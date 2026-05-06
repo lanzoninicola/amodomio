@@ -18,7 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "~/components/ui/select";
-import { menuItemSellingChannelPrismaEntity } from "~/domain/cardapio/menu-item-selling-channel.entity.server";
+import { itemSellingChannelPrismaEntity } from "~/domain/cardapio/menu-item-selling-channel.entity.server";
 import { menuItemSizePrismaEntity } from "~/domain/cardapio/menu-item-size.entity.server";
 import { buildCostImpactGraphForItem } from "~/domain/costs/cost-impact-graph.server";
 import { listMenuItemMarginImpactRows } from "~/domain/costs/menu-item-margin-impact.server";
@@ -109,7 +109,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     String(url.searchParams.get("belowTargetOnly") || "").trim() === "true";
 
   const [channels, sizes, windowDays] = await Promise.all([
-    menuItemSellingChannelPrismaEntity.findAll(),
+    itemSellingChannelPrismaEntity.findAll(),
     menuItemSizePrismaEntity.findAll(),
     getItemAverageCostWindowDays(),
   ]);

@@ -1,3 +1,4 @@
+import { redirect } from "@remix-run/node";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import { Link, Outlet, useActionData, useLoaderData, useLocation, useNavigate } from "@remix-run/react";
 import { useEffect, useState } from "react";
@@ -13,13 +14,32 @@ import {
   AlertDialogTitle,
 } from "~/components/ui/alert-dialog";
 import { toast } from "~/components/ui/use-toast";
-import { calculateItemCostMetrics, getItemAverageCostWindowDays } from "~/domain/item/item-cost-metrics.server";
+import {
+  calculateItemCostAverageWindowMetrics,
+  calculateItemCostMetrics,
+  getItemAverageCostWindowDays,
+} from "~/domain/item/item-cost-metrics.server";
 import { recalculateItemCostHistory } from "~/domain/item/item-cost-recalculate.server";
 import { loadItemCostAuditForItem } from "~/domain/item/item-cost-audit.server";
 import { getAvailableItemUnits as getAvailableItemUnitsFromServer } from "~/domain/item/item-units.server";
 import { itemVariationPrismaEntity } from "~/domain/item/item-variation.prisma.entity.server";
 import { registerItemCostEvent } from "~/domain/costs/item-cost-event.server";
+import {
+  deleteManualItemCostEntry,
+  updateManualItemCostEntry,
+} from "~/domain/costs/item-cost-manual-entry.server";
 import { supplierPrismaEntity } from "~/domain/supplier/supplier.prisma.entity.server";
+import {
+  DEFAULT_RECIPE_CHATGPT_PROJECT_URL,
+  RECIPE_CHATGPT_PROJECT_URL_SETTING_NAME,
+  RECIPE_CHATGPT_SETTINGS_CONTEXT,
+} from "~/domain/recipe/recipe-chatgpt-settings";
+import {
+  buildItemRecipeChatGptImportPreview,
+  type ExistingRecipeImportMode,
+  importItemRecipeFromChatGpt,
+  parseItemRecipeChatGptImportPayload,
+} from "~/domain/recipe/item-recipe-chatgpt.server";
 import prismaClient from "~/lib/prisma/client.server";
 import { badRequest, ok, serverError } from "~/utils/http-response.server";
 import { lastUrlSegment } from "~/utils/url";
@@ -37,6 +57,7 @@ const ITEM_UNIT_OPTIONS = ["UN", "L", "ML", "KG", "G"];
 
 const itemNavigation = [
   { name: "Principal", href: "main" },
+  { name: "Galeria", href: "galeria" },
   { name: "Variações", href: "variations" },
   { name: "Venda", href: "venda" },
   { name: "Custos", href: "costs" },
@@ -53,6 +74,14 @@ function toBool(value: FormDataEntryValue | null) {
 function normalizeUnit(value: FormDataEntryValue | string | null | undefined) {
   const normalized = String(value || "").trim().toUpperCase();
   return normalized || null;
+}
+
+function parseDateTimeInput(value: FormDataEntryValue | null) {
+  const raw = String(value || "").trim();
+  if (!raw) return null;
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return parsed;
 }
 
 const RECIPE_VARIATION_POLICY_OPTIONS = ["auto", "hide", "show"] as const;
@@ -131,7 +160,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
         })
         : Promise.resolve([]);
 
-    const [loadedItem, averageWindowDays, unitOptions, categories, ingredientRecipeUsage, suppliers] = await Promise.all([
+    const [loadedItem, averageWindowDays, unitOptions, categories, ingredientRecipeUsage, suppliers, recipeAssistantItems, chatGptProjectUrlSetting] = await Promise.all([
       db.item.findUnique({
         where: { id },
         include: {
@@ -145,6 +174,14 @@ export async function loader({ params }: LoaderFunctionArgs) {
           Recipe: {
             select: { id: true, name: true, createdAt: true },
             take: 5,
+          },
+          ItemSellingInfo: {
+            select: {
+              id: true,
+              ingredients: true,
+              longDescription: true,
+              notesPublic: true,
+            },
           },
           ItemCostSheet: {
             select: {
@@ -213,6 +250,25 @@ export async function loader({ params }: LoaderFunctionArgs) {
       }),
       ingredientRecipeUsageLookup,
       supplierPrismaEntity.findAll(),
+      db.item.findMany({
+        where: { active: true },
+        select: {
+          id: true,
+          name: true,
+          classification: true,
+          consumptionUm: true,
+        },
+        orderBy: [{ name: "asc" }],
+        take: 500,
+      }),
+      db.setting.findFirst({
+        where: {
+          context: RECIPE_CHATGPT_SETTINGS_CONTEXT,
+          name: RECIPE_CHATGPT_PROJECT_URL_SETTING_NAME,
+        },
+        orderBy: [{ createdAt: "desc" }],
+        select: { value: true },
+      }),
     ]);
 
     if (!loadedItem) return badRequest("Item não encontrado");
@@ -221,6 +277,14 @@ export async function loader({ params }: LoaderFunctionArgs) {
       include: {
         MenuItem: { select: { id: true, name: true }, take: 5 },
         Recipe: { select: { id: true, name: true, createdAt: true }, take: 5 },
+        ItemSellingInfo: {
+          select: {
+            id: true,
+            ingredients: true,
+            longDescription: true,
+            notesPublic: true,
+          },
+        },
         ItemCostSheet: {
           select: {
             id: true,
@@ -288,14 +352,15 @@ export async function loader({ params }: LoaderFunctionArgs) {
 
     if (!item) return badRequest("Item não encontrado");
 
-    // Load all restricted units and which ones are linked to this item
-    const restrictedUnits = typeof db.measurementUnit?.findMany === "function"
+    // Load all units plus the restricted subset used by purchases UI
+    const measurementUnits = typeof db.measurementUnit?.findMany === "function"
       ? await db.measurementUnit.findMany({
-          where: { active: true, scope: "restricted" },
-          select: { id: true, code: true, name: true, kind: true },
+          where: { active: true },
+          select: { id: true, code: true, name: true, kind: true, scope: true },
           orderBy: [{ code: "asc" }],
         })
       : [];
+    const restrictedUnits = measurementUnits.filter((unit: any) => unit.scope === "restricted");
     const linkedUnitCodes = new Set<string>(
       (item.ItemUnit ?? []).map((u: any) => u.unitCode)
     );
@@ -324,6 +389,13 @@ export async function loader({ params }: LoaderFunctionArgs) {
       history: historyForMetrics,
       averageWindowDays,
     });
+    const costAverageWindows = [30, 60, 90].map((windowDays) =>
+      calculateItemCostAverageWindowMetrics({
+        item,
+        history: historyForMetrics,
+        averageWindowDays: windowDays,
+      }),
+    );
     const latestPurchaseSupplierName = findLatestPurchaseSupplierName(primaryHistory);
     const costAuditHistory = primaryVariation?.id
       ? await loadItemCostAuditForItem(primaryVariation.id, 30)
@@ -340,12 +412,18 @@ export async function loader({ params }: LoaderFunctionArgs) {
         _costAuditHistory: costAuditHistory,
       },
       costMetrics,
+      costAverageWindows,
       averageWindowDays,
       unitOptions,
       categories,
       suppliers,
+      measurementUnits,
       restrictedUnits,
       linkedUnitCodes: Array.from(linkedUnitCodes),
+      recipeAssistantItems,
+      recipeAssistantChatGptProjectUrl:
+        String(chatGptProjectUrlSetting?.value || "").trim() ||
+        DEFAULT_RECIPE_CHATGPT_PROJECT_URL,
     });
   } catch (error) {
     return serverError(error);
@@ -427,6 +505,156 @@ export async function action({ request, params }: ActionFunctionArgs) {
         message: "Item atualizado com sucesso",
         missingVariations: !hasConfiguredVariations,
       });
+    }
+
+    if (_action === "item-delete") {
+      const stockMovementLookup =
+        typeof db.stockMovement?.findFirst === "function"
+          ? db.stockMovement.findFirst({
+            where: { itemId: id, deletedAt: null },
+            select: { id: true },
+          })
+          : typeof db.stockMovementImportBatchLine?.findFirst === "function"
+            ? db.stockMovementImportBatchLine.findFirst({
+              where: { mappedItemId: id, appliedAt: { not: null }, rolledBackAt: null },
+              select: { id: true },
+            })
+            : Promise.resolve(null);
+      const recipeUsageLookup =
+        typeof db.recipeIngredient?.findFirst === "function"
+          ? db.recipeIngredient.findFirst({
+            where: { ingredientItemId: id },
+            select: { id: true },
+          })
+          : typeof db.recipeLine?.findFirst === "function"
+            ? db.recipeLine.findFirst({
+              where: { itemId: id },
+              select: { id: true },
+            })
+            : Promise.resolve(null);
+
+      const [
+        stockMovement,
+        recipeLine,
+        recipe,
+        menuItem,
+        itemCostSheet,
+      ] = await Promise.all([
+        stockMovementLookup,
+        recipeUsageLookup,
+        db.recipe.findFirst({ where: { itemId: id }, select: { id: true } }),
+        db.menuItem.findFirst({ where: { itemId: id }, select: { id: true } }),
+        db.itemCostSheet.findFirst({ where: { itemId: id }, select: { id: true } }),
+      ]);
+
+      const reasons: string[] = [];
+      if (stockMovement) reasons.push("existem movimentações de estoque");
+      if (recipeLine) reasons.push("está sendo usado como ingrediente em receitas");
+      if (recipe) reasons.push("está vinculado a uma receita");
+      if (menuItem) reasons.push("está vinculado ao cardápio");
+      if (itemCostSheet) reasons.push("possui fichas de custo");
+
+      if (reasons.length > 0) {
+        return badRequest(`Não é possível eliminar o item porque ${reasons.join(", ")}.`);
+      }
+
+      await db.item.delete({ where: { id } });
+
+      return redirect("/admin/items");
+    }
+
+    if (_action === "item-recipe-chatgpt-preview") {
+      const chatGptResponse = String(formData.get("chatGptResponse") || "").trim();
+      const existingRecipeImportMode = String(formData.get("existingRecipeImportMode") || "replace_existing").trim() as ExistingRecipeImportMode;
+      if (!chatGptResponse) return badRequest("Cole a resposta do ChatGPT antes de pré-visualizar");
+
+      const item = await db.item.findUnique({
+        where: { id },
+        include: {
+          Recipe: {
+            select: { id: true, name: true },
+            take: 10,
+          },
+          ItemCostSheet: {
+            select: { id: true, baseItemCostSheetId: true },
+            take: 20,
+          },
+          ItemVariation: {
+            where: { deletedAt: null },
+            include: { Variation: true },
+            orderBy: [{ createdAt: "asc" }],
+          },
+        },
+      });
+      if (!item) return badRequest("Item não encontrado");
+
+      try {
+        const payload = parseItemRecipeChatGptImportPayload(chatGptResponse);
+        const { preview } = await buildItemRecipeChatGptImportPreview({
+          db,
+          item,
+          payload,
+          existingRecipeImportMode,
+        });
+
+        return ok({
+          message: "Pré-visualização gerada",
+          payload: preview,
+        });
+      } catch (error) {
+        return badRequest(
+          (error as Error)?.message || "Erro ao gerar pré-visualização da importação"
+        );
+      }
+    }
+
+    if (_action === "item-recipe-chatgpt-import") {
+      const chatGptResponse = String(formData.get("chatGptResponse") || "").trim();
+      const existingRecipeImportMode = String(formData.get("existingRecipeImportMode") || "replace_existing").trim() as ExistingRecipeImportMode;
+      if (!chatGptResponse) return badRequest("Cole a resposta do ChatGPT antes de importar");
+
+      const item = await db.item.findUnique({
+        where: { id },
+        include: {
+          Recipe: {
+            select: { id: true, name: true },
+            take: 10,
+          },
+          ItemCostSheet: {
+            select: { id: true, baseItemCostSheetId: true },
+            take: 20,
+          },
+          ItemVariation: {
+            where: { deletedAt: null },
+            include: { Variation: true },
+            orderBy: [{ createdAt: "asc" }],
+          },
+        },
+      });
+      if (!item) return badRequest("Item não encontrado");
+
+      try {
+        const payload = parseItemRecipeChatGptImportPayload(chatGptResponse);
+        if (payload.ingredients.length === 0) {
+          return badRequest("A resposta só contém ingredientes faltantes. Cadastre os itens e tente novamente.");
+        }
+
+        const result = await importItemRecipeFromChatGpt({
+          db,
+          item,
+          payload,
+          existingRecipeImportMode,
+        });
+
+        return ok({
+          message: "Receita e ficha técnica geradas com sucesso",
+          payload: result,
+        });
+      } catch (error) {
+        return badRequest(
+          (error as Error)?.message || "Erro ao importar receita do ChatGPT"
+        );
+      }
     }
 
     if (_action === "item-purchase-conversion-add") {
@@ -525,6 +753,53 @@ export async function action({ request, params }: ActionFunctionArgs) {
       return ok("Custo registrado com sucesso");
     }
 
+    if (_action === "item-cost-manual-update") {
+      const historyId = String(formData.get("historyId") || "").trim();
+      const costAmount = Number(formData.get("costAmount") || 0);
+      const unit = String(formData.get("unit") || "").trim();
+      const source = String(formData.get("source") || "manual").trim();
+      const supplierName = String(formData.get("supplierName") || "").trim();
+      const notes = String(formData.get("notes") || "").trim();
+      const validFrom = parseDateTimeInput(formData.get("validFrom"));
+
+      if (!historyId) return badRequest("Levantamento manual inválido");
+      if (!(costAmount > 0)) return badRequest("Informe um custo maior que zero");
+      if (!validFrom) return badRequest("Informe uma data válida");
+
+      await updateManualItemCostEntry({
+        itemId: id,
+        historyId,
+        costAmount,
+        unit,
+        source,
+        supplierName,
+        notes,
+        validFrom,
+      });
+
+      return ok({
+        action: "item-cost-manual-update",
+        historyId,
+        message: "Levantamento manual atualizado com sucesso",
+      });
+    }
+
+    if (_action === "item-cost-manual-delete") {
+      const historyId = String(formData.get("historyId") || "").trim();
+      if (!historyId) return badRequest("Levantamento manual inválido");
+
+      await deleteManualItemCostEntry({
+        itemId: id,
+        historyId,
+      });
+
+      return ok({
+        action: "item-cost-manual-delete",
+        historyId,
+        message: "Levantamento manual eliminado com sucesso",
+      });
+    }
+
     if (_action === "supplier-quick-create") {
       const name = String(formData.get("name") || "").trim();
 
@@ -614,6 +889,24 @@ export async function action({ request, params }: ActionFunctionArgs) {
       });
     }
 
+    if (_action === "item-recipe-create") {
+      const currentItem = await db.item.findUnique({
+        where: { id },
+        select: { id: true, name: true },
+      });
+      if (!currentItem) return badRequest("Item não encontrado");
+
+      const newRecipe = await db.recipe.create({
+        data: {
+          id: crypto.randomUUID(),
+          name: currentItem.name,
+          itemId: id,
+        },
+      });
+
+      return redirect(`/admin/recipes/${newRecipe.id}`);
+    }
+
     return badRequest("Ação inválida");
   } catch (error) {
     return serverError(error);
@@ -626,8 +919,21 @@ export type AdminItemOutletContext = {
   unitOptions: string[];
   categories: Array<{ id: string; name: string }>;
   suppliers: Array<{ id: string; name: string; cnpj?: string | null }>;
+  recipeAssistantItems: Array<{
+    id: string;
+    name: string;
+    classification?: string | null;
+    consumptionUm?: string | null;
+  }>;
+  recipeAssistantChatGptProjectUrl: string;
   costMetrics: any;
+  costAverageWindows: Array<{
+    averageWindowDays: number;
+    averageCostPerConsumptionUnit: number | null;
+    averageSamplesCount: number;
+  }>;
   averageWindowDays: number;
+  measurementUnits: Array<{ id: string; code: string; name: string; kind: string | null; scope: string | null }>;
   restrictedUnits: Array<{ id: string; code: string; name: string; kind: string | null }>;
   linkedUnitCodes: string[];
 };
@@ -641,6 +947,11 @@ export default function AdminItemDetailLayout() {
 
   const item = (loaderData?.payload as any)?.item;
   const costMetrics = (loaderData?.payload as any)?.costMetrics;
+  const costAverageWindows = ((loaderData?.payload as any)?.costAverageWindows || []) as Array<{
+    averageWindowDays: number;
+    averageCostPerConsumptionUnit: number | null;
+    averageSamplesCount: number;
+  }>;
   const averageWindowDays = Number((loaderData?.payload as any)?.averageWindowDays || 30);
   const unitOptions = ((loaderData?.payload as any)?.unitOptions || ITEM_UNIT_OPTIONS) as string[];
   const categories = ((loaderData?.payload as any)?.categories || []) as Array<{ id: string; name: string }>;
@@ -712,8 +1023,12 @@ export default function AdminItemDetailLayout() {
             unitOptions,
             categories,
             suppliers,
+            recipeAssistantItems: ((loaderData?.payload as any)?.recipeAssistantItems || []),
+            recipeAssistantChatGptProjectUrl: String((loaderData?.payload as any)?.recipeAssistantChatGptProjectUrl || ""),
             costMetrics,
+            costAverageWindows,
             averageWindowDays,
+            measurementUnits: ((loaderData?.payload as any)?.measurementUnits || []),
             restrictedUnits: ((loaderData?.payload as any)?.restrictedUnits || []),
             linkedUnitCodes: ((loaderData?.payload as any)?.linkedUnitCodes || []),
           }}

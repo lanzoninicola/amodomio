@@ -90,6 +90,8 @@ export async function buildCostImpactGraphForItem(
     }
   }
 
+  // Compat layer: o pipeline de impacto ainda expõe ids legados de MenuItem
+  // para telas antigas de margem/preço que ainda não foram migradas.
   const menuItems = await db.menuItem.findMany({
     where: { itemId: { in: Array.from(affectedItemIds) } },
     select: { id: true },

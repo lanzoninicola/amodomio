@@ -1,6 +1,16 @@
 import { Form, Link, useOutletContext } from "@remix-run/react";
 import type { ReactNode } from "react";
 import { useRef, useState } from "react";
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "~/components/ui/alert-dialog";
 import { Button } from "~/components/ui/button";
 import useSaveShortcut from "~/hooks/use-save-shortcut.hook";
 import { Input } from "~/components/ui/input";
@@ -11,11 +21,11 @@ import type { AdminItemOutletContext } from "./admin.items.$id";
 
 export default function AdminItemMainTab() {
   const { item, classifications, unitOptions, categories } = useOutletContext<AdminItemOutletContext>();
-  const ingredientRecipeUsage = item._ingredientRecipeUsage || [];
   const [classificationValue, setClassificationValue] = useState(item.classification || classifications[0] || "");
   const [categoryIdValue, setCategoryIdValue] = useState(item.categoryId || "__EMPTY__");
   const [consumptionUmValue, setConsumptionUmValue] = useState(item.consumptionUm || "__EMPTY__");
   const [recipeVariationPolicyValue, setRecipeVariationPolicyValue] = useState(item.recipeVariationPolicy || "auto");
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const formRef = useRef<HTMLFormElement | null>(null);
 
   useSaveShortcut({
@@ -186,66 +196,34 @@ export default function AdminItemMainTab() {
                 Criar item
               </Link>
             </Button>
+            <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+              <AlertDialogTrigger asChild>
+                <Button type="button" variant="destructive">
+                  Eliminar item
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Eliminar item?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Esta ação remove <strong>{item.name}</strong>. Se a eliminação for permitida, você será redirecionado para a lista completa de itens.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                  <Form method="post" action="..">
+                    <input type="hidden" name="_action" value="item-delete" />
+                    <Button type="submit" variant="destructive">
+                      Confirmar eliminação
+                    </Button>
+                  </Form>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           </div>
         </div>
       </Form>
 
-      <div className="rounded-xl border border-slate-200 bg-white p-4">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Vínculos</h2>
-        <div className="mt-3 space-y-2 text-sm">
-          <div>
-            MenuItems: {item.MenuItem?.length || 0}
-            {!!item.MenuItem?.length && (
-              <div className="mt-1 flex flex-wrap gap-2">
-                {item.MenuItem.map((m: any) => (
-                  <Link key={m.id} to={`/admin/gerenciamento/cardapio/${m.id}/main`} className="text-xs underline">
-                    {m.name}
-                  </Link>
-                ))}
-              </div>
-            )}
-          </div>
-          <div>
-            Receitas: {item.Recipe?.length || 0}
-            {!!item.Recipe?.length && (
-              <div className="mt-1 flex flex-wrap gap-2">
-                {item.Recipe.map((r: any) => (
-                  <Link key={r.id} to={`/admin/recipes/${r.id}`} className="text-xs underline">
-                    {r.name}
-                  </Link>
-                ))}
-              </div>
-            )}
-          </div>
-          <div>
-            Uso como ingrediente em receitas: {ingredientRecipeUsage.length || 0}
-            {!!ingredientRecipeUsage.length && (
-              <div className="mt-1 flex flex-wrap gap-2">
-                {ingredientRecipeUsage.map((usage: any) => (
-                  <Link key={usage.id} to={`/admin/recipes/${usage.recipeId}`} className="text-xs underline">
-                    {usage.Recipe?.name || usage.recipeId}
-                  </Link>
-                ))}
-              </div>
-            )}
-          </div>
-          <div>
-            Fichas de custo: {item.ItemCostSheet?.length || 0}
-            {!!item.ItemCostSheet?.length && (
-              <div className="mt-1 flex flex-col gap-1">
-                {item.ItemCostSheet.map((s: any) => (
-                  <span key={s.id} className="text-xs text-slate-600">
-                    {s.name} {s.isActive ? "(ativa)" : ""}
-                  </span>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-        <p className="mt-4 text-xs text-slate-500">
-          O vínculo legado com `Produtos` foi removido deste fluxo. Use `Itens`, `Receitas` e `Fichas de custo`.
-        </p>
-      </div>
     </div>
   );
 }

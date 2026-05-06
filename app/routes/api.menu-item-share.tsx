@@ -1,5 +1,6 @@
 import type { ActionFunctionArgs } from "@remix-run/node";
 import { menuItemSharePrismaEntity } from "~/domain/cardapio/menu-item-share.prisma.entity.server";
+import { itemSharePrismaEntity } from "~/domain/item/item-share.prisma.entity.server";
 import {
   createMenuItemInterestEvent,
   hasRecentMenuItemInterestEvent,
@@ -34,6 +35,7 @@ export async function action({ request }: ActionFunctionArgs) {
   const values = Object.fromEntries(formData);
 
   const itemId = typeof values?.itemId === "string" ? values.itemId : "";
+  const sourceType = typeof values?.sourceType === "string" ? values.sourceType : "legacy";
   const clientId = typeof values?.clientId === "string" ? values.clientId : null;
 
   const rateLimitContext = await buildLikeRateLimitContext(request);
@@ -50,7 +52,8 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 
   const alreadyShared = await hasRecentMenuItemInterestEvent({
-    menuItemId: itemId,
+    menuItemId: sourceType === "native" ? undefined : itemId,
+    itemId: sourceType === "native" ? itemId : undefined,
     type: "share",
     clientId,
   });
@@ -66,7 +69,7 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 
   const rateLimitResult = await consumeLikeRateLimit({
-    menuItemId: itemId,
+    menuItemId: `${sourceType}:${itemId}`,
     rateLimitId: rateLimitContext.rateLimitId,
     ip: rateLimitContext.ip,
   });
@@ -82,14 +85,23 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 
   const [err, shareAmount] = await prismaIt(
-    menuItemSharePrismaEntity.create({
-      createdAt: new Date().toISOString(),
-      MenuItem: {
-        connect: {
-          id: itemId,
-        },
-      },
-    })
+    sourceType === "native"
+      ? itemSharePrismaEntity.create({
+          createdAt: new Date().toISOString(),
+          Item: {
+            connect: {
+              id: itemId,
+            },
+          },
+        } as any)
+      : menuItemSharePrismaEntity.create({
+          createdAt: new Date().toISOString(),
+          MenuItem: {
+            connect: {
+              id: itemId,
+            },
+          },
+        })
   );
 
   if (err) {
@@ -103,7 +115,8 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 
   await createMenuItemInterestEvent({
-    menuItemId: itemId,
+    menuItemId: sourceType === "native" ? undefined : itemId,
+    itemId: sourceType === "native" ? itemId : undefined,
     type: "share",
     clientId,
   });

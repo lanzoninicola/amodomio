@@ -33,6 +33,12 @@ export type ItemCostMetrics = {
   averageSamplesCount: number;
 };
 
+export type ItemCostAverageWindowMetrics = {
+  averageWindowDays: number;
+  averageCostPerConsumptionUnit: number | null;
+  averageSamplesCount: number;
+};
+
 function normalizeUm(value: string | null | undefined) {
   return String(value || "").trim().toUpperCase() || null;
 }
@@ -153,5 +159,19 @@ export function calculateItemCostMetrics(params: {
     latestCostPerConsumptionUnit,
     averageCostPerConsumptionUnit,
     averageSamplesCount: normalizedInWindow.length,
+  };
+}
+
+export function calculateItemCostAverageWindowMetrics(params: {
+  item: ItemMeasurementLike;
+  history: ItemCostHistoryLike[];
+  averageWindowDays: number;
+  now?: Date;
+}): ItemCostAverageWindowMetrics {
+  const metrics = calculateItemCostMetrics(params);
+  return {
+    averageWindowDays: metrics.averageWindowDays,
+    averageCostPerConsumptionUnit: metrics.averageCostPerConsumptionUnit,
+    averageSamplesCount: metrics.averageSamplesCount,
   };
 }

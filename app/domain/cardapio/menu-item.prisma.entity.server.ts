@@ -6,7 +6,7 @@ import {
   MenuItemImage,
   MenuItemLike,
   MenuItemPriceVariation,
-  MenuItemSellingChannel,
+  ItemSellingChannel,
   MenuItemSellingPriceVariation,
   MenuItemSellingPriceVariationAudit,
   MenuItemShare,
@@ -30,7 +30,7 @@ import {
 } from "./menu-item-size.entity.server";
 import { menuItemSellingPriceUtilityEntity } from "./menu-item-selling-price-utility.entity";
 import {
-  menuItemSellingChannelPrismaEntity,
+  itemSellingChannelPrismaEntity,
   SellingChannelKey,
 } from "./menu-item-selling-channel.entity.server";
 import { slugifyString } from "~/utils/slugify";
@@ -51,7 +51,7 @@ export interface MenuItemWithAssociations extends MenuItem {
   MenuItemGroup: MenuItemGroup;
   MenuItemSellingPriceVariation: Array<
     MenuItemSellingPriceVariation & {
-      MenuItemSellingChannel: MenuItemSellingChannel;
+      ItemSellingChannel: ItemSellingChannel;
       MenuItemSize: MenuItemSize;
     }
   >;
@@ -93,7 +93,7 @@ interface MenuItemEntityProps extends PrismaEntityProps {
   menuItemCostVariation: typeof menuItemCostVariationPrismaEntity;
   menuItemSellingPriceUtility: typeof menuItemSellingPriceUtilityEntity;
   menuItemSize: typeof menuItemSizePrismaEntity;
-  menuItemSellingChannel: typeof menuItemSellingChannelPrismaEntity;
+  itemSellingChannel: typeof itemSellingChannelPrismaEntity;
 }
 
 type MenuItemMediaLike = {
@@ -175,7 +175,7 @@ export class MenuItemPrismaEntity {
 
   menuItemCostVariation: typeof menuItemCostVariationPrismaEntity;
 
-  menuItemSellingChannel: typeof menuItemSellingChannelPrismaEntity;
+  itemSellingChannel: typeof itemSellingChannelPrismaEntity;
 
   menuItemSize: typeof menuItemSizePrismaEntity;
 
@@ -184,14 +184,14 @@ export class MenuItemPrismaEntity {
     menuItemCostVariation,
 
     menuItemSize,
-    menuItemSellingChannel,
+    itemSellingChannel,
   }: MenuItemEntityProps) {
     this.client = client;
 
     this.menuItemCostVariation = menuItemCostVariation;
 
     this.menuItemSize = menuItemSize;
-    this.menuItemSellingChannel = menuItemSellingChannel;
+    this.itemSellingChannel = itemSellingChannel;
   }
 
   async findAll(
@@ -243,7 +243,7 @@ export class MenuItemPrismaEntity {
         MenuItemGroup: true,
         MenuItemSellingPriceVariation: {
           where: {
-            MenuItemSellingChannel: {
+            ItemSellingChannel: {
               key: params.sellingChannelKey || "cardapio", // Default to 'cardapio'
             },
           },
@@ -251,7 +251,7 @@ export class MenuItemPrismaEntity {
             priceAmount: "asc",
           },
           include: {
-            MenuItemSellingChannel: true,
+            ItemSellingChannel: true,
             MenuItemSize: true,
           },
         },
@@ -383,7 +383,7 @@ export class MenuItemPrismaEntity {
         },
         MenuItemSellingPriceVariation: {
           where: {
-            MenuItemSellingChannel: {
+            ItemSellingChannel: {
               key: params.sellingChannelKey || "cardapio",
             },
           },
@@ -396,7 +396,7 @@ export class MenuItemPrismaEntity {
             profitActualPerc: true,
             profitExpectedPerc: true,
             showOnCardapio: true,
-            MenuItemSellingChannel: {
+            ItemSellingChannel: {
               select: {
                 id: true,
                 key: true,
@@ -695,7 +695,7 @@ export class MenuItemPrismaEntity {
       include: {
         MenuItemSellingPriceVariation: {
           include: {
-            MenuItemSellingChannel: true,
+            ItemSellingChannel: true,
             MenuItemSize: true,
           },
         },
@@ -727,7 +727,7 @@ export class MenuItemPrismaEntity {
           audits =
             await this.client.menuItemSellingPriceVariationAudit.findMany({
               where: {
-                menuItemSellingChannelId: channelId,
+                itemSellingChannelId: channelId,
               },
             });
         }
@@ -738,7 +738,7 @@ export class MenuItemPrismaEntity {
       }
 
       for (const audit of audits) {
-        const key = `${audit.menuItemId}-${audit.menuItemSellingChannelId}-${audit.menuItemSizeId}`;
+        const key = `${audit.menuItemId}-${audit.itemSellingChannelId}-${audit.menuItemSizeId}`;
         if (!auditMap.has(key)) auditMap.set(key, []);
         auditMap.get(key)!.push(audit);
       }
@@ -751,12 +751,12 @@ export class MenuItemPrismaEntity {
             (cv) =>
               cv.menuItemSizeId === size.id &&
               (!sellingChannelKey ||
-                cv.MenuItemSellingChannel?.key === sellingChannelKey)
+                cv.ItemSellingChannel?.key === sellingChannelKey)
           );
 
           if (!variation) return null;
 
-          const auditKey = `${item.id}-${variation.menuItemSellingChannelId}-${variation.menuItemSizeId}`;
+          const auditKey = `${item.id}-${variation.itemSellingChannelId}-${variation.menuItemSizeId}`;
           const variationAuditRecords = options?.includeAuditRecords
             ? auditMap.get(auditKey) ?? []
             : [];
@@ -766,9 +766,9 @@ export class MenuItemPrismaEntity {
             sizeId: variation.MenuItemSize?.id!,
             sizeKey: variation.MenuItemSize?.key ?? null,
             sizeName: variation.MenuItemSize?.name!,
-            channelId: variation.MenuItemSellingChannel?.id ?? null,
-            channelKey: variation.MenuItemSellingChannel?.key ?? null,
-            channelName: variation.MenuItemSellingChannel?.name ?? "",
+            channelId: variation.ItemSellingChannel?.id ?? null,
+            channelKey: variation.ItemSellingChannel?.key ?? null,
+            channelName: variation.ItemSellingChannel?.name ?? "",
             priceAmount: variation.priceAmount ?? 0,
             profitActualPerc: variation.profitActualPerc ?? 0,
             priceExpectedAmount: variation.priceExpectedAmount ?? 0,
@@ -902,7 +902,7 @@ export class MenuItemPrismaEntity {
         },
         MenuItemSellingPriceVariation: {
           include: {
-            MenuItemSellingChannel: true,
+            ItemSellingChannel: true,
             MenuItemSize: true,
           },
         },
@@ -1082,7 +1082,7 @@ const menuItemPrismaEntity = new MenuItemPrismaEntity({
   menuItemCostVariation: menuItemCostVariationPrismaEntity,
   menuItemSellingPriceUtility: menuItemSellingPriceUtilityEntity,
   menuItemSize: menuItemSizePrismaEntity,
-  menuItemSellingChannel: menuItemSellingChannelPrismaEntity,
+  itemSellingChannel: itemSellingChannelPrismaEntity,
 });
 
 export { menuItemPrismaEntity };

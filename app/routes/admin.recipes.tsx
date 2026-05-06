@@ -1,17 +1,20 @@
+import type { MetaFunction } from "@remix-run/node";
 import { Link, NavLink, Outlet } from "@remix-run/react";
 import { ChevronLeft, LayoutGrid, List, PlusCircle } from "lucide-react";
 import Container from "~/components/layout/container/container";
 import { cn } from "~/lib/utils";
 
+export const meta: MetaFunction = () => [{ title: "Receitas" }];
+
 export default function RecipesOutlet() {
   return (
-    <Container fullWidth className="mt-12 px-4">
+    <Container fullWidth className=" px-4">
       <div className="flex flex-col gap-6">
         <section className="space-y-5 pb-5">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex flex-wrap items-center gap-2 text-sm">
               <Link
-                to="/admin"
+                to="/admin/recipes"
                 className="inline-flex items-center gap-1.5 font-semibold text-slate-700 transition hover:text-slate-950"
               >
                 <span className="flex size-5 items-center justify-center rounded-full border border-slate-200 text-slate-500">

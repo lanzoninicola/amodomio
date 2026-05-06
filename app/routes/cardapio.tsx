@@ -26,8 +26,10 @@ import useCurrentPage from "~/hooks/use-current-page";
 import { NotificationCenterProvider, useNotificationCenter } from "~/domain/push/notification-center-context";
 import { PwaInstallPrompt } from "~/domain/pwa/pwa-install-prompt";
 import { CardapioSizesContent } from "~/domain/cardapio/components/cardapio-sizes-content";
+import CardapioDatabaseUnavailable from "~/domain/cardapio/components/cardapio-database-unavailable/cardapio-database-unavailable";
 import CardapioErrorRedirect from "~/domain/cardapio/components/cardapio-error-redirect/cardapio-error-redirect";
 import RouteProgressBar from "~/components/route-progress-bar/route-progress-bar";
+import { isDatabaseConnectivityError } from "~/lib/errors/connectivity";
 
 
 /**
@@ -177,6 +179,10 @@ export function ErrorBoundary() {
 
     console.error("[cardapio] route error boundary", error);
 
+    if (isDatabaseConnectivityError(error)) {
+        return <CardapioDatabaseUnavailable error={error} />;
+    }
+
     return <CardapioErrorRedirect redirectHref={saiposHref} />;
 }
 
@@ -217,7 +223,7 @@ function CardapioHeader() {
     const { fazerPedidoPublicURL, notificationsEnabled, vapidPublicKey } = useLoaderData<typeof loader>()
 
     return (
-        <header className="fixed top-0 w-full z-10 md:max-w-6xl md:-translate-x-1/2 md:left-1/2 " >
+        <header className="fixed top-0 w-full z-30 md:max-w-6xl md:-translate-x-1/2 md:left-1/2 " >
             <div className="flex flex-col bg-white px-1 pt-2 py-3 h-[50px] md:h-[70px]">
                 <div className="grid grid-cols-3 items-center w-full">
                     {/* <div className="flex gap-1 items-center" onClick={() => setShowSearch(!showSearch)}>
@@ -312,18 +318,18 @@ function CardapioHeader() {
                 </p>
             </div>
 
-            <ScrollingBanner
+            {/* <ScrollingBanner
                 cnContainer="h-[30px] md:h-[40px] bg-white border-b border-t border-solid border-black flex"
             >
                 <div className="flex items-center gap-2 justify-center">
-                    {/* @ts-ignore */}
+
                     <ItalyFlag className="w-4 h-4 md:w-6 md:h-6" />
                     <p className="font-neue text-[15px] uppercase tracking-wider md:text-lg">
                         Todas as nossas pizzas são preparadas com farinha e molho de tomate importados da Itália
                     </p>
                 </div>
 
-            </ScrollingBanner>
+            </ScrollingBanner> */}
             {currentPage === "other" && notificationsEnabled && <PushOptIn vapidPublicKey={vapidPublicKey} />}
 
         </header>

@@ -8,7 +8,7 @@ interface MenuItemSellingPriceVariationAuditPrismaEntityConstructorProps
 export interface MenuItemSellingPriceVariationAuditBaseParams {
   menuItemId: string;
   menuItemSizeId: string;
-  menuItemSellingChannelId: string;
+  itemSellingChannelId: string;
   recipeCostAmount: number;
   packagingCostAmount: number;
   doughCostAmount: number;
@@ -80,13 +80,13 @@ class MenuItemSellingPriceVariationAuditPrismaEntity {
   async findLast(
     menuItemId: string,
     menuItemSizeId: string,
-    menuItemSellingChannelId: string
+    itemSellingChannelId: string
   ) {
     return await this.client.menuItemSellingPriceVariationAudit.findFirst({
       where: {
         menuItemId,
         menuItemSizeId,
-        menuItemSellingChannelId,
+        itemSellingChannelId,
       },
       orderBy: { createdAt: "desc" },
     });

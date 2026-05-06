@@ -1,7 +1,8 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from '@remix-run/node';
 import { Form, Link, useActionData, useLoaderData } from '@remix-run/react';
 import { useMemo, useState } from 'react';
-import { CheckCircle2, Eye, Search, Trash2 } from 'lucide-react';
+import type React from 'react';
+import { CheckCircle2, Eye, FileSpreadsheet, Image, Globe, Search, Trash2 } from 'lucide-react';
 import NoRecordsFound from '~/components/primitives/no-records-found/no-records-found';
 import {
   AlertDialog,
@@ -42,6 +43,46 @@ function summaryFromAny(summary: any) {
   };
 }
 
+const SOURCE_TYPE_LABELS: Record<string, { label: string; className: string; icon: React.ReactNode }> = {
+  file_upload: {
+    label: 'Arquivo',
+    className: 'border-slate-200 bg-slate-100 text-slate-500',
+    icon: <FileSpreadsheet className="h-3 w-3" />,
+  },
+  photo_vision: {
+    label: 'Foto',
+    className: 'border-slate-200 bg-slate-100 text-slate-500',
+    icon: <Image className="h-3 w-3" />,
+  },
+  rest_api: {
+    label: 'API',
+    className: 'border-slate-200 bg-slate-100 text-slate-500',
+    icon: <Globe className="h-3 w-3" />,
+  },
+};
+
+function SourceTypeBadge({ sourceType }: { sourceType: string | null | undefined }) {
+  const config = SOURCE_TYPE_LABELS[sourceType || ''];
+  if (!config) return null;
+  return (
+    <Badge variant="outline" className={`flex items-center gap-1 ${config.className}`}>
+      {config.icon}
+      {config.label}
+    </Badge>
+  );
+}
+
+function batchStatusLabel(status: string) {
+  switch (status) {
+    case 'validated': return 'Aguardando importação';
+    case 'ready':     return 'Pronta';
+    case 'imported':  return 'Importado';
+    case 'partial':   return 'Parcial';
+    case 'archived':  return 'Arquivado';
+    default:          return status;
+  }
+}
+
 function statusBadgeClass(status: string) {
   switch (status) {
     case 'validated':
@@ -53,6 +94,8 @@ function statusBadgeClass(status: string) {
       return 'border-amber-200 bg-amber-50 text-amber-700';
     case 'archived':
       return 'border-slate-200 bg-slate-100 text-slate-700';
+    case 'draft':
+      return 'border-orange-200 bg-orange-50 text-orange-700';
     default:
       return 'border-slate-200 bg-white text-slate-700';
   }
@@ -136,17 +179,18 @@ export default function AdminImportStockMovementsIndexRoute() {
   const actionData = useActionData<typeof action>();
   const batches = ((loaderData as any)?.payload?.batches || []) as any[];
   const [search, setSearch] = useState('');
+  const [sourceTypeFilter, setSourceTypeFilter] = useState<string | null>(null);
 
   const filtered = useMemo(() => {
     const query = search.trim().toLowerCase();
-    if (!query) return batches;
-
     return batches.filter((batch) => {
+      if (sourceTypeFilter && batch.sourceType !== sourceTypeFilter) return false;
+      if (!query) return true;
       const haystack = [batch.name, batch.originalFileName, batch.worksheetName, batch.status]
         .map((value) => String(value || '').toLowerCase());
       return haystack.some((value) => value.includes(query));
     });
-  }, [batches, search]);
+  }, [batches, search, sourceTypeFilter]);
 
   return (
     <div className="flex flex-col gap-4">
@@ -162,15 +206,38 @@ export default function AdminImportStockMovementsIndexRoute() {
           </p>
 
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-            <div className="relative w-full max-w-[620px]">
-              <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-              <Input
-                type="search"
-                className="h-12 rounded-xl border-slate-300 bg-white pl-10 text-sm text-black placeholder:text-slate-400 focus-visible:border-black focus-visible:ring-1 focus-visible:ring-black"
-                placeholder="Pesquise por lote, arquivo ou status"
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-              />
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <div className="relative w-full max-w-[400px]">
+                <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                <Input
+                  type="search"
+                  className="h-10 rounded-xl border-slate-300 bg-white pl-10 text-sm text-black placeholder:text-slate-400 focus-visible:border-black focus-visible:ring-1 focus-visible:ring-black"
+                  placeholder="Pesquise por lote, arquivo ou status"
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                />
+              </div>
+              <div className="flex items-center gap-1.5">
+                {([null, 'file_upload', 'photo_vision', 'rest_api'] as const).map((type) => {
+                  const config = type ? SOURCE_TYPE_LABELS[type] : null;
+                  const isActive = sourceTypeFilter === type;
+                  return (
+                    <button
+                      key={type ?? 'all'}
+                      type="button"
+                      onClick={() => setSourceTypeFilter(type)}
+                      className={`flex h-10 items-center gap-1.5 rounded-xl border px-3 text-sm font-medium transition-colors ${
+                        isActive
+                          ? 'border-slate-900 bg-slate-900 text-white'
+                          : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+                      }`}
+                    >
+                      {config ? config.icon : null}
+                      {config ? config.label : 'Todos'}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
             <div className="flex flex-wrap items-center gap-5 text-sm text-black">
@@ -194,13 +261,12 @@ export default function AdminImportStockMovementsIndexRoute() {
           <Table className="min-w-[980px]">
             <TableHeader className="bg-slate-50/70">
               <TableRow className="hover:bg-slate-50/70">
+                <TableHead className="h-10 px-4 text-xs font-semibold uppercase tracking-wide text-slate-500">Status</TableHead>
                 <TableHead className="h-10 px-4 text-xs font-semibold uppercase tracking-wide text-slate-500">Lote</TableHead>
-                <TableHead className="h-10 px-4 text-xs font-semibold uppercase tracking-wide text-slate-500">Arquivo</TableHead>
                 <TableHead className="h-10 px-4 text-xs font-semibold uppercase tracking-wide text-slate-500">Total</TableHead>
                 <TableHead className="h-10 px-4 text-xs font-semibold uppercase tracking-wide text-slate-500">Importadas</TableHead>
                 <TableHead className="h-10 px-4 text-xs font-semibold uppercase tracking-wide text-slate-500">Importar</TableHead>
                 <TableHead className="h-10 px-4 text-xs font-semibold uppercase tracking-wide text-slate-500">Fornecedor</TableHead>
-                <TableHead className="h-10 px-4 text-xs font-semibold uppercase tracking-wide text-slate-500">Status</TableHead>
                 <TableHead className="h-10 px-4 text-xs font-semibold uppercase tracking-wide text-slate-500">Criado em</TableHead>
                 <TableHead className="h-10 px-4 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">Ações</TableHead>
               </TableRow>
@@ -211,6 +277,11 @@ export default function AdminImportStockMovementsIndexRoute() {
                 return (
                   <TableRow key={batch.id} className="border-slate-100 align-top hover:bg-slate-50/40">
                     <TableCell className="px-4 py-4">
+                      <Badge variant="outline" className={statusBadgeClass(String(batch.status))}>
+                        {batchStatusLabel(String(batch.status))}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="px-4 py-4">
                       <div className="flex min-w-0 flex-col gap-1.5">
                         <Link
                           to={`/admin/import-stock-movements/${batch.id}`}
@@ -219,9 +290,10 @@ export default function AdminImportStockMovementsIndexRoute() {
                           {batch.name}
                         </Link>
                         <div className="flex flex-wrap items-center gap-2">
-                          <span className="rounded-full bg-slate-100 px-2.5 py-1 font-mono text-[11px] text-slate-600">
+                          <span className="font-mono text-[11px] text-slate-400">
                             {batch.id}
                           </span>
+                          <SourceTypeBadge sourceType={batch.sourceType} />
                           {summary.pendingSupplier > 0 ? (
                             <span className="rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-semibold text-amber-800">
                               {summary.pendingSupplier} pend. fornecedor
@@ -230,30 +302,22 @@ export default function AdminImportStockMovementsIndexRoute() {
                         </div>
                       </div>
                     </TableCell>
-                    <TableCell className="px-4 py-4">
-                      <div className="min-w-[210px] space-y-1">
-                        <div className="line-clamp-2 text-sm font-medium leading-5 text-slate-800">
-                          {batch.originalFileName || '-'}
-                        </div>
-                        <div className="text-xs text-slate-500">Aba: {batch.worksheetName || '-'}</div>
+                    <TableCell className="px-4 py-4 text-center">
+                      <div className="flex flex-col items-center gap-0.5">
+                        <span className="text-sm font-semibold text-slate-900">{summary.total}</span>
+                        <span className="text-[11px] uppercase tracking-wide text-slate-400">linhas</span>
                       </div>
                     </TableCell>
-                    <TableCell className="px-4 py-4">
-                      <div className="min-w-[68px] rounded-xl bg-slate-50 px-3 py-2 text-center">
-                        <div className="text-lg font-semibold leading-none text-slate-950">{summary.total}</div>
-                        <div className="mt-1 text-[11px] uppercase tracking-wide text-slate-500">linhas</div>
+                    <TableCell className="px-4 py-4 text-center">
+                      <div className="flex flex-col items-center gap-0.5">
+                        <span className="text-sm font-semibold text-slate-900">{summary.imported}</span>
+                        <span className="text-[11px] uppercase tracking-wide text-slate-400">importadas</span>
                       </div>
                     </TableCell>
-                    <TableCell className="px-4 py-4">
-                      <div className="min-w-[68px] rounded-xl bg-slate-50 px-3 py-2 text-center">
-                        <div className="text-lg font-semibold leading-none text-slate-950">{summary.imported}</div>
-                        <div className="mt-1 text-[11px] uppercase tracking-wide text-slate-500">importadas</div>
-                      </div>
-                    </TableCell>
-                    <TableCell className="px-4 py-4">
-                      <div className="min-w-[88px] rounded-xl bg-emerald-50 px-3 py-2 text-center">
-                        <div className="text-lg font-semibold leading-none text-emerald-800">{summary.readyToImport}</div>
-                        <div className="mt-1 text-[11px] uppercase tracking-wide text-emerald-700">prontas</div>
+                    <TableCell className="px-4 py-4 text-center">
+                      <div className="flex flex-col items-center gap-0.5">
+                        <span className="text-sm font-bold text-slate-900">{summary.readyToImport}</span>
+                        <span className="text-[11px] uppercase tracking-wide text-slate-400">prontas</span>
                       </div>
                     </TableCell>
                     <TableCell className="px-4 py-4">
@@ -270,17 +334,12 @@ export default function AdminImportStockMovementsIndexRoute() {
                             </Button>
                           </div>
                         ) : (
-                          <div className="inline-flex h-8 items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-2.5 text-[11px] font-semibold text-emerald-700">
+                          <div className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-emerald-700">
                             <CheckCircle2 className="h-3.5 w-3.5" />
                             Conciliado
                           </div>
                         )}
                       </div>
-                    </TableCell>
-                    <TableCell className="px-4 py-4">
-                      <Badge variant="outline" className={statusBadgeClass(String(batch.status))}>
-                        {batch.status}
-                      </Badge>
                     </TableCell>
                     <TableCell className="px-4 py-4 text-sm text-slate-600">
                       <div className="min-w-[120px] leading-5">{formatDate(batch.createdAt)}</div>

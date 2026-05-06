@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type InputHTMLAttributes } from "react";
 import type { DecimalLike } from "../../domain/kds/types";
 import { cn } from "~/lib/utils";
-type Props = {
+type Props = Omit<InputHTMLAttributes<HTMLInputElement>, "defaultValue" | "name" | "onChange" | "value" | "type"> & {
   id?: string;
   name: string;
   defaultValue?: DecimalLike | null;
@@ -19,6 +19,7 @@ export function MoneyInput({ name, defaultValue, placeholder, className, disable
   const [cents, setCents] = useState<number>(toCents(defaultValue));
   useEffect(() => setCents(toCents(defaultValue)), [defaultValue]);
   const display = (cents / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const form = props.form;
   function onKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
     if (disabled || readOnly) return;
     const k = e.key;
@@ -67,6 +68,6 @@ export function MoneyInput({ name, defaultValue, placeholder, className, disable
       placeholder={placeholder}
       {...props}
     />
-    <input type="hidden" name={name} value={(cents / 100).toFixed(2)} />
+    <input type="hidden" name={name} form={form} value={(cents / 100).toFixed(2)} />
   </div>);
 }

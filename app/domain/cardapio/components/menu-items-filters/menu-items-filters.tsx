@@ -14,6 +14,7 @@ interface MenuItemsFiltersProps {
   initialItems: MenuItemWithSellPriceVariations[] | MenuItemWithCostVariations[];
   groups: MenuItemGroup[];
   categories: Category[];
+  sizes?: { id: string; name: string }[];
   cnContainer?: string
   onItemsChange: (filteredItems: MenuItemWithSellPriceVariations[] | MenuItemWithCostVariations[]) => void;
 }
@@ -22,6 +23,7 @@ export function MenuItemsFilters({
   initialItems,
   groups,
   categories,
+  sizes,
   cnContainer,
   onItemsChange,
 }: MenuItemsFiltersProps) {
@@ -29,12 +31,14 @@ export function MenuItemsFilters({
   const [currentGroup, setCurrentGroup] = useState<MenuItemGroup["key"] | null>(null);
   const [currentCategory, setCurrentCategory] = useState<Category | null>(null);
   const [currentFilter, setCurrentFilter] = useState<MenuItemVisibilityFilterOption | null>("all");
+  const [currentVariation, setCurrentVariation] = useState<string | null>(null);
 
   const applyFilters = (
     groupKey: MenuItemGroup["key"] | null,
     category: Category | null,
     visibility: MenuItemVisibilityFilterOption | null,
-    searchValue: string
+    searchValue: string,
+    variation: string | null
   ) => {
     let filtered = [...initialItems];
 
@@ -49,16 +53,21 @@ export function MenuItemsFilters({
         i.ingredients?.toLowerCase().includes(searchValue.toLowerCase())
       );
     }
+    if (variation) {
+      filtered = filtered.filter(i =>
+        (i as MenuItemWithSellPriceVariations).sellPriceVariations?.some(v => v.sizeName === variation)
+      );
+    }
 
     onItemsChange(filtered);
   };
 
   useEffect(() => {
-    applyFilters(currentGroup, currentCategory, currentFilter, search);
+    applyFilters(currentGroup, currentCategory, currentFilter, search, currentVariation);
   }, []);
 
   useEffect(() => {
-    applyFilters(currentGroup, currentCategory, currentFilter, search);
+    applyFilters(currentGroup, currentCategory, currentFilter, search, currentVariation);
   }, [initialItems]);
 
   return (
@@ -74,7 +83,7 @@ export function MenuItemsFilters({
           const parsed = value ? jsonParse(value) : null;
           const key = parsed?.key || null;
           setCurrentGroup(key);
-          applyFilters(key, currentCategory, currentFilter, search);
+          applyFilters(key, currentCategory, currentFilter, search, currentVariation);
         }}
       >
         <SelectTrigger className="w-full md:col-span-1 bg-white">
@@ -95,7 +104,7 @@ export function MenuItemsFilters({
         onValueChange={(value) => {
           const parsed = jsonParse(value);
           setCurrentCategory(parsed);
-          applyFilters(currentGroup, parsed, currentFilter, search);
+          applyFilters(currentGroup, parsed, currentFilter, search, currentVariation);
         }}
         disabled={currentGroup === null}
       >
@@ -116,7 +125,7 @@ export function MenuItemsFilters({
         onValueChange={(value) => {
           const v = value as MenuItemVisibilityFilterOption;
           setCurrentFilter(v);
-          applyFilters(currentGroup, currentCategory, v, search);
+          applyFilters(currentGroup, currentCategory, v, search, currentVariation);
         }}
         defaultValue={"all"}
       >
@@ -130,6 +139,30 @@ export function MenuItemsFilters({
           <SelectItem value="inactive">Desativados</SelectItem>
         </SelectContent>
       </Select>
+
+      {sizes && sizes.length > 0 && (
+        <Select
+          name="variation"
+          onValueChange={(value) => {
+            const v = value || null;
+            setCurrentVariation(v);
+            applyFilters(currentGroup, currentCategory, currentFilter, search, v);
+          }}
+          defaultValue=""
+        >
+          <SelectTrigger className="w-full bg-white md:col-span-1">
+            <SelectValue placeholder="Variação" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="">Todas</SelectItem>
+            {sizes.map((s) => (
+              <SelectItem key={s.id} value={s.name}>
+                {s.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      )}
 
       <div className="grid place-items-center rounded-sm col-span-5 w-full" >
         <Input

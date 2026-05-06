@@ -1,5 +1,6 @@
 import { Link, useFetcher, useOutletContext, useParams, useRevalidator, useSearchParams } from '@remix-run/react';
-import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { TwoLevelLineRow } from '~/components/admin/import-stock-two-level-row';
 import { Check, ChevronLeft, ChevronsUpDown, Loader2 } from 'lucide-react';
 import { DecimalInput } from '~/components/inputs/inputs';
 import { Badge } from '~/components/ui/badge';
@@ -657,48 +658,36 @@ export default function AdminImportStockMovementsBatchLineDetailRoute() {
                   const canSaveThenApprove = isActive && preview.status === 'pending_cost_review' && !canApprovePersistedCostReview;
 
                   return (
-                  <Fragment key={line.id}>
-                    <TableRow
-                      key={`${line.id}-entry`}
-                      className={cn('border-slate-200 align-top bg-white hover:bg-white', isActive && 'border-l-2 border-l-amber-300')}
-                    >
-                    <TableCell rowSpan={2} className={cn('px-3 py-3 text-xs font-semibold align-top text-slate-700', isActive && 'bg-slate-50')}>
-                      {line.rowNumber}
-                    </TableCell>
-                    <TableCell className="px-3 py-3 text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">
-                      Arquivo
-                    </TableCell>
-                    <TableCell className="min-w-[260px] px-3 py-3 text-xs font-medium text-slate-900">
-                      {line.ingredientName || '-'}
-                    </TableCell>
-                    <TableCell className="px-3 py-3 text-xs text-slate-700">
-                      {line.movementUnit || line.unitEntry || '-'}
-                    </TableCell>
-                    <TableCell className="px-3 py-3 text-right font-mono text-xs tabular-nums text-slate-700">
-                      {formatDecimal(line.qtyEntry)}
-                    </TableCell>
-                    <TableCell className="px-3 py-3 text-right font-mono text-xs tabular-nums text-slate-700">
-                      {formatMoney(line.costAmount)}
-                    </TableCell>
-                    <TableCell className="px-3 py-3 text-right font-mono text-xs tabular-nums text-slate-700">
-                      {formatMoney(line.costTotalAmount)}
-                    </TableCell>
-                    <TableCell className="px-3 py-3 text-xs text-slate-400">-</TableCell>
-                    <TableCell className="px-3 py-3 text-xs text-slate-400">-</TableCell>
-                    <TableCell className="px-3 py-3 text-xs text-slate-400"></TableCell>
-                    </TableRow>
-                    <TableRow
-                      key={`${line.id}-movement`}
-                      className={cn(
-                        'border-sky-200 align-top bg-sky-50/70',
-                        isActive && 'border-l-2 border-l-sky-400 bg-sky-100/70',
-                        canActivateInlineEdit && 'cursor-pointer hover:bg-sky-100/80',
-                      )}
-                      onClick={canActivateInlineEdit ? () => setEditableLineId(String(line.id)) : undefined}
-                    >
-                      <TableCell className="px-3 py-3 text-[11px] font-semibold uppercase tracking-[0.08em] text-sky-800">
-                        Movimento
-                      </TableCell>
+                  <TwoLevelLineRow
+                    key={line.id}
+                    rowNumber={line.rowNumber}
+                    isActive={isActive}
+                    canMovementRowClick={canActivateInlineEdit}
+                    onMovementRowClick={() => setEditableLineId(String(line.id))}
+                    archiveCells={
+                      <>
+                        <TableCell className="min-w-[260px] px-3 py-3 text-xs font-medium text-slate-900">
+                          {line.ingredientName || '-'}
+                        </TableCell>
+                        <TableCell className="px-3 py-3 text-xs text-slate-700">
+                          {line.movementUnit || line.unitEntry || '-'}
+                        </TableCell>
+                        <TableCell className="px-3 py-3 text-right font-mono text-xs tabular-nums text-slate-700">
+                          {formatDecimal(line.qtyEntry)}
+                        </TableCell>
+                        <TableCell className="px-3 py-3 text-right font-mono text-xs tabular-nums text-slate-700">
+                          {formatMoney(line.costAmount)}
+                        </TableCell>
+                        <TableCell className="px-3 py-3 text-right font-mono text-xs tabular-nums text-slate-700">
+                          {formatMoney(line.costTotalAmount)}
+                        </TableCell>
+                        <TableCell className="px-3 py-3 text-xs text-slate-400">-</TableCell>
+                        <TableCell className="px-3 py-3 text-xs text-slate-400">-</TableCell>
+                        <TableCell className="px-3 py-3 text-xs text-slate-400" />
+                      </>
+                    }
+                    movementCells={
+                      <>
                       <TableCell className={cn('min-w-[280px] px-3 py-3 pl-8 text-xs text-slate-900', isActive && 'font-medium')}>
                         {isActive ? (
                           <div className="space-y-2">
@@ -1033,8 +1022,9 @@ export default function AdminImportStockMovementsBatchLineDetailRoute() {
                         </Button>
                       ) : null}
                     </TableCell>
-                  </TableRow>
-                  </Fragment>
+                      </>
+                    }
+                  />
                 );
               })}
             </TableBody>

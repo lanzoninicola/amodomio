@@ -6,10 +6,35 @@ import { itemCostVariationPrismaEntity } from '~/domain/item/item-cost-variation
 import { isItemCostExcludedFromMetrics, normalizeItemCostToConsumptionUnit } from '~/domain/item/item-cost-metrics.server';
 
 const SOURCE_SYSTEM = 'saipos';
-const SOURCE_TYPE = 'entrada_nf';
+const SOURCE_TYPE_FILE = 'file_upload';
+const SOURCE_TYPE_VISION = 'photo_vision';
+const SOURCE_TYPE_API = 'rest_api';
+const ALIAS_SOURCE_TYPE = 'entrada_nf'; // compartilhado entre todos os tipos de importação
 const COST_REFERENCE_TYPE_LINE = 'stock-movement-import-line';
 const COST_REFERENCE_TYPE_MOVEMENT = 'stock-movement';
 const COST_DISCREPANCY_THRESHOLD = 0.3;
+
+const UNIT_ALIASES: Record<string, string> = {
+  UNIDADE: 'UN',
+  UNID: 'UN',
+  UND: 'UN',
+  PC: 'UN',
+  PCA: 'UN',
+  PECA: 'UN',
+  LITRO: 'L',
+  LT: 'L',
+  GRAMA: 'G',
+  GR: 'G',
+  GRS: 'G',
+  QUILOGRAMA: 'KG',
+  QUILO: 'KG',
+  MILILITRO: 'ML',
+  MILILITROS: 'ML',
+};
+
+function resolveUnitAlias(unit: string): string {
+  return UNIT_ALIASES[unit.toUpperCase()] ?? unit;
+}
 
 export type BatchSummary = {
   total: number;
@@ -77,7 +102,7 @@ function movementMetadataBase(params: {
     direction: 'entry',
     movementType: 'import',
     sourceSystem: SOURCE_SYSTEM,
-    sourceType: SOURCE_TYPE,
+    sourceType: ALIAS_SOURCE_TYPE,
     ingredientName: params.line?.ingredientName || null,
     invoiceNumber: params.line?.invoiceNumber || null,
     supplierId: params.line?.supplierId || null,
@@ -223,7 +248,7 @@ async function loadItemsAndAliases() {
     }),
     typeof db.itemImportAlias?.findMany === 'function'
       ? db.itemImportAlias.findMany({
-          where: { active: true, sourceSystem: SOURCE_SYSTEM, sourceType: SOURCE_TYPE },
+          where: { active: true, sourceSystem: SOURCE_SYSTEM, sourceType: ALIAS_SOURCE_TYPE },
           select: { id: true, aliasName: true, aliasNormalized: true, itemId: true },
         })
       : [],
@@ -282,6 +307,31 @@ async function loadItemsAndAliases() {
   };
 }
 
+const FUZZY_ALIAS_THRESHOLD = 0.6;
+
+function tokenizeForSimilarity(name: string): string[] {
+  return String(name || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9\s]/g, '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+}
+
+function computeAliasSimilarity(a: string, b: string): number {
+  const tokA = tokenizeForSimilarity(a);
+  const tokB = tokenizeForSimilarity(b);
+  if (tokA.length === 0 && tokB.length === 0) return 1;
+  if (tokA.length === 0 || tokB.length === 0) return 0;
+  const setB = new Set(tokB);
+  let intersection = 0;
+  for (const t of tokA) if (setB.has(t)) intersection++;
+  const union = new Set([...tokA, ...tokB]).size;
+  return intersection / union;
+}
+
 function chooseAutoMapping(ingredientName: string, lookup: Awaited<ReturnType<typeof loadItemsAndAliases>>) {
   const normalized = normalizeName(ingredientName);
   const exact = lookup.itemsByNormalized.get(normalized);
@@ -293,6 +343,21 @@ function chooseAutoMapping(ingredientName: string, lookup: Awaited<ReturnType<ty
   if (alias) {
     const item = lookup.itemsById.get(alias.itemId);
     if (item) return { item, source: 'alias' };
+  }
+
+  // Fuzzy alias fallback: find the saved alias with highest token similarity
+  let bestScore = 0;
+  let bestAlias: any = null;
+  for (const [, a] of lookup.aliasByNormalized) {
+    const score = computeAliasSimilarity(ingredientName, a.aliasName || a.aliasNormalized);
+    if (score > bestScore) {
+      bestScore = score;
+      bestAlias = a;
+    }
+  }
+  if (bestScore >= FUZZY_ALIAS_THRESHOLD && bestAlias) {
+    const item = lookup.itemsById.get(bestAlias.itemId);
+    if (item) return { item, source: 'alias_fuzzy' };
   }
 
   return { item: null, source: null };
@@ -566,7 +631,7 @@ function resolveLatestCostHint(params: {
 
 async function getCurrentCostHintsByItemIds(itemIds: string[]) {
   const normalizedIds = Array.from(new Set(itemIds.map((id) => str(id)).filter(Boolean)));
-  if (normalizedIds.length === 0) return {} as Record<string, { lastCostPerUnit: number | null }>;
+  if (normalizedIds.length === 0) return {} as Record<string, { lastCostPerUnit: number | null; avgCostPerUnit: number | null }>;
 
   const db = prismaClient as any;
   const itemVariationSelect = {
@@ -586,6 +651,8 @@ async function getCurrentCostHintsByItemIds(itemIds: string[]) {
       },
     },
   };
+  const thirtyDaysAgo = new Date();
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
   const [costRows, historyRows] = await Promise.all([
     db.itemCostVariation.findMany({
       where: { ItemVariation: { itemId: { in: normalizedIds }, deletedAt: null } },
@@ -593,7 +660,10 @@ async function getCurrentCostHintsByItemIds(itemIds: string[]) {
       orderBy: [{ validFrom: 'desc' }, { createdAt: 'desc' }],
     }),
     db.itemCostVariationHistory.findMany({
-      where: { ItemVariation: { itemId: { in: normalizedIds }, deletedAt: null } },
+      where: {
+        ItemVariation: { itemId: { in: normalizedIds }, deletedAt: null },
+        OR: [{ validFrom: { gte: thirtyDaysAgo } }, { createdAt: { gte: thirtyDaysAgo } }],
+      },
       select: {
         costAmount: true,
         unit: true,
@@ -604,10 +674,11 @@ async function getCurrentCostHintsByItemIds(itemIds: string[]) {
         ItemVariation: { select: itemVariationSelect },
       },
       orderBy: [{ validFrom: 'desc' }, { createdAt: 'desc' }],
+      take: 500,
     }),
   ]);
 
-  const itemCostHints: Record<string, { lastCostPerUnit: number | null }> = {};
+  const itemCostHints: Record<string, { lastCostPerUnit: number | null; avgCostPerUnit: number | null }> = {};
   const currentRowsByItemId = new Map<string, any[]>();
   for (const row of costRows as any[]) {
     const itemId = str(row?.ItemVariation?.itemId);
@@ -625,11 +696,19 @@ async function getCurrentCostHintsByItemIds(itemIds: string[]) {
   }
 
   for (const itemId of normalizedIds) {
+    const histEntries = historyRowsByItemId.get(itemId) || [];
+    const item = (histEntries[0] as any)?.ItemVariation?.Item || {};
+    const normalized = histEntries
+      .filter((e: any) => !isItemCostExcludedFromMetrics(e))
+      .map((e: any) => normalizeItemCostToConsumptionUnit({ costAmount: e.costAmount, unit: e.unit, source: e.source }, item))
+      .filter((v): v is number => Number.isFinite(v as number) && (v as number) > 0);
+    const avg = normalized.length > 0 ? normalized.reduce((a: number, b: number) => a + b, 0) / normalized.length : null;
     itemCostHints[itemId] = {
       lastCostPerUnit: resolveLatestCostHint({
         currentRows: currentRowsByItemId.get(itemId) || [],
-        historyRows: historyRowsByItemId.get(itemId) || [],
+        historyRows: histEntries,
       }),
+      avgCostPerUnit: avg,
     };
   }
 
@@ -676,7 +755,7 @@ function resolveReadyStatusWithCostReview(params: {
   mappedItemId?: string | null;
   convertedCostAmount?: number | null;
   targetUnit?: string | null;
-  costHintsByItemId: Record<string, { lastCostPerUnit: number | null }>;
+  costHintsByItemId: Record<string, { lastCostPerUnit: number | null; avgCostPerUnit: number | null }>;
 }) {
   if (params.status !== 'ready') {
     return {
@@ -732,9 +811,12 @@ function resolveReadyStatusWithCostReview(params: {
 }
 
 async function resolveConversionForLine(line: any, item: any) {
-  const movementUnit = str(line.movementUnit || line.unitEntry || line.unitConsumption).toUpperCase() || null;
+  const movementUnit = resolveUnitAlias(str(line.movementUnit || line.unitEntry || line.unitConsumption).toUpperCase()) || null;
   const targetUnit = resolveTargetUnit(item);
-  const costAmount = Number(line.costAmount ?? NaN);
+  let costAmount = Number(line.costAmount ?? NaN);
+  if ((!Number.isFinite(costAmount) || costAmount <= 0) && Number(line.costTotalAmount) > 0 && Number(line.qtyEntry) > 0) {
+    costAmount = Number(line.costTotalAmount) / Number(line.qtyEntry);
+  }
 
   if (!Number.isFinite(costAmount) || costAmount <= 0) {
     return { status: 'invalid', errorCode: 'invalid_cost', errorMessage: 'Custo inválido' } as const;
@@ -843,7 +925,7 @@ async function resolveConversionForLine(line: any, item: any) {
 async function classifyLine(
   line: any,
   lookup: Awaited<ReturnType<typeof loadItemsAndAliases>>,
-  costHintsByItemId: Record<string, { lastCostPerUnit: number | null }>,
+  costHintsByItemId: Record<string, { lastCostPerUnit: number | null; avgCostPerUnit: number | null }>,
 ) {
   if (!isSupportedStockEntryReason(line.motivo)) {
     return {
@@ -1081,7 +1163,7 @@ export async function createStockMovementImportBatchFromFile(params: {
 
     const sourceFingerprint = hashFingerprint({
       sourceSystem: SOURCE_SYSTEM,
-      sourceType: SOURCE_TYPE,
+      sourceType: SOURCE_TYPE_FILE,
       movementAt: movementAt?.toISOString() || str(rawRow[0]),
       ingredientName: normalizeName(ingredientName),
       invoiceNumber,
@@ -1179,7 +1261,7 @@ export async function createStockMovementImportBatchFromFile(params: {
     data: {
       name: str(params.batchName) || `Importação de movimentações ${new Date().toLocaleString('pt-BR')}`,
       sourceSystem: SOURCE_SYSTEM,
-      sourceType: SOURCE_TYPE,
+      sourceType: SOURCE_TYPE_FILE,
       status: derivePreApplyBatchStatus(summary),
       originalFileName: params.fileName,
       worksheetName: sheetName,
@@ -1331,6 +1413,7 @@ async function resolveDirectSupplierFromLookup(
 
 export async function createStockMovementImportBatchFromVisionPayload(params: {
   batchName: string;
+  sourceType?: typeof SOURCE_TYPE_VISION | typeof SOURCE_TYPE_API;
   uploadedBy?: string | null;
   originalFileName?: string | null;
   worksheetName?: string | null;
@@ -1339,6 +1422,7 @@ export async function createStockMovementImportBatchFromVisionPayload(params: {
   invoiceNumber?: string | null;
   supplierName?: string | null;
   supplierCnpj?: string | null;
+  freightAmount?: number | null;
   lines: Array<{
     rowNumber?: number | null;
     movementAt?: Date | null;
@@ -1395,7 +1479,7 @@ export async function createStockMovementImportBatchFromVisionPayload(params: {
 
     const sourceFingerprint = hashFingerprint({
       sourceSystem: SOURCE_SYSTEM,
-      sourceType: SOURCE_TYPE,
+      sourceType: params.sourceType || SOURCE_TYPE_VISION,
       movementAt: movementAt?.toISOString() || '',
       ingredientName: normalizeName(ingredientName),
       invoiceNumber,
@@ -1487,6 +1571,10 @@ export async function createStockMovementImportBatchFromVisionPayload(params: {
     return line;
   });
 
+  const freightAmount = Number.isFinite(Number(params.freightAmount)) && Number(params.freightAmount) > 0
+    ? Number(params.freightAmount)
+    : null;
+
   const summary = summarizeLines(finalLines);
   const db = prismaClient as any;
   const periodDates = finalLines
@@ -1500,7 +1588,7 @@ export async function createStockMovementImportBatchFromVisionPayload(params: {
     data: {
       name: str(params.batchName) || `Importação de movimentações por foto ${new Date().toLocaleString('pt-BR')}`,
       sourceSystem: SOURCE_SYSTEM,
-      sourceType: SOURCE_TYPE,
+      sourceType: params.sourceType || SOURCE_TYPE_VISION,
       status: derivePreApplyBatchStatus(summary),
       originalFileName: str(params.originalFileName) || 'chatgpt-photo-import.json',
       worksheetName: str(params.worksheetName) || 'chatgpt-vision',
@@ -1509,6 +1597,7 @@ export async function createStockMovementImportBatchFromVisionPayload(params: {
       periodStart,
       periodEnd,
       uploadedBy: params.uploadedBy || null,
+      freightAmount,
       notes: str(params.notes) || 'Lote criado a partir de resposta estruturada do ChatGPT com foto de cupom ou documento fiscal.',
       summary,
       Lines: {
@@ -1798,6 +1887,7 @@ async function ensureSyntheticInvoiceNumbersForVisionBatch(batchId: string) {
     where: { id: batchId },
     select: {
       id: true,
+      sourceType: true,
       worksheetName: true,
       originalFileName: true,
       periodStart: true,
@@ -1821,10 +1911,7 @@ async function ensureSyntheticInvoiceNumbersForVisionBatch(batchId: string) {
   });
 
   if (!batch) return;
-  const isVisionBatch =
-    String(batch.worksheetName || '') === 'chatgpt-vision' ||
-    String(batch.originalFileName || '') === 'chatgpt-photo-import.json';
-  if (!isVisionBatch) return;
+  if (batch.sourceType !== SOURCE_TYPE_VISION) return;
 
   const linesMissingInvoice = (batch.Lines || []).filter((line: any) => !str(line.invoiceNumber));
   if (linesMissingInvoice.length === 0) return;
@@ -1953,13 +2040,13 @@ export async function mapBatchLinesToItem(params: {
         where: {
           sourceSystem_sourceType_aliasNormalized: {
             sourceSystem: SOURCE_SYSTEM,
-            sourceType: SOURCE_TYPE,
+            sourceType: ALIAS_SOURCE_TYPE,
             aliasNormalized: aliasLine.ingredientNameNormalized,
           },
         },
         create: {
           sourceSystem: SOURCE_SYSTEM,
-          sourceType: SOURCE_TYPE,
+          sourceType: ALIAS_SOURCE_TYPE,
           aliasName: aliasLine.ingredientName,
           aliasNormalized: aliasLine.ingredientNameNormalized,
           itemId: item.id,
@@ -1972,10 +2059,43 @@ export async function mapBatchLinesToItem(params: {
           active: true,
         },
       });
+
+      // Propagate the new alias to all other active batches that still have
+      // pending_mapping lines for the same ingredient name.
+      const otherBatches = await db.stockMovementImportBatchLine.findMany({
+        where: {
+          ingredientNameNormalized: aliasLine.ingredientNameNormalized,
+          status: 'pending_mapping',
+          appliedAt: null,
+          batchId: { not: params.batchId },
+        },
+        select: { batchId: true },
+        distinct: ['batchId'],
+      });
+      for (const row of otherBatches as Array<{ batchId: string }>) {
+        await recomputeBatchLines(row.batchId);
+      }
     }
   }
 
   await recomputeBatchLines(params.batchId);
+}
+
+export async function reapplyAliasesToAllPendingBatches() {
+  const db = prismaClient as any;
+  const batches = await db.stockMovementImportBatchLine.findMany({
+    where: {
+      status: { in: ['pending_mapping', 'invalid', 'error'] },
+      mappedItemId: null,
+      appliedAt: null,
+    },
+    select: { batchId: true },
+    distinct: ['batchId'],
+  });
+  for (const row of batches as Array<{ batchId: string }>) {
+    await recomputeBatchLines(row.batchId);
+  }
+  return batches.length;
 }
 
 export async function setBatchLineManualConversion(params: {
@@ -2033,10 +2153,10 @@ export async function updateStockMovementImportBatchLineEditableFields(params: {
       id: true,
       itemId: true,
       previousCostVariationId: true,
-      previousCostAmount: true,
-      previousCostUnit: true,
-      newCostAmount: true,
-      newCostUnit: true,
+      lastCostAtImport: true,
+      lastCostUnitAtImport: true,
+      newCostAtImport: true,
+      newCostUnitAtImport: true,
       movementUnit: true,
       conversionSource: true,
       conversionFactorUsed: true,
@@ -2281,11 +2401,11 @@ export async function updateStockMovementImportBatchLineEditableFields(params: {
           str(params.movementUnit).toUpperCase() ||
           activeMovement.quantityUnit ||
           null,
-        newCostAmount: Number((conversion as any).convertedCostAmount ?? activeMovement.newCostAmount),
-        newCostUnit: (conversion as any).targetUnit ?? activeMovement.newCostUnit,
+        newCostAtImport: Number((conversion as any).convertedCostAmount ?? activeMovement.newCostAtImport),
+        newCostUnitAtImport: (conversion as any).targetUnit ?? activeMovement.newCostUnitAtImport,
         previousCostVariationId: activeMovement.previousCostVariationId || null,
-        previousCostAmount: activeMovement.previousCostAmount ?? null,
-        previousCostUnit: activeMovement.previousCostUnit ?? null,
+        lastCostAtImport: activeMovement.lastCostAtImport ?? null,
+        lastCostUnitAtImport: activeMovement.lastCostUnitAtImport ?? null,
         movementUnit: str(params.movementUnit).toUpperCase() || null,
         conversionSource: (conversion as any).conversionSource ?? null,
         conversionFactorUsed: (conversion as any).conversionFactorUsed ?? null,
@@ -2508,12 +2628,14 @@ export async function approveBatchLineCostReview(params: {
   if (line.appliedAt) throw new Error('Linha já importada não pode ser reclassificada');
   if (str(line.status) !== 'pending_cost_review') throw new Error('Linha não está pendente de revisão de custo');
 
+  const approvedAt = new Date();
+
   const metadata =
     typeof line.metadata === 'object' && line.metadata && !Array.isArray(line.metadata)
       ? { ...(line.metadata as Record<string, unknown>) }
       : {};
   metadata.costReviewApproval = {
-    approvedAt: new Date().toISOString(),
+    approvedAt: approvedAt.toISOString(),
     approvedBy: str(params.actor) || null,
     mappedItemId: line.mappedItemId || null,
     movementUnit: line.movementUnit || null,
@@ -2522,6 +2644,19 @@ export async function approveBatchLineCostReview(params: {
     convertedCostAmount: line.convertedCostAmount ?? null,
     manualConversionFactor: line.manualConversionFactor ?? null,
   };
+
+  // Fetch cost hints for audit record
+  let lastCostPerUnit: number | null = null;
+  if (line.mappedItemId) {
+    const hints = await getCurrentCostHintsByItemIds([line.mappedItemId]);
+    lastCostPerUnit = hints[line.mappedItemId]?.lastCostPerUnit ?? null;
+  }
+
+  // Fetch batch name for WhatsApp message
+  const batch = await db.stockMovementImportBatch.findUnique({
+    where: { id: params.batchId },
+    select: { name: true },
+  });
 
   await db.stockMovementImportBatchLine.update({
     where: { id: params.lineId },
@@ -2533,7 +2668,97 @@ export async function approveBatchLineCostReview(params: {
     },
   });
 
+  // Write audit record
+  await db.stockMovementCostReviewApproval.create({
+    data: {
+      batchId: params.batchId,
+      lineId: params.lineId,
+      approvedBy: str(params.actor) || null,
+      approvedAt,
+      ingredientName: line.ingredientName || '',
+      mappedItemId: line.mappedItemId || null,
+      mappedItemName: line.mappedItemName || null,
+      targetUnit: line.targetUnit || null,
+      costAmount: line.costAmount ?? null,
+      convertedCostAmount: line.convertedCostAmount ?? null,
+      lastCostPerUnit,
+      notifiedWhatsapp: false,
+    },
+  });
+
+  // Send WhatsApp notification if enabled
+  await sendCostReviewApprovalNotification({
+    batchId: params.batchId,
+    batchName: batch?.name || params.batchId,
+    lineId: params.lineId,
+    ingredientName: line.ingredientName || '',
+    mappedItemName: line.mappedItemName || null,
+    convertedCostAmount: line.convertedCostAmount ?? null,
+    lastCostPerUnit,
+    targetUnit: line.targetUnit || null,
+    approvedBy: str(params.actor) || null,
+  });
+
   await recomputeBatchLines(params.batchId);
+}
+
+async function sendCostReviewApprovalNotification(params: {
+  batchId: string;
+  batchName: string;
+  lineId: string;
+  ingredientName: string;
+  mappedItemName: string | null;
+  convertedCostAmount: number | null;
+  lastCostPerUnit: number | null;
+  targetUnit: string | null;
+  approvedBy: string | null;
+}) {
+  try {
+    const {
+      COST_REVIEW_NOTIFICATION_CONTEXT,
+      COST_REVIEW_WHATSAPP_ENABLED_SETTING,
+      COST_REVIEW_WHATSAPP_PHONE_SETTING,
+    } = await import('~/domain/stock-movement/cost-review-notification-settings');
+    const { sendTextMessage } = await import('~/domain/z-api/zapi.service.server');
+
+    const settings = await prismaClient.setting.findMany({
+      where: {
+        context: COST_REVIEW_NOTIFICATION_CONTEXT,
+        name: { in: [COST_REVIEW_WHATSAPP_ENABLED_SETTING, COST_REVIEW_WHATSAPP_PHONE_SETTING] },
+      },
+    });
+    const settingsMap = Object.fromEntries(settings.map((s) => [s.name, s.value]));
+
+    const enabled = settingsMap[COST_REVIEW_WHATSAPP_ENABLED_SETTING] === 'true';
+    if (!enabled) return;
+
+    const phone = str(settingsMap[COST_REVIEW_WHATSAPP_PHONE_SETTING]);
+    if (!phone) return;
+
+    const fmt = (v: number | null) =>
+      v != null
+        ? v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+        : '-';
+
+    const lines = [
+      `✅ *Aprovação de custo*`,
+      ``,
+      `*Item:* ${params.mappedItemName || params.ingredientName}`,
+      `*Custo aprovado:* ${fmt(params.convertedCostAmount)}${params.targetUnit ? `/${params.targetUnit}` : ''}`,
+      `*Último custo:* ${fmt(params.lastCostPerUnit)}`,
+      `*Lote:* ${params.batchName}`,
+      params.approvedBy ? `*Aprovado por:* ${params.approvedBy}` : null,
+    ].filter(Boolean).join('\n');
+
+    await sendTextMessage({ phone, message: lines }, { timeoutMs: 8_000 });
+
+    await (prismaClient as any).stockMovementCostReviewApproval.updateMany({
+      where: { lineId: params.lineId, notifiedWhatsapp: false },
+      data: { notifiedWhatsapp: true },
+    });
+  } catch (err) {
+    console.error('[sendCostReviewApprovalNotification] failed silently:', err);
+  }
 }
 
 async function getBatchReadyLines(batchId: string) {
@@ -2584,6 +2809,9 @@ async function importSingleStockMovementImportBatchLine(params: { batchId: strin
     return { imported: 0, errors: 1, processed: 1 };
   }
 
+  const costHintsAtImport = await getCurrentCostHintsByItemIds([item.id]);
+  const avgCostAtImport = costHintsAtImport[item.id]?.avgCostPerUnit ?? null;
+
   const baseVar = await itemVariationPrismaEntity.findPrimaryVariationForItem(item.id, {
     ensureBaseIfMissing: true,
   });
@@ -2623,10 +2851,11 @@ async function importSingleStockMovementImportBatchLine(params: { batchId: strin
         quantityAmount: line.qtyEntry ?? line.qtyConsumption ?? null,
         quantityUnit: line.unitEntry || line.unitConsumption || line.movementUnit || null,
         previousCostVariationId: currentCost?.id || null,
-        previousCostAmount: currentCost?.costAmount ?? null,
-        previousCostUnit: currentCost?.unit ?? null,
-        newCostAmount: nextCost,
-        newCostUnit: line.targetUnit || line.movementUnit || null,
+        lastCostAtImport: currentCost?.costAmount ?? null,
+        lastCostUnitAtImport: currentCost?.unit ?? null,
+        avgCostAtImport: avgCostAtImport,
+        newCostAtImport: nextCost,
+        newCostUnitAtImport: line.targetUnit || line.movementUnit || null,
         movementUnit: line.movementUnit || null,
         conversionSource: line.conversionSource || null,
         conversionFactorUsed: line.conversionFactorUsed ?? null,
@@ -2886,8 +3115,8 @@ export async function rollbackStockMovementImportBatch(params: { batchId: string
       id: true,
       importLineId: true,
       itemVariationId: true,
-      previousCostAmount: true,
-      previousCostUnit: true,
+      lastCostAtImport: true,
+      lastCostUnitAtImport: true,
       metadata: true,
     },
   });
@@ -2934,12 +3163,12 @@ async function deleteImportedStockMovements(params: {
         continue;
       }
 
-      const previousAmount = Number(movement.previousCostAmount ?? NaN);
+      const previousAmount = Number(movement.lastCostAtImport ?? NaN);
       if (canRestorePreviousCost && Number.isFinite(previousAmount) && previousAmount >= 0) {
         await itemCostVariationPrismaEntity.setCurrentCost({
           itemVariationId: movement.itemVariationId,
           costAmount: previousAmount,
-          unit: movement.previousCostUnit || null,
+          unit: movement.lastCostUnitAtImport || null,
           source: 'import',
           referenceType: 'stock-movement-delete',
           referenceId: movement.id,
@@ -2978,7 +3207,7 @@ async function deleteImportedStockMovements(params: {
               costAmountBefore: Number(current?.costAmount || 0),
               costAmountAfter: previousAmount,
               unitBefore: current?.unit ?? null,
-              unitAfter: movement.previousCostUnit || null,
+              unitAfter: movement.lastCostUnitAtImport || null,
               sourceBefore: current?.source ?? null,
               sourceAfter: 'import',
               validFromBefore: current?.validFrom || rollbackHistoryEntry.validFrom,
@@ -3119,8 +3348,8 @@ export async function rollbackStockMovementImportBatchLine(params: {
       id: true,
       importLineId: true,
       itemVariationId: true,
-      previousCostAmount: true,
-      previousCostUnit: true,
+      lastCostAtImport: true,
+      lastCostUnitAtImport: true,
       metadata: true,
     },
   });
@@ -3169,8 +3398,8 @@ export async function deleteStockMovementImportBatch(batchId: string) {
       id: true,
       importLineId: true,
       itemVariationId: true,
-      previousCostAmount: true,
-      previousCostUnit: true,
+      lastCostAtImport: true,
+      lastCostUnitAtImport: true,
       metadata: true,
     },
   });
@@ -3199,6 +3428,7 @@ export async function listStockMovementImportBatches(limit = 30) {
     select: {
       id: true,
       name: true,
+      sourceType: true,
       status: true,
       originalFileName: true,
       worksheetName: true,
@@ -3249,10 +3479,10 @@ export async function getStockMovementImportBatchView(batchId: string) {
         itemId: true,
         quantityAmount: true,
         quantityUnit: true,
-        previousCostAmount: true,
-        previousCostUnit: true,
-        newCostAmount: true,
-        newCostUnit: true,
+        lastCostAtImport: true,
+        lastCostUnitAtImport: true,
+        newCostAtImport: true,
+        newCostUnitAtImport: true,
         appliedAt: true,
         deletedAt: true,
         ImportBatch: {
@@ -3424,10 +3654,10 @@ export async function listStockMovementImportMovements(params: {
         itemId: true,
         quantityAmount: true,
         quantityUnit: true,
-        previousCostAmount: true,
-        previousCostUnit: true,
-        newCostAmount: true,
-        newCostUnit: true,
+        lastCostAtImport: true,
+        lastCostUnitAtImport: true,
+        newCostAtImport: true,
+        newCostUnitAtImport: true,
         movementUnit: true,
         conversionSource: true,
         conversionFactorUsed: true,

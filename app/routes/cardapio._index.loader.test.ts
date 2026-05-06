@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({
   findTags: vi.fn(),
   postFindFirst: vi.fn(),
   settingFindFirst: vi.fn(),
+  getCardapioItemsSourceResolution: vi.fn(),
   getEngagementSettings: vi.fn(),
   redisGetJson: vi.fn(),
   redisSetJson: vi.fn(),
@@ -12,10 +13,9 @@ const mocks = vi.hoisted(() => ({
   fetch: vi.fn(),
 }));
 
-vi.mock("~/domain/cardapio/menu-item.prisma.entity.server", () => ({
-  menuItemPrismaEntity: {
-    findAllGroupedByGroupLight: mocks.findItems,
-  },
+vi.mock("~/domain/cardapio/cardapio-items-source.server", () => ({
+  findAllCardapioItemsGroupedByGroupLight: mocks.findItems,
+  getCardapioItemsSourceResolution: mocks.getCardapioItemsSourceResolution,
 }));
 
 vi.mock("~/domain/tags/tag.prisma.entity.server", () => ({
@@ -64,6 +64,11 @@ describe("cardapio._index loader (blocker guard)", () => {
     vi.stubGlobal("fetch", mocks.fetch);
 
     mocks.findItems.mockReturnValue(Promise.resolve([{ id: "item-1" }]));
+    mocks.getCardapioItemsSourceResolution.mockResolvedValue({
+      configuredSource: "menu_items",
+      effectiveSource: "menu_items",
+      fallbackReason: "configured",
+    });
     mocks.findTags.mockReturnValue(Promise.resolve([{ id: "tag-1", name: "pizza" }]));
     mocks.postFindFirst.mockResolvedValue(null);
     mocks.getEngagementSettings.mockResolvedValue({
@@ -103,6 +108,11 @@ describe("cardapio._index loader (blocker guard)", () => {
       tags: [{ id: "cached-tag-1", name: "pizza" }],
       postFeatured: null,
       reelUrls: [],
+      cardapioItemsSource: {
+        configuredSource: "menu_items",
+        effectiveSource: "menu_items",
+        fallbackReason: "configured",
+      },
       menuItemInterestEnabled: true,
       likesEnabled: true,
       sharesEnabled: true,

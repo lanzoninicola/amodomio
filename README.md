@@ -222,11 +222,15 @@ O painel flutuante de alertas no admin lista conversas que precisam de ação do
 O botão de resposta rápida usa mensagem configurável em `setting`:
 
 - `context=whatsapp-no-response`
+- `name=enabled`
+- `value=true|false`
 - `name=quick-reply-message`
 
 Compatibilidade legada:
 
 - `context=admin-wpp-alert-panel` (fallback de leitura)
+
+Quando `context=whatsapp-no-response` com `name=enabled` estiver como `false`, a barra superior e o painel flutuante de alertas não aparecem no admin.
 
 Implementação:
 

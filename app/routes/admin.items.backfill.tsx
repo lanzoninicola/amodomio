@@ -2,6 +2,7 @@ import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import { Form, useActionData, useLoaderData } from "@remix-run/react";
 import { Button } from "~/components/ui/button";
 import { toast } from "~/components/ui/use-toast";
+import { runBackfillLegacySellingInfoToItems } from "~/domain/item/item-selling-info-backfill.server";
 import prismaClient from "~/lib/prisma/client.server";
 import { ok, serverError } from "~/utils/http-response.server";
 
@@ -134,6 +135,13 @@ async function runBackfillMenuItemsToItems() {
 export async function loader({}: LoaderFunctionArgs) {
   try {
     const db = prismaClient as any;
+    const nativeSellingPricesCount =
+      typeof db.itemSellingPriceVariation?.count === "function"
+        ? await db.itemSellingPriceVariation.count()
+        : null;
+    const nativeSellingInfoCount =
+      typeof db.itemSellingInfo?.count === "function" ? await db.itemSellingInfo.count() : null;
+
     const [totalMenuItems, totalItems, linkedMenuItems] = await Promise.all([
       db.menuItem.count(),
       db.item.count(),
@@ -145,6 +153,8 @@ export async function loader({}: LoaderFunctionArgs) {
         totalMenuItems,
         totalItems,
         linkedMenuItems,
+        nativeSellingPrices: nativeSellingPricesCount,
+        nativeSellingInfo: nativeSellingInfoCount,
       },
     });
   } catch (error) {
@@ -152,9 +162,16 @@ export async function loader({}: LoaderFunctionArgs) {
   }
 }
 
-export async function action({}: ActionFunctionArgs) {
+export async function action({ request }: ActionFunctionArgs) {
   try {
-    const result = await runBackfillMenuItemsToItems();
+    const formData = await request.formData();
+    const actionName = String(formData.get("_action") || "menu-items-backfill");
+
+    const result =
+      actionName === "selling-info-backfill"
+          ? await runBackfillLegacySellingInfoToItems()
+          : await runBackfillMenuItemsToItems();
+
     return ok(result);
   } catch (error) {
     return serverError(error);
@@ -168,7 +185,7 @@ export default function AdminItemsBackfillPage() {
   if (actionData?.status === 200) {
     toast({
       title: "Ok",
-      description: `Backfill concluido. Vinculados: ${actionData.payload?.menuItemsLinked ?? 0}`,
+      description: "Backfill concluído.",
     });
   }
 
@@ -193,19 +210,29 @@ export default function AdminItemsBackfillPage() {
           <div>Total MenuItems: {stats.totalMenuItems ?? 0}</div>
           <div>Total Items: {stats.totalItems ?? 0}</div>
           <div>MenuItems vinculados: {stats.linkedMenuItems ?? 0}</div>
+          <div>Preços nativos de venda: {stats.nativeSellingPrices ?? "indisponível"}</div>
+          <div>Infos nativas de venda: {stats.nativeSellingInfo ?? "indisponível"}</div>
         </div>
       </div>
 
       <Form method="post" className="rounded-xl border border-slate-200 bg-white p-4">
+        <input type="hidden" name="_action" value="menu-items-backfill" />
         <Button type="submit" className="bg-slate-900 hover:bg-slate-700">
-          Executar backfill
+          Executar backfill MenuItem → Item
+        </Button>
+      </Form>
+
+      <Form method="post" className="rounded-xl border border-slate-200 bg-white p-4">
+        <input type="hidden" name="_action" value="selling-info-backfill" />
+        <Button type="submit" className="bg-slate-900 hover:bg-slate-700">
+          Executar backfill dados comerciais
         </Button>
       </Form>
 
       {actionData?.payload ? (
         <pre className="overflow-auto rounded-xl border border-slate-200 bg-slate-50 p-4 text-xs">
           {JSON.stringify(actionData.payload, null, 2)}
-        </pre>
+          </pre>
       ) : null}
     </div>
   );

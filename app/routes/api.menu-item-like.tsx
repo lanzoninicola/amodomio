@@ -1,5 +1,6 @@
 import type { ActionFunctionArgs } from "@remix-run/node";
 import { menuItemLikePrismaEntity } from "~/domain/cardapio/menu-item-like.prisma.entity.server";
+import { itemLikePrismaEntity } from "~/domain/item/item-like.prisma.entity.server";
 import {
   createMenuItemInterestEvent,
   hasRecentMenuItemInterestEvent,
@@ -34,6 +35,7 @@ export async function action({ request }: ActionFunctionArgs) {
   const values = Object.fromEntries(formData);
 
   const itemId = typeof values?.itemId === "string" ? values.itemId : "";
+  const sourceType = typeof values?.sourceType === "string" ? values.sourceType : "legacy";
   const clientId = typeof values?.clientId === "string" ? values.clientId : null;
 
   const rateLimitContext = await buildLikeRateLimitContext(request);
@@ -50,7 +52,8 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 
   const alreadyLiked = await hasRecentMenuItemInterestEvent({
-    menuItemId: itemId,
+    menuItemId: sourceType === "native" ? undefined : itemId,
+    itemId: sourceType === "native" ? itemId : undefined,
     type: "like",
     clientId,
   });
@@ -59,17 +62,18 @@ export async function action({ request }: ActionFunctionArgs) {
     const currentAmount = await menuItemLikePrismaEntity.countByMenuItemId(
       itemId
     );
+    const nativeAmount = await itemLikePrismaEntity.countByItemId(itemId);
     return ok(
       {
         action: "menu-item-like-it",
-        likeAmount: currentAmount,
+        likeAmount: sourceType === "native" ? nativeAmount : currentAmount,
       },
       { headers: responseHeaders }
     );
   }
 
   const rateLimitResult = await consumeLikeRateLimit({
-    menuItemId: itemId,
+    menuItemId: `${sourceType}:${itemId}`,
     rateLimitId: rateLimitContext.rateLimitId,
     ip: rateLimitContext.ip,
   });
@@ -78,25 +82,35 @@ export async function action({ request }: ActionFunctionArgs) {
     const currentAmount = await menuItemLikePrismaEntity.countByMenuItemId(
       itemId
     );
+    const nativeAmount = await itemLikePrismaEntity.countByItemId(itemId);
     return ok(
       {
         action: "menu-item-like-it",
-        likeAmount: currentAmount,
+        likeAmount: sourceType === "native" ? nativeAmount : currentAmount,
       },
       { headers: responseHeaders }
     );
   }
 
-  const [err, likeAmount] = await prismaIt(
-    menuItemLikePrismaEntity.create({
-      createdAt: new Date().toISOString(),
-      amount: 1,
-      MenuItem: {
-        connect: {
-          id: itemId,
+  const [err, likeAmount] = await prismaIt(sourceType === "native"
+    ? itemLikePrismaEntity.create({
+        createdAt: new Date().toISOString(),
+        amount: 1,
+        Item: {
+          connect: {
+            id: itemId,
+          },
         },
-      },
-    })
+      } as any)
+    : menuItemLikePrismaEntity.create({
+        createdAt: new Date().toISOString(),
+        amount: 1,
+        MenuItem: {
+          connect: {
+            id: itemId,
+          },
+        },
+      })
   );
 
   if (err) {
@@ -110,7 +124,8 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 
   await createMenuItemInterestEvent({
-    menuItemId: itemId,
+    menuItemId: sourceType === "native" ? undefined : itemId,
+    itemId: sourceType === "native" ? itemId : undefined,
     type: "like",
     clientId,
   });

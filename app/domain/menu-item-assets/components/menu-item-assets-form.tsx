@@ -12,8 +12,9 @@ import {
 } from "../menu-item-assets.shared";
 
 interface MenuItemAssetsFormProps {
-  menuItemId: string;
+  menuItemId?: string;
   initialImages: MenuItemAssetDto[];
+  endpoints?: ReturnType<typeof getMenuItemAssetsApiEndpoints>;
 }
 
 function sortImages(images: MenuItemAssetDto[]) {
@@ -70,6 +71,7 @@ async function readErrorMessage(response: Response, fallback: string) {
 export default function MenuItemAssetsForm({
   menuItemId,
   initialImages,
+  endpoints: endpointsProp,
 }: MenuItemAssetsFormProps) {
   const [images, setImages] = useState<MenuItemAssetDto[]>(sortImages(initialImages || []));
   const [uploading, setUploading] = useState(false);
@@ -81,7 +83,11 @@ export default function MenuItemAssetsForm({
   const [visibleFromUrl, setVisibleFromUrl] = useState(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const endpoints = useMemo(() => getMenuItemAssetsApiEndpoints(menuItemId), [menuItemId]);
+  const endpoints = useMemo(() => {
+    if (endpointsProp) return endpointsProp;
+    if (!menuItemId) throw new Error("MenuItemAssetsForm requer menuItemId ou endpoints.");
+    return getMenuItemAssetsApiEndpoints(menuItemId);
+  }, [endpointsProp, menuItemId]);
 
   const primaryImage = useMemo(
     () => images.find((img) => img.isPrimary) || null,

@@ -16,6 +16,25 @@ export const headers: HeadersFunction = () => ({
     'Cache-Control': 's-maxage=1, stale-while-revalidate=59',
 });
 
+function getEngagementItemId(item: MenuItemWithAssociations) {
+    const compatItem = item as MenuItemWithAssociations & {
+        sourceType?: "legacy" | "native";
+        sourceItemId?: string | null;
+    };
+
+    return typeof compatItem.sourceItemId === "string" && compatItem.sourceItemId.trim()
+        ? compatItem.sourceItemId.trim()
+        : item.id;
+}
+
+function getEngagementSourceType(item: MenuItemWithAssociations) {
+    const compatItem = item as MenuItemWithAssociations & {
+        sourceType?: "legacy" | "native";
+    };
+
+    return compatItem.sourceType === "native" ? "native" : "legacy";
+}
+
 export default function CardapioWebIndex() {
     const [searchParams] = useSearchParams();
     let currentFilterTag = searchParams.get("tag");
@@ -218,6 +237,8 @@ function CardapioItemActionBarVertical({
     const fetcher = useFetcher();
 
     const likingIt = () => {
+        const engagementItemId = getEngagementItemId(item)
+        if (!engagementItemId) return
 
         setLikeIt(true)
         setLikesAmount(likesAmount + 1)
@@ -226,7 +247,8 @@ function CardapioItemActionBarVertical({
         fetcher.submit(
             {
                 action: "menu-item-like-it",
-                itemId: item.id,
+                itemId: engagementItemId,
+                sourceType: getEngagementSourceType(item),
                 likesAmount: String(1),
                 clientId: clientId || "",
             },
@@ -235,6 +257,8 @@ function CardapioItemActionBarVertical({
     };
 
     const shareIt = () => {
+        const engagementItemId = getEngagementItemId(item)
+        if (!engagementItemId) return
         if (!navigator?.share) {
             console.log("Navegador não suporta o compartilhamento")
             return
@@ -251,7 +275,8 @@ function CardapioItemActionBarVertical({
             fetcher.submit(
                 {
                     action: "menu-item-share-it",
-                    itemId: item.id,
+                    itemId: engagementItemId,
+                    sourceType: getEngagementSourceType(item),
                     clientId: clientId || "",
                 },
                 { method: "post", action: "/api/menu-item-share" }

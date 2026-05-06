@@ -7,6 +7,8 @@ export type VariationCreateInput = {
   kind: string;
   code: string;
   name: string;
+  sortOrderIndex?: number | null;
+  additionalInformation?: string | null;
 };
 
 export type VariationUpdateInput = Partial<VariationCreateInput>;
@@ -24,6 +26,17 @@ function normalizeCode(value: string) {
 
 function normalizeName(value: string) {
   return String(value || "").trim();
+}
+
+function normalizeAdditionalInformation(value: string | null | undefined) {
+  const normalized = String(value || "").trim();
+  return normalized || null;
+}
+
+function normalizeSortOrderIndex(value: number | string | null | undefined) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return 0;
+  return Math.trunc(parsed);
 }
 
 class VariationPrismaEntity {
@@ -44,7 +57,7 @@ class VariationPrismaEntity {
 
     return await this.model.findMany({
       where,
-      orderBy: [{ kind: "asc" }, { name: "asc" }],
+      orderBy: [{ kind: "asc" }, { sortOrderIndex: "asc" }, { name: "asc" }],
     });
   }
 
@@ -70,6 +83,8 @@ class VariationPrismaEntity {
     const kind = normalizeKind(data.kind);
     const code = normalizeCode(data.code);
     const name = normalizeName(data.name);
+    const sortOrderIndex = normalizeSortOrderIndex(data.sortOrderIndex);
+    const additionalInformation = normalizeAdditionalInformation(data.additionalInformation);
 
     if (!kind) throw new Error("Variation.kind é obrigatório");
     if (!code) throw new Error("Variation.code é obrigatório");
@@ -80,6 +95,8 @@ class VariationPrismaEntity {
         kind,
         code,
         name,
+        sortOrderIndex,
+        additionalInformation,
       },
     });
   }
@@ -91,6 +108,12 @@ class VariationPrismaEntity {
     if (data.kind != null) nextData.kind = normalizeKind(data.kind);
     if (data.code != null) nextData.code = normalizeCode(data.code);
     if (data.name != null) nextData.name = normalizeName(data.name);
+    if (data.sortOrderIndex != null || Object.prototype.hasOwnProperty.call(data, "sortOrderIndex")) {
+      nextData.sortOrderIndex = normalizeSortOrderIndex(data.sortOrderIndex);
+    }
+    if (data.additionalInformation != null || Object.prototype.hasOwnProperty.call(data, "additionalInformation")) {
+      nextData.additionalInformation = normalizeAdditionalInformation(data.additionalInformation);
+    }
 
     if ("kind" in nextData && !nextData.kind) throw new Error("Variation.kind inválido");
     if ("code" in nextData && !nextData.code) throw new Error("Variation.code inválido");
@@ -104,6 +127,20 @@ class VariationPrismaEntity {
 
   async softDelete(id: string) {
     if (!id) throw new Error("Variation.id é obrigatório");
+
+    const linkedSellingPrices = await (this.client as any).itemSellingPriceVariation.count({
+      where: {
+        ItemVariation: {
+          variationId: id,
+          deletedAt: null,
+        },
+      },
+    });
+
+    if (linkedSellingPrices > 0) {
+      throw new Error("Esta variação possui preços de venda vinculados e não pode ser excluída");
+    }
+
     return await this.model.update({
       where: { id },
       data: { deletedAt: new Date() },
@@ -117,7 +154,7 @@ class VariationPrismaEntity {
     if (existing?.deletedAt) {
       return await this.model.update({
         where: { id: existing.id },
-        data: { name: "Base", deletedAt: null },
+        data: { name: "Base", sortOrderIndex: 0, deletedAt: null },
       });
     }
 
@@ -125,6 +162,7 @@ class VariationPrismaEntity {
       kind: "base",
       code: "base",
       name: "Base",
+      sortOrderIndex: 0,
     });
   }
 }
@@ -132,4 +170,3 @@ class VariationPrismaEntity {
 export const variationPrismaEntity = new VariationPrismaEntity({
   client: prismaClient,
 });
-

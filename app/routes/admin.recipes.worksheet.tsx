@@ -89,31 +89,6 @@ async function getUnitOptions(db: any): Promise<string[]> {
     }
 }
 
-async function resolveLineCostSnapshot(db: any, itemId: string, variationId?: string | null) {
-    const baseWhere: Record<string, any> = { itemId, deletedAt: null }
-    if (variationId) baseWhere.variationId = variationId
-
-    let itemVariation = await db.itemVariation.findFirst({
-        where: baseWhere,
-        include: { ItemCostVariation: true },
-        orderBy: [{ createdAt: "asc" }],
-    })
-
-    if (!itemVariation && variationId) {
-        itemVariation = await db.itemVariation.findFirst({
-            where: { itemId, deletedAt: null },
-            include: { ItemCostVariation: true },
-            orderBy: [{ createdAt: "asc" }],
-        })
-    }
-
-    const lastUnitCostAmount = Number(itemVariation?.ItemCostVariation?.costAmount ?? 0)
-    return {
-        lastUnitCostAmount,
-        avgUnitCostAmount: lastUnitCostAmount,
-    }
-}
-
 // Label exibida nos comboboxes de item: "Nome (Classificação) · UM"
 function itemLabel(item: WorksheetItem): string {
     const parts = [item.name]
@@ -263,19 +238,12 @@ export async function action({ request }: ActionFunctionArgs) {
         const line = lines.find((current) => current.id === lineId)
         if (!line) return badRequest("Linha não encontrada")
 
-        const cost = await resolveLineCostSnapshot(db, line.itemId, line.ItemVariation?.variationId || null)
         const [err] = await tryit(updateRecipeCompositionLine({
             db,
             lineId,
             recipeId,
             unit,
             quantity,
-            snapshot: {
-                lastUnitCostAmount: Number(cost.lastUnitCostAmount || 0),
-                avgUnitCostAmount: Number(cost.avgUnitCostAmount || 0),
-                lastTotalCostAmount: Number(((cost.lastUnitCostAmount || 0) * quantity).toFixed(6)),
-                avgTotalCostAmount: Number(((cost.avgUnitCostAmount || 0) * quantity).toFixed(6)),
-            },
         }))
         if (err) return badRequest("Erro ao atualizar linha")
         return ok({ message: "Linha atualizada" })
@@ -302,19 +270,12 @@ export async function action({ request }: ActionFunctionArgs) {
         if (!unit) return badRequest("Informe a unidade")
         if (!Number.isFinite(quantity) || quantity <= 0) return badRequest("Informe uma quantidade válida")
 
-        const cost = await resolveLineCostSnapshot(db, itemId, null)
         const [err] = await tryit(createRecipeCompositionLine({
             db,
             recipeId,
             itemId,
             unit,
             quantity,
-            snapshot: {
-                lastUnitCostAmount: Number(cost.lastUnitCostAmount || 0),
-                avgUnitCostAmount: Number(cost.avgUnitCostAmount || 0),
-                lastTotalCostAmount: Number(((cost.lastUnitCostAmount || 0) * quantity).toFixed(6)),
-                avgTotalCostAmount: Number(((cost.avgUnitCostAmount || 0) * quantity).toFixed(6)),
-            },
         }))
         if (err) return badRequest("Erro ao adicionar ingrediente: " + err.message)
         return ok({ message: "Ingrediente adicionado" })
@@ -337,8 +298,6 @@ export async function action({ request }: ActionFunctionArgs) {
         const grossQty = normalizedLoss > 0
             ? Number((qty / (1 - normalizedLoss / 100)).toFixed(6))
             : qty
-        const cost = await resolveLineCostSnapshot(db, itemId, line.ItemVariation?.variationId || null)
-
         const [err] = await tryit(updateRecipeCompositionLineItem({
             db,
             lineId,
@@ -346,12 +305,6 @@ export async function action({ request }: ActionFunctionArgs) {
             itemId,
             quantity: qty,
             unit: line.unit,
-            snapshot: {
-                lastUnitCostAmount: Number(cost.lastUnitCostAmount || 0),
-                avgUnitCostAmount: Number(cost.avgUnitCostAmount || 0),
-                lastTotalCostAmount: Number(((cost.lastUnitCostAmount || 0) * grossQty).toFixed(6)),
-                avgTotalCostAmount: Number(((cost.avgUnitCostAmount || 0) * grossQty).toFixed(6)),
-            },
         }))
         if (err) return badRequest("Erro ao atualizar ingrediente")
         return ok({ message: "Ingrediente atualizado" })
@@ -373,19 +326,6 @@ export async function action({ request }: ActionFunctionArgs) {
             recipeId,
             lineId,
             variationIds,
-            resolveCostByVariationId: async (variationId, itemId, quantity, lossPct) => {
-                const normalizedLoss = Math.min(99.9999, Math.max(0, Number(lossPct || 0)))
-                const grossQty = normalizedLoss > 0
-                    ? Number((quantity / (1 - normalizedLoss / 100)).toFixed(6))
-                    : quantity
-                const cost = await resolveLineCostSnapshot(db, itemId, variationId)
-                return {
-                    lastUnitCostAmount: Number(cost.lastUnitCostAmount || 0),
-                    avgUnitCostAmount: Number(cost.avgUnitCostAmount || 0),
-                    lastTotalCostAmount: Number(((cost.lastUnitCostAmount || 0) * grossQty).toFixed(6)),
-                    avgTotalCostAmount: Number(((cost.avgUnitCostAmount || 0) * grossQty).toFixed(6)),
-                }
-            },
         }))
         if (err) return badRequest("Erro ao aplicar variações")
         return ok({ message: "Variações atualizadas" })
@@ -412,18 +352,16 @@ const INPUT_BASE = "w-full h-full px-2 bg-transparent border-0 outline-none text
 //   3  │ 160px  │ Item Vinculado       │ Variação Ing.
 //   4  │  96px  │ Variante             │ UM
 //   5  │ 106px  │ Nome Calculado       │ Quantidade
-//   6  │ 112px  │ ──                   │ Custo Un.
-//   7  │ 112px  │ Total                │ Total
-//   8  │  36px  │ link / count         │ delete
+//   6  │  36px  │ link / count         │ delete
 
 // ─── Column widths (default px) — col 1 (name) is the widest / most flexible ──
-const DEFAULT_COL_WIDTHS = [36, 240, 120, 72, 100, 100, 100, 36]
+const DEFAULT_COL_WIDTHS = [36, 240, 120, 72, 100, 36]
 // Minimum widths per column (don't shrink below these)
-const MIN_COL_WIDTHS = [36, 80, 60, 50, 60, 60, 60, 36]
+const MIN_COL_WIDTHS = [36, 80, 60, 50, 60, 36]
 
-// ─── Flat view column widths: # | Receita | Ingrediente | Variação | UM | Qtd | Custo Un. | Total | Del
-const FLAT_DEFAULT_COL_WIDTHS = [36, 180, 200, 120, 72, 100, 100, 100, 36]
-const FLAT_MIN_COL_WIDTHS     = [36,  80, 100,  60, 50,  60,  60,  60, 36]
+// ─── Flat view column widths: # | Receita | Ingrediente | Variação | UM | Qtd | Del
+const FLAT_DEFAULT_COL_WIDTHS = [36, 180, 200, 120, 72, 100, 36]
+const FLAT_MIN_COL_WIDTHS     = [36,  80, 100,  60, 50,  60, 36]
 const LINE_PAGE_SIZE = 100
 
 function limitRecipesByLines(recipes: WorksheetRecipe[], limit: number): WorksheetRecipe[] {
@@ -611,8 +549,6 @@ export default function RecipeWorksheet() {
                                     <ColHeader colIndex={3} onStartResize={startFlatResize}>Variação</ColHeader>
                                     <ColHeader colIndex={4} onStartResize={startFlatResize}>UM</ColHeader>
                                     <ColHeader colIndex={5} onStartResize={startFlatResize} align="right">Quantidade</ColHeader>
-                                    <ColHeader colIndex={6} onStartResize={startFlatResize} align="right">Custo Un.</ColHeader>
-                                    <ColHeader colIndex={7} onStartResize={startFlatResize} align="right">Total</ColHeader>
                                     <th className={CELL_HDR} />
                                 </tr>
                             </thead>
@@ -639,8 +575,6 @@ export default function RecipeWorksheet() {
                                     <ColHeader colIndex={2} onStartResize={startResize}>Variação</ColHeader>
                                     <ColHeader colIndex={3} onStartResize={startResize}>UM</ColHeader>
                                     <ColHeader colIndex={4} onStartResize={startResize} align="right">Quantidade</ColHeader>
-                                    <ColHeader colIndex={5} onStartResize={startResize} align="right">Custo Un.</ColHeader>
-                                    <ColHeader colIndex={6} onStartResize={startResize} align="right">Total</ColHeader>
                                     <th className={CELL_HDR} />
                                 </tr>
                             </thead>
@@ -648,7 +582,7 @@ export default function RecipeWorksheet() {
                             <tbody>
                                 {filteredRecipes.length === 0 && !isCreating && (
                                     <tr>
-                                        <td colSpan={8} className="border border-slate-200 px-4 py-10 text-center text-sm text-slate-400">
+                                        <td colSpan={6} className="border border-slate-200 px-4 py-10 text-center text-sm text-slate-400">
                                             Nenhuma receita encontrada.
                                         </td>
                                     </tr>
@@ -680,7 +614,7 @@ export default function RecipeWorksheet() {
                                 ) : (
                                     <tr className="h-7 bg-slate-50/60">
                                         <td className="border border-slate-200" />
-                                        <td colSpan={7} className="border border-slate-200 p-3">
+                                        <td colSpan={5} className="border border-slate-200 p-3">
                                             <Button
                                                 onClick={() => setIsCreating(true)}
                                                 className="h-7 px-2 text-sm font-medium gap-1.5">
@@ -792,7 +726,7 @@ function RecipeGroup({ recipe, collapsed, onToggle, items, unitOptions, linkedVa
             {!collapsed && !isAdding && (
                 <tr className="h-7">
                     <td className={cn(CELL)} />
-                    <td colSpan={7} className={cn(CELL, "px-1")}>
+                    <td colSpan={5} className={cn(CELL, "px-1")}>
                         <Button type="button" variant="ghost" size="sm"
                             onClick={handleStartAdd}
                             className="h-6 px-2 text-xs font-medium text-slate-500 hover:text-blue-600 hover:bg-blue-50 gap-1.5">
@@ -834,10 +768,8 @@ function RecipeHeaderRow({ recipe, collapsed, onToggle, items }: {
         )
     }
 
-    const totalCost = recipe.RecipeLine.reduce((acc, l) => acc + l.lastTotalCostAmount, 0)
     const nomeCalculado = calcNome(recipe)
     const filteredItems = filterItems(items, itemSearch).slice(0, 50)
-    const hasZeroCost = recipe.RecipeLine.some(l => Number(l.lastTotalCostAmount) <= 0)
 
     return (
         <tr className="h-9 border-t-2 border-slate-300">
@@ -851,8 +783,8 @@ function RecipeHeaderRow({ recipe, collapsed, onToggle, items }: {
                 </span>
             </td>
 
-            {/* Recipe metadata — spans all 7 remaining columns */}
-            <td colSpan={7} className={cn(CELL_RECIPE, "px-2")}>
+            {/* Recipe metadata — spans all remaining columns */}
+            <td colSpan={5} className={cn(CELL_RECIPE, "px-2")}>
                 <div className="flex items-center gap-2 h-full min-w-0">
 
                     {/* Nome — click to edit */}
@@ -890,14 +822,6 @@ function RecipeHeaderRow({ recipe, collapsed, onToggle, items }: {
                     )}
 
                     <RecipeBadge item={recipe as any} />
-                    {hasZeroCost && (
-                        <span
-                            className="text-[10px] px-1.5 py-0.5 rounded-full border border-amber-300 text-amber-700 bg-amber-50 shrink-0"
-                            title="Ingredientes com custo total zero"
-                        >
-                            CUSTO 0
-                        </span>
-                    )}
 
                     <span className="text-slate-200 select-none shrink-0">|</span>
 
@@ -958,13 +882,6 @@ function RecipeHeaderRow({ recipe, collapsed, onToggle, items }: {
                     )}
 
                     <div className="flex-1" />
-
-                    {/* Total */}
-                    {totalCost > 0 && (
-                        <span className="text-sm font-semibold text-slate-700 tabular-nums whitespace-nowrap shrink-0">
-                            R$ {totalCost.toFixed(2)}
-                        </span>
-                    )}
 
                     {/* Link */}
                     <Button variant="outline" size="icon" title="Abrir receita"
@@ -1034,7 +951,6 @@ function RecipeLineRow({ line, recipeId, linkedVariations, unitOptions, items, r
     }, [])
 
     const isPending = fetcher.state !== "idle"
-    const displayTotal = line.lastUnitCostAmount * currentQty
     const [selectedVariationIds, setSelectedVariationIds] = useState<string[]>([])
 
     useEffect(() => {
@@ -1192,23 +1108,6 @@ function RecipeLineRow({ line, recipeId, linkedVariations, unitOptions, items, r
                     onValueChange={setCurrentQty}
                     className="w-full h-8 px-2 bg-transparent border-0 outline-none text-sm text-slate-700 text-right"
                 />
-            </td>
-
-            {/* Custo Un. */}
-            <td className={cn(CELL, "px-2 text-right text-xs text-slate-400 tabular-nums")}>
-                {line.lastUnitCostAmount > 0
-                    ? `R$ ${line.lastUnitCostAmount.toFixed(4)}`
-                    : <span className="text-slate-200">—</span>
-                }
-            </td>
-
-            {/* Total */}
-            <td className={cn(CELL, "px-2 text-right text-xs tabular-nums font-medium",
-                isDirty ? "text-amber-600" : "text-slate-600")}>
-                {displayTotal > 0
-                    ? `R$ ${displayTotal.toFixed(4)}`
-                    : <span className="text-slate-200">—</span>
-                }
             </td>
 
             {/* Delete */}
@@ -1527,7 +1426,7 @@ function FlatTableBody({ recipes, items, unitOptions }: {
         <tbody>
             {recipes.length === 0 && !isCreating && (
                 <tr>
-                    <td colSpan={9} className="border border-slate-200 px-4 py-10 text-center text-sm text-slate-400">
+                    <td colSpan={7} className="border border-slate-200 px-4 py-10 text-center text-sm text-slate-400">
                         Nenhuma receita encontrada.
                     </td>
                 </tr>
@@ -1552,7 +1451,7 @@ function FlatTableBody({ recipes, items, unitOptions }: {
                                         {recipe.name}
                                     </Link>
                                 </td>
-                                <td colSpan={7} className={cn(CELL, "px-2")}>
+                                <td colSpan={5} className={cn(CELL, "px-2")}>
                                     <span className="text-xs text-slate-400 italic">Sem ingredientes</span>
                                 </td>
                             </tr>
@@ -1590,7 +1489,7 @@ function FlatTableBody({ recipes, items, unitOptions }: {
                         {!isAdding && (
                             <tr className="h-7">
                                 <td className={CELL} />
-                                <td colSpan={8} className={cn(CELL, "px-1")}>
+                                <td colSpan={6} className={cn(CELL, "px-1")}>
                                     <Button type="button" variant="ghost" size="sm"
                                         onClick={() => setAddingForRecipeId(recipe.id)}
                                         className="h-6 px-2 text-xs font-medium text-slate-500 hover:text-blue-600 hover:bg-blue-50 gap-1.5">
@@ -1614,7 +1513,7 @@ function FlatTableBody({ recipes, items, unitOptions }: {
             ) : (
                 <tr className="h-7 bg-slate-50/60">
                     <td className={CELL} />
-                    <td colSpan={8} className="border border-slate-200 p-3">
+                    <td colSpan={6} className="border border-slate-200 p-3">
                         <Button
                             onClick={() => setIsCreating(true)}
                             className="h-7 px-2 text-sm font-medium gap-1.5">

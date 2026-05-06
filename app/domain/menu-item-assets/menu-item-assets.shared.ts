@@ -11,8 +11,7 @@ export type MenuItemAssetDto = {
   createdAt: string;
 };
 
-export function getMenuItemAssetsApiEndpoints(menuItemId: string) {
-  const basePath = `/admin/menu-items/${menuItemId}/assets`;
+export function getAssetApiEndpoints(basePath: string) {
   return {
     list: basePath,
     order: `${basePath}/order`,
@@ -22,8 +21,20 @@ export function getMenuItemAssetsApiEndpoints(menuItemId: string) {
   };
 }
 
+export function getMenuItemAssetsApiEndpoints(menuItemId: string) {
+  return getAssetApiEndpoints(`/admin/menu-items/${menuItemId}/assets`);
+}
+
+export function getItemAssetsApiEndpoints(itemId: string) {
+  return getAssetApiEndpoints(`/admin/items/${itemId}/assets`);
+}
+
 export function getMenuItemMediaFolderPath(menuItemId: string) {
   return `menu-items/${menuItemId}`;
+}
+
+export function getItemMediaFolderPath(itemId: string) {
+  return `items/${itemId}`;
 }
 
 function toMenuItemAssetKind(value: unknown): MenuItemAssetKind {

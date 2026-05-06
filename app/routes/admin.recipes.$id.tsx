@@ -13,7 +13,14 @@ import {
   useLoaderData,
   useLocation,
 } from "@remix-run/react";
-import { Check, ChevronLeft, RefreshCw } from "lucide-react";
+import {
+  Check,
+  ChevronLeft,
+  Copy,
+  FileSpreadsheet,
+  RefreshCw,
+  Trash2,
+} from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import {
   Select,
@@ -22,25 +29,23 @@ import {
   SelectTrigger,
   SelectValue,
 } from "~/components/ui/select";
+import { Button } from "~/components/ui/button";
 import { toast } from "~/components/ui/use-toast";
 import { DecimalInput } from "~/components/inputs/inputs";
 import { recipeEntity } from "~/domain/recipe/recipe.entity.server";
+import { ensureItemCostSheetForRecipe } from "~/domain/recipe/recipe-item-cost-sheet.server";
 import {
   DEFAULT_RECIPE_CHATGPT_PROJECT_URL,
   RECIPE_CHATGPT_PROJECT_URL_SETTING_NAME,
   RECIPE_CHATGPT_SETTINGS_CONTEXT,
 } from "~/domain/recipe/recipe-chatgpt-settings";
 import {
-  buildRecipeLineCostSnapshot,
-  recalcRecipeCosts,
-  resolveRecipeLineCosts,
-} from "~/domain/costs/recipe-cost-recalc.server";
-import {
   applyRecipeCompositionLineToVariations,
   createRecipeCompositionIngredientSkeleton,
   deleteRecipeCompositionLine,
   listRecipeLinkedVariations,
   listRecipeCompositionLines,
+  moveRecipeCompositionIngredient,
   updateRecipeCompositionIngredientDefaultLoss,
   updateRecipeCompositionLine,
 } from "~/domain/recipe/recipe-composition.server";
@@ -315,10 +320,6 @@ async function buildRecipeChatGptImportPreview(params: {
   };
 }
 
-export function formatMoney(value: number, decimals: number = 2) {
-  return `R$ ${formatDecimalPlaces(Number(value || 0), decimals)}`;
-}
-
 export const RECIPE_SECTIONS = ["cadastro", "composicao", "variacoes"] as const;
 export type RecipeSection = (typeof RECIPE_SECTIONS)[number];
 export const ALPHABET_FILTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
@@ -344,6 +345,51 @@ function buildRecipeSectionRedirect(recipeId: string, sectionRaw: unknown) {
   return redirect(
     buildRecipeSectionHref(recipeId, resolveRecipeSection(sectionRaw))
   );
+}
+
+async function ensureRecipeLinkedItem(db: any, recipe: Recipe) {
+  const linkedItemId = String((recipe as any)?.itemId || "").trim();
+
+  if (linkedItemId) {
+    const item = await db.item.findUnique({
+      where: { id: linkedItemId },
+      select: { id: true, name: true },
+    });
+    if (item) return item;
+  }
+
+  let item = await db.item.findFirst({
+    where: { name: recipe.name },
+    orderBy: { updatedAt: "desc" },
+    select: { id: true, name: true },
+  });
+
+  if (!item) {
+    const isSemiFinished = recipe.type === "semiFinished";
+    item = await db.item.create({
+      data: {
+        name: recipe.name,
+        description: recipe.description || null,
+        classification: isSemiFinished ? "semi_acabado" : "produto_final",
+        active: true,
+        canPurchase: false,
+        canTransform: true,
+        canSell: !isSemiFinished,
+        canStock: true,
+      },
+      select: { id: true, name: true },
+    });
+  }
+
+  await db.recipe.update({
+    where: { id: recipe.id },
+    data: {
+      itemId: item.id,
+      variationId: null,
+    },
+  });
+
+  return item;
 }
 
 export function normalizeInitialLetter(value: string) {
@@ -415,6 +461,64 @@ export async function action({ request }: ActionFunctionArgs) {
   let formData = await request.formData();
   const { _action, ...values } = Object.fromEntries(formData);
   const currentSection = resolveRecipeSection(values.tab);
+
+  if (_action === "recipe-delete") {
+    const recipeId = String(values.recipeId || "").trim();
+    if (!recipeId) return badRequest("Receita inválida");
+
+    try {
+      await recipeEntity.delete(recipeId);
+      return redirect("/admin/recipes");
+    } catch (error) {
+      return badRequest(
+        (error as Error)?.message || "Erro ao eliminar receita"
+      );
+    }
+  }
+
+  if (_action === "recipe-duplicate") {
+    const recipeId = String(values.recipeId || "").trim();
+    if (!recipeId) return badRequest("Receita inválida");
+
+    try {
+      const duplicatedRecipe = await recipeEntity.duplicate(recipeId);
+      return redirect(buildRecipeSectionHref(duplicatedRecipe.id, "cadastro"));
+    } catch (error) {
+      return badRequest(
+        (error as Error)?.message || "Erro ao duplicar receita"
+      );
+    }
+  }
+
+  if (_action === "recipe-create-cost-sheet") {
+    const recipeId = String(values.recipeId || "").trim();
+    if (!recipeId) return badRequest("Receita inválida");
+
+    try {
+      const db = prismaClient as any;
+      const recipe = await recipeEntity.findById(recipeId);
+      if (!recipe) return badRequest("Receita não encontrada");
+
+      const item = await ensureRecipeLinkedItem(db, recipe);
+      const { rootSheetId } = await ensureItemCostSheetForRecipe({
+        db,
+        item,
+        recipe: {
+          id: recipe.id,
+          name: recipe.name,
+        },
+        sheetDescription: `Ficha tecnica gerada a partir da receita ${recipe.name}`,
+        componentNotes:
+          "Componente criado automaticamente a partir da receita aberta",
+      });
+
+      return redirect(`/admin/item-cost-sheets/${rootSheetId}/custos`);
+    } catch (error) {
+      return badRequest(
+        (error as Error)?.message || "Erro ao criar ficha técnica"
+      );
+    }
+  }
 
   if (_action === "recipe-ingredient-add") {
     const recipeId = String(values.recipeId || "").trim();
@@ -574,13 +678,6 @@ export async function action({ request }: ActionFunctionArgs) {
             );
           }
 
-          const variationId = line.ItemVariation?.variationId || null;
-          const snapshot = buildRecipeLineCostSnapshot(
-            await resolveRecipeLineCosts(db, ingredient.itemId, variationId),
-            quantity,
-            ingredient.defaultLossPct
-          );
-
           await updateRecipeCompositionLine({
             db,
             lineId: line.id,
@@ -588,7 +685,6 @@ export async function action({ request }: ActionFunctionArgs) {
             unit: ingredient.unit,
             quantity,
             lossPct: ingredient.defaultLossPct,
-            snapshot,
           });
         }
       }
@@ -683,6 +779,33 @@ export async function action({ request }: ActionFunctionArgs) {
     }
   }
 
+  if (_action === "recipe-ingredient-move") {
+    const recipeId = String(values.recipeId || "").trim();
+    const recipeIngredientId = String(values.recipeIngredientId || "").trim();
+    const recipeLineId = String(values.recipeLineId || "").trim();
+    const direction = String(values.direction || "").trim().toLowerCase();
+
+    if (!recipeId) return badRequest("Ingrediente inválido");
+    if (!["up", "down"].includes(direction))
+      return badRequest("Direção inválida");
+
+    try {
+      const db = prismaClient as any;
+      await moveRecipeCompositionIngredient({
+        db,
+        recipeId,
+        recipeIngredientId,
+        recipeLineId,
+        direction: direction as "up" | "down",
+      });
+      return buildRecipeSectionRedirect(recipeId, currentSection);
+    } catch (error) {
+      return badRequest(
+        (error as Error)?.message || "Erro ao reordenar ingrediente da composição"
+      );
+    }
+  }
+
   if (_action === "recipe-line-update") {
     const recipeId = String(values.recipeId || "").trim();
     const recipeLineId = String(values.recipeLineId || "").trim();
@@ -714,19 +837,8 @@ export async function action({ request }: ActionFunctionArgs) {
         return badRequest("Linha da receita não encontrada");
       }
 
-      const variationId = line.ItemVariation?.variationId || null;
       const effectiveLossPct =
         requestedLossPct ?? Number(line.lossPct ?? line.defaultLossPct ?? 0);
-      const costInfo = await resolveRecipeLineCosts(
-        db,
-        line.itemId,
-        variationId
-      );
-      const snapshot = buildRecipeLineCostSnapshot(
-        costInfo,
-        quantity,
-        effectiveLossPct
-      );
 
       await updateRecipeCompositionLine({
         db,
@@ -735,28 +847,12 @@ export async function action({ request }: ActionFunctionArgs) {
         unit,
         quantity,
         lossPct: effectiveLossPct,
-        snapshot,
       });
 
       return buildRecipeSectionRedirect(recipeId, currentSection);
     } catch (error) {
       return badRequest(
         (error as Error)?.message || "Erro ao atualizar item da composição"
-      );
-    }
-  }
-
-  if (_action === "recipe-lines-recalc") {
-    const recipeId = String(values.recipeId || "").trim();
-    if (!recipeId) return badRequest("Receita inválida");
-
-    try {
-      const db = prismaClient as any;
-      await recalcRecipeCosts(db, recipeId);
-      return buildRecipeSectionRedirect(recipeId, currentSection);
-    } catch (error) {
-      return badRequest(
-        (error as Error)?.message || "Erro ao recalcular custos da composição"
       );
     }
   }
@@ -788,19 +884,6 @@ export async function action({ request }: ActionFunctionArgs) {
         recipeId,
         lineId: recipeLineId,
         variationIds,
-        resolveCostByVariationId: async (
-          variationId,
-          itemId,
-          quantity,
-          lossPct
-        ) => {
-          const costInfo = await resolveRecipeLineCosts(
-            db,
-            itemId,
-            variationId
-          );
-          return buildRecipeLineCostSnapshot(costInfo, quantity, lossPct);
-        },
       });
 
       return buildRecipeSectionRedirect(recipeId, currentSection);
@@ -829,19 +912,8 @@ export async function action({ request }: ActionFunctionArgs) {
         (line) => String(line.recipeIngredientId || "") === recipeIngredientId
       );
       for (const line of targetLines) {
-        const variationId = line.ItemVariation?.variationId || null;
         const effectiveLossPct = Number(
           line.lossPct ?? line.defaultLossPct ?? 0
-        );
-        const costInfo = await resolveRecipeLineCosts(
-          db,
-          line.itemId,
-          variationId
-        );
-        const snapshot = buildRecipeLineCostSnapshot(
-          costInfo,
-          Number(line.quantity || 0),
-          effectiveLossPct
         );
         await updateRecipeCompositionLine({
           db,
@@ -850,7 +922,6 @@ export async function action({ request }: ActionFunctionArgs) {
           unit,
           quantity: Number(line.quantity || 0),
           lossPct: effectiveLossPct,
-          snapshot,
         });
       }
       return buildRecipeSectionRedirect(recipeId, currentSection);
@@ -891,20 +962,9 @@ export async function action({ request }: ActionFunctionArgs) {
         (line) => String(line.recipeIngredientId || "") === recipeIngredientId
       );
       for (const line of targetLines) {
-        const variationId = line.ItemVariation?.variationId || null;
         const effectiveLossPct = applyToLines
           ? requestedLossPct
           : Number(line.lossPct ?? requestedLossPct);
-        const costInfo = await resolveRecipeLineCosts(
-          db,
-          line.itemId,
-          variationId
-        );
-        const snapshot = buildRecipeLineCostSnapshot(
-          costInfo,
-          Number(line.quantity || 0),
-          effectiveLossPct
-        );
         await updateRecipeCompositionLine({
           db,
           lineId: line.id,
@@ -912,7 +972,6 @@ export async function action({ request }: ActionFunctionArgs) {
           unit: line.unit,
           quantity: Number(line.quantity || 0),
           lossPct: applyToLines ? effectiveLossPct : line.lossPct,
-          snapshot,
         });
       }
 
@@ -962,6 +1021,8 @@ export async function action({ request }: ActionFunctionArgs) {
       return badRequest(err);
     }
 
+    let ensuredItem: any = null;
+
     try {
       const db = prismaClient as any;
       const explicitItemId = String(values.linkedItemId || "").trim();
@@ -986,6 +1047,7 @@ export async function action({ request }: ActionFunctionArgs) {
           });
           if (explicitItem) {
             itemId = explicitItem.id;
+            ensuredItem = explicitItem;
             await db.recipe.update({
               where: { id: updatedRecipe.id },
               data: {
@@ -1021,6 +1083,7 @@ export async function action({ request }: ActionFunctionArgs) {
           }
 
           itemId = item.id;
+          ensuredItem = item;
 
           await db.recipe.update({
             where: { id: updatedRecipe.id },
@@ -1035,6 +1098,13 @@ export async function action({ request }: ActionFunctionArgs) {
           await db.recipe.update({
             where: { id: updatedRecipe.id },
             data: { variationId: null },
+          });
+        }
+
+        if (!ensuredItem && itemId) {
+          ensuredItem = await db.item.findUnique({
+            where: { id: itemId },
+            select: { id: true, name: true },
           });
         }
 
@@ -1095,10 +1165,6 @@ export async function action({ request }: ActionFunctionArgs) {
                   unit: "UN",
                   quantity: 0,
                   lossPct: null,
-                  lastUnitCostAmount: 0,
-                  avgUnitCostAmount: 0,
-                  lastTotalCostAmount: 0,
-                  avgTotalCostAmount: 0,
                 }))
             );
             if (data.length > 0) {
@@ -1109,6 +1175,21 @@ export async function action({ request }: ActionFunctionArgs) {
             }
           }
         }
+
+        if (
+          ensuredItem &&
+          String(values.createItemCostSheet || "").trim().toLowerCase() === "yes"
+        ) {
+          await ensureItemCostSheetForRecipe({
+            db,
+            item: ensuredItem,
+            recipe: {
+              id: updatedRecipe.id,
+              name: updatedRecipe.name,
+            },
+          });
+        }
+
       }
     } catch (_error) {
       // best effort: preserve legacy behavior when migrations are pending
@@ -1144,10 +1225,14 @@ export function InlineVariationCellEditor({
   const [lineLossPct, setLineLossPct] = useState(
     Number(line.lossPct ?? line.defaultLossPct ?? 0)
   );
+  const [saveStatus, setSaveStatus] = useState<
+    "idle" | "pending" | "saving" | "saved" | "error"
+  >("idle");
   const [defaultQty, setDefaultQty] = useState(Number(line.quantity || 0));
   const [defaultLossPct, setDefaultLossPct] = useState(
     Number(line.lossPct ?? line.defaultLossPct ?? 0)
   );
+  const hasSubmittedRef = useRef(false);
   const baselineRef = useRef({
     quantity: Number(line.quantity || 0),
     lossPct: Number(line.lossPct ?? line.defaultLossPct ?? 0),
@@ -1164,6 +1249,7 @@ export function InlineVariationCellEditor({
       quantity: Number(line.quantity || 0),
       lossPct: Number(line.lossPct ?? line.defaultLossPct ?? 0),
     };
+    setSaveStatus("idle");
   }, [line.id, line.quantity, line.lossPct, line.defaultLossPct]);
 
   useEffect(() => {
@@ -1190,11 +1276,29 @@ export function InlineVariationCellEditor({
     return Math.abs(nextQuantity - baselineRef.current.quantity) > 0.0000001;
   }
 
+  const hasPending = hasPendingChanges();
+
+  useEffect(() => {
+    if (fetcher.state !== "idle") {
+      hasSubmittedRef.current = true;
+      setSaveStatus("saving");
+      return;
+    }
+
+    if (!hasSubmittedRef.current) return;
+    hasSubmittedRef.current = false;
+
+    const fetcherStatus = Number((fetcher.data as any)?.status || 200);
+    setSaveStatus(fetcherStatus >= 400 ? "error" : "saved");
+  }, [fetcher.state, fetcher.data]);
+
   function submitAutoUpdate() {
     if (!formRef.current) return;
-    if (!hasPendingChanges()) return;
+    if (!hasPending) return;
     const formData = new FormData(formRef.current);
     formData.set("_action", "recipe-line-update");
+    hasSubmittedRef.current = true;
+    setSaveStatus("saving");
     fetcher.submit(formData, {
       method: "post",
       action: "..",
@@ -1210,6 +1314,16 @@ export function InlineVariationCellEditor({
     safeLossPct > 0
       ? Number(lineQuantity || 0) / (1 - safeLossPct / 100)
       : Number(lineQuantity || 0);
+  const saveMessage =
+    saveStatus === "saving"
+      ? "Salvando valor..."
+      : saveStatus === "saved"
+        ? "Valor salvo."
+        : saveStatus === "error"
+          ? String((fetcher.data as any)?.message || "Erro ao salvar.")
+          : hasPending
+            ? "Alteração pendente."
+            : "Sem alterações pendentes.";
 
   return (
     <fetcher.Form
@@ -1246,7 +1360,10 @@ export function InlineVariationCellEditor({
             name="lineQuantity"
             defaultValue={defaultQty}
             fractionDigits={3}
-            onValueChange={setLineQuantity}
+            onValueChange={(value) => {
+              setLineQuantity(value);
+              setSaveStatus("pending");
+            }}
             className="w-24 h-8 border-b border-slate-200 bg-transparent px-1 py-0 text-sm text-right outline-none focus:border-slate-700 transition-colors"
           />
           {showVariationLoss ? (
@@ -1255,42 +1372,41 @@ export function InlineVariationCellEditor({
                 name="lineLossPct"
                 defaultValue={defaultLossPct}
                 fractionDigits={3}
-                onValueChange={setLineLossPct}
+                onValueChange={(value) => {
+                  setLineLossPct(value);
+                  setSaveStatus("pending");
+                }}
                 className="w-16 h-8 border-b border-slate-200 bg-transparent px-1 py-0 text-sm text-right outline-none focus:border-slate-700 transition-colors"
               />
               <span className="text-[11px] text-slate-400">%</span>
             </div>
           ) : null}
           <span
-            className={`h-1.5 w-1.5 flex-shrink-0 rounded-full ${hasPendingChanges() ? "bg-amber-400" : "bg-emerald-400"
+            className={`h-1.5 w-1.5 flex-shrink-0 rounded-full ${hasPending ? "bg-amber-400" : "bg-emerald-400"
               }`}
-            title={hasPendingChanges() ? "Alterações pendentes" : "Salvo"}
+            title={hasPending ? "Alterações pendentes" : "Salvo"}
           />
         </div>
-        <div className="space-y-0.5 text-[11px] text-slate-400">
+        <div className="space-y-1 text-[11px] text-slate-400">
+          <div
+            className={cn(
+              "text-[11px]",
+              saveStatus === "error"
+                ? "text-red-500"
+                : saveStatus === "saving"
+                  ? "text-amber-600"
+                  : saveStatus === "saved"
+                    ? "text-emerald-600"
+                    : "text-slate-400"
+            )}
+            aria-live="polite"
+          >
+            {saveMessage}
+          </div>
           <div className="flex items-center justify-between gap-3">
             <span>Qtd bruta</span>
-            <span className="font-medium text-slate-600">
+            <span className="font-medium text-xs text-slate-600">
               {formatDecimalPlaces(Number(grossQty || 0), 4)}
-            </span>
-          </div>
-          <div className="flex items-center justify-between gap-3">
-            <span>Custo total</span>
-            <span
-              className={cn(
-                "font-medium",
-                Number(line.lastTotalCostAmount || 0) <= 0
-                  ? "text-slate-400"
-                  : "text-slate-600"
-              )}
-            >
-              {formatMoney(Number(line.lastTotalCostAmount || 0), 4)}
-            </span>
-          </div>
-          <div className="flex items-center justify-between gap-3">
-            <span>Custo médio</span>
-            <span className="font-medium text-slate-600">
-              {formatMoney(Number(line.avgTotalCostAmount || 0), 4)}
             </span>
           </div>
         </div>
@@ -1390,26 +1506,30 @@ export function IngredientLossEditor({
           <span className="text-[11px] text-slate-400">%</span>
         </div>
         <div className="flex items-center gap-1">
-          <button
+          <Button
             type="submit"
             name="applyToLines"
             value="no"
-            className="h-6 w-6 flex items-center justify-center rounded text-slate-400 hover:text-slate-900 hover:bg-slate-100 transition-colors"
+            variant="ghost"
+            size="icon"
+            className="h-6 w-6"
             title="Salvar perda padrão"
             aria-label="Salvar perda padrão"
           >
             <Check size={11} />
-          </button>
-          <button
+          </Button>
+          <Button
             type="submit"
             name="applyToLines"
             value="yes"
-            className="h-6 w-6 flex items-center justify-center rounded text-slate-400 hover:text-slate-900 hover:bg-slate-100 transition-colors"
+            variant="ghost"
+            size="icon"
+            className="h-6 w-6"
             title="Aplicar para todas as variações"
             aria-label="Aplicar para todas as variações"
           >
             <RefreshCw size={11} />
-          </button>
+          </Button>
         </div>
       </div>
     </Form>
@@ -1479,15 +1599,16 @@ export default function AdminRecipeDetailLayout() {
   const linkedVariations = (loaderData?.payload?.linkedVariations ||
     []) as AdminRecipeOutletContext["linkedVariations"];
   const linkedItem = items.find((item) => item.id === recipe?.itemId);
-  const recipeLineCount = recipeLines.length;
-  const avgCompositionCost = recipeLines.reduce(
-    (acc, line) => acc + Number(line.avgTotalCostAmount || 0),
-    0
-  );
-  const lastCompositionCost = recipeLines.reduce(
-    (acc, line) => acc + Number(line.lastTotalCostAmount || 0),
-    0
-  );
+  const referenceVariation =
+    linkedVariations.find((variation) => variation.isReference) ||
+    linkedVariations[0] ||
+    null;
+  const summaryLines = referenceVariation
+    ? recipeLines.filter(
+      (line) => String(line.ItemVariation?.id || "") === referenceVariation.itemVariationId
+    )
+    : recipeLines;
+  const recipeLineCount = summaryLines.length;
   const lastSegment = lastUrlSegment(location.pathname);
   const activeTab =
     lastSegment === "composition-builder"
@@ -1514,7 +1635,7 @@ export default function AdminRecipeDetailLayout() {
   }
 
   return (
-    <div className="min-h-[calc(100vh-8rem)] space-y-6 bg-white p-4 pb-20 md:pb-24">
+    <div className="min-h-[calc(100vh-8rem)] space-y-6 bg-white pb-20 md:pb-24">
 
 
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
@@ -1547,28 +1668,63 @@ export default function AdminRecipeDetailLayout() {
         </div>
 
         <div className="flex flex-wrap items-center gap-6 text-sm">
+          <Form method="post">
+            <input type="hidden" name="recipeId" value={recipe.id} />
+            <input type="hidden" name="tab" value={activeTab} />
+            <Button
+              type="submit"
+              name="_action"
+              value="recipe-create-cost-sheet"
+              variant="outline"
+              size="sm"
+              className="flex gap-x-2"
+            >
+              <FileSpreadsheet size={14} />
+              Criar ficha técnica
+            </Button>
+          </Form>
+          <Form method="post">
+            <input type="hidden" name="recipeId" value={recipe.id} />
+            <input type="hidden" name="tab" value={activeTab} />
+            <Button
+              type="submit"
+              name="_action"
+              value="recipe-duplicate"
+              variant="outline"
+              size="sm"
+              className="flex gap-x-2"
+            >
+              <Copy size={14} />
+              Duplicar receita
+            </Button>
+          </Form>
+          <Form
+            method="post"
+            onSubmit={(e) => {
+              if (!window.confirm(`Eliminar a receita "${recipe.name}"? Esta ação não pode ser desfeita.`)) {
+                e.preventDefault();
+              }
+            }}
+          >
+            <input type="hidden" name="recipeId" value={recipe.id} />
+            <Button
+              type="submit"
+              name="_action"
+              value="recipe-delete"
+              variant="outline"
+              size="sm"
+              className="flex gap-x-2 text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
+            >
+              <Trash2 size={14} />
+              Eliminar receita
+            </Button>
+          </Form>
           <div className="space-y-1">
             <div className="text-xs font-medium text-slate-400">
               Ingredientes
             </div>
             <div className="text-sm font-medium text-slate-900">
               {recipeLineCount}
-            </div>
-          </div>
-          <div className="space-y-1">
-            <div className="text-xs font-medium text-slate-400">
-              Custo médio
-            </div>
-            <div className="text-sm font-medium text-slate-900">
-              {formatMoney(avgCompositionCost, 2)}
-            </div>
-          </div>
-          <div className="space-y-1">
-            <div className="text-xs font-medium text-slate-400">
-              Último custo
-            </div>
-            <div className="text-sm font-medium text-slate-900">
-              {formatMoney(lastCompositionCost, 2)}
             </div>
           </div>
         </div>

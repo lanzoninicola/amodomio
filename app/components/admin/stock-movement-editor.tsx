@@ -4,7 +4,7 @@ import { Check, ChevronsUpDown } from 'lucide-react';
 import { DecimalInput } from '~/components/inputs/inputs';
 import { MoneyInput } from '~/components/money-input/MoneyInput';
 import { Button } from '~/components/ui/button';
-import { Command, CommandEmpty, CommandInput, CommandItem, CommandList } from '~/components/ui/command';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandSeparator } from '~/components/ui/command';
 import { Input } from '~/components/ui/input';
 import { Label } from '~/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '~/components/ui/popover';
@@ -12,6 +12,16 @@ import { Separator } from '~/components/ui/separator';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '~/components/ui/select';
 import { Textarea } from '~/components/ui/textarea';
 import { cn } from '~/lib/utils';
+
+const ITEM_CLASSIFICATION_ORDER = ['insumo', 'semi_acabado', 'produto_final', 'embalagem', 'servico', 'outro'] as const;
+const ITEM_CLASSIFICATION_LABELS: Record<string, string> = {
+  insumo: 'insumo',
+  semi_acabado: 'semi-acabado',
+  produto_final: 'produto final',
+  embalagem: 'embalagem',
+  servico: 'serviço',
+  outro: 'outro',
+};
 
 function formatDateTimeLocalValue(value: unknown) {
   if (!value) return '';
@@ -257,36 +267,44 @@ export function StockMovementEditor({
                               <Check className={cn('mr-2 h-4 w-4', mappedItemIdDraft ? 'opacity-0' : 'opacity-100')} />
                               <span className="truncate">Sem item mapeado</span>
                             </CommandItem>
-                            {itemOptions.map((item) => (
-                              <CommandItem
-                                key={item.id}
-                                value={`${item.name} ${item.classification || ''} ${item.purchaseUm || ''} ${item.consumptionUm || ''} ${item.id}`}
-                                onSelect={() => {
-                                  setMappedItemIdDraft(item.id);
-                                  setItemPickerOpen(false);
-                                }}
-                              >
-                                <Check className={cn('mr-2 h-4 w-4', mappedItemIdDraft === item.id ? 'opacity-100' : 'opacity-0')} />
-                                <div className="flex min-w-0 flex-1 items-center justify-between gap-2">
-                                  <span className="truncate">
-                                    {item.name} [{item.classification || '-'}] ({getItemBaseUnit(item)})
-                                  </span>
-                                  <Link
-                                    to={`/admin/items/${item.id}/main`}
-                                    className="shrink-0 rounded border border-slate-300 px-2 py-0.5 text-[11px] font-medium text-slate-700 hover:bg-slate-100"
-                                    onMouseDown={(event) => {
-                                      event.preventDefault();
-                                      event.stopPropagation();
-                                    }}
-                                    onClick={(event) => {
-                                      event.stopPropagation();
-                                    }}
-                                  >
-                                    Abrir
-                                  </Link>
-                                </div>
-                              </CommandItem>
-                            ))}
+                            {ITEM_CLASSIFICATION_ORDER.map((classification) => {
+                              const groupItems = itemOptions.filter((item) => (item.classification || 'outro') === classification);
+                              if (groupItems.length === 0) return null;
+                              return (
+                                <CommandGroup key={classification} heading={ITEM_CLASSIFICATION_LABELS[classification] ?? classification}>
+                                  {groupItems.map((item) => (
+                                    <CommandItem
+                                      key={item.id}
+                                      value={`${item.name} ${item.classification || ''} ${item.purchaseUm || ''} ${item.consumptionUm || ''} ${item.id}`}
+                                      onSelect={() => {
+                                        setMappedItemIdDraft(item.id);
+                                        setItemPickerOpen(false);
+                                      }}
+                                    >
+                                      <Check className={cn('mr-2 h-4 w-4', mappedItemIdDraft === item.id ? 'opacity-100' : 'opacity-0')} />
+                                      <div className="flex min-w-0 flex-1 items-center justify-between gap-2">
+                                        <span className="truncate">
+                                          {item.name} ({getItemBaseUnit(item)})
+                                        </span>
+                                        <Link
+                                          to={`/admin/items/${item.id}/main`}
+                                          className="shrink-0 rounded border border-slate-300 px-2 py-0.5 text-[11px] font-medium text-slate-700 hover:bg-slate-100"
+                                          onMouseDown={(event) => {
+                                            event.preventDefault();
+                                            event.stopPropagation();
+                                          }}
+                                          onClick={(event) => {
+                                            event.stopPropagation();
+                                          }}
+                                        >
+                                          Abrir
+                                        </Link>
+                                      </div>
+                                    </CommandItem>
+                                  ))}
+                                </CommandGroup>
+                              );
+                            })}
                           </CommandList>
                         </Command>
                       </PopoverContent>

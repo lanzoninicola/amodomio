@@ -28,12 +28,25 @@ import {
   RECIPE_CHATGPT_SETTINGS_CONTEXT,
 } from "~/domain/recipe/recipe-chatgpt-settings";
 import {
+  DEFAULT_DOUGH_STOCK_WHATSAPP_TEMPLATE,
+  DOUGH_STOCK_WHATSAPP_CONTEXT,
+  DOUGH_STOCK_WHATSAPP_RECIPIENTS_SETTING,
+  DOUGH_STOCK_WHATSAPP_TEMPLATE_SETTING,
+} from "~/domain/kds/dough-stock.server";
+import {
   DEFAULT_STOCK_PHOTO_CHATGPT_PROMPT_TEMPLATE,
   DEFAULT_STOCK_PHOTO_CHATGPT_RETURN_URL,
   STOCK_PHOTO_CHATGPT_PROMPT_SETTING_NAME,
   STOCK_PHOTO_CHATGPT_RETURN_URL_SETTING_NAME,
   STOCK_PHOTO_CHATGPT_SETTINGS_CONTEXT,
 } from "~/domain/stock-movement/stock-photo-chatgpt-settings";
+import {
+  COST_REVIEW_NOTIFICATION_CONTEXT,
+  COST_REVIEW_WHATSAPP_ENABLED_SETTING,
+  COST_REVIEW_WHATSAPP_PHONE_SETTING,
+  DEFAULT_COST_REVIEW_WHATSAPP_ENABLED,
+  DEFAULT_COST_REVIEW_WHATSAPP_PHONE,
+} from "~/domain/stock-movement/cost-review-notification-settings";
 
 const SETTING_TYPES = ["string", "boolean", "float", "int", "json"] as const;
 const REELS_SETTINGS_CONTEXT = "cardapio";
@@ -81,9 +94,13 @@ export async function loader({ request }: LoaderFunctionArgs) {
     sharesSetting,
     reelsEnabledSetting,
     itemCostAverageWindowSetting,
+    doughStockWhatsappRecipientsSetting,
+    doughStockWhatsappTemplateSetting,
     recipeChatGptProjectUrlSetting,
     stockPhotoChatGptPromptSetting,
     stockPhotoChatGptReturnUrlSetting,
+    costReviewWhatsappEnabledSetting,
+    costReviewWhatsappPhoneSetting,
   ] = await Promise.all([
     prismaClient.setting.findFirst({
       where: { context: ENGAGEMENT_SETTINGS_CONTEXT, name: LIKE_SETTING_NAME },
@@ -106,6 +123,20 @@ export async function loader({ request }: LoaderFunctionArgs) {
     }),
     prismaClient.setting.findFirst({
       where: {
+        context: DOUGH_STOCK_WHATSAPP_CONTEXT,
+        name: DOUGH_STOCK_WHATSAPP_RECIPIENTS_SETTING,
+      },
+      orderBy: [{ createdAt: "desc" }],
+    }),
+    prismaClient.setting.findFirst({
+      where: {
+        context: DOUGH_STOCK_WHATSAPP_CONTEXT,
+        name: DOUGH_STOCK_WHATSAPP_TEMPLATE_SETTING,
+      },
+      orderBy: [{ createdAt: "desc" }],
+    }),
+    prismaClient.setting.findFirst({
+      where: {
         context: RECIPE_CHATGPT_SETTINGS_CONTEXT,
         name: RECIPE_CHATGPT_PROJECT_URL_SETTING_NAME,
       },
@@ -123,6 +154,14 @@ export async function loader({ request }: LoaderFunctionArgs) {
         context: STOCK_PHOTO_CHATGPT_SETTINGS_CONTEXT,
         name: STOCK_PHOTO_CHATGPT_RETURN_URL_SETTING_NAME,
       },
+      orderBy: [{ createdAt: "desc" }],
+    }),
+    prismaClient.setting.findFirst({
+      where: { context: COST_REVIEW_NOTIFICATION_CONTEXT, name: COST_REVIEW_WHATSAPP_ENABLED_SETTING },
+      orderBy: [{ createdAt: "desc" }],
+    }),
+    prismaClient.setting.findFirst({
+      where: { context: COST_REVIEW_NOTIFICATION_CONTEXT, name: COST_REVIEW_WHATSAPP_PHONE_SETTING },
       orderBy: [{ createdAt: "desc" }],
     }),
   ]);
@@ -175,6 +214,30 @@ export async function loader({ request }: LoaderFunctionArgs) {
     });
   }
 
+  if (!doughStockWhatsappRecipientsSetting) {
+    await prismaClient.setting.create({
+      data: {
+        context: DOUGH_STOCK_WHATSAPP_CONTEXT,
+        name: DOUGH_STOCK_WHATSAPP_RECIPIENTS_SETTING,
+        type: "string",
+        value: "",
+        createdAt: new Date(),
+      },
+    });
+  }
+
+  if (!doughStockWhatsappTemplateSetting) {
+    await prismaClient.setting.create({
+      data: {
+        context: DOUGH_STOCK_WHATSAPP_CONTEXT,
+        name: DOUGH_STOCK_WHATSAPP_TEMPLATE_SETTING,
+        type: "string",
+        value: DEFAULT_DOUGH_STOCK_WHATSAPP_TEMPLATE,
+        createdAt: new Date(),
+      },
+    });
+  }
+
   if (!recipeChatGptProjectUrlSetting) {
     await prismaClient.setting.create({
       data: {
@@ -206,6 +269,30 @@ export async function loader({ request }: LoaderFunctionArgs) {
         name: STOCK_PHOTO_CHATGPT_RETURN_URL_SETTING_NAME,
         type: "string",
         value: DEFAULT_STOCK_PHOTO_CHATGPT_RETURN_URL,
+        createdAt: new Date(),
+      },
+    });
+  }
+
+  if (!costReviewWhatsappEnabledSetting) {
+    await prismaClient.setting.create({
+      data: {
+        context: COST_REVIEW_NOTIFICATION_CONTEXT,
+        name: COST_REVIEW_WHATSAPP_ENABLED_SETTING,
+        type: "boolean",
+        value: DEFAULT_COST_REVIEW_WHATSAPP_ENABLED,
+        createdAt: new Date(),
+      },
+    });
+  }
+
+  if (!costReviewWhatsappPhoneSetting) {
+    await prismaClient.setting.create({
+      data: {
+        context: COST_REVIEW_NOTIFICATION_CONTEXT,
+        name: COST_REVIEW_WHATSAPP_PHONE_SETTING,
+        type: "string",
+        value: DEFAULT_COST_REVIEW_WHATSAPP_PHONE,
         createdAt: new Date(),
       },
     });

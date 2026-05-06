@@ -2,7 +2,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   buildCostImpactGraphForItem: vi.fn(),
-  recalcRecipeCosts: vi.fn(),
   recalcItemCostSheetTotals: vi.fn(),
   syncMenuItemCostsForItems: vi.fn(),
   listMenuItemMarginImpactRows: vi.fn(),
@@ -10,10 +9,6 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("~/domain/costs/cost-impact-graph.server", () => ({
   buildCostImpactGraphForItem: mocks.buildCostImpactGraphForItem,
-}));
-
-vi.mock("~/domain/costs/recipe-cost-recalc.server", () => ({
-  recalcRecipeCosts: mocks.recalcRecipeCosts,
 }));
 
 vi.mock("~/domain/costs/item-cost-sheet-recalc.server", () => ({
@@ -61,7 +56,6 @@ describe("runCostImpactPipelineForItemChange", () => {
       affectedItemIds: ["item-1", "item-2"],
       affectedMenuItemIds: ["menu-1", "menu-2"],
     });
-    mocks.recalcRecipeCosts.mockResolvedValue(undefined);
     mocks.recalcItemCostSheetTotals.mockResolvedValue(undefined);
     mocks.syncMenuItemCostsForItems.mockResolvedValue({
       updatedMenuItems: ["menu-1"],
@@ -108,7 +102,6 @@ describe("runCostImpactPipelineForItemChange", () => {
     });
 
     expect(mocks.buildCostImpactGraphForItem).toHaveBeenCalledWith(db, "item-1");
-    expect(mocks.recalcRecipeCosts).toHaveBeenCalledTimes(2);
     expect(mocks.recalcItemCostSheetTotals).toHaveBeenCalledWith(db, "sheet-1");
     expect(mocks.syncMenuItemCostsForItems).toHaveBeenCalledWith({
       db,

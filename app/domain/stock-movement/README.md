@@ -224,7 +224,11 @@ Regras atuais:
 - `admin.import-stock-movements.new`
   Upload do `.xlsx` e, opcionalmente, do `.json` de fornecedores.
 - `admin.mobile.entrada-estoque-foto`
-  Fluxo mobile que gera preview estruturado e cria lote a partir do payload de foto/cupom.
+  Outlet pai com navegacao entre os dois modos de entrada por foto/cupom (tabs "1 cupom" / "Multiplos cupons").
+- `admin.mobile.entrada-estoque-foto.unica`
+  Modo cupom unico: o usuario seleciona o fornecedor manualmente, o prompt e personalizado com nome e CNPJ do fornecedor selecionado, e o import gera um unico lote.
+- `admin.mobile.entrada-estoque-foto.multipla`
+  Modo multiplos cupons: sem selecao de fornecedor. O prompt instrui o ChatGPT a ler o nome e CNPJ diretamente de cada cupom e inclui `supplierName`/`supplierCnpj` por linha. O import agrupa as linhas por `supplierName` e cria um lote separado para cada fornecedor. O resultado exibe links diretos para cada lote criado.
 
 ### Detalhe do lote
 
@@ -269,14 +273,45 @@ Regras atuais:
 - a importacao incremental depende da pagina aberta e do polling do browser;
 - ainda faltam testes mais densos para conflitos de rollback, retries, dedupe e cenarios do fluxo de foto.
 
+## Fluxo de foto/cupom via ChatGPT
+
+### Logica compartilhada
+
+Toda a logica de parse, normalizacao e construcao de prompt esta centralizada em dois arquivos no dominio:
+
+- `app/domain/stock-movement/stock-photo-chatgpt.ts`
+  Exporta: `parseVisionResponse`, `buildStockPhotoPrompt`, `buildMultiStockPhotoPrompt`, `groupLinesBySupplier`, helpers `str`, `parseNumeric`, `normalizeUnit`, `parseFlexibleDate`, `formatDateInputValue`.
+
+- `app/domain/stock-movement/stock-photo-chatgpt-settings.ts`
+  Exporta os templates de prompt e as constantes de configuracao para busca no banco (`Setting`).
+  - `DEFAULT_STOCK_PHOTO_CHATGPT_PROMPT_TEMPLATE` — prompt para cupom unico, com `{{supplierName}}`, `{{supplierCnpj}}` e `{{returnUrl}}`.
+  - `DEFAULT_STOCK_PHOTO_MULTI_CHATGPT_PROMPT_TEMPLATE` — prompt para multiplos cupons, sem fornecedor fixo. Instrui o ChatGPT a ler o nome e CNPJ de cada cupom individualmente. Usa so `{{returnUrl}}`.
+
+### Como o ChatGPT resolve o fornecedor no modo multiplo
+
+Cada cupom fiscal imprime o nome e CNPJ do emitente no cabecalho. O prompt multi instrui o modelo a ler esses dados diretamente de cada cupom e preencher `supplierName` e `supplierCnpj` por linha. Nao e preciso informar o fornecedor de antemao.
+
+Casos suportados:
+- N fotos, cada uma de um fornecedor diferente.
+- N fotos com mais de um cupom do mesmo fornecedor — as linhas sao agrupadas pelo `supplierName` lido e viram um unico lote para aquele fornecedor.
+
+### Agrupamento e criacao de lotes
+
+A funcao `groupLinesBySupplier` recebe todas as linhas normalizadas e retorna um array de `SupplierGroup`, cada um com `supplierName`, `supplierCnpj`, `invoiceNumber`, `movementAt` e `lines`. O action de import itera sobre os grupos e chama `createStockMovementImportBatchFromVisionPayload` para cada um.
+
 ## Arquivos principais
 
-- `app/domain/stock-movement-import/stock-movement-import.server.ts`
+- `app/domain/stock-movement/stock-movement-import.server.ts`
+- `app/domain/stock-movement/stock-photo-chatgpt.ts`
+- `app/domain/stock-movement/stock-photo-chatgpt-settings.ts`
 - `app/routes/admin.import-stock-movements.new.tsx`
 - `app/routes/admin.import-stock-movements.$batchId.tsx`
 - `app/routes/admin.import-stock-movements.$batchId._index.tsx`
 - `app/routes/admin.import-stock-movements.$batchId.applied-changes.tsx`
 - `app/routes/admin.mobile.entrada-estoque-foto.tsx`
+- `app/routes/admin.mobile.entrada-estoque-foto._index.tsx`
+- `app/routes/admin.mobile.entrada-estoque-foto.unica.tsx`
+- `app/routes/admin.mobile.entrada-estoque-foto.multipla.tsx`
 - `app/routes/admin.mobile.import-stock-movements.$batchId.tsx`
 - `app/routes/admin.supplier-reconciliation.tsx`
 - `app/routes/admin.mobile.import-stock-movements.$batchId.supplier-reconciliation.tsx`

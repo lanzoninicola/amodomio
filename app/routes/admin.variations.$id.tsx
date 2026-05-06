@@ -6,11 +6,18 @@ import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
+import { Textarea } from "~/components/ui/textarea";
 import { variationPrismaEntity } from "~/domain/item/variation.prisma.entity.server";
 import { badRequest, ok, serverError } from "~/utils/http-response.server";
 
 function str(value: FormDataEntryValue | null) {
   return String(value ?? "").trim();
+}
+
+function int(value: FormDataEntryValue | null) {
+  const parsed = Number(String(value ?? "").trim());
+  if (!Number.isFinite(parsed)) return 0;
+  return Math.trunc(parsed);
 }
 
 export async function loader({ params }: LoaderFunctionArgs) {
@@ -25,6 +32,9 @@ export async function loader({ params }: LoaderFunctionArgs) {
 
     return ok({ variation });
   } catch (error) {
+    if (error instanceof Error) {
+      return badRequest(error.message);
+    }
     return serverError(error);
   }
 }
@@ -42,6 +52,8 @@ export async function action({ request, params }: ActionFunctionArgs) {
         kind: str(formData.get("kind")),
         code: str(formData.get("code")),
         name: str(formData.get("name")),
+        sortOrderIndex: int(formData.get("sortOrderIndex")),
+        additionalInformation: str(formData.get("additionalInformation")),
       });
 
       return ok({ message: "Variação atualizada com sucesso" });
@@ -54,6 +66,9 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
     return badRequest("Ação inválida");
   } catch (error) {
+    if (error instanceof Error) {
+      return badRequest(error.message);
+    }
     return serverError(error);
   }
 }
@@ -114,6 +129,27 @@ export default function AdminVariationDetailRoute() {
             <div className="grid gap-2 md:col-span-2">
               <Label htmlFor="name">Nome</Label>
               <Input id="name" name="name" defaultValue={variation.name} required />
+            </div>
+
+            <div className="grid gap-2 md:col-span-2">
+              <Label htmlFor="sortOrderIndex">Sort order</Label>
+              <Input
+                id="sortOrderIndex"
+                name="sortOrderIndex"
+                type="number"
+                defaultValue={Number(variation.sortOrderIndex || 0)}
+                required
+              />
+            </div>
+
+            <div className="grid gap-2 md:col-span-2">
+              <Label htmlFor="additionalInformation">Informações adicionais</Label>
+              <Textarea
+                id="additionalInformation"
+                name="additionalInformation"
+                defaultValue={variation.additionalInformation || ""}
+                className="min-h-[120px]"
+              />
             </div>
 
             <div className="md:col-span-2 flex items-center gap-2">

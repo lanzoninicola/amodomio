@@ -5,10 +5,11 @@ import type { FocusEvent, MouseEvent } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { normalizeCounts, getAvailableDoughSizes, getDoughStock, saveDoughStock, type DoughStockSnapshot } from "~/domain/kds/dough-stock.server";
+import { normalizeCounts, getAvailableDoughSizes, getDoughStock, notifyTodayDoughStockSavedByWhatsapp, saveDoughStock, type DoughStockSnapshot } from "~/domain/kds/dough-stock.server";
 import { defaultSizeCounts, type SizeCounts } from "~/domain/kds";
 import { todayLocalYMD, ymdToDateInt, ymdToUtcNoon } from "~/domain/kds";
 import { NumericInput } from "~/components/numeric-input/numeric-input";
+import WhatsAppIcon from "~/components/primitives/whatsapp/whatsapp-icon";
 
 export const meta: MetaFunction = () => [{ title: "KDS | Estoque de Massa" }];
 
@@ -44,17 +45,35 @@ export async function action({ request, params }: ActionFunctionArgs) {
     FT: form.get("adjustFT"),
   } as any);
 
+  if (intent === "sendWhatsapp") {
+    const snapshot: DoughStockSnapshot = {
+      base: manualCounts,
+      adjustment: manualCounts,
+      effective: manualCounts,
+      adjustmentMode: "override",
+    };
+
+    const result = await notifyTodayDoughStockSavedByWhatsapp({ dateStr, snapshot });
+
+    return json({
+      ok: result.ok,
+      stock: snapshot,
+      message: result.detail,
+      whatsappSent: result.attempted && !result.skipped && result.ok,
+    });
+  }
+
   const counts = intent === "reset" ? defaultSizeCounts() : manualCounts;
   const adjustment = counts; // saldo manual define o estoque atual
 
   const snapshot = await saveDoughStock(dateInt, ymdToUtcNoon(dateStr), counts, adjustment);
 
-  return json({ ok: true, stock: snapshot });
+  return json({ ok: true, stock: snapshot, message: "Estoque atualizado.", whatsappSent: false });
 }
 
 export default function EstoqueMassaPage() {
   const { dateStr, sizes, stock } = useLoaderData<typeof loader>();
-  const fx = useFetcher<{ ok: boolean; stock: DoughStockSnapshot }>();
+  const fx = useFetcher<{ ok: boolean; stock: DoughStockSnapshot; message?: string; whatsappSent?: boolean }>();
   const navigate = useNavigate();
   const location = useLocation();
   const isMobileRoute = location.pathname.startsWith("/admin/mobile/estoque-massa/");
@@ -102,7 +121,7 @@ export default function EstoqueMassaPage() {
   const effective = useMemo<SizeCounts>(() => ({ ...draftManual }), [draftManual]);
 
   return (
-    <div className={`mx-auto max-w-6xl space-y-4 ${isMobileRoute ? "mt-1 pb-28" : "mt-6"}`}>
+    <div className={`mx-auto max-w-6xl space-y-4 ${isMobileRoute ? "mt-1 pb-40" : "mt-6"}`}>
       <header className={isMobileRoute ? "space-y-0" : "space-y-2"}>
         {isMobileRoute ? (
           <div className="flex items-center gap-2 border-b border-slate-200 pb-3">
@@ -234,26 +253,41 @@ export default function EstoqueMassaPage() {
 
         {isMobileRoute ? (
           <div className="fixed inset-x-0 bottom-0 z-20 border-t border-slate-200 bg-white/95 p-3 backdrop-blur">
-            <div className="mx-auto grid w-full max-w-md grid-cols-2 gap-3">
-              <Button
-                type="submit"
-                name="_action"
-                value="reset"
-                variant="destructive"
-                disabled={fx.state !== "idle"}
-                className="h-12 w-full text-base"
-              >
-                {fx.state !== "idle" && formData?.get("_action") === "reset" ? "Zerando…" : "Zerar"}
-              </Button>
+            <div className="mx-auto flex w-full max-w-md flex-col gap-3">
+              <div className="grid grid-cols-2 gap-3">
+                <Button
+                  type="submit"
+                  name="_action"
+                  value="reset"
+                  variant="destructive"
+                  disabled={fx.state !== "idle"}
+                  className="h-12 w-full text-base"
+                >
+                  {fx.state !== "idle" && formData?.get("_action") === "reset" ? "Zerando…" : "Zerar"}
+                </Button>
+
+                <Button
+                  type="submit"
+                  name="_action"
+                  value="save"
+                  disabled={fx.state !== "idle"}
+                  className="h-12 w-full bg-slate-950 text-base text-white hover:bg-slate-800"
+                >
+                  {fx.state !== "idle" && formData?.get("_action") === "save" ? "Salvando…" : "Salvar"}
+                </Button>
+              </div>
 
               <Button
                 type="submit"
                 name="_action"
-                value="save"
-                disabled={fx.state !== "idle"}
-                className="h-12 w-full bg-slate-950 text-base text-white hover:bg-slate-800"
+                value="sendWhatsapp"
+                disabled={fx.state !== "idle" || !isTodaySelected}
+                className="h-12 w-full gap-2 bg-emerald-600 text-base text-white hover:bg-emerald-700 disabled:bg-emerald-300"
               >
-                {fx.state !== "idle" && formData?.get("_action") === "save" ? "Salvando…" : "Salvar"}
+                <WhatsAppIcon color="white" width={18} height={18} />
+                {fx.state !== "idle" && formData?.get("_action") === "sendWhatsapp"
+                  ? "Enviando…"
+                  : "Enviar estoque pelo WhatsApp"}
               </Button>
             </div>
           </div>
@@ -282,9 +316,11 @@ export default function EstoqueMassaPage() {
           </div>
         )}
 
-        {fx.data?.ok && (
-          <div className="text-sm text-emerald-700 text-center">Estoque atualizado.</div>
-        )}
+        {fx.data?.message ? (
+          <div className={`text-center text-sm ${fx.data.whatsappSent ? "text-emerald-700" : "text-slate-700"}`}>
+            {fx.data.message}
+          </div>
+        ) : null}
       </fx.Form>
 
       {!isMobileRoute ? (

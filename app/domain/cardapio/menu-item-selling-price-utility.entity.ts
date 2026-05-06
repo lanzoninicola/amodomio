@@ -4,7 +4,7 @@ import createUUID from "~/utils/uuid";
 import { menuItemCostVariationPrismaEntity } from "./menu-item-cost-variation.entity.server";
 import {
   SellingChannelKey,
-  menuItemSellingChannelPrismaEntity,
+  itemSellingChannelPrismaEntity,
 } from "./menu-item-selling-channel.entity.server";
 import {
   PizzaSizeKey,
@@ -14,7 +14,7 @@ import { on } from "events";
 import formatDecimalPlaces from "~/utils/format-decimal-places";
 import {
   MenuItemCostVariation,
-  MenuItemSellingChannel,
+  ItemSellingChannel,
   MenuItemSize,
 } from "@prisma/client";
 import { se } from "date-fns/locale";
@@ -22,7 +22,7 @@ import { se } from "date-fns/locale";
 interface MenuItemSellingPriceUtilityEntityConstructorProps
   extends PrismaEntityProps {
   menuItemCostVariationEntity: typeof menuItemCostVariationPrismaEntity;
-  menuItemSellingChannelEntity: typeof menuItemSellingChannelPrismaEntity;
+  itemSellingChannelEntity: typeof itemSellingChannelPrismaEntity;
   menuItemSizePrismaEntity: typeof menuItemSizePrismaEntity;
 }
 
@@ -71,24 +71,27 @@ class MenuItemSellingPriceUtilityEntity {
 
   menuItemCostVariationEntity;
 
-  menuItemSellingChannelEntity;
+  itemSellingChannelEntity;
 
   menuItemSizePrismaEntity;
 
   constructor({
     client,
     menuItemCostVariationEntity,
-    menuItemSellingChannelEntity,
+    itemSellingChannelEntity,
     menuItemSizePrismaEntity,
   }: MenuItemSellingPriceUtilityEntityConstructorProps) {
     this.client = client;
     this.menuItemCostVariationEntity = menuItemCostVariationEntity;
-    this.menuItemSellingChannelEntity = menuItemSellingChannelEntity;
+    this.itemSellingChannelEntity = itemSellingChannelEntity;
     this.menuItemSizePrismaEntity = menuItemSizePrismaEntity;
   }
 
   async getSellingPriceConfig(): Promise<SellingPriceConfig> {
-    const dnaSettings = await this.client.dnaEmpresaSettings.findFirst();
+    const dnaSettings = await this.client.dnaEmpresaSettings.findFirst({
+      where: { isSnapshot: false },
+      orderBy: { createdAt: "desc" },
+    });
 
     return {
       dnaPercentage: dnaSettings?.dnaPerc ?? 0,
@@ -107,7 +110,7 @@ class MenuItemSellingPriceUtilityEntity {
    */
 
   async calculateSellingPriceByChannel(
-    channel: MenuItemSellingChannel,
+    channel: ItemSellingChannel,
     itemCost: number,
     size: MenuItemSize | null,
     sellingPriceConfig: SellingPriceConfig
@@ -193,7 +196,7 @@ class MenuItemSellingPriceUtilityEntity {
     const priceWithoutProfit = amount / divisorWithoutProfit;
 
     return {
-      formulaExplanation: `(Custo ficha de custo + Desperdício + Custo embalagem) / (1 - (% Dna + % Profito))`,
+      formulaExplanation: `(CMV + Embalagem) / (1 - (% DNA + % Lucro))`,
       formulaExpression: `(${formatDecimalPlaces(
         amount
       )} / (1 - (${formatDecimalPlaces(dnaPerc)} / 100 + ${formatDecimalPlaces(
@@ -292,6 +295,6 @@ export const menuItemSellingPriceUtilityEntity =
   new MenuItemSellingPriceUtilityEntity({
     client: prismaClient,
     menuItemCostVariationEntity: menuItemCostVariationPrismaEntity,
-    menuItemSellingChannelEntity: menuItemSellingChannelPrismaEntity,
+    itemSellingChannelEntity: itemSellingChannelPrismaEntity,
     menuItemSizePrismaEntity: menuItemSizePrismaEntity,
   });

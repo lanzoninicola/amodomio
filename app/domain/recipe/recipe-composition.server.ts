@@ -156,10 +156,10 @@ export async function listRecipeCompositionLines(db: any, recipeId: string): Pro
           lossPct: perVariation.lossPct == null ? null : Number(perVariation.lossPct),
           sortOrderIndex: Number(ingredient.sortOrderIndex || 0),
           notes: ingredient.notes || null,
-          lastUnitCostAmount: Number(perVariation.lastUnitCostAmount || 0),
-          avgUnitCostAmount: Number(perVariation.avgUnitCostAmount || 0),
-          lastTotalCostAmount: Number(perVariation.lastTotalCostAmount || 0),
-          avgTotalCostAmount: Number(perVariation.avgTotalCostAmount || 0),
+          lastUnitCostAmount: 0,
+          avgUnitCostAmount: 0,
+          lastTotalCostAmount: 0,
+          avgTotalCostAmount: 0,
           Item: {
             id: ingredient.IngredientItem.id,
             name: ingredient.IngredientItem.name,
@@ -201,10 +201,10 @@ export async function listRecipeCompositionLines(db: any, recipeId: string): Pro
     lossPct: null,
     sortOrderIndex: Number(line.sortOrderIndex || 0),
     notes: line.notes || null,
-    lastUnitCostAmount: Number(line.lastUnitCostAmount || 0),
-    avgUnitCostAmount: Number(line.avgUnitCostAmount || 0),
-    lastTotalCostAmount: Number(line.lastTotalCostAmount || 0),
-    avgTotalCostAmount: Number(line.avgTotalCostAmount || 0),
+    lastUnitCostAmount: 0,
+    avgUnitCostAmount: 0,
+    lastTotalCostAmount: 0,
+    avgTotalCostAmount: 0,
     Item: line.Item,
     ItemVariation: line.ItemVariation
       ? {
@@ -224,6 +224,75 @@ export async function countRecipeCompositionLines(db: any, recipeId: string): Pr
     return Number(await db.recipeLine.count({ where: { recipeId } }))
   }
   return 0
+}
+
+export async function moveRecipeCompositionIngredient(params: {
+  db: any
+  recipeId: string
+  recipeIngredientId?: string | null
+  recipeLineId?: string | null
+  direction: "up" | "down"
+}): Promise<void> {
+  const { db, recipeId, recipeIngredientId, recipeLineId, direction } = params
+
+  if (isNewCompositionModelAvailable(db)) {
+    const ingredientId = String(recipeIngredientId || "").trim()
+    if (!ingredientId) throw new Error("Ingrediente inválido")
+
+    const rows = await db.recipeIngredient.findMany({
+      where: { recipeId },
+      select: { id: true, sortOrderIndex: true, createdAt: true },
+      orderBy: [{ sortOrderIndex: "asc" }, { createdAt: "asc" }],
+    })
+
+    const currentIndex = rows.findIndex((row: any) => row.id === ingredientId)
+    if (currentIndex < 0) throw new Error("Ingrediente não encontrado")
+
+    const targetIndex = direction === "up" ? currentIndex - 1 : currentIndex + 1
+    if (targetIndex < 0 || targetIndex >= rows.length) return
+
+    const current = rows[currentIndex]
+    const target = rows[targetIndex]
+    await db.$transaction([
+      db.recipeIngredient.update({
+        where: { id: current.id },
+        data: { sortOrderIndex: Number(target.sortOrderIndex || 0) },
+      }),
+      db.recipeIngredient.update({
+        where: { id: target.id },
+        data: { sortOrderIndex: Number(current.sortOrderIndex || 0) },
+      }),
+    ])
+    return
+  }
+
+  const lineId = String(recipeLineId || "").trim()
+  if (!lineId) throw new Error("Linha inválida")
+
+  const rows = await db.recipeLine.findMany({
+    where: { recipeId },
+    select: { id: true, sortOrderIndex: true, createdAt: true },
+    orderBy: [{ sortOrderIndex: "asc" }, { createdAt: "asc" }],
+  })
+
+  const currentIndex = rows.findIndex((row: any) => row.id === lineId)
+  if (currentIndex < 0) throw new Error("Linha não encontrada")
+
+  const targetIndex = direction === "up" ? currentIndex - 1 : currentIndex + 1
+  if (targetIndex < 0 || targetIndex >= rows.length) return
+
+  const current = rows[currentIndex]
+  const target = rows[targetIndex]
+  await db.$transaction([
+    db.recipeLine.update({
+      where: { id: current.id },
+      data: { sortOrderIndex: Number(target.sortOrderIndex || 0) },
+    }),
+    db.recipeLine.update({
+      where: { id: target.id },
+      data: { sortOrderIndex: Number(current.sortOrderIndex || 0) },
+    }),
+  ])
 }
 
 async function resolveTargetItemVariationIdsForRecipe(db: any, recipeId: string): Promise<string[]> {
@@ -302,10 +371,6 @@ export async function createRecipeCompositionIngredientSkeleton(params: {
         unit: defaultUnit,
         quantity: 0,
         lossPct: null,
-        lastUnitCostAmount: 0,
-        avgUnitCostAmount: 0,
-        lastTotalCostAmount: 0,
-        avgTotalCostAmount: 0,
       },
     })
   }
@@ -318,9 +383,10 @@ export async function createRecipeCompositionLine(params: {
   unit: string
   quantity: number
   lossPct?: number | null
-  snapshot: CostSnapshot
+  snapshot?: Partial<CostSnapshot> | null
 }): Promise<void> {
   const { db, recipeId, itemId, unit, quantity, lossPct = null, snapshot } = params
+  void snapshot
 
   if (isNewCompositionModelAvailable(db)) {
     const ownerItemVariationId = await ensureOwnerItemVariationId(db, recipeId)
@@ -361,10 +427,6 @@ export async function createRecipeCompositionLine(params: {
           unit,
           quantity,
           lossPct,
-          lastUnitCostAmount: snapshot.lastUnitCostAmount,
-          avgUnitCostAmount: snapshot.avgUnitCostAmount,
-          lastTotalCostAmount: snapshot.lastTotalCostAmount,
-          avgTotalCostAmount: snapshot.avgTotalCostAmount,
         },
         create: {
           recipeIngredientId: recipeIngredient.id,
@@ -372,10 +434,6 @@ export async function createRecipeCompositionLine(params: {
           unit,
           quantity,
           lossPct,
-          lastUnitCostAmount: snapshot.lastUnitCostAmount,
-          avgUnitCostAmount: snapshot.avgUnitCostAmount,
-          lastTotalCostAmount: snapshot.lastTotalCostAmount,
-          avgTotalCostAmount: snapshot.avgTotalCostAmount,
         },
       })
     }
@@ -394,10 +452,6 @@ export async function createRecipeCompositionLine(params: {
       itemVariationId: null,
       unit,
       quantity,
-      lastUnitCostAmount: snapshot.lastUnitCostAmount,
-      avgUnitCostAmount: snapshot.avgUnitCostAmount,
-      lastTotalCostAmount: snapshot.lastTotalCostAmount,
-      avgTotalCostAmount: snapshot.avgTotalCostAmount,
       sortOrderIndex: Number(recipeLineCount || 0),
     },
   })
@@ -410,9 +464,10 @@ export async function updateRecipeCompositionLine(params: {
   unit: string
   quantity: number
   lossPct?: number | null
-  snapshot: CostSnapshot
+  snapshot?: Partial<CostSnapshot> | null
 }): Promise<void> {
   const { db, lineId, recipeId, unit, quantity, lossPct = null, snapshot } = params
+  void snapshot
 
   if (isNewCompositionModelAvailable(db)) {
     const line = await db.recipeVariationIngredient.findUnique({
@@ -426,10 +481,6 @@ export async function updateRecipeCompositionLine(params: {
         unit,
         quantity,
         lossPct,
-        lastUnitCostAmount: snapshot.lastUnitCostAmount,
-        avgUnitCostAmount: snapshot.avgUnitCostAmount,
-        lastTotalCostAmount: snapshot.lastTotalCostAmount,
-        avgTotalCostAmount: snapshot.avgTotalCostAmount,
       },
     })
     return
@@ -440,10 +491,6 @@ export async function updateRecipeCompositionLine(params: {
     data: {
       unit,
       quantity,
-      lastUnitCostAmount: snapshot.lastUnitCostAmount,
-      avgUnitCostAmount: snapshot.avgUnitCostAmount,
-      lastTotalCostAmount: snapshot.lastTotalCostAmount,
-      avgTotalCostAmount: snapshot.avgTotalCostAmount,
     },
   })
 }
@@ -482,12 +529,13 @@ export async function updateRecipeCompositionLineItem(params: {
   lineId: string
   recipeId: string
   itemId: string
-  snapshot: CostSnapshot
+  snapshot?: Partial<CostSnapshot> | null
   quantity: number
   unit: string
   lossPct?: number | null
 }): Promise<void> {
   const { db, lineId, recipeId, itemId, snapshot, quantity, unit, lossPct = null } = params
+  void snapshot
 
   if (isNewCompositionModelAvailable(db)) {
     const line = await db.recipeVariationIngredient.findUnique({
@@ -525,10 +573,6 @@ export async function updateRecipeCompositionLineItem(params: {
         unit,
         quantity,
         lossPct,
-        lastUnitCostAmount: snapshot.lastUnitCostAmount,
-        avgUnitCostAmount: snapshot.avgUnitCostAmount,
-        lastTotalCostAmount: snapshot.lastTotalCostAmount,
-        avgTotalCostAmount: snapshot.avgTotalCostAmount,
       },
       create: {
         recipeIngredientId: targetRecipeIngredient.id,
@@ -536,10 +580,6 @@ export async function updateRecipeCompositionLineItem(params: {
         unit,
         quantity,
         lossPct,
-        lastUnitCostAmount: snapshot.lastUnitCostAmount,
-        avgUnitCostAmount: snapshot.avgUnitCostAmount,
-        lastTotalCostAmount: snapshot.lastTotalCostAmount,
-        avgTotalCostAmount: snapshot.avgTotalCostAmount,
       },
     })
 
@@ -561,10 +601,6 @@ export async function updateRecipeCompositionLineItem(params: {
       itemId,
       unit,
       quantity,
-      lastUnitCostAmount: snapshot.lastUnitCostAmount,
-      avgUnitCostAmount: snapshot.avgUnitCostAmount,
-      lastTotalCostAmount: snapshot.lastTotalCostAmount,
-      avgTotalCostAmount: snapshot.avgTotalCostAmount,
     },
   })
 }
@@ -596,9 +632,9 @@ export async function applyRecipeCompositionLineToVariations(params: {
   recipeId: string
   lineId: string
   variationIds: string[]
-  resolveCostByVariationId: (variationId: string, itemId: string, quantity: number, lossPct: number) => Promise<CostSnapshot>
+  resolveCostByVariationId?: (variationId: string, itemId: string, quantity: number, lossPct: number) => Promise<CostSnapshot>
 }): Promise<number> {
-  const { db, recipeId, lineId, variationIds, resolveCostByVariationId } = params
+  const { db, recipeId, lineId, variationIds } = params
 
   if (!isNewCompositionModelAvailable(db)) return 0
   if (!Array.isArray(variationIds) || variationIds.length === 0) return 0
@@ -630,12 +666,6 @@ export async function applyRecipeCompositionLineToVariations(params: {
   let affected = 0
   for (const target of targets) {
     if (!target.variationId) continue
-    const snapshot = await resolveCostByVariationId(
-      String(target.variationId),
-      line.RecipeIngredient.ingredientItemId,
-      Number(line.quantity || 0),
-      Number(line.lossPct ?? line.RecipeIngredient.defaultLossPct ?? 0)
-    )
     await db.recipeVariationIngredient.upsert({
       where: {
         recipeIngredientId_itemVariationId: {
@@ -647,10 +677,6 @@ export async function applyRecipeCompositionLineToVariations(params: {
         unit: line.unit,
         quantity: Number(line.quantity || 0),
         lossPct: line.lossPct == null ? null : Number(line.lossPct),
-        lastUnitCostAmount: snapshot.lastUnitCostAmount,
-        avgUnitCostAmount: snapshot.avgUnitCostAmount,
-        lastTotalCostAmount: snapshot.lastTotalCostAmount,
-        avgTotalCostAmount: snapshot.avgTotalCostAmount,
       },
       create: {
         recipeIngredientId: line.recipeIngredientId,
@@ -658,10 +684,6 @@ export async function applyRecipeCompositionLineToVariations(params: {
         unit: line.unit,
         quantity: Number(line.quantity || 0),
         lossPct: line.lossPct == null ? null : Number(line.lossPct),
-        lastUnitCostAmount: snapshot.lastUnitCostAmount,
-        avgUnitCostAmount: snapshot.avgUnitCostAmount,
-        lastTotalCostAmount: snapshot.lastTotalCostAmount,
-        avgTotalCostAmount: snapshot.avgTotalCostAmount,
       },
     })
     affected += 1

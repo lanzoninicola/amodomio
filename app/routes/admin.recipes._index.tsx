@@ -45,11 +45,9 @@ import {
   PaginationItem,
   PaginationLink,
 } from "~/components/ui/pagination";
-import { listRecipeCompositionLines } from "~/domain/recipe/recipe-composition.server";
 
 type RecipeWithMeta = Recipe & {
   Item: { name: string } | null;
-  RecipeLine: { lastTotalCostAmount: number }[];
 };
 type FilterItem = {
   id: string;
@@ -116,7 +114,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
             select: { name: true },
           },
         },
-        orderBy: [{ name: "asc" }],
+        orderBy: [{ createdAt: "desc" }],
         skip: (page - 1) * PAGE_SIZE,
         take: PAGE_SIZE,
       }),
@@ -128,17 +126,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   }
 
   const [items, recipesRaw] = result;
-  const recipes: RecipeWithMeta[] = await Promise.all(
-    (recipesRaw || []).map(async (recipe: RecipeWithMeta) => {
-      const lines = await listRecipeCompositionLines(db, recipe.id);
-      return {
-        ...recipe,
-        RecipeLine: lines.map((line) => ({
-          lastTotalCostAmount: Number(line.lastTotalCostAmount || 0),
-        })),
-      };
-    })
-  );
+  const recipes: RecipeWithMeta[] = recipesRaw || [];
 
   return ok({
     recipes,
@@ -387,9 +375,8 @@ export default function RecipesIndex() {
               <button
                 type="button"
                 className="inline-flex h-9 items-center gap-2 rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-700"
-                aria-label={`Rows per page: ${
-                  pagination?.pageSize || PAGE_SIZE
-                }`}
+                aria-label={`Rows per page: ${pagination?.pageSize || PAGE_SIZE
+                  }`}
               >
                 <span>{pagination?.pageSize || PAGE_SIZE}</span>
                 <ChevronLeft className="h-4 w-4 rotate-[-90deg] text-slate-400" />
@@ -402,17 +389,16 @@ export default function RecipesIndex() {
                     href={
                       pagination?.page > 1
                         ? buildPageHref({
-                            q: filters?.q || "",
-                            itemId: filters?.itemId || "",
-                            page: 1,
-                          })
+                          q: filters?.q || "",
+                          itemId: filters?.itemId || "",
+                          page: 1,
+                        })
                         : "#"
                     }
-                    className={`h-8 w-8 rounded-md border border-slate-200 bg-white p-0 text-slate-600 hover:bg-slate-50 ${
-                      pagination?.page <= 1
+                    className={`h-8 w-8 rounded-md border border-slate-200 bg-white p-0 text-slate-600 hover:bg-slate-50 ${pagination?.page <= 1
                         ? "pointer-events-none opacity-40"
                         : ""
-                    }`}
+                      }`}
                     aria-label="Primeira pagina"
                   >
                     <ChevronsLeft className="h-4 w-4" />
@@ -423,17 +409,16 @@ export default function RecipesIndex() {
                     href={
                       pagination?.page > 1
                         ? buildPageHref({
-                            q: filters?.q || "",
-                            itemId: filters?.itemId || "",
-                            page: (pagination?.page || 1) - 1,
-                          })
+                          q: filters?.q || "",
+                          itemId: filters?.itemId || "",
+                          page: (pagination?.page || 1) - 1,
+                        })
                         : "#"
                     }
-                    className={`h-8 w-8 rounded-md border border-slate-200 bg-white p-0 text-slate-600 hover:bg-slate-50 ${
-                      pagination?.page <= 1
+                    className={`h-8 w-8 rounded-md border border-slate-200 bg-white p-0 text-slate-600 hover:bg-slate-50 ${pagination?.page <= 1
                         ? "pointer-events-none opacity-40"
                         : ""
-                    }`}
+                      }`}
                     aria-label="Pagina anterior"
                   >
                     <ChevronLeft className="h-4 w-4" />
@@ -444,17 +429,16 @@ export default function RecipesIndex() {
                     href={
                       pagination?.page < (pagination?.totalPages || 1)
                         ? buildPageHref({
-                            q: filters?.q || "",
-                            itemId: filters?.itemId || "",
-                            page: (pagination?.page || 1) + 1,
-                          })
+                          q: filters?.q || "",
+                          itemId: filters?.itemId || "",
+                          page: (pagination?.page || 1) + 1,
+                        })
                         : "#"
                     }
-                    className={`h-8 w-8 rounded-md border border-slate-200 bg-white p-0 text-slate-600 hover:bg-slate-50 ${
-                      pagination?.page >= (pagination?.totalPages || 1)
+                    className={`h-8 w-8 rounded-md border border-slate-200 bg-white p-0 text-slate-600 hover:bg-slate-50 ${pagination?.page >= (pagination?.totalPages || 1)
                         ? "pointer-events-none opacity-40"
                         : ""
-                    }`}
+                      }`}
                     aria-label="Proxima pagina"
                   >
                     <ChevronLeft className="h-4 w-4 rotate-180" />
@@ -465,17 +449,16 @@ export default function RecipesIndex() {
                     href={
                       pagination?.page < (pagination?.totalPages || 1)
                         ? buildPageHref({
-                            q: filters?.q || "",
-                            itemId: filters?.itemId || "",
-                            page: pagination?.totalPages || 1,
-                          })
+                          q: filters?.q || "",
+                          itemId: filters?.itemId || "",
+                          page: pagination?.totalPages || 1,
+                        })
                         : "#"
                     }
-                    className={`h-8 w-8 rounded-md border border-slate-200 bg-white p-0 text-slate-600 hover:bg-slate-50 ${
-                      pagination?.page >= (pagination?.totalPages || 1)
+                    className={`h-8 w-8 rounded-md border border-slate-200 bg-white p-0 text-slate-600 hover:bg-slate-50 ${pagination?.page >= (pagination?.totalPages || 1)
                         ? "pointer-events-none opacity-40"
                         : ""
-                    }`}
+                      }`}
                     aria-label="Ultima pagina"
                   >
                     <ChevronsRight className="h-4 w-4" />
@@ -495,10 +478,6 @@ interface RecipeItemProps {
 }
 
 function RecipeRow({ item }: RecipeItemProps) {
-  const hasZeroCost = item.RecipeLine?.some(
-    (l) => Number(l.lastTotalCostAmount) <= 0
-  );
-
   return (
     <TableRow className="border-slate-100 hover:bg-slate-50/50">
       <TableCell className="px-4 py-3">
@@ -530,14 +509,6 @@ function RecipeRow({ item }: RecipeItemProps) {
       <TableCell className="px-4 py-3">
         <div className="flex items-center gap-2">
           <RecipeBadge item={item} />
-          {hasZeroCost && (
-            <span
-              className="text-[10px] px-1.5 py-0.5 rounded-full border border-amber-300 text-amber-700 bg-amber-50 shrink-0"
-              title="Ingredientes com custo total zero"
-            >
-              CUSTO 0
-            </span>
-          )}
         </div>
       </TableCell>
       <TableCell className="px-4 py-3">

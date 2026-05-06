@@ -10,12 +10,10 @@ function getRedisClient() {
 
   if (!globalThis.__redisClient__) {
     const client = new Redis(redisUrl, {
-      lazyConnect: true,
       maxRetriesPerRequest: 1,
       connectTimeout: 1200,
       keepAlive: 10_000,
       enableAutoPipelining: true,
-      enableOfflineQueue: false,
       retryStrategy(times) {
         if (times > 2) return null;
         return Math.min(100 * times, 300);

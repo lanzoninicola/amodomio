@@ -213,6 +213,30 @@ Content-Type: application/json
   }
 }
 
+### Unidades de consumo - todas
+GET http://localhost:3000/api/measurement-units
+x-api-key: {{REST_API_KEY}}
+
+### Unidades de consumo - apenas ativas
+GET http://localhost:3000/api/measurement-units?active=true
+x-api-key: {{REST_API_KEY}}
+
+### Unidades de consumo - filtro por tipo
+GET http://localhost:3000/api/measurement-units?kind=weight&active=true
+x-api-key: {{REST_API_KEY}}
+
+### Unidades de consumo - globais (disponíveis em todo o sistema)
+GET http://localhost:3000/api/measurement-units?scope=global&active=true
+x-api-key: {{REST_API_KEY}}
+
+### Unidades de consumo - vinculadas a itens específicos
+GET http://localhost:3000/api/measurement-units?scope=restricted&active=true
+x-api-key: {{REST_API_KEY}}
+
+### Unidades de consumo - produção
+GET https://amodomio.com.br/api/measurement-units?active=true
+x-api-key: {{REST_API_KEY}}
+
 ### Criar pedido mínimo (KDS) DELIVERY
 POST http://localhost:3000/api/kds/orders
 Content-Type: application/json

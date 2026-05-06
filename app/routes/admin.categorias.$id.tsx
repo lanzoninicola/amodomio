@@ -65,20 +65,33 @@ export async function action({ request }: ActionFunctionArgs) {
     if (_action === "category-delete") {
         const db = prismaClient as any
 
-        const [linkedItems, linkedMenuItems] = await Promise.all([
+        const [linkedItems, linkedSellingInfos] = await Promise.all([
             db.item.findMany({
                 where: { categoryId: category.id },
                 select: { id: true, name: true },
                 orderBy: [{ name: "asc" }],
                 take: 100,
             }),
-            db.menuItem.findMany({
+            db.itemSellingInfo.findMany({
                 where: { categoryId: category.id },
-                select: { id: true, name: true },
-                orderBy: [{ name: "asc" }],
+                select: {
+                    itemId: true,
+                    Item: {
+                        select: {
+                            id: true,
+                            name: true,
+                        },
+                    },
+                },
                 take: 100,
             }),
         ])
+
+        const linkedCommercialItems = linkedSellingInfos
+            .map((row: any) => row.Item)
+            .filter(Boolean)
+            .filter((item: any, index: number, current: any[]) => current.findIndex((entry) => entry.id === item.id) === index)
+            .sort((a: any, b: any) => String(a.name || "").localeCompare(String(b.name || "")))
 
         if (linkedItems.length > 0) {
             return badRequest({
@@ -92,13 +105,13 @@ export async function action({ request }: ActionFunctionArgs) {
             })
         }
 
-        if (linkedMenuItems.length > 0) {
+        if (linkedCommercialItems.length > 0) {
             return badRequest({
-                message: "Não é possível excluir esta categoria porque ela está vinculada a itens do cardápio.",
+                message: "Não é possível excluir esta categoria porque ela está vinculada à venda de itens.",
                 payload: {
                     action: "category-delete",
-                    linkedMenuItems,
-                    linkedMenuItemsCount: linkedMenuItems.length,
+                    linkedCommercialItems,
+                    linkedCommercialItemsCount: linkedCommercialItems.length,
                     categoryId: category.id,
                 },
             })
@@ -122,8 +135,8 @@ export default function CategorySingle() {
     const category = loaderData?.payload.category as Category
     const types = loaderData?.payload.types || []
     const linkedItems = actionData?.payload?.linkedItems || []
-    const linkedMenuItems = actionData?.payload?.linkedMenuItems || []
-    const deleteActionFeedback = actionData && (linkedItems.length > 0 || linkedMenuItems.length > 0)
+    const linkedCommercialItems = actionData?.payload?.linkedCommercialItems || []
+    const deleteActionFeedback = actionData && (linkedItems.length > 0 || linkedCommercialItems.length > 0)
 
     return (
         <div className="flex flex-col gap-4">
@@ -191,24 +204,24 @@ export default function CategorySingle() {
                         </div>
                     ) : null}
 
-                    {linkedMenuItems.length > 0 ? (
+                    {linkedCommercialItems.length > 0 ? (
                         <div className="space-y-2">
                             <p className="text-sm font-medium text-slate-900">
-                                Itens do cardápio vinculados ({actionData?.payload?.linkedMenuItemsCount || linkedMenuItems.length})
+                                Itens com venda vinculada ({actionData?.payload?.linkedCommercialItemsCount || linkedCommercialItems.length})
                             </p>
                             <p className="text-xs text-slate-600">
-                                Atualize a categoria desses itens do cardápio antes de excluir.
+                                Atualize a categoria comercial desses itens antes de excluir.
                             </p>
                             <div className="max-h-72 overflow-auto rounded-md border border-slate-200">
                                 <ul className="divide-y divide-slate-100">
-                                    {linkedMenuItems.map((item: any) => (
+                                    {linkedCommercialItems.map((item: any) => (
                                         <li key={item.id} className="flex items-center justify-between gap-2 px-3 py-2 text-sm">
                                             <div className="min-w-0">
                                                 <div className="truncate font-medium text-slate-900">{item.name}</div>
                                                 <div className="text-xs text-slate-500">ID: {item.id}</div>
                                             </div>
-                                            <Link to={`/admin/gerenciamento/cardapio/${item.id}/main`} className="text-xs underline">
-                                                Abrir cardápio
+                                            <Link to={`/admin/items/${item.id}/venda/comercial`} className="text-xs underline">
+                                                Abrir venda
                                             </Link>
                                         </li>
                                     ))}

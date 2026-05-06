@@ -147,6 +147,16 @@ export type CostVarItem = {
   currentDate: string | null;
   /** ISO date string of when the previous price was recorded */
   previousDate: string | null;
+  /** % change between end-of-momRef-month price and end-of-(momRef-1)-month price */
+  momPctDelta: number | null;
+  /** Normalised price at end of momRef month */
+  momCurr: number | null;
+  /** Normalised price at end of (momRef-1) month */
+  momPrev: number | null;
+  /** ISO date of the price used as "current" in the MoM comparison */
+  momCurrMonthDate: string | null;
+  /** ISO date of the price used as "previous" in the MoM comparison */
+  momPrevMonthDate: string | null;
 };
 
 export type CostVarImpactItem = CostVarItem & {
@@ -367,15 +377,25 @@ async function loadTopImpact(
 // both normalised to the consumption unit, so the before/after values are
 // comparable regardless of which purchase unit was used at each point in time.
 
-async function loadCostVariations(top = 10): Promise<{ byAbs: CostVarItem[]; byPct: CostVarItem[]; missingConsumptionUm: MissingUmItem[] }> {
+async function loadCostVariations(
+  top = 10,
+  momRef?: { year: number; month: number },
+): Promise<{ byAbs: CostVarItem[]; byPct: CostVarItem[]; all: CostVarItem[]; missingConsumptionUm: MissingUmItem[] }> {
   const db = prismaClient as any;
 
   // Only show items whose most-recent history entry was updated in the last 60 days.
-  // This ensures the variation table shows genuinely recent price changes, not
-  // ancient comparisons that would produce misleading deltas.
   const RECENCY_DAYS = 60;
   const recencyCutoff = new Date();
   recencyCutoff.setDate(recencyCutoff.getDate() - RECENCY_DAYS);
+
+  // MoM reference: last instant of the selected month and the one before it.
+  // new Date(year, month, 0) gives the last day of (month-1) in 0-indexed JS months,
+  // which equals the last day of our 1-indexed momRef.month.
+  const now = new Date();
+  const momRefYear = momRef?.year ?? now.getFullYear();
+  const momRefMonth = momRef?.month ?? (now.getMonth() + 1); // 1-indexed
+  const momCurrEnd = new Date(momRefYear, momRefMonth, 0, 23, 59, 59, 999);
+  const momPrevEnd = new Date(momRefYear, momRefMonth - 1, 0, 23, 59, 59, 999);
 
   // Fetch active item variations with their two latest history entries and full
   // item measurement data needed for unit normalisation.
@@ -401,7 +421,7 @@ async function loadCostVariations(top = 10): Promise<{ byAbs: CostVarItem[]; byP
         // (Prisma JSON path filters exclude rows where the field is null/missing,
         //  which would discard most history entries that don't set that flag at all)
         orderBy: [{ validFrom: "desc" }, { createdAt: "desc" }],
-        take: 10,
+        take: 20,
         select: { costAmount: true, unit: true, validFrom: true, createdAt: true, source: true, metadata: true },
       },
     },
@@ -466,6 +486,28 @@ async function loadCostVariations(top = 10): Promise<{ byAbs: CostVarItem[]; byP
         return d && !isNaN(d.getTime()) ? d.toISOString() : null;
       };
 
+      // Month-over-month: price at end of momCurrEnd vs price at end of momPrevEnd
+      const entryDate = (h: any) => h.validFrom ? new Date(h.validFrom) : h.createdAt ? new Date(h.createdAt) : null;
+      const momCurrEntry = validHistory.find((h: any) => { const d = entryDate(h); return d != null && d <= momCurrEnd; });
+      const momPrevEntry = validHistory.find((h: any) => { const d = entryDate(h); return d != null && d <= momPrevEnd; });
+      let momPctDelta: number | null = null;
+      let momCurr: number | null = null;
+      let momPrev: number | null = null;
+      let momCurrMonthDate: string | null = null;
+      let momPrevMonthDate: string | null = null;
+      if (momCurrEntry && momPrevEntry) {
+        const momCurrNorm = normalizeItemCostToConsumptionUnit(momCurrEntry, item);
+        const momPrevNorm = normalizeItemCostToConsumptionUnit(momPrevEntry, item);
+        if (momCurrNorm != null && Number.isFinite(momCurrNorm) && momCurrNorm > 0 &&
+            momPrevNorm != null && Number.isFinite(momPrevNorm) && momPrevNorm > 0) {
+          momPctDelta = ((momCurrNorm - momPrevNorm) / momPrevNorm) * 100;
+          momCurr = momCurrNorm;
+          momPrev = momPrevNorm;
+          momCurrMonthDate = pickDate(momCurrEntry);
+          momPrevMonthDate = pickDate(momPrevEntry);
+        }
+      }
+
       return {
         itemId: item.id,
         name: item.name,
@@ -478,6 +520,11 @@ async function loadCostVariations(top = 10): Promise<{ byAbs: CostVarItem[]; byP
         pctDelta,
         currentDate: pickDate(latest),
         previousDate: pickDate(previous),
+        momPctDelta,
+        momCurr,
+        momPrev,
+        momCurrMonthDate,
+        momPrevMonthDate,
       } as CostVarItem;
     })
     .filter(Boolean);
@@ -691,11 +738,11 @@ export async function loadItemsGroupData() {
 }
 
 /** Group 3 — Cost variation tables (by abs R$, by %, and by recipe impact) */
-export async function loadCostVarGroupData() {
+export async function loadCostVarGroupData(momRef?: { year: number; month: number }) {
   const db = prismaClient as any;
 
   const [{ byAbs, byPct, all, missingConsumptionUm }, ingredientRows] = await Promise.all([
-    loadCostVariations(10),
+    loadCostVariations(10, momRef),
     db.recipeIngredient.groupBy({
       by: ["ingredientItemId"],
       _count: { ingredientItemId: true },
@@ -717,5 +764,7 @@ export async function loadCostVarGroupData() {
     .sort((a, b) => b.weightedImpact - a.weightedImpact)
     .slice(0, 10);
 
-  return { byAbs, byPct, byImpact, missingConsumptionUm, all };
+  const now = new Date();
+  const resolvedMomRef = momRef ?? { year: now.getFullYear(), month: now.getMonth() + 1 };
+  return { byAbs, byPct, byImpact, missingConsumptionUm, all, momRef: resolvedMomRef };
 }

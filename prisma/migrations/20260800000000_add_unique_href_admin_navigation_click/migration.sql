@@ -1,0 +1,3 @@
+-- No-op.
+-- href is intentionally not unique because the same destination can exist
+-- both as a pinned shortcut and as a regular navigation entry.

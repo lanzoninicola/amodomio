@@ -1,4 +1,4 @@
-import { MenuItemTag, Tag } from "@prisma/client";
+import { Tag } from "@prisma/client";
 import { Separator } from "@radix-ui/react-separator";
 import { LoaderFunctionArgs, defer } from "@remix-run/node";
 import { Await, Link, useLoaderData } from "@remix-run/react";
@@ -9,15 +9,14 @@ import FadeIn from "~/components/primitives/fade-in/fade-in";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import CardapioItemDialog from "~/domain/cardapio/components/cardapio-item-dialog/cardapio-item-dialog";
-import { MenuItemWithAssociations, menuItemPrismaEntity } from "~/domain/cardapio/menu-item.prisma.entity.server";
-import BadgeTag from "~/domain/tags/components/badge-tag";
+import { MenuItemWithAssociations } from "~/domain/cardapio/menu-item.prisma.entity.server";
+import { findAllCardapioItems } from "~/domain/cardapio/cardapio-items-source.server";
 import { tagPrismaEntity } from "~/domain/tags/tag.prisma.entity.server";
 import WEBSITE_LINKS from "~/domain/website-navigation/links/website-links";
 import capitalize from "~/utils/capitalize";
 
-export async function loader({ request }: LoaderFunctionArgs) {
-    //@ts-ignore
-    const items = menuItemPrismaEntity.findAll({
+export async function loader({}: LoaderFunctionArgs) {
+    const items = findAllCardapioItems({
         where: {
             visible: true,
             active: true,
@@ -217,7 +216,7 @@ function FoundedItems({ items }: {
 
                                     <div className="self-start bg-center bg-cover bg-no-repeat w-8 h-8 rounded-lg col-span-1 "
                                         style={{
-                                            backgroundImage: `url(${item.MenuItemImage?.thumbnailUrl || "/images/cardapio-web-app/placeholder.png"})`,
+                                            backgroundImage: `url(${item.MenuItemImage?.thumbnailUrl || item.imageTransformedURL || "/images/cardapio-web-app/placeholder.png"})`,
                                         }}></div>
                                     <div className="flex flex-col col-span-7">
                                         <span className="font-neue text-[0.85rem] font-semibold leading-tight uppercase text-left">{item.name}</span>

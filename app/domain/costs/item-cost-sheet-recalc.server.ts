@@ -1,5 +1,6 @@
-import { listRecipeCompositionLines } from "~/domain/recipe/recipe-composition.server";
+import { resolveItemCostSnapshot } from "~/domain/costs/item-cost-snapshot.server";
 import { registerItemCostEvent } from "~/domain/costs/item-cost-event.server";
+import { listRecipeCompositionLines } from "~/domain/recipe/recipe-composition.server";
 
 export function roundItemCostSheetMoney(value: number) {
   return Number(Number(value || 0).toFixed(6));
@@ -15,10 +16,130 @@ export function calcItemCostSheetTotalCostAmount(
   return roundItemCostSheetMoney(baseAmount * wasteFactor);
 }
 
-export async function getRecipeCostSheetSnapshot(
+async function findRecipeLinkedIngredientVariation(params: {
+  db: any;
+  itemId: string;
+  variationId?: string | null;
+}) {
+  const itemId = String(params.itemId || "").trim();
+  if (!itemId) return null;
+
+  if (params.variationId) {
+    const exact = await params.db.itemVariation.findFirst({
+      where: {
+        itemId,
+        variationId: params.variationId,
+        deletedAt: null,
+        recipeId: { not: null },
+      },
+      select: {
+        id: true,
+        recipeId: true,
+      },
+    });
+    if (exact?.recipeId) return exact;
+  }
+
+  return await params.db.itemVariation.findFirst({
+    where: {
+      itemId,
+      deletedAt: null,
+      recipeId: { not: null },
+    },
+    select: {
+      id: true,
+      recipeId: true,
+    },
+    orderBy: [{ isReference: "desc" }, { createdAt: "asc" }],
+  });
+}
+
+async function findLatestActiveCostSheetForVariation(params: {
+  db: any;
+  itemVariationId: string;
+}) {
+  const itemVariationId = String(params.itemVariationId || "").trim();
+  if (!itemVariationId) return null;
+
+  return await params.db.itemCostSheet.findFirst({
+    where: {
+      itemVariationId,
+      isActive: true,
+    },
+    select: {
+      id: true,
+      costAmount: true,
+      activatedAt: true,
+      updatedAt: true,
+    },
+    orderBy: [{ activatedAt: "desc" }, { updatedAt: "desc" }],
+  });
+}
+
+export async function resolveRecipeIngredientCostSnapshot(params: {
+  db: any;
+  itemId: string;
+  variationId?: string | null;
+  _depth?: number;
+}) {
+  const depth = Number(params._depth || 0);
+
+  const costInfo = await resolveItemCostSnapshot({
+    db: params.db,
+    itemId: params.itemId,
+    variationId: params.variationId || null,
+  });
+
+  const hasDirectCost =
+    Number(costInfo.lastUnitCostAmount || 0) > 0 ||
+    Number(costInfo.avgUnitCostAmount || 0) > 0;
+  if (hasDirectCost) return costInfo;
+
+  const linkedVariation = await findRecipeLinkedIngredientVariation({
+    db: params.db,
+    itemId: params.itemId,
+    variationId: params.variationId || null,
+  });
+  if (!linkedVariation?.id || !linkedVariation.recipeId) return costInfo;
+
+  const activeSheet = await findLatestActiveCostSheetForVariation({
+    db: params.db,
+    itemVariationId: linkedVariation.id,
+  });
+  const activeSheetCost = Number(activeSheet?.costAmount || 0);
+  if (activeSheetCost > 0) {
+    return {
+      ...costInfo,
+      itemVariationId: linkedVariation.id,
+      lastUnitCostAmount: activeSheetCost,
+      avgUnitCostAmount: activeSheetCost,
+    };
+  }
+
+  if (depth >= 5) return costInfo;
+
+  const subSnapshot = await getRecipeCompositionCostSnapshot(
+    params.db,
+    linkedVariation.recipeId,
+    linkedVariation.id,
+    depth + 1
+  );
+  const subCost = Number(subSnapshot.unitCostAmount || 0);
+  if (subCost <= 0) return costInfo;
+
+  return {
+    ...costInfo,
+    itemVariationId: linkedVariation.id,
+    lastUnitCostAmount: subCost,
+    avgUnitCostAmount: subCost,
+  };
+}
+
+export async function getRecipeCompositionCostSnapshot(
   db: any,
   recipeId: string,
-  itemVariationId?: string | null
+  itemVariationId?: string | null,
+  _depth = 0
 ) {
   const recipe = await db.recipe.findUnique({
     where: { id: recipeId },
@@ -26,28 +147,61 @@ export async function getRecipeCostSheetSnapshot(
   });
   if (!recipe) throw new Error("Receita não encontrada");
 
-  const lines = (await listRecipeCompositionLines(db, recipeId)).filter(
-    (line) =>
-      !itemVariationId ||
-      String(line.ItemVariation?.id || "") === String(itemVariationId)
-  );
-  const lastTotal = lines.reduce(
-    (acc, line) => acc + Number(line.lastTotalCostAmount || 0),
-    0
-  );
-  const avgTotal = lines.reduce(
-    (acc, line) => acc + Number(line.avgTotalCostAmount || 0),
-    0
-  );
+  const allLines = await listRecipeCompositionLines(db, recipeId);
+
+  let lines = allLines;
+  if (itemVariationId) {
+    const ownerVariation = await db.itemVariation.findUnique({
+      where: { id: itemVariationId },
+      select: { variationId: true },
+    });
+    const variationId = ownerVariation?.variationId;
+    lines = variationId
+      ? allLines.filter(
+          (line) =>
+            String(line.ItemVariation?.variationId || "") === String(variationId)
+        )
+      : allLines;
+  }
+
+  let lastTotal = 0;
+  let avgTotal = 0;
+
+  for (const line of lines) {
+    const variationId = line.ItemVariation?.variationId || null;
+    const effectiveLossPct = Number(line.lossPct ?? line.defaultLossPct ?? 0);
+    const costInfo = await resolveRecipeIngredientCostSnapshot({
+      db,
+      itemId: line.itemId,
+      variationId: variationId || null,
+      _depth,
+    });
+    const safeLossPct = Math.min(99.9999, Math.max(0, effectiveLossPct));
+    const grossQuantity =
+      safeLossPct > 0
+        ? Number(
+            (Number(line.quantity || 0) / (1 - safeLossPct / 100)).toFixed(6)
+          )
+        : Number(line.quantity || 0);
+
+    lastTotal += Number(
+      ((Number(costInfo.lastUnitCostAmount || 0) || 0) * grossQuantity).toFixed(6)
+    );
+    avgTotal += Number(
+      ((Number(costInfo.avgUnitCostAmount || 0) || 0) * grossQuantity).toFixed(6)
+    );
+  }
 
   return {
     recipe,
     lastTotal,
     avgTotal,
     unitCostAmount: avgTotal,
-    note: `snapshot receita: ultimo=${lastTotal.toFixed(4)} medio=${avgTotal.toFixed(4)}`,
+    note: `calculado pela composicao da receita: ultimo=${lastTotal.toFixed(4)} medio=${avgTotal.toFixed(4)}`,
   };
 }
+
+export const getRecipeCostSheetSnapshot = getRecipeCompositionCostSnapshot;
 
 export async function getItemCostSheetSnapshot(
   db: any,
@@ -128,7 +282,6 @@ export async function recalcItemCostSheetTotals(db: any, itemCostSheetId: string
     },
     orderBy: [{ sortOrderIndex: "asc" }, { createdAt: "asc" }],
   });
-
   for (const component of components) {
     const values = Array.isArray(component.ItemCostSheetVariationComponent)
       ? component.ItemCostSheetVariationComponent
@@ -138,7 +291,7 @@ export async function recalcItemCostSheetTotals(db: any, itemCostSheetId: string
     for (const value of values) {
       try {
         if (component.type === "recipe") {
-          const snapshot = await getRecipeCostSheetSnapshot(
+          const snapshot = await getRecipeCompositionCostSnapshot(
             db,
             component.refId,
             value.itemVariationId
@@ -227,6 +380,7 @@ async function publishActiveItemCostSheetSnapshots(db: any, rootSheetId: string)
     where: {
       isActive: true,
       OR: [{ id: rootSheetId }, { baseItemCostSheetId: rootSheetId }],
+      ItemVariation: { deletedAt: null },
     },
     select: {
       id: true,

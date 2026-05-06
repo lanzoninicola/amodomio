@@ -65,10 +65,10 @@ export async function scanItemsForRecalculation(): Promise<ScanResult> {
   const movements = allMovementIds.size > 0
     ? await db.stockMovement.findMany({
         where: { id: { in: Array.from(allMovementIds) } },
-        select: { id: true, newCostAmount: true, newCostUnit: true, movementType: true },
+        select: { id: true, newCostAtImport: true, newCostUnitAtImport: true, movementType: true },
       })
     : [];
-  const movementMap = new Map<string, { newCostAmount: any; newCostUnit: any; movementType: any }>(
+  const movementMap = new Map<string, { newCostAtImport: any; newCostUnitAtImport: any; movementType: any }>(
     movements.map((m: any) => [m.id, m])
   );
 
@@ -93,7 +93,7 @@ export async function scanItemsForRecalculation(): Promise<ScanResult> {
       if (String(movement.movementType || "").trim().toLowerCase() !== "import") continue;
 
       const normalizedFromMovement = normalizeItemCostToConsumptionUnit(
-        { costAmount: movement.newCostAmount, unit: movement.newCostUnit },
+        { costAmount: movement.newCostAtImport, unit: movement.newCostUnitAtImport },
         item
       );
       if (normalizedFromMovement === null) continue;
@@ -130,6 +130,7 @@ export async function scanItemsForRecalculation(): Promise<ScanResult> {
 // ─── filtered scan ───────────────────────────────────────────────────────────
 
 export type ScanFilters = {
+  itemId?: string;          // filter by exact item id
   search?: string;          // filter by item name (case-insensitive contains)
   consumptionUm?: string;   // filter by exact consumptionUm value
   onlyWithIssues?: boolean; // if true, only return items where recalculableEntries > 0
@@ -141,7 +142,9 @@ export async function scanItemsForRecalculationFiltered(
   const db = prismaClient as any;
 
   const itemWhere: Record<string, any> = { active: true, classification: "insumo" };
-  if (filters.search) {
+  if (filters.itemId) {
+    itemWhere.id = filters.itemId;
+  } else if (filters.search) {
     itemWhere.name = { contains: filters.search, mode: "insensitive" };
   }
   if (filters.consumptionUm) {
@@ -188,10 +191,10 @@ export async function scanItemsForRecalculationFiltered(
   const movements = allMovementIds.size > 0
     ? await db.stockMovement.findMany({
         where: { id: { in: Array.from(allMovementIds) } },
-        select: { id: true, newCostAmount: true, newCostUnit: true, movementType: true },
+        select: { id: true, newCostAtImport: true, newCostUnitAtImport: true, movementType: true },
       })
     : [];
-  const movementMap = new Map<string, { newCostAmount: any; newCostUnit: any; movementType: any }>(
+  const movementMap = new Map<string, { newCostAtImport: any; newCostUnitAtImport: any; movementType: any }>(
     movements.map((m: any) => [m.id, m])
   );
 
@@ -216,7 +219,7 @@ export async function scanItemsForRecalculationFiltered(
       if (String(movement.movementType || "").trim().toLowerCase() !== "import") continue;
 
       const normalizedFromMovement = normalizeItemCostToConsumptionUnit(
-        { costAmount: movement.newCostAmount, unit: movement.newCostUnit },
+        { costAmount: movement.newCostAtImport, unit: movement.newCostUnitAtImport },
         item
       );
       if (normalizedFromMovement === null) continue;
@@ -372,8 +375,8 @@ export async function recalculateItemCostHistory(itemId: string): Promise<{
         where: { id: entry.referenceId },
         select: {
           id: true,
-          newCostAmount: true,
-          newCostUnit: true,
+          newCostAtImport: true,
+          newCostUnitAtImport: true,
         },
       });
 
@@ -386,8 +389,8 @@ export async function recalculateItemCostHistory(itemId: string): Promise<{
 
       // e. Try to normalize the movement's cost using current item config
       const movementCost = {
-        costAmount: movement.newCostAmount,
-        unit: movement.newCostUnit,
+        costAmount: movement.newCostAtImport,
+        unit: movement.newCostUnitAtImport,
       };
       const normalizedFromMovement = normalizeItemCostToConsumptionUnit(movementCost, item);
 

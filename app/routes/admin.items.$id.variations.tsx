@@ -2,6 +2,8 @@ import type { LoaderFunctionArgs } from "@remix-run/node";
 import { Form, useLoaderData } from "@remix-run/react";
 import { useMemo, useState } from "react";
 import { Button } from "~/components/ui/button";
+import { SelectSeparator } from "~/components/ui/select";
+import { Separator } from "~/components/ui/separator";
 import prismaClient from "~/lib/prisma/client.server";
 import { badRequest, ok, serverError } from "~/utils/http-response.server";
 
@@ -10,6 +12,7 @@ type VariationOption = {
   kind: string;
   code: string;
   name: string;
+  sortOrderIndex: number;
 };
 
 type LinkedVariation = {
@@ -34,8 +37,8 @@ export async function loader({ params }: LoaderFunctionArgs) {
         where: {
           deletedAt: null,
         },
-        select: { id: true, kind: true, code: true, name: true },
-        orderBy: [{ kind: "asc" }, { name: "asc" }],
+        select: { id: true, kind: true, code: true, name: true, sortOrderIndex: true },
+        orderBy: [{ kind: "asc" }, { sortOrderIndex: "asc" }, { name: "asc" }],
       }),
       db.itemVariation.findMany({
         where: { itemId: id, deletedAt: null },
@@ -103,8 +106,17 @@ export default function AdminItemVariationsTab() {
           <input key={variationId} type="hidden" name="variationIds" value={variationId} />
         ))}
 
-        <div className="grid gap-4 lg:grid-cols-2">
-          <div className="rounded-xl border border-slate-200 bg-white p-4">
+
+        <div className="flex justify-end">
+          <Button type="submit" className="bg-slate-900 hover:bg-slate-700">
+            Salvar variações
+          </Button>
+        </div>
+
+        <Separator className="my-6" />
+
+        <div className="grid gap-8 lg:grid-cols-2">
+          <div className="">
             <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Todas as variações</h2>
             <p className="mt-1 text-xs text-slate-600">Selecione múltiplas variações para vincular ao item.</p>
 
@@ -123,7 +135,7 @@ export default function AdminItemVariationsTab() {
                       <div className="min-w-0">
                         <div className="truncate text-sm font-medium text-slate-900">{variation.name}</div>
                         <div className="text-xs text-slate-500">
-                          {variation.kind} • {variation.code}
+                          {variation.kind} • {variation.code} • sort {Number(variation.sortOrderIndex || 0)}
                         </div>
                       </div>
                       <input
@@ -138,7 +150,8 @@ export default function AdminItemVariationsTab() {
             </div>
           </div>
 
-          <div className="rounded-xl border border-slate-200 bg-white p-4">
+
+          <div className="">
             <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Variações vinculadas</h2>
             <p className="mt-1 text-xs text-slate-600">
               Defina qual variação será a referência para cálculo das demais.
@@ -156,7 +169,7 @@ export default function AdminItemVariationsTab() {
                     <div className="min-w-0">
                       <div className="truncate text-sm font-medium text-slate-900">{variation.name}</div>
                       <div className="text-xs text-slate-500">
-                        {variation.kind} • {variation.code}
+                        {variation.kind} • {variation.code} • sort {Number(variation.sortOrderIndex || 0)}
                       </div>
                     </div>
                     <div className="flex items-center gap-2 text-xs text-slate-700">
@@ -175,11 +188,8 @@ export default function AdminItemVariationsTab() {
           </div>
         </div>
 
-        <div className="rounded-xl border border-slate-200 bg-white p-4">
-          <Button type="submit" className="bg-slate-900 hover:bg-slate-700">
-            Salvar variações
-          </Button>
-        </div>
+
+
       </Form>
     </div>
   );

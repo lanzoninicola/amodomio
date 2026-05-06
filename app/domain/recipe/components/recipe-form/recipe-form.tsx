@@ -1,9 +1,8 @@
 import { Recipe } from "@prisma/client";
 import { useEffect, useMemo, useState, type ChangeEvent } from "react";
-import { Check, ChevronsUpDown } from "lucide-react";
+import { Check, ChevronsUpDown, SaveIcon } from "lucide-react";
 import { Form, Link } from "@remix-run/react";
 import InputItem from "~/components/primitives/form/input-item/input-item";
-import SaveItemButton from "~/components/primitives/table-list/action-buttons/save-item-button/save-item-button";
 import { Button } from "~/components/ui/button";
 import { Command, CommandEmpty, CommandInput, CommandItem, CommandList, CommandSeparator } from "~/components/ui/command";
 import Fieldset from "~/components/ui/fieldset";
@@ -23,6 +22,10 @@ interface RecipeFormProps {
     requireItemRemapConfirmation?: boolean;
     hiddenFields?: Array<{ name: string; value: string }>;
     formAction?: string;
+    createCostSheetOption?: {
+        enabled: boolean;
+        helperText?: string;
+    };
 }
 
 function buildRecipeName(itemName?: string) {
@@ -30,7 +33,16 @@ function buildRecipeName(itemName?: string) {
     return `Receita ${itemName}`;
 }
 
-export default function RecipeForm({ recipe, actionName, items = [], title, requireItemRemapConfirmation = false, hiddenFields = [], formAction }: RecipeFormProps) {
+export default function RecipeForm({
+    recipe,
+    actionName,
+    items = [],
+    title,
+    requireItemRemapConfirmation = false,
+    hiddenFields = [],
+    formAction,
+    createCostSheetOption,
+}: RecipeFormProps) {
     const isCreate = actionName === "recipe-create";
     const initialLinkedItemId = String(recipe?.itemId || "");
     const [name, setName] = useState(recipe?.name || "");
@@ -83,9 +95,11 @@ export default function RecipeForm({ recipe, actionName, items = [], title, requ
         }
     }, [hasItemChanged]);
 
+
     return (
         <Form method="post" action={formAction}>
             <input type="hidden" name="recipeId" value={recipe?.id} />
+            <input type="hidden" name="_action" value={actionName} />
             <input type="hidden" name="confirmItemRemap" value={confirmItemRemap ? "yes" : "no"} />
             {hiddenFields.map((field) => (
                 <input key={field.name} type="hidden" name={field.name} value={field.value} />
@@ -95,13 +109,29 @@ export default function RecipeForm({ recipe, actionName, items = [], title, requ
                     {title ? (
                         <h1 className="text-xl font-semibold tracking-tight">{title}</h1>
                     ) : null}
-                    <SaveItemButton
-                        actionName={actionName}
-                        label="Salvar"
-                        labelClassName="uppercase font-semibold tracking-wider text-xs"
-                        variant={"outline"}
-                        disabled={requireItemRemapConfirmation && hasItemChanged && !confirmItemRemap}
-                    />
+                    <div className="flex items-center gap-2">
+                        {createCostSheetOption?.enabled ? (
+                            <Button
+                                type="submit"
+                                name="createItemCostSheet"
+                                value="yes"
+                                variant="outline"
+                                size="sm"
+                                className="text-xs uppercase font-semibold tracking-wider"
+                                disabled={requireItemRemapConfirmation && hasItemChanged && !confirmItemRemap}
+                            >
+                                Vincular ficha técnica
+                            </Button>
+                        ) : null}
+                        <Button
+                            type="submit"
+                            size="sm"
+                            disabled={requireItemRemapConfirmation && hasItemChanged && !confirmItemRemap}
+                        >
+                            <SaveIcon size={16} />
+                            <span className="pl-2 text-xs uppercase font-semibold tracking-wider">Salvar</span>
+                        </Button>
+                    </div>
                 </div>
                 <div className="flex flex-col gap-4">
                     <div className="border rounded-md p-4">
@@ -188,7 +218,7 @@ export default function RecipeForm({ recipe, actionName, items = [], title, requ
                                     {requireItemRemapConfirmation && hasItemChanged ? (
                                         <div className="mt-2 rounded-md border border-amber-300 bg-amber-50 p-2">
                                             <p className="text-xs font-semibold text-amber-900">
-                                                Trocar o item apaga os dados por variação (UM, quantidade e custos) e exige remapeamento.
+                                                Trocar o item apaga os dados por variação (UM e quantidade) e exige remapeamento.
                                             </p>
                                             <label className="mt-1 inline-flex items-center gap-2 text-xs text-amber-900">
                                                 <input

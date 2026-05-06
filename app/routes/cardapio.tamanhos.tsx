@@ -79,7 +79,7 @@ export async function loader(_: LoaderFunctionArgs) {
             where: {
                 menuItemSizeId: { in: sizeIds },
                 showOnCardapio: true,
-                MenuItemSellingChannel: {
+                ItemSellingChannel: {
                     key: "cardapio",
                 },
             },

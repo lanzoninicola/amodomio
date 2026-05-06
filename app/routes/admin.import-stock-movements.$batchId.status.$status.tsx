@@ -1,8 +1,7 @@
 import { useParams } from '@remix-run/react';
-import { AdminImportStockMovementsBatchLinesRoute } from './admin.import-stock-movements.$batchId._index';
+import { AdminImportStockMovementsBatchLinesRoute } from '~/components/admin/import-stock-lines';
 
 export default function AdminImportStockMovementsBatchStatusRoute() {
   const params = useParams();
-
-  return <AdminImportStockMovementsBatchLinesRoute forcedStatus={params.status} />;
+  return <AdminImportStockMovementsBatchLinesRoute layout="cards" forcedStatus={params.status} />;
 }

@@ -68,7 +68,7 @@ export default function AdminStockMovementDetailRoute() {
   const returnTo = payload.returnTo || '/admin/stock-movements';
 
   return (
-    <Container fullWidth className="mt-12 px-4">
+    <Container fullWidth className=" px-4">
       <div className="mx-auto flex w-full max-w-[1500px] flex-col gap-6">
         <section className="space-y-4 pb-2">
           <Link to={returnTo} className="inline-flex items-center gap-2 text-sm font-semibold text-slate-700 transition hover:text-slate-950">

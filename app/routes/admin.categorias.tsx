@@ -10,7 +10,7 @@ export default function AdminCategorias() {
 
 
     return (
-        <Container fullWidth className="mt-12 px-4">
+        <Container fullWidth className="px-4">
             <div className="flex flex-col gap-6">
                 <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:p-5">
                     <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
@@ -48,13 +48,13 @@ export default function AdminCategorias() {
 
                 <Outlet />
             </div>
-            
-            
-            
-            
-            
-            
-            
+
+
+
+
+
+
+
         </Container>
 
     )

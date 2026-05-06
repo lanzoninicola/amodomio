@@ -1,13 +1,51 @@
-import type { LoaderFunctionArgs } from "@remix-run/node";
-import { useLoaderData } from "@remix-run/react";
+import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
+import { Link, Outlet, useActionData, useLoaderData, useLocation, useOutletContext } from "@remix-run/react";
+import { Eye, Pencil } from "lucide-react";
+import { useEffect } from "react";
+import { toast } from "~/components/ui/use-toast";
+import type { ComputedSellingPriceBreakdown } from "~/domain/cardapio/menu-item-selling-price-utility.entity";
+import {
+  buildNativeSellingPriceUpsertPayload,
+  computeNativeItemSellingPriceBreakdown,
+  listSizeMapByKey,
+  pickLatestActiveSheet,
+  resolveVariationSizeKey,
+} from "~/domain/item/item-selling-price-calculation.server";
+import { itemSellingPriceVariationEntity } from "~/domain/item/item-selling-price-variation.entity.server";
+import { menuItemSellingPriceUtilityEntity } from "~/domain/cardapio/menu-item-selling-price-utility.entity";
+import { settingPrismaEntity } from "~/domain/setting/setting.prisma.entity.server";
 import prismaClient from "~/lib/prisma/client.server";
 import { badRequest, ok, serverError } from "~/utils/http-response.server";
-import { SELLING_CHANNEL_CATALOG } from "./admin.items.$id.venda";
+import { lastUrlSegment } from "~/utils/url";
+import type { AdminItemVendaOutletContext } from "./admin.items.$id.venda";
 
-function formatCurrency(value: number | null | undefined) {
-  if (value == null) return "-";
-  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(Number(value || 0));
+function parseMoneyInput(value: FormDataEntryValue | null) {
+  const raw = String(value || "").trim().replace(/\s+/g, "");
+  if (!raw) return null;
+
+  const normalized = raw.includes(",")
+    ? raw.replace(/\./g, "").replace(",", ".")
+    : raw;
+
+  const parsed = Number(normalized);
+  if (!Number.isFinite(parsed)) return null;
+  return parsed;
 }
+
+function uniqueStrings(values: FormDataEntryValue[]) {
+  return Array.from(
+    new Set(
+      values
+        .map((value) => String(value || "").trim())
+        .filter(Boolean)
+    )
+  );
+}
+
+const pricesNavigation = [
+  { name: "Visualizar", href: "visualizar", icon: Eye },
+  { name: "Editar", href: "editar", icon: Pencil },
+];
 
 export async function loader({ params }: LoaderFunctionArgs) {
   try {
@@ -15,243 +53,422 @@ export async function loader({ params }: LoaderFunctionArgs) {
     if (!id) return badRequest("Item inválido");
 
     const db = prismaClient as any;
-    const item = await db.item.findUnique({
-      where: { id },
-      select: { id: true, name: true },
-    });
-
-    if (!item) return badRequest("Item não encontrado");
-
-    const [menuItems, allSizes] = await Promise.all([
-      db.menuItem.findMany({
+    const [
+      item,
+      editableVariations,
+      nativeRows,
+      nativeModelAvailable,
+      itemChannelRows,
+      activeSheets,
+      sizeMap,
+      sellingPriceConfig,
+      dnaHelpSetting,
+      profitPriceHelpSetting,
+    ] = await Promise.all([
+      db.item.findUnique({
+        where: { id },
+        select: { id: true, name: true },
+      }),
+      db.itemVariation.findMany({
         where: { itemId: id, deletedAt: null },
         select: {
           id: true,
-          name: true,
-          active: true,
-          visible: true,
-          sortOrderIndex: true,
-          MenuItemSellingPriceVariation: {
-            select: {
-              id: true,
-              priceAmount: true,
-              showOnCardapio: true,
-              updatedAt: true,
-              MenuItemSize: {
-                select: {
-                  id: true,
-                  key: true,
-                  name: true,
-                  nameShort: true,
-                  nameAbbreviated: true,
-                  sortOrderIndex: true,
-                },
-              },
-              MenuItemSellingChannel: {
-                select: {
-                  id: true,
-                  key: true,
-                  name: true,
-                },
+          isReference: true,
+            Variation: {
+              select: {
+                id: true,
+                code: true,
+                name: true,
+                sortOrderIndex: true,
               },
             },
           },
-        },
-        orderBy: [{ sortOrderIndex: "asc" }, { name: "asc" }],
+        orderBy: [{ isReference: "desc" }, { createdAt: "asc" }],
       }),
-      db.menuItemSize.findMany({
+      itemSellingPriceVariationEntity.findManyByItemId(id),
+      itemSellingPriceVariationEntity.isAvailable(),
+      db.itemSellingChannelItem.findMany({
+        where: { itemId: id },
+        select: {
+          visible: true,
+          ItemSellingChannel: true,
+        },
+      }),
+      db.itemCostSheet.findMany({
+        where: {
+          itemId: id,
+          isActive: true,
+        },
         select: {
           id: true,
-          key: true,
           name: true,
-          nameShort: true,
-          nameAbbreviated: true,
-          sortOrderIndex: true,
+          itemId: true,
+          itemVariationId: true,
+          costAmount: true,
+          updatedAt: true,
+          activatedAt: true,
         },
-        orderBy: [{ sortOrderIndex: "asc" }, { name: "asc" }],
+        orderBy: [{ activatedAt: "desc" }, { updatedAt: "desc" }],
       }),
+      listSizeMapByKey(),
+      menuItemSellingPriceUtilityEntity.getSellingPriceConfig(),
+      settingPrismaEntity.findByContextAndName("sell-price-management", "dnaHelpUrl"),
+      settingPrismaEntity.findByContextAndName("sell-price-management", "profitPriceHelpUrl"),
     ]);
 
-    const channels = SELLING_CHANNEL_CATALOG.map((channel) => ({
-      key: channel.key,
-      name: channel.name,
-    }));
+    if (!item) return badRequest("Item não encontrado");
 
-    const normalizedMenuItems = (menuItems || []).map((menuItem: any) => {
-      const variationMap = new Map<string, any>(
-        (allSizes || []).map((size: any) => [
-          size.id,
-          {
-            id: size.id,
-            key: size.key || null,
-            name: size.nameShort || size.nameAbbreviated || size.name || "Sem variação",
-            fullName: size.name || "Sem variação",
-            sortOrderIndex: Number(size.sortOrderIndex || 0),
-            channels: {},
-          },
-        ])
-      );
+    const currentRowByKey = new Map(
+      (nativeRows || []).map((row: any) => [
+        `${row.itemVariationId}::${row.itemSellingChannelId}`,
+        row,
+      ])
+    );
+    const pricingRows = (itemChannelRows || []).flatMap((itemChannelRow: any) => {
+      const channel = itemChannelRow.ItemSellingChannel;
+      if (!channel?.id) return [];
 
-      for (const priceVariation of menuItem.MenuItemSellingPriceVariation || []) {
-        const size = priceVariation.MenuItemSize;
-        if (!size?.id) continue;
+      return (editableVariations || []).map((itemVariation: any) => {
+        const activeSheet = pickLatestActiveSheet(
+          (activeSheets || []).filter(
+            (sheet: any) => String(sheet.itemVariationId || "") === String(itemVariation.id || "")
+          )
+        );
+        const sizeKey = resolveVariationSizeKey({
+          variationCode: itemVariation.Variation?.code,
+          variationName: itemVariation.Variation?.name,
+        });
+        const size = sizeKey ? sizeMap.get(sizeKey) || null : null;
+        const currentRow =
+          currentRowByKey.get(`${itemVariation.id}::${channel.id}`) || null;
+        const breakdown = computeNativeItemSellingPriceBreakdown({
+          channel,
+          itemCostAmount: Number(activeSheet?.costAmount || 0),
+          sellingPriceConfig,
+          size,
+        });
 
-        if (!variationMap.has(size.id)) {
-          variationMap.set(size.id, {
-            id: size.id,
-            key: size.key || null,
-            name: size.nameShort || size.nameAbbreviated || size.name || "Sem variação",
-            fullName: size.name || "Sem variação",
-            sortOrderIndex: Number(size.sortOrderIndex || 0),
-            channels: {},
-          });
-        }
-
-        const channelKey = String(priceVariation.MenuItemSellingChannel?.key || "").toLowerCase();
-        if (!channelKey) continue;
-
-        variationMap.get(size.id).channels[channelKey] = {
-          id: priceVariation.id,
-          priceAmount: Number(priceVariation.priceAmount || 0),
-          showOnCardapio: Boolean(priceVariation.showOnCardapio),
-          updatedAt: priceVariation.updatedAt || null,
-          channelName: priceVariation.MenuItemSellingChannel?.name || null,
+        return {
+          itemVariationId: itemVariation.id,
+          itemSellingChannelId: channel.id,
+          itemSellingChannelKey: String(channel.key || "").toLowerCase(),
+          itemSellingChannelName: channel.name || String(channel.key || ""),
+          variationName:
+            itemVariation.Variation?.name ||
+            (itemVariation.isReference ? "Referencia" : "Sem variação"),
+          variationCode: itemVariation.Variation?.code || null,
+          isReference: Boolean(itemVariation.isReference),
+          currentRow: currentRow
+            ? {
+                id: currentRow.id,
+                priceAmount: Number(currentRow.priceAmount || 0),
+                previousPriceAmount: Number(currentRow.previousPriceAmount || 0),
+                priceExpectedAmount: Number(currentRow.priceExpectedAmount || 0),
+                profitExpectedPerc: Number(currentRow.profitExpectedPerc || 0),
+                updatedBy: currentRow.updatedBy || null,
+              }
+            : null,
+          activeSheetId: activeSheet?.id || null,
+          activeSheetName: activeSheet?.name || null,
+          activeSheetCostAmount: Number(activeSheet?.costAmount || 0),
+          sizeKey,
+          computedSellingPriceBreakdown: breakdown,
         };
-      }
-
-      return {
-        id: menuItem.id,
-        name: menuItem.name,
-        active: Boolean(menuItem.active),
-        visible: Boolean(menuItem.visible),
-        variations: Array.from(variationMap.values()).sort(
-          (a: any, b: any) => Number(a.sortOrderIndex || 0) - Number(b.sortOrderIndex || 0)
-        ),
-      };
+      });
     });
 
     return ok({
       item,
-      channels,
-      menuItems: normalizedMenuItems,
+      editableVariations: [...(editableVariations || [])].sort(
+        (a: any, b: any) =>
+          Number(Boolean(b?.isReference)) - Number(Boolean(a?.isReference)) ||
+          Number(a?.Variation?.sortOrderIndex || 0) - Number(b?.Variation?.sortOrderIndex || 0) ||
+          String(a?.Variation?.name || "").localeCompare(String(b?.Variation?.name || ""), "pt-BR")
+      ),
+      nativeRows,
+      nativeModelAvailable,
+      pricingRows,
+      dnaHelpUrl: String(dnaHelpSetting?.value || "").trim() || null,
+      profitPriceHelpUrl: String(profitPriceHelpSetting?.value || "").trim() || null,
     });
   } catch (error) {
     return serverError(error);
   }
 }
 
-export default function AdminItemVendaPrecosRoute() {
-  const loaderData = useLoaderData<typeof loader>();
-  const payload = (loaderData?.payload || {}) as {
-    channels?: Array<{ key: string; name: string }>;
-    menuItems?: Array<{
-      id: string;
-      name: string;
-      active: boolean;
-      visible: boolean;
-      variations: Array<{
-        id: string;
-        key: string | null;
-        name: string;
-        fullName: string;
-        channels: Record<
-          string,
-          {
-            id: string;
-            priceAmount: number;
-            showOnCardapio: boolean;
-            updatedAt: string | null;
-            channelName: string | null;
-          }
-        >;
-      }>;
-    }>;
-  };
+export async function action({ request, params }: ActionFunctionArgs) {
+  try {
+    const itemId = params.id;
+    if (!itemId) return badRequest("Item inválido");
 
-  const channels = payload.channels || [];
-  const menuItems = payload.menuItems || [];
+    const formData = await request.formData();
+    const actionName = String(formData.get("_action") || "");
+
+    if (
+      actionName !== "upsert-native-price" &&
+      actionName !== "upsert-native-price-batch"
+    ) {
+      return badRequest("Ação inválida");
+    }
+
+    const nativeModelAvailable = await itemSellingPriceVariationEntity.isAvailable();
+    if (!nativeModelAvailable) {
+      return badRequest("Modelo nativo de venda ainda não disponível no Prisma Client desta execução.");
+    }
+
+    const itemSellingChannelId = String(formData.get("itemSellingChannelId") || "").trim();
+    const updatedBy = String(formData.get("updatedBy") || "").trim() || null;
+    const intent = String(formData.get("_intent") || "").trim();
+    if (!itemSellingChannelId) return badRequest("Canal inválido");
+
+    const db = prismaClient as any;
+    const itemChannel = await db.itemSellingChannelItem.findFirst({
+      where: {
+        itemId,
+        itemSellingChannelId,
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    if (!itemChannel) {
+      return badRequest("Este item não está habilitado para o canal selecionado.");
+    }
+
+    if (actionName === "upsert-native-price") {
+      const itemVariationId = String(formData.get("itemVariationId") || "").trim();
+      const priceAmount =
+        intent === "apply-recommended"
+          ? Number(formData.get("recommendedPriceAmount") || 0)
+          : parseMoneyInput(formData.get("priceAmount"));
+
+      if (!itemVariationId) return badRequest("Variação inválida");
+      if (priceAmount == null) return badRequest("Preço inválido");
+
+      const { upsertInput } = await buildNativeSellingPriceUpsertPayload({
+        db,
+        itemId,
+        itemVariationId,
+        itemSellingChannelId,
+        priceAmount,
+        updatedBy,
+      });
+
+      await itemSellingPriceVariationEntity.upsert(upsertInput);
+
+      return ok("Preço nativo do item salvo.");
+    }
+
+    const itemVariationIds = uniqueStrings(formData.getAll("itemVariationIds"));
+    if (itemVariationIds.length === 0) {
+      return badRequest("Nenhuma variação informada.");
+    }
+
+    const validVariations = await db.itemVariation.findMany({
+      where: {
+        itemId,
+        deletedAt: null,
+        id: { in: itemVariationIds },
+      },
+      select: { id: true },
+    });
+    const validVariationIds = new Set(
+      (validVariations || []).map((row: { id: string }) => String(row.id || ""))
+    );
+
+    if (validVariationIds.size !== itemVariationIds.length) {
+      return badRequest("Há variações inválidas para este item.");
+    }
+
+    if (intent === "copy-cardapio-and-save") {
+      const cardapioChannel = await db.itemSellingChannel.findFirst({
+        where: { key: "cardapio" },
+        select: { id: true, name: true },
+      });
+
+      if (!cardapioChannel?.id) {
+        return badRequest("Canal cardápio não encontrado.");
+      }
+
+      if (String(cardapioChannel.id) === String(itemSellingChannelId)) {
+        return badRequest("A duplicação do cardápio só se aplica aos outros canais.");
+      }
+
+      const sourceRows = await db.itemSellingPriceVariation.findMany({
+        where: {
+          itemId,
+          itemSellingChannelId: cardapioChannel.id,
+          itemVariationId: { in: itemVariationIds },
+        },
+        select: {
+          itemVariationId: true,
+          priceAmount: true,
+        },
+      });
+
+      if ((sourceRows || []).length === 0) {
+        return badRequest("O cardápio ainda não tem preços salvos para duplicar.");
+      }
+
+      for (const sourceRow of sourceRows) {
+        const { upsertInput } = await buildNativeSellingPriceUpsertPayload({
+          db,
+          itemId,
+          itemVariationId: String(sourceRow.itemVariationId || ""),
+          itemSellingChannelId,
+          priceAmount: Number(sourceRow.priceAmount || 0),
+          updatedBy,
+        });
+
+        await itemSellingPriceVariationEntity.upsert(upsertInput);
+      }
+
+      return ok(`Valores do cardápio duplicados e salvos para ${sourceRows.length} tamanho(s).`);
+    }
+
+    let savedCount = 0;
+    for (const itemVariationId of itemVariationIds) {
+      const priceAmount = parseMoneyInput(
+        formData.get(`priceAmount:${itemVariationId}`)
+      );
+
+      if (priceAmount == null) {
+        return badRequest("Preço inválido em uma das variações.");
+      }
+
+      const { upsertInput } = await buildNativeSellingPriceUpsertPayload({
+        db,
+        itemId,
+        itemVariationId,
+        itemSellingChannelId,
+        priceAmount,
+        updatedBy,
+      });
+
+      await itemSellingPriceVariationEntity.upsert(upsertInput);
+      savedCount += 1;
+    }
+
+    return ok(`Preços salvos para ${savedCount} tamanho(s) do canal.`);
+  } catch (error) {
+    return serverError(error);
+  }
+}
+
+export type AdminItemVendaPrecosOutletContext = AdminItemVendaOutletContext & {
+  editableVariations: Array<{
+    id: string;
+    isReference: boolean;
+    Variation?: {
+      id: string;
+      code: string;
+      name: string;
+    } | null;
+  }>;
+  nativeRows: Array<{
+    id: string;
+    itemVariationId: string;
+    itemSellingChannelId: string;
+    priceAmount: number;
+    previousPriceAmount?: number;
+    priceExpectedAmount?: number;
+    profitExpectedPerc?: number;
+    updatedBy?: string | null;
+  }>;
+  nativeModelAvailable: boolean;
+  dnaHelpUrl: string | null;
+  profitPriceHelpUrl: string | null;
+  pricingRows: Array<{
+    itemVariationId: string;
+    itemSellingChannelId: string;
+    itemSellingChannelKey: string;
+    itemSellingChannelName: string;
+    variationName: string;
+    variationCode: string | null;
+    isReference: boolean;
+    currentRow: {
+      id: string;
+      priceAmount: number;
+      previousPriceAmount: number;
+      priceExpectedAmount: number;
+      profitExpectedPerc: number;
+      updatedBy: string | null;
+    } | null;
+    activeSheetId: string | null;
+    activeSheetName: string | null;
+    activeSheetCostAmount: number;
+    sizeKey: string | null;
+    computedSellingPriceBreakdown: ComputedSellingPriceBreakdown;
+  }>;
+};
+
+export default function AdminItemVendaPrecosLayout() {
+  const actionData = useActionData<typeof action>();
+  const loaderData = useLoaderData<typeof loader>();
+  const sellingContext = useOutletContext<AdminItemVendaOutletContext>();
+  const location = useLocation();
+  const activeSubtab = lastUrlSegment(location.pathname);
+  const payload = (loaderData?.payload || {}) as {
+    editableVariations?: AdminItemVendaPrecosOutletContext["editableVariations"];
+    nativeRows?: AdminItemVendaPrecosOutletContext["nativeRows"];
+    nativeModelAvailable?: boolean;
+    dnaHelpUrl?: AdminItemVendaPrecosOutletContext["dnaHelpUrl"];
+    profitPriceHelpUrl?: AdminItemVendaPrecosOutletContext["profitPriceHelpUrl"];
+    pricingRows?: AdminItemVendaPrecosOutletContext["pricingRows"];
+  };
+  const basePath = `/admin/items/${sellingContext.item.id}/venda/precos`;
+
+  useEffect(() => {
+    if (actionData?.status === 200) {
+      toast({ title: "Ok", description: actionData.message });
+    }
+
+    if (actionData?.status && actionData.status >= 400) {
+      toast({ title: "Erro", description: actionData.message, variant: "destructive" });
+    }
+  }, [actionData]);
+
+  const outletContext: AdminItemVendaPrecosOutletContext = {
+    ...sellingContext,
+    editableVariations: payload.editableVariations || [],
+    nativeRows: payload.nativeRows || [],
+    nativeModelAvailable: payload.nativeModelAvailable ?? false,
+    dnaHelpUrl: payload.dnaHelpUrl || null,
+    profitPriceHelpUrl: payload.profitPriceHelpUrl || null,
+    pricingRows: payload.pricingRows || [],
+  };
 
   return (
     <div className="space-y-4">
-      {menuItems.length === 0 ? (
-        <div className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-500">
-          Nenhum menu item vinculado a este item para exibir preços públicos.
-        </div>
-      ) : (
-        menuItems.map((menuItem) => (
-          <section key={menuItem.id} className="rounded-xl border border-slate-200 bg-white p-4">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Preços públicos</h2>
-                <div className="mt-1 text-base font-semibold text-slate-900">{menuItem.name}</div>
-                <div className="text-xs text-slate-500">{menuItem.id}</div>
-              </div>
-              <div className="flex gap-2 text-[11px] font-semibold uppercase tracking-wide">
-                <span className={`rounded-full px-2 py-1 ${menuItem.active ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-600"}`}>
-                  {menuItem.active ? "Ativo" : "Inativo"}
-                </span>
-                <span className={`rounded-full px-2 py-1 ${menuItem.visible ? "bg-blue-100 text-blue-700" : "bg-slate-100 text-slate-600"}`}>
-                  {menuItem.visible ? "Visível" : "Oculto"}
-                </span>
-              </div>
-            </div>
+      <div className="space-y-2">
+        <h2 className="text-sm font-semibold text-slate-950">Preços</h2>
+        <nav className="border-b border-slate-100">
+          <div className="flex items-center gap-5 overflow-x-auto text-sm">
+            {pricesNavigation.map((navItem) => {
+              const Icon = navItem.icon;
+              const isActive = activeSubtab === navItem.href;
 
-            <div className="mt-4 overflow-x-auto">
-              <table className="min-w-full border-separate border-spacing-0 text-sm">
-                <thead>
-                  <tr>
-                    <th className="sticky left-0 bg-white px-3 py-2 text-left font-semibold text-slate-700">Variação</th>
-                    {channels.map((channel) => (
-                      <th key={channel.key} className="px-3 py-2 text-left font-semibold text-slate-700">
-                        {channel.name}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {menuItem.variations.length === 0 ? (
-                    <tr>
-                      <td colSpan={channels.length + 1} className="px-3 py-4 text-slate-500">
-                        Nenhuma variação com preço de venda cadastrada.
-                      </td>
-                    </tr>
-                  ) : (
-                    menuItem.variations.map((variation) => (
-                      <tr key={variation.id}>
-                        <td className="sticky left-0 border-t border-slate-100 bg-white px-3 py-3 align-top">
-                          <div className="font-medium text-slate-900">{variation.name}</div>
-                          <div className="text-xs text-slate-500">{variation.fullName}</div>
-                        </td>
-                        {channels.map((channel) => {
-                          const priceRecord = variation.channels[channel.key];
-                          const isPublic = Boolean(priceRecord?.showOnCardapio);
+              return (
+                <Link
+                  key={navItem.href}
+                  to={`${basePath}/${navItem.href}`}
+                  className={`inline-flex shrink-0 items-center gap-2 border-b-2 pb-2.5 font-medium transition ${
+                    isActive
+                      ? "border-slate-950 text-slate-950"
+                      : "border-transparent text-slate-400 hover:text-slate-700"
+                  }`}
+                >
+                  <Icon size={14} />
+                  {navItem.name}
+                </Link>
+              );
+            })}
+          </div>
+        </nav>
+      </div>
 
-                          return (
-                            <td key={channel.key} className="border-t border-slate-100 px-3 py-3 align-top">
-                              {priceRecord ? (
-                                <div className="space-y-1">
-                                  <div className={`font-semibold ${isPublic ? "text-slate-900" : "text-slate-400"}`}>
-                                    {formatCurrency(priceRecord.priceAmount)}
-                                  </div>
-                                  <div className="text-xs text-slate-500">
-                                    {isPublic ? "Publicado" : "Nao publico"}
-                                  </div>
-                                </div>
-                              ) : (
-                                <span className="text-xs text-slate-400">Sem preço</span>
-                              )}
-                            </td>
-                          );
-                        })}
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </section>
-        ))
-      )}
+      <Outlet context={outletContext} />
     </div>
   );
 }

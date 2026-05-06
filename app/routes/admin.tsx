@@ -6,6 +6,7 @@ import { authenticator } from "~/domain/auth/google.server";
 import { LoggedUser } from "~/domain/auth/types.server";
 import ADMIN_NAVIGATION_LINKS from "~/domain/website-navigation/links/admin-navigation";
 import { AdminSidebar } from "~/domain/website-navigation/components/admin-sidebar";
+import { isWhatsappNoResponseEnabled } from "~/domain/crm/whatsapp-no-response-settings.server";
 import prismaClient from "~/lib/prisma/client.server";
 import { ok } from "~/utils/http-response.server";
 import { lastUrlSegment } from "~/utils/url";
@@ -14,6 +15,7 @@ import { AlertTriangle, Copy, Loader2, MessageSquareReply, X, ChevronUp } from "
 import { useCallback, useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { toast } from "~/components/ui/use-toast";
+import { getErrorMessage, isDatabaseConnectivityError } from "~/lib/errors/connectivity";
 
 
 export interface AdminOutletContext {
@@ -85,6 +87,7 @@ export const loader: LoaderFunction = async ({ request }: LoaderFunctionArgs) =>
     }
 
     const slug = lastUrlSegment(request.url)
+    const whatsappNoResponseEnabled = isMobileRoute ? false : await isWhatsappNoResponseEnabled();
 
     const [pinnedNav, pendingReplyAlerts, topNavItems] = isMobileRoute
         ? [[], [], []]
@@ -95,37 +98,40 @@ export const loader: LoaderFunction = async ({ request }: LoaderFunctionArgs) =>
                 orderBy: [{ lastClickedAt: "desc" }],
                 take: 50,
             }),
-            prismaClient.$queryRaw<Array<{
-                customer_id: string;
-                phone_e164: string;
-                name: string | null;
-                seconds_waiting: number;
-                message_preview: string | null;
-            }>>`
-                WITH last_event_today AS (
-                    SELECT DISTINCT ON (e.customer_id)
-                        e.customer_id,
-                        e.event_type,
-                        e.created_at,
-                        NULLIF(TRIM(COALESCE(e.payload ->> 'messageText', '')), '') AS message_preview
-                    FROM crm_customer_event e
-                    WHERE (e.created_at AT TIME ZONE 'America/Sao_Paulo')::date = (now() AT TIME ZONE 'America/Sao_Paulo')::date
-                    ORDER BY e.customer_id, e.created_at DESC, e.id DESC
-                )
-                SELECT
-                    c.id AS customer_id,
-                    c.phone_e164,
-                    c.name,
-                    EXTRACT(EPOCH FROM (now() - le.created_at))::INT AS seconds_waiting,
-                    le.message_preview
-                FROM last_event_today le
-                INNER JOIN crm_customer c ON c.id = le.customer_id
-                WHERE le.event_type = 'WHATSAPP_SENT'
-                  AND EXTRACT(EPOCH FROM (now() - le.created_at))::INT >= ${DEFAULT_REPLY_WAIT_SECONDS}
-                ORDER BY le.created_at ASC
-                LIMIT 15
-            `,
+            whatsappNoResponseEnabled
+                ? prismaClient.$queryRaw<Array<{
+                    customer_id: string;
+                    phone_e164: string;
+                    name: string | null;
+                    seconds_waiting: number;
+                    message_preview: string | null;
+                }>>`
+                    WITH last_event_today AS (
+                        SELECT DISTINCT ON (e.customer_id)
+                            e.customer_id,
+                            e.event_type,
+                            e.created_at,
+                            NULLIF(TRIM(COALESCE(e.payload ->> 'messageText', '')), '') AS message_preview
+                        FROM crm_customer_event e
+                        WHERE (e.created_at AT TIME ZONE 'America/Sao_Paulo')::date = (now() AT TIME ZONE 'America/Sao_Paulo')::date
+                        ORDER BY e.customer_id, e.created_at DESC, e.id DESC
+                    )
+                    SELECT
+                        c.id AS customer_id,
+                        c.phone_e164,
+                        c.name,
+                        EXTRACT(EPOCH FROM (now() - le.created_at))::INT AS seconds_waiting,
+                        le.message_preview
+                    FROM last_event_today le
+                    INNER JOIN crm_customer c ON c.id = le.customer_id
+                    WHERE le.event_type = 'WHATSAPP_SENT'
+                      AND EXTRACT(EPOCH FROM (now() - le.created_at))::INT >= ${DEFAULT_REPLY_WAIT_SECONDS}
+                    ORDER BY le.created_at ASC
+                    LIMIT 15
+                `
+                : Promise.resolve([]),
             prismaClient.adminNavigationClick.findMany({
+                where: { pinned: false },
                 orderBy: [{ count: "desc" }, { lastClickedAt: "desc" }],
                 take: 8,
             }).catch((error) => {
@@ -150,6 +156,7 @@ export const loader: LoaderFunction = async ({ request }: LoaderFunctionArgs) =>
             groupTitle: item.groupTitle ?? null,
             pinned: item.pinned ?? false,
         })),
+        whatsappNoResponseEnabled,
         pendingReplyAlerts: pendingReplyAlerts.map((row) => ({
             customerId: row.customer_id,
             phoneE164: row.phone_e164,
@@ -176,6 +183,7 @@ export default function AdminOutlet() {
     const pinnedNavHrefs = loaderData?.payload?.pinnedNavHrefs ?? [];
     const pinnedNavItems = loaderData?.payload?.pinnedNavItems ?? [];
     const topNavItems = loaderData?.payload?.topNavItems ?? [];
+    const whatsappNoResponseEnabled = loaderData?.payload?.whatsappNoResponseEnabled ?? true;
     const pendingReplyAlerts = (loaderData?.payload?.pendingReplyAlerts ?? []) as PendingReplyAlert[];
     const [isAlertsPanelOpen, setIsAlertsPanelOpen] = useState(false);
     const [panelPosition, setPanelPosition] = useState<{ x: number; y: number } | null>(null);
@@ -326,7 +334,7 @@ export default function AdminOutlet() {
             <RouteProgressBar />
             <AdminSidebar navigationLinks={ADMIN_NAVIGATION_LINKS} pinnedHrefs={pinnedNavHrefs} pinnedItems={pinnedNavItems} />
             <SidebarTrigger className="hidden md:flex" />
-            {pendingReplyAlerts.length > 0 && isAlertsPanelOpen ? (
+            {whatsappNoResponseEnabled && pendingReplyAlerts.length > 0 && isAlertsPanelOpen ? (
                 <aside
                     ref={panelRef}
                     className={[
@@ -511,7 +519,7 @@ export default function AdminOutlet() {
                 </aside>
             ) : null}
             <div className="flex flex-col w-screen">
-                {pendingReplyAlerts.length > 0 ? (
+                {whatsappNoResponseEnabled && pendingReplyAlerts.length > 0 ? (
                     <>
                         <div className="fixed right-0 top-0 z-[70] flex h-6 w-fit items-center justify-end border-b border-red-300 bg-red-50/95 px-3 text-red-900 shadow-sm md:h-7 md:px-4">
                             <div className="flex items-center gap-2">
@@ -556,7 +564,9 @@ export default function AdminOutlet() {
 
 export function ErrorBoundary() {
     const error = useRouteError();
+    const location = useLocation();
     const [showDetails, setShowDetails] = useState(false);
+    const isDbUnavailable = isDatabaseConnectivityError(error);
 
     const errorDetails = (() => {
         if (error instanceof Error) {
@@ -595,14 +605,30 @@ export function ErrorBoundary() {
         <div className="min-h-screen bg-slate-50 text-slate-900 p-6 md:p-10">
             <div className="mx-auto max-w-2xl rounded-xl border bg-white p-6 md:p-8 shadow-sm space-y-4">
                 <p className="text-xs font-semibold uppercase tracking-widest text-slate-500">Admin</p>
-                <h1 className="text-2xl md:text-3xl font-semibold">Ocorreu um erro no painel administrativo</h1>
+                <h1 className="text-2xl md:text-3xl font-semibold">
+                    {isDbUnavailable ? "Banco temporariamente indisponível" : "Ocorreu um erro no painel administrativo"}
+                </h1>
                 <p className="text-sm md:text-base text-slate-600">
-                    Atualize a página ou volte para o painel. Se o problema continuar, acione o suporte interno.
+                    {isDbUnavailable
+                        ? "Não foi possível conectar ao banco de dados nesta tentativa. Você pode recarregar a rota atual sem cair em uma tela técnica."
+                        : "Atualize a página ou volte para o painel. Se o problema continuar, acione o suporte interno."}
                 </p>
+                {isDbUnavailable ? (
+                    <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                        {getErrorMessage(error) || "Falha de conectividade com a base de dados."}
+                    </div>
+                ) : null}
                 <div className="flex flex-wrap items-center gap-2">
                     <Link
-                        to="/admin"
+                        to={location.pathname + location.search}
+                        reloadDocument
                         className="inline-flex items-center rounded-md bg-slate-900 px-4 py-2 text-sm font-semibold text-white"
+                    >
+                        Tentar novamente
+                    </Link>
+                    <Link
+                        to="/admin"
+                        className="inline-flex items-center rounded-md border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700"
                     >
                         Voltar ao painel
                     </Link>

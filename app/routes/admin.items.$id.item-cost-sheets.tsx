@@ -32,7 +32,7 @@ export default function AdminItemCostSheetsTab() {
   });
 
   return (
-    <div className="space-y-6 rounded-2xl border border-slate-200 bg-white p-5">
+    <div className="space-y-6  bg-white ">
       <div className="flex items-center justify-between gap-3">
         <div>
           <h2 className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Fichas técnicas de custo</h2>
@@ -59,9 +59,8 @@ export default function AdminItemCostSheetsTab() {
                   </div>
                 </div>
                 <span
-                  className={`rounded-full px-2 py-1 text-[11px] font-semibold uppercase tracking-wide ${
-                    sheet.isActive ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-600"
-                  }`}
+                  className={`rounded-full px-2 py-1 text-[11px] font-semibold uppercase tracking-wide ${sheet.isActive ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-600"
+                    }`}
                 >
                   {sheet.isActive ? "Ativa" : "Rascunho"}
                 </span>

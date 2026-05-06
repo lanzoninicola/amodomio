@@ -1,5 +1,5 @@
 import { useOutletContext } from "@remix-run/react";
-import { formatCompactMoney, type AdminItemCostSheetDetailOutletContext } from "./admin.item-cost-sheets.$id";
+import { type AdminItemCostSheetDetailOutletContext } from "./admin.item-cost-sheets.$id";
 
 export default function AdminItemCostSheetOutrosTab() {
   const {
@@ -9,7 +9,6 @@ export default function AdminItemCostSheetOutrosTab() {
     recipeReferenceCount,
     sheetReferenceCount,
     operationalCostCount,
-    totalSheetCost,
   } = useOutletContext<AdminItemCostSheetDetailOutletContext>();
 
   return (
@@ -20,10 +19,6 @@ export default function AdminItemCostSheetOutrosTab() {
           <div>
             <div className="text-xs text-slate-400">Nome</div>
             <div className="mt-1 font-medium text-slate-900">{selectedSheet?.name || "-"}</div>
-          </div>
-          <div>
-            <div className="text-xs text-slate-400">Custo consolidado</div>
-            <div className="mt-1 font-medium text-slate-900">{formatCompactMoney(totalSheetCost)}</div>
           </div>
           <div>
             <div className="text-xs text-slate-400">Dependencias</div>
