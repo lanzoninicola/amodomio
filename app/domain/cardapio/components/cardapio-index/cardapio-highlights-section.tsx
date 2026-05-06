@@ -43,7 +43,7 @@ export function CardapioHighlightsSection({
     const topLikedItems = likesEnabled
         ? [...flatItems]
             .sort((a, b) => (b.likes?.amount ?? 0) - (a.likes?.amount ?? 0))
-            .slice(0, 4)
+            .slice(0, 6)
         : [];
 
     return (
@@ -64,11 +64,8 @@ export function CardapioHighlightsSection({
                     <>
                         <div className="col-span-full mx-2 my-4 h-[2px] bg-zinc-900 md:hidden" />
                         <section id="mais-curtidas" className="flex flex-col gap-4 mx-2 md:flex-1">
-                            <ChefSuggestionsCarousel
-                                title="Mais curtidas: "
-                                mobileTitle="Mais curtidas"
-                                subtitle="nossos clientes gostam de mostrar o que é bom. Aqui está uma seleção dos sabores que eles mais curtem e querem compartilhar com todo mundo."
-                                groups={[topLikedItems]}
+                            <MaisCurtidasRanking
+                                items={topLikedItems}
                                 headerProfile={SECTION_THREAD_PROFILE_BY_SECTION.likes}
                             />
                         </section>
@@ -615,6 +612,141 @@ function ChefSuggestionsCarousel({
                     />
                 ) : null}
                 {carousel}
+            </div>
+        </div>
+    );
+}
+
+
+function MaisCurtidasRanking({
+    items,
+    headerProfile,
+}: {
+    items: CardapioIndexItem[];
+    headerProfile?: ThreadSectionProfile;
+}) {
+    const [isOpen, setIsOpen] = useState(false);
+
+    if (!items.length) return null;
+
+    const rankList = (
+        <div className="flex flex-col gap-1">
+            {items.map((item, index) => {
+                const media = getPrimaryCardapioMedia(item);
+                const rank = index + 1;
+                const medalClass = "text-zinc-500 border-zinc-300 bg-white";
+                const likeCount = item.likes?.amount ?? 0;
+
+                return (
+                    <Link
+                        key={item.id}
+                        to={getCardapioItemHref(item)}
+                        className="flex items-center gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-zinc-50 active:bg-zinc-100"
+                    >
+                        <span
+                            className={cn(
+                                "flex h-7 w-7 shrink-0 items-center justify-center rounded-full border text-xs font-bold",
+                                medalClass
+                            )}
+                        >
+                            {rank}
+                        </span>
+                        <div className="h-10 w-10 shrink-0 overflow-hidden rounded-full">
+                            {media?.secureUrl && (media.kind === "video" || /\.(mp4|mov|webm|m4v|ogg|ogv)(\?|$)/i.test(media.secureUrl)) ? (
+                                <video
+                                    src={media.secureUrl}
+                                    muted
+                                    loop
+                                    playsInline
+                                    autoPlay
+                                    preload="metadata"
+                                    className="h-full w-full object-cover"
+                                />
+                            ) : media?.secureUrl ? (
+                                <img
+                                    src={media.secureUrl}
+                                    alt={item.name}
+                                    className="h-full w-full object-cover"
+                                />
+                            ) : (
+                                <div className="h-full w-full flex items-center justify-center bg-gradient-to-b from-zinc-800 to-zinc-950">
+                                    <span className="font-lora text-lg font-bold text-white/80 uppercase leading-none">
+                                        {item.name.charAt(0)}
+                                    </span>
+                                </div>
+                            )}
+                        </div>
+                        <span className="flex-1 font-neue text-sm font-medium text-zinc-800 leading-tight">
+                            {item.name}
+                        </span>
+                        {likeCount > 0 ? (
+                            <span className="flex items-center gap-1 text-xs text-zinc-400 shrink-0">
+                                <Heart className="h-3 w-3 fill-zinc-300 text-zinc-300" />
+                                {likeCount}
+                            </span>
+                        ) : null}
+                    </Link>
+                );
+            })}
+        </div>
+    );
+
+    return (
+        <div className="p-2">
+            <div className="md:hidden">
+                <button
+                    type="button"
+                    className="w-full text-left"
+                    onClick={() => setIsOpen((v) => !v)}
+                    aria-expanded={isOpen}
+                >
+                    <div className="flex items-center justify-between gap-2">
+                        <h2 className="font-lora text-2xl font-bold tracking-tight leading-tight">
+                            Mais curtidas
+                        </h2>
+                        <ChevronRight
+                            className={cn(
+                                "h-6 w-6 shrink-0 transition-transform duration-300",
+                                isOpen && "rotate-90"
+                            )}
+                        />
+                    </div>
+                    <p className="font-neue text-sm tracking-wide mt-2 text-zinc-600">
+                        nossos clientes gostam de mostrar o que é bom. Aqui está uma seleção dos sabores que eles mais curtem e querem compartilhar com todo mundo.
+                    </p>
+                    {headerProfile ? (
+                        <div className="flex items-center gap-2 mt-3">
+                            {headerProfile.avatarImageUrl ? (
+                                <img
+                                    src={headerProfile.avatarImageUrl}
+                                    alt={headerProfile.username}
+                                    className="h-8 w-8 rounded-full object-cover border border-zinc-200"
+                                />
+                            ) : null}
+                            <span className="font-neue text-sm font-semibold">
+                                {headerProfile.username === "chef.nicola" ? "Chef Nicola" : headerProfile.username}
+                            </span>
+                        </div>
+                    ) : null}
+                </button>
+                <div
+                    className={cn(
+                        "overflow-hidden transition-all duration-300 ease-in-out",
+                        isOpen ? "max-h-[600px] opacity-100 mt-4" : "max-h-0 opacity-0 mt-0"
+                    )}
+                >
+                    {rankList}
+                </div>
+            </div>
+
+            <div className="hidden md:block">
+                <SectionThreadHeader
+                    profile={headerProfile ?? SECTION_THREAD_PROFILE_BY_SECTION.likes}
+                    title="Mais curtidas: "
+                    subtitle="nossos clientes gostam de mostrar o que é bom. Aqui está uma seleção dos sabores que eles mais curtem e querem compartilhar com todo mundo."
+                    className="mb-3"
+                />
+                {rankList}
             </div>
         </div>
     );

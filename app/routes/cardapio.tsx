@@ -26,8 +26,10 @@ import useCurrentPage from "~/hooks/use-current-page";
 import { NotificationCenterProvider, useNotificationCenter } from "~/domain/push/notification-center-context";
 import { PwaInstallPrompt } from "~/domain/pwa/pwa-install-prompt";
 import { CardapioSizesContent } from "~/domain/cardapio/components/cardapio-sizes-content";
+import CardapioDatabaseUnavailable from "~/domain/cardapio/components/cardapio-database-unavailable/cardapio-database-unavailable";
 import CardapioErrorRedirect from "~/domain/cardapio/components/cardapio-error-redirect/cardapio-error-redirect";
 import RouteProgressBar from "~/components/route-progress-bar/route-progress-bar";
+import { isDatabaseConnectivityError } from "~/lib/errors/connectivity";
 
 
 /**
@@ -176,6 +178,10 @@ export function ErrorBoundary() {
     const saiposHref = WEBSITE_LINKS.saiposCardapio.href;
 
     console.error("[cardapio] route error boundary", error);
+
+    if (isDatabaseConnectivityError(error)) {
+        return <CardapioDatabaseUnavailable error={error} />;
+    }
 
     return <CardapioErrorRedirect redirectHref={saiposHref} />;
 }

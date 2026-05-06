@@ -5,9 +5,11 @@ import { Await, defer, useLoaderData, useRouteError } from "@remix-run/react";
 import React, { Suspense, useEffect, useState } from "react";
 import Loading from "~/components/loading/loading";
 import { Separator } from "~/components/ui/separator";
+import CardapioDatabaseUnavailable from "~/domain/cardapio/components/cardapio-database-unavailable/cardapio-database-unavailable";
 import prismaClient from "~/lib/prisma/client.server";
 import CardapioErrorRedirect from "~/domain/cardapio/components/cardapio-error-redirect/cardapio-error-redirect";
 import WEBSITE_LINKS from "~/domain/website-navigation/links/website-links";
+import { isDatabaseConnectivityError } from "~/lib/errors/connectivity";
 import { prismaIt } from "~/lib/prisma/prisma-it.server";
 import { badRequest, ok } from "~/utils/http-response.server";
 import { loadCardapioIndexData } from "~/domain/cardapio/cardapio-index.server";
@@ -173,6 +175,10 @@ export function ErrorBoundary() {
     const saiposHref = WEBSITE_LINKS.saiposCardapio.href;
 
     console.error("[cardapio._index] route error boundary", error);
+
+    if (isDatabaseConnectivityError(error)) {
+        return <CardapioDatabaseUnavailable error={error} />;
+    }
 
     return <CardapioErrorRedirect redirectHref={saiposHref} />;
 }

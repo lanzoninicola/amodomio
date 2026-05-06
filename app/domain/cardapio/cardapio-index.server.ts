@@ -6,6 +6,7 @@ import { notifyCardapioContingencyByWhatsapp } from "~/domain/cardapio/cardapio-
 import { findAllCardapioItemsGroupedByGroupLight } from "~/domain/cardapio/cardapio-items-source.server";
 import { getEngagementSettings } from "~/domain/cardapio/engagement-settings.server";
 import { tagPrismaEntity } from "~/domain/tags/tag.prisma.entity.server";
+import { isDatabaseConnectivityError } from "~/lib/errors/connectivity";
 import { parseBooleanSetting } from "~/utils/parse-boolean-setting";
 
 const REELS_SETTING_KEY = "reel.urls";
@@ -31,20 +32,23 @@ export async function loadCardapioIndexData(request: Request): Promise<CardapioI
     const url = new URL(request.url);
     const simulateError = url.searchParams.get("simularErro");
     const simulateErrorByQuery = simulateError === "cardapio-index" || simulateError === "cardapio";
+    const cachedPayload = await redisGetJson<CardapioIndexLoaderData>(CARDAPIO_INDEX_CACHE_KEY);
     let simulateErrorBySetting = false;
 
-    try {
-        const simulateErrorSetting = await prismaClient.setting.findFirst({
-            where: {
-                context: SIMULATE_ERROR_SETTING_CONTEXT,
-                name: SIMULATE_ERROR_SETTING_NAME,
-            },
-            orderBy: [{ createdAt: "desc" }],
-        });
+    if (!cachedPayload || simulateErrorByQuery) {
+        try {
+            const simulateErrorSetting = await prismaClient.setting.findFirst({
+                where: {
+                    context: SIMULATE_ERROR_SETTING_CONTEXT,
+                    name: SIMULATE_ERROR_SETTING_NAME,
+                },
+                orderBy: [{ createdAt: "desc" }],
+            });
 
-        simulateErrorBySetting = parseBooleanSetting(simulateErrorSetting?.value, false);
-    } catch (error) {
-        console.error("[cardapio._index] non-blocking contingencia.simula.erro load failed, using default", error);
+            simulateErrorBySetting = parseBooleanSetting(simulateErrorSetting?.value, false);
+        } catch (error) {
+            console.error("[cardapio._index] non-blocking contingencia.simula.erro load failed, using default", error);
+        }
     }
 
     if (simulateErrorByQuery || simulateErrorBySetting) {
@@ -57,9 +61,11 @@ export async function loadCardapioIndexData(request: Request): Promise<CardapioI
         throw simulationError;
     }
 
-    try {
-        const cachedPayload = await redisGetJson<CardapioIndexLoaderData>(CARDAPIO_INDEX_CACHE_KEY);
+    if (cachedPayload) {
+        return cachedPayload;
+    }
 
+    try {
         const reelsEnabledSetting = await prismaClient.setting.findFirst({
             where: {
                 context: REELS_SETTING_CONTEXT,
@@ -133,6 +139,11 @@ export async function loadCardapioIndexData(request: Request): Promise<CardapioI
 
         return payload;
     } catch (error) {
+        if (cachedPayload && isDatabaseConnectivityError(error)) {
+            console.warn("[cardapio._index] database unavailable, serving cached payload", error);
+            return cachedPayload;
+        }
+
         await notifyCardapioContingencyByWhatsapp({
             requestUrl: request.url,
             error,
