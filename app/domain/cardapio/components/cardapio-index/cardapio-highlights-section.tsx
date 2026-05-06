@@ -1,12 +1,12 @@
 import { Link } from "@remix-run/react";
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { ChevronRight, X } from "lucide-react";
+import { ChevronRight, Heart, X } from "lucide-react";
 import SectionThreadHeader, {
     type ThreadSectionProfile,
 } from "~/domain/cardapio/components/section-thread-header/section-thread-header";
 import CardapioItemImageSingle from "~/domain/cardapio/components/cardapio-item-image-single/cardapio-item-image-single";
 import Logo from "~/components/primitives/logo/logo";
-import { Carousel, CarouselContent, CarouselItem, type CarouselApi } from "~/components/ui/carousel";
+import { Carousel, CarouselContent, CarouselItem } from "~/components/ui/carousel";
 import { cn } from "~/lib/utils";
 import capitalize from "~/utils/capitalize";
 import formatMoneyString from "~/utils/format-money-string";
@@ -22,7 +22,6 @@ import {
     isGrouped,
 } from "~/domain/cardapio/cardapio-index.shared";
 import { SECTION_THREAD_PROFILE_BY_SECTION } from "./cardapio-index-shared";
-import Autoplay from "embla-carousel-autoplay";
 
 export function CardapioHighlightsSection({
     items,
@@ -401,99 +400,161 @@ function ReelsCarousel({ urls }: { urls: string[] }) {
     );
 }
 
+function SuggestionMiniCarousel({ items }: { items: CardapioIndexItem[] }) {
+    const allItems = items.slice(0, 8);
+    const [current, setCurrent] = useState(0);
+    const [paused, setPaused] = useState(false);
+    const containerRef = useRef<HTMLDivElement>(null);
+    const pauseTimerRef = useRef<ReturnType<typeof setTimeout>>();
+    const itemWidth = 140;
+    const itemGap = 16;
+    const step = itemWidth + itemGap;
+
+    const scrollToIndex = useCallback((index: number, instant = false) => {
+        containerRef.current?.scrollTo({
+            left: index * step,
+            behavior: instant ? "auto" : "smooth",
+        });
+    }, [step]);
+
+    const handleScroll = useCallback(() => {
+        if (!containerRef.current) return;
+        const index = Math.round(containerRef.current.scrollLeft / step);
+        setCurrent(Math.max(0, Math.min(index, allItems.length - 1)));
+    }, [allItems.length, step]);
+
+    useEffect(() => {
+        if (paused || allItems.length <= 1) return;
+        const timer = window.setInterval(() => {
+            setCurrent((previous) => {
+                const next = (previous + 1) % allItems.length;
+                scrollToIndex(next, next === 0);
+                return next;
+            });
+        }, 2500);
+        return () => window.clearInterval(timer);
+    }, [allItems.length, paused, scrollToIndex]);
+
+    const handleInteraction = useCallback(() => {
+        setPaused(true);
+        if (pauseTimerRef.current) clearTimeout(pauseTimerRef.current);
+        pauseTimerRef.current = window.setTimeout(() => setPaused(false), 6000);
+    }, []);
+
+    const activeItem = allItems[current] ?? allItems[0];
+    const activePrice = activeItem ? getVisiblePublicPriceVariations(activeItem)[0] : null;
+
+    if (!activeItem) return null;
+
+    return (
+        <div>
+            <div className="overflow-hidden">
+                <div
+                    ref={containerRef}
+                    className="flex snap-x snap-mandatory overflow-x-scroll [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                    onScroll={handleScroll}
+                    onTouchStart={handleInteraction}
+                    onMouseDown={handleInteraction}
+                >
+                    <div style={{ flexShrink: 0, width: `calc(50vw - ${itemWidth / 2}px)` }} />
+
+                    {allItems.map((item, index) => {
+                        const media = getPrimaryCardapioMedia(item);
+                        const hasImage = Boolean(media?.secureUrl);
+                        const isActive = index === current;
+                        const initial = item.name?.charAt(0).toUpperCase() ?? "?";
+                        return (
+                            <div
+                                key={item.id}
+                                className="snap-center flex-shrink-0"
+                                style={{
+                                    width: itemWidth,
+                                    marginRight: index < allItems.length - 1 ? itemGap : 0,
+                                }}
+                            >
+                                <div
+                                    className="aspect-square w-full overflow-hidden rounded-full transition-all duration-500"
+                                    style={{
+                                        transform: isActive ? "scale(1)" : "scale(0.78)",
+                                        opacity: isActive ? 1 : 0.38,
+                                    }}
+                                >
+                                    {hasImage ? (
+                                        <CardapioItemImageSingle
+                                            src={media?.secureUrl || ""}
+                                            placeholder={item.imagePlaceholderURL || ""}
+                                            placeholderIcon={false}
+                                            placeholderText=""
+                                            cnContainer="h-full w-full"
+                                            enableOverlay={false}
+                                        />
+                                    ) : (
+                                        <div className="h-full w-full flex flex-col items-center justify-center bg-zinc-900">
+                                            <span className="font-lora text-5xl font-bold text-white/80 leading-none">
+                                                {initial}
+                                            </span>
+                                            <span className="font-neue text-[10px] tracking-[0.2em] uppercase text-white/40 mt-2 px-3 text-center leading-tight">
+                                                {item.name}
+                                            </span>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        );
+                    })}
+
+                    <div style={{ flexShrink: 0, width: `calc(50vw - ${itemWidth / 2}px)` }} />
+                </div>
+            </div>
+
+            <Link to={getCardapioItemHref(activeItem)} className="group mt-4 block px-6 text-center">
+                <h3 className="font-lora text-lg font-bold text-zinc-950 transition-opacity group-hover:opacity-60">
+                    {activeItem.name}
+                </h3>
+                <p className="mt-1 font-neue text-sm text-zinc-500">
+                    {capitalize(activeItem.ingredients || "")}
+                </p>
+                {activePrice ? (
+                    <p className="mt-1 font-neue text-xs text-zinc-400">
+                        {formatMoneyString(activePrice.priceAmount)}
+                    </p>
+                ) : null}
+            </Link>
+
+            <div className="mt-4 flex items-center justify-center gap-1.5">
+                {allItems.map((_, index) => (
+                    <div
+                        key={index}
+                        className={cn(
+                            "h-[3px] rounded-full transition-all duration-300",
+                            index === current ? "w-6 bg-zinc-950" : "w-[6px] bg-zinc-300"
+                        )}
+                    />
+                ))}
+            </div>
+        </div>
+    );
+}
+
 function ChefSuggestionsCarousel({
     title,
     subtitle,
     mobileTitle,
     groups,
-    carouselDelay = 2500,
     headerProfile,
 }: {
     title?: string;
     subtitle?: string;
     mobileTitle?: React.ReactNode;
     groups: CardapioIndexItem[][];
-    carouselDelay?: number;
     headerProfile?: ThreadSectionProfile;
 }) {
-    const [api, setApi] = useState<CarouselApi | null>(null);
-    const [selectedIndex, setSelectedIndex] = useState(0);
     const [isOpen, setIsOpen] = useState(false);
-
-    useEffect(() => {
-        if (!api) return;
-        const onSelect = () => setSelectedIndex(api.selectedScrollSnap());
-        api.on("select", onSelect);
-        setSelectedIndex(api.selectedScrollSnap());
-        return () => api.off("select", onSelect);
-    }, [api]);
 
     if (!groups.length) return null;
 
     const items = groups.flat();
-    const groupSize = 4;
-    const selectedGroupIndex = Math.floor(selectedIndex / groupSize);
-
-    const carouselContent = (
-        <Carousel
-            setApi={setApi}
-            opts={{ loop: true, align: "start" }}
-            plugins={[
-                Autoplay({
-                    delay: carouselDelay,
-                    stopOnInteraction: false,
-                    stopOnMouseEnter: true,
-                }),
-            ]}
-            className="relative"
-        >
-            <CarouselContent>
-                {items.map((item) => {
-                    const featuredImage =
-                        item.MenuItemGalleryImage?.find((img) => img.isPrimary) ||
-                        item.MenuItemGalleryImage?.[0];
-
-                    return (
-                        <CarouselItem key={item.id} className="basis-full">
-                            <Link to={getCardapioItemHref(item)} className="group relative block overflow-hidden rounded-md">
-                                <div className="relative h-[220px] md:h-[280px]">
-                                    <CardapioItemImageSingle
-                                        src={featuredImage?.secureUrl || ""}
-                                        placeholder={item.imagePlaceholderURL || ""}
-                                        placeholderIcon={false}
-                                        placeholderText={item.ingredients}
-                                        cnContainer="h-full w-full"
-                                        enableOverlay={false}
-                                    />
-                                    <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent opacity-90" />
-                                    <div className="absolute bottom-2 left-2 right-2">
-                                        <span className="font-neue text-white text-xs tracking-widest uppercase font-semibold drop-shadow leading-tight">
-                                            {item.name}
-                                        </span>
-                                    </div>
-                                </div>
-                            </Link>
-                        </CarouselItem>
-                    );
-                })}
-            </CarouselContent>
-
-            <div className="absolute inset-x-0 -bottom-3 flex items-center justify-center gap-2 md:-bottom-4">
-                {groups.map((_, index) => (
-                    <button
-                        key={index}
-                        type="button"
-                        aria-label={`Ir para slide ${index + 1}`}
-                        onClick={() => api?.scrollTo(index * groupSize)}
-                        className={cn(
-                            "h-2 w-2 rounded-full transition-all",
-                            selectedGroupIndex === index ? "w-6 bg-black/80" : "bg-black/30"
-                        )}
-                    />
-                ))}
-            </div>
-        </Carousel>
-    );
+    const carousel = <SuggestionMiniCarousel items={items} />;
 
     return (
         <div className="p-2">
@@ -537,10 +598,10 @@ function ChefSuggestionsCarousel({
                 <div
                     className={cn(
                         "overflow-hidden transition-all duration-300 ease-in-out",
-                        isOpen ? "max-h-[400px] opacity-100 mt-6" : "max-h-0 opacity-0 mt-0"
+                        isOpen ? "max-h-[360px] opacity-100 mt-6" : "max-h-0 opacity-0 mt-0"
                     )}
                 >
-                    {carouselContent}
+                    {carousel}
                 </div>
             </div>
 
@@ -553,7 +614,7 @@ function ChefSuggestionsCarousel({
                         className="mb-3"
                     />
                 ) : null}
-                {carouselContent}
+                {carousel}
             </div>
         </div>
     );
