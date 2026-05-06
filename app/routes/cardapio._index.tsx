@@ -129,13 +129,13 @@ export default function CardapioWebIndex() {
     }, [showLikeCelebration, likeCelebrationSeed]);
 
     return (
-        <section className="flex flex-col mb-24 pt-28 md:pt-48" data-element="cardapio-index">
+        <section className="flex flex-col mb-24 pt-32 md:pt-48" data-element="cardapio-index">
             <LikeCelebrationOverlay
                 isOpen={forceLikeOverlay || showLikeCelebration}
                 seed={likeCelebrationSeed}
                 onClose={() => setShowLikeCelebration(false)}
             />
-            <Separator className="my-6 md:hidden" />
+
 
             <Suspense fallback={null}>
                 <Await resolve={items}>

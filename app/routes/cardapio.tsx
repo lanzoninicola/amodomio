@@ -318,18 +318,18 @@ function CardapioHeader() {
                 </p>
             </div>
 
-            <ScrollingBanner
+            {/* <ScrollingBanner
                 cnContainer="h-[30px] md:h-[40px] bg-white border-b border-t border-solid border-black flex"
             >
                 <div className="flex items-center gap-2 justify-center">
-                    {/* @ts-ignore */}
+
                     <ItalyFlag className="w-4 h-4 md:w-6 md:h-6" />
                     <p className="font-neue text-[15px] uppercase tracking-wider md:text-lg">
                         Todas as nossas pizzas são preparadas com farinha e molho de tomate importados da Itália
                     </p>
                 </div>
 
-            </ScrollingBanner>
+            </ScrollingBanner> */}
             {currentPage === "other" && notificationsEnabled && <PushOptIn vapidPublicKey={vapidPublicKey} />}
 
         </header>

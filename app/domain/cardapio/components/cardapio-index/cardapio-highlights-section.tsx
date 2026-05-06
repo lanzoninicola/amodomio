@@ -87,6 +87,10 @@ export function CardapioHighlightsSection({
             ) : null}
 
             <div className="mx-4 my-4 h-[2px] bg-zinc-900" />
+
+            <ItalianIngredientsSection />
+
+            <div className="mx-4 my-4 h-[2px] bg-zinc-900" />
         </>
     );
 }
@@ -552,6 +556,57 @@ function SuggestionMiniCarousel({ items }: { items: CardapioIndexItem[] }) {
             </div>
         </div>
     );
+}
+
+function ItalianPizzaLineArt() {
+    return (
+        <svg
+            viewBox="0 0 300 380"
+            xmlns="http://www.w3.org/2000/svg"
+            fill="none"
+            className="w-full max-w-[200px]"
+            aria-hidden
+        >
+            <path d="M 145 35 C 165 30 192 42 202 62 C 212 82 207 108 198 128 C 196 136 197 140 197 148 C 192 168 184 188 171 204 C 159 220 143 226 130 224 C 116 222 102 208 95 193 C 88 178 88 158 92 141 C 92 134 96 129 96 121 C 92 106 89 83 94 64 C 100 46 121 32 145 35 Z" stroke="#1a1a1a" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+            <path d="M 145 35 C 140 21 127 14 113 14 C 98 13 86 21 86 34 C 83 46 89 56 94 64" stroke="#1a1a1a" strokeWidth="1.3" strokeLinecap="round" />
+            <path d="M 202 62 C 210 49 208 32 197 22 C 186 11 169 10 156 16 C 150 20 146 28 145 35" stroke="#1a1a1a" strokeWidth="1.3" strokeLinecap="round" />
+            <path d="M 94 121 C 83 126 79 137 82 148 C 85 158 95 162 100 155" stroke="#1a1a1a" strokeWidth="1.2" strokeLinecap="round" />
+            <path d="M 149 74 C 160 67 175 67 183 73" stroke="#1a1a1a" strokeWidth="1.2" strokeLinecap="round" />
+            <path d="M 147 86 C 157 79 174 79 180 87 C 173 97 156 98 147 86" stroke="#1a1a1a" strokeWidth="1.2" strokeLinecap="round" />
+            <path d="M 107 77 C 114 71 124 71 129 77" stroke="#1a1a1a" strokeWidth="1.2" strokeLinecap="round" />
+            <path d="M 106 88 C 113 82 124 82 128 89 C 122 96 113 96 106 88" stroke="#1a1a1a" strokeWidth="1.2" strokeLinecap="round" />
+            <path d="M 164 83 C 162 102 161 122 158 138 C 155 150 148 156 152 162" stroke="#1a1a1a" strokeWidth="1.2" strokeLinecap="round" />
+            <path d="M 140 158 C 144 164 154 164 158 159" stroke="#1a1a1a" strokeWidth="1.2" strokeLinecap="round" />
+            <path d="M 127 176 C 136 169 149 168 159 174 C 163 177 163 181 158 183" stroke="#1a1a1a" strokeWidth="1.2" strokeLinecap="round" />
+            <path d="M 136 170 C 142 166 148 166 153 170" stroke="#1a1a1a" strokeWidth="1.0" strokeLinecap="round" />
+            <path d="M 126 185 C 136 196 155 196 161 185" stroke="#1a1a1a" strokeWidth="1.2" strokeLinecap="round" />
+            <path d="M 123 230 C 118 248 116 268 118 284" stroke="#1a1a1a" strokeWidth="1.2" strokeLinecap="round" />
+            <path d="M 153 227 C 158 244 160 265 157 280" stroke="#1a1a1a" strokeWidth="1.2" strokeLinecap="round" />
+            <path d="M 118 284 C 103 294 86 298 68 295" stroke="#1a1a1a" strokeWidth="1.2" strokeLinecap="round" />
+            <path d="M 157 280 C 172 290 190 296 210 293" stroke="#1a1a1a" strokeWidth="1.2" strokeLinecap="round" />
+            <path d="M 218 70 C 227 50 248 44 265 50 C 280 56 288 72 287 90 C 286 107 276 121 268 134 C 260 146 254 158 252 172 C 250 184 254 197 247 208 C 240 218 226 220 222 230" stroke="#1a1a1a" strokeWidth="1.1" strokeLinecap="round" />
+            <path d="M 218 70 C 218 53 220 38 228 29 C 236 20 248 17 258 20 C 268 23 276 32 278 46 C 281 58 282 72 287 90" stroke="#1a1a1a" strokeWidth="1.0" strokeLinecap="round" />
+            <path d="M 252 78 C 260 72 271 73 276 79" stroke="#1a1a1a" strokeWidth="1.0" strokeLinecap="round" />
+            <path d="M 255 88 C 262 82 273 83 276 90" stroke="#1a1a1a" strokeWidth="1.0" strokeLinecap="round" />
+            <path d="M 271 92 C 276 106 275 122 269 134 C 265 144 258 150 261 156" stroke="#1a1a1a" strokeWidth="1.0" strokeLinecap="round" />
+            <path d="M 247 172 C 253 166 261 166 263 173 C 259 181 249 180 247 172" stroke="#1a1a1a" strokeWidth="1.0" strokeLinecap="round" />
+            <path d="M 222 230 C 220 244 222 258 226 268" stroke="#1a1a1a" strokeWidth="1.0" strokeLinecap="round" />
+        </svg>
+    )
+}
+
+function ItalianIngredientsSection() {
+    return (
+        <section className="relative bg-white overflow-hidden">
+            <img src="/images/roman_man.png" alt="" className="w-[55%] h-auto opacity-40" aria-hidden />
+            <blockquote className="absolute top-1/2 right-4 -translate-y-1/2 z-10 flex flex-col items-end gap-2 border-r-2 border-black/30 pr-3 w-[52%]">
+                <p className="font-lora italic font-bold text-black/85 leading-snug text-[1.2rem] text-right">
+                    Todas as nossas pizzas são preparadas com farinha e molho de tomate importados da Itália.
+                </p>
+                <span className="font-neue text-[0.6rem] uppercase tracking-widest text-black/30">A Modo Mio</span>
+            </blockquote>
+        </section>
+    )
 }
 
 function ChefSuggestionsCarousel({
