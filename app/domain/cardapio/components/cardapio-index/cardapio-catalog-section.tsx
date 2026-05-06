@@ -574,6 +574,7 @@ function CardapioItemPriceDialog({
     onOpenChange: (open: boolean) => void;
 }) {
     const variations = getVisiblePublicPriceVariations(item);
+    const itemInitial = item.name?.charAt(0).toUpperCase() ?? "?";
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
@@ -582,15 +583,26 @@ function CardapioItemPriceDialog({
 
                 <div className="overflow-hidden rounded-[1.25rem] bg-zinc-900 text-white">
                     <div className="relative h-[170px] overflow-hidden">
-                        <CardapioItemImageSingle
-                            src={featuredImageUrl}
-                            placeholder={item.imagePlaceholderURL || ""}
-                            placeholderIcon={false}
-                            cnPlaceholderText="text-white/60 font-lora text-sm"
-                            cnPlaceholderContainer="from-zinc-800 via-zinc-700 to-zinc-600"
-                            cnContainer="w-full h-full"
-                            enableOverlay={false}
-                        />
+                        {featuredImageUrl ? (
+                            <CardapioItemImageSingle
+                                src={featuredImageUrl}
+                                placeholder={item.imagePlaceholderURL || ""}
+                                placeholderIcon={false}
+                                cnPlaceholderText="text-white/60 font-lora text-sm"
+                                cnPlaceholderContainer="from-zinc-800 via-zinc-700 to-zinc-600"
+                                cnContainer="w-full h-full"
+                                enableOverlay={false}
+                            />
+                        ) : (
+                            <div className="flex h-full w-full flex-col items-center justify-center bg-gradient-to-b from-zinc-800 to-zinc-950 px-6 text-center">
+                                <span className="font-lora text-6xl font-bold leading-none text-white/80">
+                                    {itemInitial}
+                                </span>
+                                <span className="mt-3 font-neue text-[10px] uppercase tracking-[0.2em] text-white/40">
+                                    {item.name}
+                                </span>
+                            </div>
+                        )}
                     </div>
 
                     <div className="px-4 pb-5 pt-4">
