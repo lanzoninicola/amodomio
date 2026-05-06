@@ -50,8 +50,8 @@ export function CardapioHighlightsSection({
         <>
             {noveltyItems.length > 0 ? <NoveltiesHeroSection items={noveltyItems} /> : null}
 
-            <div className="md:flex md:flex-row gap-4">
-                <section id="destaque" className="flex flex-col gap-4 mx-2 md:flex-1">
+            <div className="gap-4 md:flex md:flex-row md:items-start">
+                <section id="destaque" className="mx-2 flex min-w-0 flex-col gap-4 md:flex-1">
                     <ChefSuggestionsCarousel
                         title="O que vou sugerir para vocês hoje: "
                         subtitle="selecionei uma combinação que valoriza ingredientes nobres e equilíbrio de sabores."
@@ -63,7 +63,7 @@ export function CardapioHighlightsSection({
                 {likesEnabled ? (
                     <>
                         <div className="col-span-full mx-2 my-4 h-[2px] bg-zinc-900 md:hidden" />
-                        <section id="mais-curtidas" className="flex flex-col gap-4 mx-2 md:flex-1">
+                        <section id="mais-curtidas" className="mx-2 flex min-w-0 flex-col gap-4 md:flex-1">
                             <MaisCurtidasRanking
                                 items={topLikedItems}
                                 headerProfile={SECTION_THREAD_PROFILE_BY_SECTION.likes}
@@ -401,11 +401,14 @@ function SuggestionMiniCarousel({ items }: { items: CardapioIndexItem[] }) {
     const allItems = items.slice(0, 8);
     const [current, setCurrent] = useState(0);
     const [paused, setPaused] = useState(false);
+    const [containerWidth, setContainerWidth] = useState(0);
+    const wrapperRef = useRef<HTMLDivElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
     const pauseTimerRef = useRef<ReturnType<typeof setTimeout>>();
     const itemWidth = 140;
     const itemGap = 16;
     const step = itemWidth + itemGap;
+    const sideSpacerWidth = Math.max((containerWidth - itemWidth) / 2, 0);
 
     const scrollToIndex = useCallback((index: number, instant = false) => {
         containerRef.current?.scrollTo({
@@ -432,6 +435,24 @@ function SuggestionMiniCarousel({ items }: { items: CardapioIndexItem[] }) {
         return () => window.clearInterval(timer);
     }, [allItems.length, paused, scrollToIndex]);
 
+    useEffect(() => {
+        const wrapper = wrapperRef.current;
+        if (!wrapper) return;
+
+        const updateWidth = () => {
+            setContainerWidth(wrapper.clientWidth);
+        };
+
+        updateWidth();
+
+        const resizeObserver = new ResizeObserver(updateWidth);
+        resizeObserver.observe(wrapper);
+
+        return () => {
+            resizeObserver.disconnect();
+        };
+    }, []);
+
     const handleInteraction = useCallback(() => {
         setPaused(true);
         if (pauseTimerRef.current) clearTimeout(pauseTimerRef.current);
@@ -444,7 +465,7 @@ function SuggestionMiniCarousel({ items }: { items: CardapioIndexItem[] }) {
     if (!activeItem) return null;
 
     return (
-        <div>
+        <div ref={wrapperRef} className="w-full min-w-0 overflow-hidden">
             <div className="overflow-hidden">
                 <div
                     ref={containerRef}
@@ -453,7 +474,7 @@ function SuggestionMiniCarousel({ items }: { items: CardapioIndexItem[] }) {
                     onTouchStart={handleInteraction}
                     onMouseDown={handleInteraction}
                 >
-                    <div style={{ flexShrink: 0, width: `calc(50vw - ${itemWidth / 2}px)` }} />
+                    <div style={{ flexShrink: 0, width: sideSpacerWidth }} />
 
                     {allItems.map((item, index) => {
                         const media = getPrimaryCardapioMedia(item);
@@ -500,7 +521,7 @@ function SuggestionMiniCarousel({ items }: { items: CardapioIndexItem[] }) {
                         );
                     })}
 
-                    <div style={{ flexShrink: 0, width: `calc(50vw - ${itemWidth / 2}px)` }} />
+                    <div style={{ flexShrink: 0, width: sideSpacerWidth }} />
                 </div>
             </div>
 

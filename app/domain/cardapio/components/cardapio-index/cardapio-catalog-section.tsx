@@ -15,6 +15,7 @@ import {
     getCardapioInterestItemId,
     getCardapioItemHref,
     getVisiblePublicPriceVariations,
+    itemHasPublicTag,
     type GroupedItems,
     isGrouped,
 } from "~/domain/cardapio/cardapio-index.shared";
@@ -61,9 +62,7 @@ export function CardapioCatalogSection({
             return;
         }
 
-        const tagName = tag.name;
-        const hasTag = (item: CardapioIndexItem) =>
-            Boolean(item.tags?.public?.includes?.(tagName) || item.tags?.all?.includes?.(tagName));
+        const hasTag = (item: CardapioIndexItem) => itemHasPublicTag(item, tag.name);
 
         if (isGrouped(items)) {
             const filteredGroups = items
