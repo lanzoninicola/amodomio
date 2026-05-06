@@ -29,6 +29,11 @@ type SellingChannelTab = {
   count: number;
 };
 
+type TagFilterOption = {
+  id: string;
+  name: string;
+};
+
 type SellingRow = {
   id: string;
   name: string;
@@ -103,7 +108,7 @@ function getChannelTabColor(index: number) {
   return palette[index % palette.length];
 }
 
-function buildBaseItemWhere(params: { q: string; status: string }) {
+function buildBaseItemWhere(params: { q: string; status: string; tagId: string }) {
   const where: any = { AND: [] as any[] };
 
   if (params.status === "active") where.active = true;
@@ -116,6 +121,16 @@ function buildBaseItemWhere(params: { q: string; status: string }) {
         { description: { contains: params.q, mode: "insensitive" } },
         { ItemSellingInfo: { is: { slug: { contains: params.q, mode: "insensitive" } } } },
       ],
+    });
+  }
+
+  if (params.tagId) {
+    where.AND.push({
+      ItemTag: {
+        some: {
+          tagId: params.tagId,
+        },
+      },
     });
   }
 
@@ -151,12 +166,14 @@ function buildPageHref(params: {
   q: string;
   status: string;
   channel: string;
+  tagId: string;
   page?: number;
 }) {
   const searchParams = new URLSearchParams();
   if (params.q) searchParams.set("q", params.q);
   if (params.status) searchParams.set("status", params.status);
   if (params.channel) searchParams.set("channel", params.channel);
+  if (params.tagId) searchParams.set("tagId", params.tagId);
   if (params.page && params.page > 1) searchParams.set("page", String(params.page));
   return `/admin/vendas/itens-vendidos?${searchParams.toString()}`;
 }
@@ -166,6 +183,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     const db = prismaClient as any;
     const url = new URL(request.url);
     const q = String(url.searchParams.get("q") || "").trim();
+    const tagId = String(url.searchParams.get("tagId") || "").trim();
     const statusParam = String(url.searchParams.get("status") || "").trim().toLowerCase();
     const status = ITEM_STATUS_FILTERS.includes(statusParam as (typeof ITEM_STATUS_FILTERS)[number])
       ? statusParam
@@ -182,6 +200,17 @@ export async function loader({ request }: LoaderFunctionArgs) {
       },
       orderBy: [{ sortOrderIndex: "asc" }, { name: "asc" }],
     });
+    const tags = await db.tag.findMany({
+      where: {
+        deletedAt: null,
+      },
+      select: {
+        id: true,
+        name: true,
+      },
+      orderBy: [{ sortOrderIndex: "asc" }, { name: "asc" }],
+    });
+    const selectedTag = tags.find((tag: any) => String(tag.id) === tagId) || null;
 
     const selectedChannelKeyParam = String(url.searchParams.get("channel") || "").trim().toLowerCase();
     const selectedChannel =
@@ -190,7 +219,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       null;
     const cardapioChannel = channels.find((channel: any) => String(channel.key || "").toLowerCase() === "cardapio") || null;
 
-    const baseWhere = buildBaseItemWhere({ q, status });
+    const baseWhere = buildBaseItemWhere({ q, status, tagId: selectedTag ? String(selectedTag.id) : "" });
     const soldWhere = cardapioChannel ? buildSoldItemWhere(String(cardapioChannel.id)) : null;
 
     const channelTabs: SellingChannelTab[] = await Promise.all(
@@ -217,12 +246,18 @@ export async function loader({ request }: LoaderFunctionArgs) {
       return ok({
         filters: {
           q,
+          tagId: selectedTag ? String(selectedTag.id) : "",
+          tagName: selectedTag?.name || null,
           status,
           channel: null,
           page: 1,
           totalPages: 1,
         },
         tabs: [],
+        tags: tags.map((tag: any) => ({
+          id: String(tag.id),
+          name: tag.name || "Tag sem nome",
+        })),
         rows: [],
         summary: {
           totalItems: 0,
@@ -399,6 +434,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
     return ok({
       filters: {
         q,
+        tagId: selectedTag ? String(selectedTag.id) : "",
+        tagName: selectedTag?.name || null,
         status,
         channel: String(selectedChannel.key || "").toLowerCase(),
         channelName: selectedChannel.name || String(selectedChannel.key || "").toUpperCase(),
@@ -406,6 +443,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
         totalPages,
       },
       tabs: channelTabs,
+      tags: tags.map((tag: any) => ({
+        id: String(tag.id),
+        name: tag.name || "Tag sem nome",
+      })),
       rows,
       summary: {
         totalItems,
@@ -426,6 +467,8 @@ export default function AdminVendasItensVendidosPage() {
   const payload = (loaderData?.payload || {}) as {
     filters: {
       q: string;
+      tagId: string;
+      tagName?: string | null;
       status: string;
       channel: string | null;
       channelName?: string;
@@ -433,6 +476,7 @@ export default function AdminVendasItensVendidosPage() {
       totalPages: number;
     };
     tabs: SellingChannelTab[];
+    tags: TagFilterOption[];
     rows: SellingRow[];
     summary: {
       totalItems: number;
@@ -447,8 +491,10 @@ export default function AdminVendasItensVendidosPage() {
 
   const currentChannel = payload.filters?.channel || "";
   const currentStatus = payload.filters?.status || "active";
+  const currentTagId = payload.filters?.tagId || "";
   const rows = payload.rows || [];
   const tabs = payload.tabs || [];
+  const tags = payload.tags || [];
 
   if (hasLoaderError) {
     return (
@@ -535,6 +581,20 @@ export default function AdminVendasItensVendidosPage() {
             </SelectContent>
           </Select>
 
+          <Select name="tagId" defaultValue={currentTagId || "__all__"}>
+            <SelectTrigger className="h-auto w-auto gap-1 border-0 p-0 text-sm font-medium text-slate-600 shadow-none focus:ring-0 [&>svg]:h-3 [&>svg]:w-3 [&>svg]:text-slate-400">
+              <SelectValue>
+                {payload.filters?.tagName || "todas as tags"}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__all__">todas as tags</SelectItem>
+              {tags.map((tag) => (
+                <SelectItem key={tag.id} value={tag.id}>{tag.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
           <button type="submit" className="inline-flex items-center gap-1 text-sm text-slate-600 hover:text-slate-900">
             <ListFilter className="h-3.5 w-3.5" />
             <span>filtros</span>
@@ -558,6 +618,7 @@ export default function AdminVendasItensVendidosPage() {
                   q: payload.filters?.q || "",
                   status: currentStatus,
                   channel: tab.key,
+                  tagId: currentTagId,
                 })}
                 className={`relative flex flex-col items-start px-4 py-3 text-sm transition-colors ${isActive
                     ? `border-b-2 ${color.activeBorder} ${color.activeText}`
@@ -708,6 +769,7 @@ export default function AdminVendasItensVendidosPage() {
                     q: payload.filters.q,
                     status: currentStatus,
                     channel: currentChannel,
+                    tagId: currentTagId,
                     page: 1,
                   })}
                   className={`h-8 w-8 rounded-md border border-slate-200 bg-white p-0 text-slate-600 hover:bg-slate-50 ${payload.filters.page <= 1 ? "pointer-events-none opacity-40" : ""}`}
@@ -723,6 +785,7 @@ export default function AdminVendasItensVendidosPage() {
                     q: payload.filters.q,
                     status: currentStatus,
                     channel: currentChannel,
+                    tagId: currentTagId,
                     page: Math.max(1, payload.filters.page - 1),
                   })}
                   className={`h-8 w-8 rounded-md border border-slate-200 bg-white p-0 text-slate-600 hover:bg-slate-50 ${payload.filters.page <= 1 ? "pointer-events-none opacity-40" : ""}`}
@@ -741,6 +804,7 @@ export default function AdminVendasItensVendidosPage() {
                         q: payload.filters.q,
                         status: currentStatus,
                         channel: currentChannel,
+                        tagId: currentTagId,
                         page,
                       })}
                       className="h-8 min-w-8 rounded-md border border-slate-200 bg-white px-2 text-slate-600 hover:bg-slate-50"
@@ -757,6 +821,7 @@ export default function AdminVendasItensVendidosPage() {
                     q: payload.filters.q,
                     status: currentStatus,
                     channel: currentChannel,
+                    tagId: currentTagId,
                     page: Math.min(payload.filters.totalPages, payload.filters.page + 1),
                   })}
                   className={`h-8 w-8 rounded-md border border-slate-200 bg-white p-0 text-slate-600 hover:bg-slate-50 ${payload.filters.page >= payload.filters.totalPages ? "pointer-events-none opacity-40" : ""}`}

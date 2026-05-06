@@ -383,7 +383,7 @@ export default function CardapioWebIndex() {
     }, [showLikeCelebration, likeCelebrationSeed]);
 
     return (
-        <section className="flex flex-col mb-24" data-element="cardapio-index">
+        <section className="flex flex-col mb-24 pt-28 md:pt-48" data-element="cardapio-index">
             <LikeCelebrationOverlay
                 isOpen={forceLikeOverlay || showLikeCelebration}
                 seed={likeCelebrationSeed}
@@ -391,6 +391,7 @@ export default function CardapioWebIndex() {
             />
             <Separator className="my-6 md:hidden" />
 
+            {/* Novo Lancamento Section */}
             <Suspense fallback={null}>
                 <Await resolve={items}>
                     {(items) => {
@@ -406,109 +407,80 @@ export default function CardapioWebIndex() {
                 </Await>
             </Suspense>
 
-            {/* TOPO: Halloween + Destaques (igual ao teu) */}
-            <div
-                className={cn(
-                    "flex flex-col gap-0 md:grid md:grid-cols-2 md:gap-0 md:items-start md:mb-10 md:justify-center",
-                    "mt-28 md:mt-48"
-                )}
-            >
-                {/* Bloco Halloween */}
-                {/* <Suspense fallback={<Loading />}>
-                    <Await resolve={items}>
-                        {(items) => {
-                            const imageUrls = Array.from(
-                                { length: 4 },
-                                (_, i) => `/images/halloween/halloween_25_${i + 1}.png`
-                            );
-                            return (
-                                <section id="halloween" className="flex flex-col mx-2 md:flex-1 mt-24 md:mt-0">
-                                    <h3 className="font-neue text-base md:text-xl font-semibold tracking-wide p-2">
-                                        Sabores da semana de Halloween 🎃
-                                    </h3>
-                                    <ImagesCarousel imageUrls={imageUrls} autoplay intervalMs={3500} />
+            {/* Destaques and Most Likes Section */}
+            <Suspense fallback={<Loading />}>
+                <Await resolve={items}>
+                    {(items) => {
+                        const flatItems = isGrouped(items)
+                            ? (items as GroupedItems[]).flatMap((g) => g.menuItems)
+                            : (items as CardapioItem[]);
+
+                        const topMarginItems = [...(flatItems as CardapioItem[])]
+                            .sort(
+                                (a, b) =>
+                                    getItemMarginPerc(b) - getItemMarginPerc(a)
+                            )
+                            .slice(0, 12);
+
+                        const chefSuggestionGroups = buildRandomGroups(topMarginItems, 4);
+
+                        const getLikesAmount = (item: MenuItem | CardapioItem) =>
+                            (item as CardapioItem)?.likes?.amount ?? 0;
+
+                        const topLikedItems = likesEnabled
+                            ? [...flatItems]
+                                .sort((a, b) => getLikesAmount(b) - getLikesAmount(a))
+                                .slice(0, 4)
+                            : [];
+
+                        return (
+                            <div className="md:flex md:flex-row gap-4">
+                                <section
+                                    id="destaque"
+                                    className="flex flex-col gap-4 mx-2 md:flex-1"
+                                >
+                                    <ChefSuggestionsCarousel
+                                        title="O que vou sugerir para vocês hoje: "
+                                        subtitle="selecionei uma combinação que valoriza ingredientes nobres e equilíbrio de sabores."
+                                        groups={chefSuggestionGroups}
+                                        headerProfile={SECTION_THREAD_PROFILE_BY_SECTION.chef}
+                                    />
                                 </section>
-                            );
-                        }}
-                    </Await>
-                </Suspense>
 
-                <Separator className="m-4 md:hidden" /> */}
+                                {likesEnabled && (
+                                    <>
+                                        <div className="col-span-full mx-2 my-4 h-[2px] bg-zinc-900 md:hidden" />
+                                        <section
+                                            id="mais-curtidas"
+                                            className="flex flex-col gap-4 mx-2 md:flex-1"
+                                        >
+                                            <ChefSuggestionsCarousel
+                                                title="Mais curtidas: "
+                                                mobileTitle="Mais curtidas"
+                                                subtitle="nossos clientes gostam de mostrar o que é bom. Aqui está uma seleção dos sabores que eles mais curtem e querem compartilhar com todo mundo."
+                                                groups={[topLikedItems]}
+                                                headerProfile={SECTION_THREAD_PROFILE_BY_SECTION.likes}
+                                            />
+                                        </section>
+                                    </>
+                                )}
+                            </div>
+                        );
+                    }}
+                </Await>
+            </Suspense>
 
-                {/* Destaques */}
-                <Suspense fallback={<Loading />}>
-                    <Await resolve={items}>
-                        {(items) => {
-                            const flatItems = isGrouped(items)
-                                ? (items as GroupedItems[]).flatMap((g) => g.menuItems)
-                                : (items as CardapioItem[]);
-
-                            const topMarginItems = [...(flatItems as CardapioItem[])]
-                                .sort(
-                                    (a, b) =>
-                                        getItemMarginPerc(b) - getItemMarginPerc(a)
-                                )
-                                .slice(0, 12);
-
-                            const chefSuggestionGroups = buildRandomGroups(topMarginItems, 4);
-
-                            const getLikesAmount = (item: MenuItem | CardapioItem) =>
-                                (item as CardapioItem)?.likes?.amount ?? 0;
-
-                            const topLikedItems = likesEnabled
-                                ? [...flatItems]
-                                    .sort((a, b) => getLikesAmount(b) - getLikesAmount(a))
-                                    .slice(0, 4)
-                                : [];
-
-                            return (
-                                <>
-                                    <section
-                                        id="destaque"
-                                        className="flex flex-col gap-4 mx-2 md:flex-1"
-                                    >
-                                        <ChefSuggestionsCarousel
-                                            title="O que vou sugerir para vocês hoje: "
-                                            subtitle="selecionei uma combinação que valoriza ingredientes nobres e equilíbrio de sabores."
-                                            groups={chefSuggestionGroups}
-                                            headerProfile={SECTION_THREAD_PROFILE_BY_SECTION.chef}
-                                        />
-                                    </section>
-
-                                    {likesEnabled && (
-                                        <>
-                                            <div className="col-span-full mx-2 my-2 h-[2px] bg-zinc-900 md:hidden" />
-                                            <section
-                                                id="mais-curtidas"
-                                                className="flex flex-col gap-4 mx-2 md:flex-1"
-                                            >
-                                                <ChefSuggestionsCarousel
-                                                    title="Mais curtidas: "
-                                                    mobileTitle="Mais curtidas"
-                                                    subtitle="nossos clientes gostam de mostrar o que é bom. Aqui está uma seleção dos sabores que eles mais curtem e querem compartilhar com todo mundo."
-                                                    groups={[topLikedItems]}
-                                                    headerProfile={SECTION_THREAD_PROFILE_BY_SECTION.likes}
-                                                />
-                                            </section>
-                                        </>
-                                    )}
-                                </>
-                            );
-                        }}
-                    </Await>
-                </Suspense>
-            </div>
-
+            {/* Reels Section */}
             {reelsEnabled && reelUrls.length > 0 ? (
                 <>
-                    <div className="mx-4 my-2 h-[2px] bg-zinc-900 md:hidden" />
-                    <div className="mx-4 md:mx-0 my-2">
+                    <div className="mx-4 my-4 h-[2px] bg-zinc-900 md:hidden" />
+                    <section className="mx-4 md:mx-0 my-2">
                         <div className="mb-2">
                             <h2 className="font-neue font-semibold text-sm tracking-tight">Reels sugeridos</h2>
                             <p className="font-neue text-sm mt-1 text-zinc-700">conteúdos curtos da equipe para inspirar seu próximo pedido.</p>
                         </div>
                         <ReelsCarousel urls={reelUrls} />
-                    </div>
+                    </section>
                 </>
             ) : null}
 
@@ -585,7 +557,7 @@ export default function CardapioWebIndex() {
                         };
 
                         return (
-                            <div className="flex flex-col mx-4">
+                            <div className="flex flex-col m-4">
                                 {/* título + filtros inline */}
                                 <div className="mb-4 ">
                                     <h2 className="font-lora text-2xl font-bold tracking-tight leading-tight mb-3">
@@ -1480,142 +1452,148 @@ function NoveltiesHeroSection({
     likesEnabled: boolean;
     sharesEnabled: boolean;
 }) {
-    const featuredItem = items[0];
-    const secondaryItems = items.slice(1, 5);
-    const featuredMedia = getPrimaryCardapioMedia(featuredItem);
-    const featuredPrices = getVisiblePublicPriceVariations(featuredItem);
-    const featuredPrice = featuredPrices[0];
+    const allItems = items.slice(0, 6);
+    const [current, setCurrent] = useState(0);
+    const [paused, setPaused] = useState(false);
+    const containerRef = useRef<HTMLDivElement>(null);
+    const pauseTimerRef = useRef<NodeJS.Timeout>(undefined);
+
+    const ITEM_W = 220;
+    const ITEM_GAP = 20;
+    const STEP = ITEM_W + ITEM_GAP;
+
+    const scrollToIndex = useCallback((idx: number, instant = false) => {
+        containerRef.current?.scrollTo({
+            left: idx * STEP,
+            behavior: instant ? "auto" : "smooth",
+        });
+    }, [STEP]);
+
+    // Track current item from scroll position
+    const handleScroll = useCallback(() => {
+        if (!containerRef.current) return;
+        const idx = Math.round(containerRef.current.scrollLeft / STEP);
+        setCurrent(Math.max(0, Math.min(idx, allItems.length - 1)));
+    }, [STEP, allItems.length]);
+
+    // Autoplay
+    useEffect(() => {
+        if (paused || allItems.length <= 1) return;
+        const timer = setInterval(() => {
+            setCurrent((prev) => {
+                const next = (prev + 1) % allItems.length;
+                scrollToIndex(next, next === 0);
+                return next;
+            });
+        }, 4000);
+        return () => clearInterval(timer);
+    }, [paused, allItems.length, scrollToIndex]);
+
+    const handleInteraction = () => {
+        setPaused(true);
+        clearTimeout(pauseTimerRef.current);
+        pauseTimerRef.current = setTimeout(() => setPaused(false), 6000);
+    };
+
+    const activeItem = allItems[current] ?? allItems[0];
+    const activePrice = getVisiblePublicPriceVariations(activeItem)[0];
 
     return (
-        <section>
-            <div className="mx-4 mb-8 h-[2px] bg-zinc-900" />
-
-            <div className="px-4 pb-10 md:px-6 md:pb-14">
-                {/* Eyebrow */}
-                <div className="mb-5 flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                        <span className="relative flex h-1.5 w-1.5 shrink-0">
-                            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-500 opacity-50" />
-                            <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-red-500" />
-                        </span>
-                        <span className="font-neue text-[10px] uppercase tracking-[0.36em] text-zinc-500">
-                            novidades
-                        </span>
-                    </div>
-                    <span className="font-neue text-sm text-zinc-400">
-                        {items.length} sabores novos
+        <section id="novo-lancamento" >
+            <div className="mb-6 px-4 flex flex-col items-center">
+                <h2 className="font-neue text-md font-semibold tracking-tight uppercase text-zinc-950">
+                    Novos Lançamentos
+                </h2>
+                <div className="mt-1 flex items-center gap-2">
+                    <span className="font-neue text-[10px] uppercase tracking-[0.36em] text-zinc-500">
+                        {items.length} novos sabores
                     </span>
                 </div>
+            </div>
 
-                {/* Headline */}
-                <h2 className="mb-8 font-lora text-3xl font-bold leading-tight tracking-tight text-zinc-950 md:mb-10 md:text-5xl">
-                    O que chegou<br />agora.
-                </h2>
+            {/* Scroll nativo com snap — item sempre centrado */}
+            <div className="overflow-hidden">
+                <div
+                    ref={containerRef}
+                    className="flex snap-x snap-mandatory overflow-x-scroll [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                    onScroll={handleScroll}
+                    onTouchStart={handleInteraction}
+                    onMouseDown={handleInteraction}
+                >
+                    {/* Spacer esquerdo: centraliza primeiro item */}
+                    <div style={{ flexShrink: 0, width: `calc(50vw - ${ITEM_W / 2}px)` }} />
 
-                {/* Grid */}
-                <div className="grid gap-6 md:grid-cols-[1fr_0.72fr] md:gap-8 md:items-start">
-
-                    {/* Featured */}
-                    <Link to={getCardapioItemHref(featuredItem)} className="group block">
-                        <div className="relative min-h-[280px] overflow-hidden rounded-lg bg-zinc-100 md:min-h-[360px]">
-                            <div className="absolute inset-0">
-                                <CardapioItemImageSingle
-                                    src={featuredMedia?.secureUrl || ""}
-                                    placeholder={featuredItem.imagePlaceholderURL || ""}
-                                    placeholderIcon={false}
-                                    placeholderText={featuredItem.ingredients || featuredItem.name}
-                                    cnPlaceholderContainer="from-zinc-200 via-zinc-100 to-zinc-50"
-                                    cnPlaceholderText="font-lora text-xl text-zinc-500"
-                                    cnContainer="h-full w-full"
-                                    enableOverlay={false}
-                                />
-                            </div>
-                            <div className="absolute inset-0 bg-gradient-to-t from-zinc-950/75 via-zinc-950/10 to-transparent" />
-                            <div className="absolute inset-x-0 bottom-0 p-4 md:p-5">
-                                {likesEnabled && (
-                                    <div className="mb-3">
-                                        <LikeIt
-                                            item={featuredItem}
-                                            size={16}
-                                            cnContainer="h-8 w-8 rounded bg-white/90 text-zinc-900 items-center justify-center"
-                                            color="red"
-                                            filled
-                                        />
-                                    </div>
-                                )}
-                                <h3 className="font-lora text-xl font-bold leading-tight text-white md:text-2xl">
-                                    {featuredItem.name}
-                                </h3>
-                                <p className="mt-1 font-neue text-sm leading-snug text-white/60">
-                                    {capitalize(featuredItem.ingredients || "Novo sabor.")}
-                                </p>
-                            </div>
-                        </div>
-                        <div className="mt-3 flex items-baseline justify-between border-b border-zinc-200 pb-3">
-                            {featuredPrice ? (
-                                <span className="font-neue text-base font-bold text-zinc-950">
-                                    {formatMoneyString(featuredPrice.priceAmount)}
-                                </span>
-                            ) : <span />}
-                            <span className="inline-flex items-center gap-1 font-neue text-sm text-zinc-400 transition group-hover:text-zinc-950">
-                                Ver sabor
-                                <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
-                            </span>
-                        </div>
-                    </Link>
-
-                    {/* List */}
-                    <div>
-                        <div className="mb-2 border-b border-zinc-200 pb-2">
-                            <span className="font-neue text-[10px] uppercase tracking-[0.32em] text-zinc-400">
-                                também chegaram
-                            </span>
-                        </div>
-                        {secondaryItems.map((item) => {
-                            const media = getPrimaryCardapioMedia(item);
-                            const price = getVisiblePublicPriceVariations(item)[0];
-                            return (
-                                <Link
-                                    key={item.id}
-                                    to={getCardapioItemHref(item)}
-                                    className="group flex items-center gap-3 border-b border-zinc-100 py-3 transition-opacity hover:opacity-60"
+                    {allItems.map((item, index) => {
+                        const media = getPrimaryCardapioMedia(item);
+                        const isActive = index === current;
+                        return (
+                            <div
+                                key={item.id}
+                                className="snap-center flex-shrink-0"
+                                style={{
+                                    width: ITEM_W,
+                                    marginRight: index < allItems.length - 1 ? ITEM_GAP : 0,
+                                }}
+                            >
+                                <div
+                                    className="aspect-square w-full overflow-hidden rounded-full bg-zinc-100 transition-all duration-500"
+                                    style={{
+                                        transform: isActive ? "scale(1)" : "scale(0.78)",
+                                        opacity: isActive ? 1 : 0.38,
+                                    }}
                                 >
-                                    <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded bg-zinc-100 md:h-16 md:w-16">
-                                        <CardapioItemImageSingle
-                                            src={media?.secureUrl || ""}
-                                            placeholder={item.imagePlaceholderURL || ""}
-                                            placeholderIcon={false}
-                                            placeholderText={item.name}
-                                            cnPlaceholderContainer="from-zinc-200 via-zinc-100 to-zinc-50"
-                                            cnPlaceholderText="font-lora text-xs text-zinc-500"
-                                            cnContainer="h-full w-full"
-                                            enableOverlay={false}
-                                        />
-                                    </div>
-                                    <div className="min-w-0 flex-1">
-                                        <h4 className="font-neue text-[13px] font-bold uppercase leading-tight tracking-wide text-zinc-950">
-                                            {item.name}
-                                        </h4>
-                                        <p className="mt-0.5 line-clamp-1 font-lora text-[12px] text-zinc-500">
-                                            {capitalize(item.ingredients || "Novo sabor.")}
-                                        </p>
-                                    </div>
-                                    {price && (
-                                        <span className="shrink-0 font-neue text-sm font-bold text-zinc-950">
-                                            {formatMoneyString(price.priceAmount)}
-                                        </span>
-                                    )}
-                                </Link>
-                            );
-                        })}
-                        {secondaryItems.length === 0 && (
-                            <p className="pt-4 font-lora text-zinc-400">
-                                Sabor exclusivo abrindo a seleção sozinho.
-                            </p>
-                        )}
-                    </div>
+                                    <CardapioItemImageSingle
+                                        src={media?.secureUrl || ""}
+                                        placeholder={item.imagePlaceholderURL || ""}
+                                        placeholderIcon={false}
+                                        placeholderText={item.name}
+                                        cnPlaceholderContainer="from-zinc-200 via-zinc-100 to-zinc-50"
+                                        cnPlaceholderText="font-lora text-sm text-zinc-500"
+                                        cnContainer="h-full w-full"
+                                        enableOverlay={false}
+                                    />
+                                </div>
+                            </div>
+                        );
+                    })}
+
+                    {/* Spacer direito: permite centrar último item */}
+                    <div style={{ flexShrink: 0, width: `calc(50vw - ${ITEM_W / 2}px)` }} />
                 </div>
             </div>
+
+            {/* Texto do item ativo */}
+            <Link
+                to={getCardapioItemHref(activeItem)}
+                className="group mt-6 block px-6 text-center"
+            >
+                <h3 className="font-lora text-2xl font-bold text-zinc-950 transition-opacity group-hover:opacity-60">
+                    {activeItem.name}
+                </h3>
+                <p className="mt-1 font-neue text-sm text-zinc-500">
+                    {capitalize(activeItem.ingredients || "Novo sabor no cardápio.")}
+                </p>
+                {activePrice && (
+                    <p className="mt-2 font-neue text-sm text-zinc-400">
+                        {formatMoneyString(activePrice.priceAmount)}
+                    </p>
+                )}
+            </Link>
+
+            {/* Dots */}
+            <div className="mt-5 flex items-center justify-center gap-1.5">
+                {allItems.map((_, i) => (
+                    <div
+                        key={i}
+                        className={cn(
+                            "h-[3px] rounded-full transition-all duration-300",
+                            i === current ? "w-6 bg-zinc-950" : "w-[6px] bg-zinc-300"
+                        )}
+                    />
+                ))}
+            </div>
+
+            <div className="mx-4 my-4 h-[2px] bg-zinc-900" />
         </section>
     );
 }
@@ -2094,66 +2072,21 @@ function ChefSuggestionsCarousel({
                     onClick={() => setIsOpen((v) => !v)}
                     aria-expanded={isOpen}
                 >
-                    <div className="flex items-start gap-2">
-                        <div className="flex-1 min-w-0">
-                            <h2 className="font-lora text-2xl font-bold tracking-tight leading-tight">
-                                {mobileTitle ?? (<>Sugestões<br />para hoje</>)}
-                            </h2>
-                        </div>
-                        <div className="flex items-center gap-1 shrink-0">
-                            <div className="flex gap-1">
-                                {previewItems.map((i) => {
-                                    const img =
-                                        i.MenuItemGalleryImage?.find((img) => img.isPrimary) ||
-                                        i.MenuItemGalleryImage?.[0];
-                                    const isVideo =
-                                        img?.kind === "video" ||
-                                        /\.(mp4|mov|webm|m4v|ogg|ogv)(\?|$)/i.test(img?.secureUrl ?? "");
-                                    return (
-                                        <div key={i.id} className="h-[48px] w-[38px] overflow-hidden rounded-lg shrink-0">
-                                            {img?.secureUrl ? (
-                                                isVideo ? (
-                                                    <video
-                                                        src={img.secureUrl}
-                                                        className="h-full w-full object-cover"
-                                                        muted
-                                                        playsInline
-                                                        preload="metadata"
-                                                    />
-                                                ) : (
-                                                    <img
-                                                        src={img.secureUrl}
-                                                        alt={i.name}
-                                                        className="h-full w-full object-cover"
-                                                        loading="lazy"
-                                                    />
-                                                )
-                                            ) : (
-                                                <div className="h-full w-full bg-white border border-black flex items-center justify-center">
-                                                    <Pizza className="h-5 w-5 text-black" strokeWidth={1.5} />
-                                                </div>
-                                            )}
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        </div>
+                    <div className="flex items-center justify-between gap-2">
+                        <h2 className="font-lora text-2xl font-bold tracking-tight leading-tight">
+                            {mobileTitle ?? (<>Sugestões para hoje</>)}
+                        </h2>
+                        <ChevronRight
+                            className={cn(
+                                "h-6 w-6 shrink-0 transition-transform duration-300",
+                                isOpen && "rotate-90"
+                            )}
+                        />
                     </div>
 
                     {subtitle && (
-                        <p className="font-neue text-sm tracking-wide mt-2 flex items-center gap-2">
-                            <span>{subtitle}</span>
-                            <span className="flex flex-col items-center shrink-0 gap-0.5">
-                                <ChevronRight
-                                    className={cn(
-                                        "h-10 w-10 transition-transform duration-300",
-                                        isOpen && "rotate-90"
-                                    )}
-                                />
-                                <span className="text-[9px] font-neue tracking-widest uppercase leading-none">
-                                    {isOpen ? "fechar" : "ver"}
-                                </span>
-                            </span>
+                        <p className="font-neue text-sm tracking-wide mt-2 text-zinc-600">
+                            {subtitle}
                         </p>
                     )}
 
