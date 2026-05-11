@@ -1,7 +1,7 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from '@remix-run/node';
 import { redirect } from '@remix-run/node';
 import { Form, Link, NavLink, Outlet, useActionData, useFetcher, useLoaderData, useNavigation, useRevalidator } from '@remix-run/react';
-import { AlertTriangle, Archive, BarChart2, Check, ChevronsUpDown, Download, Info, Loader2, RotateCcw, Smartphone, Trash2, Truck, Users } from 'lucide-react';
+import { AlertTriangle, Archive, BarChart2, Calendar as CalendarIcon, Check, ChevronsUpDown, Download, Info, Loader2, RotateCcw, Smartphone, Trash2, Truck, Users } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import {
   AlertDialog,
@@ -42,6 +42,7 @@ import {
   setBatchLineIgnored,
   setBatchLineManualConversion,
   startStockMovementImportBatch,
+  updateImportedStockMovementBatchDate,
   updateStockMovementImportBatchLineEditableFields,
   reapplyAliasesToAllPendingBatches,
 } from '~/domain/stock-movement/stock-movement-import.server';
@@ -227,9 +228,8 @@ function deriveUnitCost(totalAmount: unknown, quantity: unknown) {
   return Number.isFinite(unitCost) && unitCost > 0 ? unitCost : null;
 }
 
-function todayDateInputValue() {
-  const now = new Date();
-  const local = new Date(now.getTime() - now.getTimezoneOffset() * 60000);
+function dateInputValueFromDate(value: Date) {
+  const local = new Date(value.getTime() - value.getTimezoneOffset() * 60000);
   return local.toISOString().slice(0, 10);
 }
 
@@ -238,6 +238,15 @@ function parseDateInputAsLocalNoon(value: string) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) return null;
   const parsed = new Date(`${raw}T12:00:00`);
   return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function firstValidDate(...values: unknown[]) {
+  for (const value of values) {
+    if (!value) continue;
+    const date = new Date(String(value));
+    if (!Number.isNaN(date.getTime())) return date;
+  }
+  return new Date();
 }
 
 export function formatDate(value: any) {
@@ -335,6 +344,7 @@ export function ImportBatchSubmitDialog({
   variant?: 'toolbar' | 'primary';
 }) {
   const [open, setOpen] = useState(false);
+  const [selectedDateInputValue, setSelectedDateInputValue] = useState(() => dateInputValueFromDate(new Date()));
   const disabled = readyToImport <= 0 || isImportingBatch;
   const buttonClass =
     variant === 'primary'
@@ -404,6 +414,19 @@ export function ImportBatchSubmitDialog({
             <ClickableTextList label="Fornecedor" values={supplierNames} />
           </div>
         ) : null}
+        <div className="flex items-center gap-3">
+          <Label htmlFor={`batch-movement-date-${batchId}`} className="shrink-0">
+            Data da movimentação
+          </Label>
+          <Input
+            id={`batch-movement-date-${batchId}`}
+            type="date"
+            value={selectedDateInputValue}
+            onChange={(event) => setSelectedDateInputValue(event.target.value)}
+            className="flex-1"
+            required
+          />
+        </div>
         <Form
           method="post"
           action={`/admin/import-stock-movements/${batchId}`}
@@ -412,16 +435,7 @@ export function ImportBatchSubmitDialog({
         >
           <input type="hidden" name="_action" value="batch-import" />
           <input type="hidden" name="batchId" value={batchId} />
-          <div className="flex flex-col gap-4 md:grid md:grid-cols-2 items-center">
-            <Label htmlFor={`batch-movement-date-${batchId}`}>Data da movimentação</Label>
-            <Input
-              id={`batch-movement-date-${batchId}`}
-              name="movementDate"
-              type="date"
-              defaultValue={todayDateInputValue()}
-              required
-            />
-          </div>
+          <input type="hidden" name="movementDate" value={selectedDateInputValue} />
           <Button type="submit" className="w-full bg-emerald-600 text-white hover:bg-emerald-700">
             Importar {readyToImport > 0 ? `(${readyToImport})` : ''}
           </Button>
@@ -1110,6 +1124,85 @@ function FreightEditButton({ batchId, freightAmount }: { batchId: string; freigh
   );
 }
 
+function BatchMovementDateEditButton({
+  batchId,
+  importedCount,
+  initialDate,
+  disabled,
+}: {
+  batchId: string;
+  importedCount: number;
+  initialDate: Date;
+  disabled: boolean;
+}) {
+  const fetcher = useFetcher<any>();
+  const [open, setOpen] = useState(false);
+  const [selectedDateInputValue, setSelectedDateInputValue] = useState(() => dateInputValueFromDate(initialDate));
+  const isSaving = fetcher.state !== 'idle';
+  const isDisabled = disabled || importedCount <= 0 || isSaving;
+
+  useEffect(() => {
+    if (fetcher.state !== 'idle') return;
+    if (fetcher.data?.status !== 200) return;
+    if (!fetcher.data?.payload?.updatedMovementDate) return;
+    setOpen(false);
+  }, [fetcher.state, fetcher.data]);
+
+  useEffect(() => {
+    if (!open) setSelectedDateInputValue(dateInputValueFromDate(initialDate));
+  }, [initialDate, open]);
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <button
+          type="button"
+          disabled={isDisabled}
+          className="flex flex-col items-center justify-center gap-1 px-4 py-2.5 text-slate-600 hover:bg-slate-50 transition min-w-[64px] disabled:cursor-not-allowed disabled:opacity-40"
+          title={importedCount > 0 ? `Alterar data de ${importedCount} movimento(s)` : 'Nenhum movimento importado'}
+        >
+          <CalendarIcon className="h-4 w-4" />
+          <span className="text-[11px] font-medium">Data</span>
+        </button>
+      </DialogTrigger>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Alterar data dos movimentos</DialogTitle>
+          <DialogDescription>
+            Atualiza a data dos movimentos já importados deste lote e mantém a data da linha de origem em sincronia.
+          </DialogDescription>
+        </DialogHeader>
+        {fetcher.data?.message && fetcher.data?.status >= 400 ? (
+          <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+            {fetcher.data.message}
+          </div>
+        ) : null}
+        <div className="space-y-2">
+          <Label htmlFor={`batch-imported-movement-date-${batchId}`}>Nova data</Label>
+          <Input
+            id={`batch-imported-movement-date-${batchId}`}
+            type="date"
+            value={selectedDateInputValue}
+            onChange={(event) => setSelectedDateInputValue(event.target.value)}
+            required
+          />
+          <p className="text-xs text-slate-500">
+            Serão atualizados {importedCount} movimento(s) ativo(s) deste lote.
+          </p>
+        </div>
+        <fetcher.Form method="post" className="space-y-4">
+          <input type="hidden" name="_action" value="batch-update-imported-movement-date" />
+          <input type="hidden" name="batchId" value={batchId} />
+          <input type="hidden" name="movementDate" value={selectedDateInputValue} />
+          <Button type="submit" className="w-full" disabled={isSaving}>
+            {isSaving ? 'Atualizando...' : 'Atualizar data'}
+          </Button>
+        </fetcher.Form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export async function loader({ params }: LoaderFunctionArgs) {
   try {
     const batchId = String(params.batchId || '').trim();
@@ -1399,15 +1492,22 @@ export async function action({ request, params }: ActionFunctionArgs) {
         manualConversionFactor: Number.isFinite(manualFactorRaw) && manualFactorRaw > 0 ? manualFactorRaw : null,
         observation: str(formData.get('observation')) || null,
       });
+      let updatedLineStatus: string | null = null;
+      const updatedLine = await db.stockMovementImportBatchLine.findUnique({
+        where: { id: lineId },
+        select: { status: true },
+      });
+      updatedLineStatus = str(updatedLine?.status) || null;
       let autoApprovedCostReview = false;
       if (autoApproveCostReview) {
-        const updatedLine = await db.stockMovementImportBatchLine.findUnique({
-          where: { id: lineId },
-          select: { status: true },
-        });
-        if (String(updatedLine?.status || '') === 'pending_cost_review') {
+        if (updatedLineStatus === 'pending_cost_review') {
           await approveBatchLineCostReview({ batchId, lineId, actor, requestOrigin });
           autoApprovedCostReview = true;
+          const approvedLine = await db.stockMovementImportBatchLine.findUnique({
+            where: { id: lineId },
+            select: { status: true },
+          });
+          updatedLineStatus = str(approvedLine?.status) || updatedLineStatus;
         }
       }
       let importedLine = false;
@@ -1419,7 +1519,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
         });
         importedLine = importResult.imported > 0;
       }
-      return ok({ updatedLineId: lineId, autoApprovedCostReview, importedLine });
+      return ok({ updatedLineId: lineId, updatedLineStatus, autoApprovedCostReview, importedLine });
     }
 
     if (_action === 'batch-approve-cost-review') {
@@ -1557,6 +1657,17 @@ export async function action({ request, params }: ActionFunctionArgs) {
       return redirect(redirectToCurrentPath(request, `/admin/import-stock-movements/${batchId}`));
     }
 
+    if (_action === 'batch-update-imported-movement-date') {
+      const movementDate = parseDateInputAsLocalNoon(str(formData.get('movementDate')));
+      if (!movementDate) return badRequest('Informe a nova data da movimentação');
+      const result = await updateImportedStockMovementBatchDate({ batchId, actor, movementAt: movementDate });
+      return ok({
+        updatedMovementDate: true,
+        ...result,
+        message: `Data atualizada em ${result.updatedMovements} movimento(s) deste lote.`,
+      });
+    }
+
     if (_action === 'batch-attach-supplier-json') {
       const supplierNotesFile = formData.get('supplierNotesFile');
       if (!(supplierNotesFile instanceof File) || supplierNotesFile.size <= 0) {
@@ -1669,6 +1780,12 @@ export default function AdminImportStockMovementsBatchDetailRoute() {
       return acc;
     },
     {} as Record<string, number>,
+  );
+  const importedLines = lines.filter((line) => String(line?.status || '') === 'imported');
+  const importedMovementDate = firstValidDate(
+    importedLines.find((line) => line?.movementAt)?.movementAt,
+    selectedBatch?.periodStart,
+    lines.find((line) => line?.movementAt)?.movementAt,
   );
   const pendingCount = (statusCounts['pending_mapping'] || 0) + (statusCounts['pending_conversion'] || 0);
   const availableStatusTabs = LINE_STATUS_NAV
@@ -1963,6 +2080,15 @@ export default function AdminImportStockMovementsBatchDetailRoute() {
               <Separator orientation="vertical" className="h-auto self-stretch" />
 
               <FreightEditButton batchId={String(selectedBatch.id)} freightAmount={selectedBatch.freightAmount ?? null} />
+
+              <Separator orientation="vertical" className="h-auto self-stretch" />
+
+              <BatchMovementDateEditButton
+                batchId={String(selectedBatch.id)}
+                importedCount={summary.imported}
+                initialDate={importedMovementDate}
+                disabled={isImportingBatch}
+              />
 
               <Separator orientation="vertical" className="h-auto self-stretch" />
 

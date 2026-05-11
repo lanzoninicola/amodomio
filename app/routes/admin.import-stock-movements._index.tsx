@@ -75,11 +75,11 @@ function SourceTypeBadge({ sourceType }: { sourceType: string | null | undefined
 function batchStatusLabel(status: string) {
   switch (status) {
     case 'validated': return 'Aguardando importação';
-    case 'ready':     return 'Pronta';
-    case 'imported':  return 'Importado';
-    case 'partial':   return 'Parcial';
-    case 'archived':  return 'Arquivado';
-    default:          return status;
+    case 'ready': return 'Pronta';
+    case 'imported': return 'Importado';
+    case 'partial': return 'Parcial';
+    case 'archived': return 'Arquivado';
+    default: return status;
   }
 }
 
@@ -226,11 +226,10 @@ export default function AdminImportStockMovementsIndexRoute() {
                       key={type ?? 'all'}
                       type="button"
                       onClick={() => setSourceTypeFilter(type)}
-                      className={`flex h-10 items-center gap-1.5 rounded-xl border px-3 text-sm font-medium transition-colors ${
-                        isActive
-                          ? 'border-slate-900 bg-slate-900 text-white'
-                          : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
-                      }`}
+                      className={`flex h-10 items-center gap-1.5 rounded-xl border px-3 text-sm font-medium transition-colors ${isActive
+                        ? 'border-slate-900 bg-slate-900 text-white'
+                        : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+                        }`}
                     >
                       {config ? config.icon : null}
                       {config ? config.label : 'Todos'}
@@ -281,11 +280,16 @@ export default function AdminImportStockMovementsIndexRoute() {
                         {batchStatusLabel(String(batch.status))}
                       </Badge>
                     </TableCell>
-                    <TableCell className="px-4 py-4">
+                    <TableCell className="w-[500px] max-w-[500px] px-4 py-4">
                       <div className="flex min-w-0 flex-col gap-1.5">
                         <Link
                           to={`/admin/import-stock-movements/${batch.id}`}
-                          className="truncate text-[15px] font-semibold leading-5 text-slate-900 hover:underline"
+                          className="block overflow-hidden break-words text-[15px] font-semibold leading-5 text-slate-900 hover:underline"
+                          style={{
+                            display: '-webkit-box',
+                            WebkitBoxOrient: 'vertical',
+                            WebkitLineClamp: 2,
+                          }}
                         >
                           {batch.name}
                         </Link>

@@ -1,7 +1,7 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import { Form, useActionData, useFetcher, useLoaderData } from "@remix-run/react";
 import { useEffect, useState } from "react";
-import { AlertCircle, CheckCircle2, ChevronRight, Loader2 } from "lucide-react";
+import { AlertCircle, CheckCircle2, ChevronRight, Loader2, Pencil } from "lucide-react";
 import { authenticator } from "~/domain/auth/google.server";
 import CopyButton from "~/components/primitives/copy-button/copy-button";
 import { Button } from "~/components/ui/button";
@@ -179,6 +179,9 @@ export default function AdminMobileEntradaEstoqueFotoMultiplaPage() {
   const [chatGptResponse, setChatGptResponse] = useState("");
   const [lastPreviewedSignature, setLastPreviewedSignature] = useState("");
   const [manualMovementAt, setManualMovementAt] = useState("");
+  const [promptOpen, setPromptOpen] = useState(false);
+  const [pasteConfirmed, setPasteConfirmed] = useState(false);
+  const [resultOpen, setResultOpen] = useState(false);
 
   const defaultPrompt = buildMultiStockPhotoPrompt({ returnUrl, promptTemplate });
   const currentPreviewSignature = `${chatGptResponse.trim()}::${manualMovementAt}`;
@@ -221,7 +224,11 @@ export default function AdminMobileEntradaEstoqueFotoMultiplaPage() {
   const handlePasteResponse = async () => {
     if (typeof navigator === "undefined" || !navigator.clipboard?.readText) return;
     const text = await navigator.clipboard.readText();
-    if (text) setChatGptResponse(text);
+    if (text) {
+      setChatGptResponse(text);
+      setPasteConfirmed(true);
+      setTimeout(() => setPasteConfirmed(false), 3000);
+    }
   };
 
   return (
@@ -232,90 +239,113 @@ export default function AdminMobileEntradaEstoqueFotoMultiplaPage() {
       </div>
 
       <div className="border-t border-slate-200 pt-4">
-        <div className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">ChatGPT</div>
+        <div className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">(2) Chat GPT</div>
       </div>
 
       <section className="space-y-2">
-        <div className="grid grid-cols-4 gap-2">
-          <CopyButton
-            textToCopy={promptDraft}
-            label="Copiar prompt"
-            variant="default"
-            classNameButton="col-span-3 h-12 w-full rounded-lg bg-slate-950 px-4 hover:bg-slate-800"
-            classNameLabel="text-base font-medium text-white"
-            classNameIcon="text-white"
-            toastTitle="Prompt copiado"
-            toastContent="Cole no ChatGPT e anexe todos os cupons."
-          />
-          <a
-            href={CHATGPT_URL}
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex h-12 w-full items-center justify-center rounded-lg border border-slate-300 bg-white text-slate-700"
-            aria-label="Abrir ChatGPT"
-            title="Abrir ChatGPT"
-          >
-            <ChatGptLogoIcon />
-          </a>
-        </div>
-
-        <details className="group rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
-          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 [&::-webkit-details-marker]:hidden">
-            <div className="text-base font-medium text-slate-900">Editar prompt</div>
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-slate-500 transition group-open:rotate-90">
-              <ChevronRight className="h-4 w-4" />
-            </div>
-          </summary>
-          <div className="mt-3">
-            <div className="mb-2 flex items-center justify-between">
-              <span className="text-sm text-slate-500">Prompt completo</span>
+        <Collapsible open={promptOpen} onOpenChange={setPromptOpen}>
+          <div className="flex gap-2">
+            <CopyButton
+              textToCopy={promptDraft}
+              label="Copiar prompt"
+              variant="default"
+              classNameButton="h-12 w-full flex-1 rounded-lg bg-slate-950 px-4 hover:bg-slate-800"
+              classNameLabel="text-base font-medium text-white"
+              classNameIcon="text-white"
+              toastTitle="Prompt copiado"
+              toastContent="Cole no ChatGPT e anexe todos os cupons."
+            />
+            <CollapsibleTrigger asChild>
               <button
                 type="button"
-                className="text-sm font-medium text-slate-600"
-                onClick={() => setPromptDraft(defaultPrompt)}
+                className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 text-slate-500"
               >
-                Restaurar
+                <Pencil className="h-4 w-4" />
               </button>
-            </div>
-            <textarea
-              value={promptDraft}
-              onChange={(e) => setPromptDraft(e.target.value)}
-              className="min-h-[180px] w-full rounded-md border border-slate-300 bg-white px-3 py-2 font-mono text-[12px] leading-5 text-slate-800 outline-none"
-            />
+            </CollapsibleTrigger>
           </div>
-        </details>
+          <CollapsibleContent className="pt-3">
+            <div className="py-2">
+              <div className="mt-3 border-t border-slate-200 pt-3">
+                <div className="mb-2 flex items-center justify-between">
+                  <span className="text-sm text-slate-500">Editar prompt completo</span>
+                  <button
+                    type="button"
+                    className="text-sm font-medium text-slate-600"
+                    onClick={() => setPromptDraft(defaultPrompt)}
+                  >
+                    Restaurar
+                  </button>
+                </div>
+                <textarea
+                  value={promptDraft}
+                  onChange={(e) => setPromptDraft(e.target.value)}
+                  className="min-h-[180px] w-full rounded-md border border-slate-300 bg-white px-3 py-2 font-mono text-[12px] leading-5 text-slate-800 outline-none"
+                />
+              </div>
+            </div>
+          </CollapsibleContent>
+        </Collapsible>
       </section>
 
-      <div className="flex items-center justify-between border-t border-slate-200 pt-4">
-        <div className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Colar</div>
-        <Button type="button" variant="outline" onClick={handlePasteResponse} className="h-12 px-5 text-base">
-          Colar
-        </Button>
+      <section className="space-y-2">
+        <a
+          href={CHATGPT_URL}
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex gap-2 h-12 w-full items-center justify-center rounded-lg border border-slate-300 bg-white text-slate-700"
+          aria-label="Abrir ChatGPT"
+          title="Abrir ChatGPT"
+        >
+          <ChatGptLogoIcon />
+          Abrir Chat GPT
+        </a>
+      </section>
+
+      <div className="border-t border-slate-200 pt-4">
+        <div className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">(3) Resultado</div>
       </div>
 
       <Form method="post" className="space-y-3">
         <input type="hidden" name="_action" value="stock-photo-import" />
-        <div className="space-y-2">
-          <label htmlFor="manualMovementAtMulti" className="block text-sm font-medium text-slate-700">
+        <div>
+          <label htmlFor="manualMovementAtMulti" className="block text-sm font-medium text-slate-700 mb-1">
             Data efetiva do movimento
           </label>
-          <Input
-            id="manualMovementAtMulti"
-            name="manualMovementAt"
-            type="date"
-            value={manualMovementAt}
-            onChange={(e) => setManualMovementAt(e.currentTarget.value)}
-          />
-          <p className="text-xs leading-5 text-slate-500">
-            Opcional. Se preenchida, prevalece sobre as datas lidas nos cupons para todos os lotes.
-          </p>
+          <div className="flex items-center gap-2">
+            <Input
+              id="manualMovementAtMulti"
+              name="manualMovementAt"
+              type="date"
+              value={manualMovementAt}
+              onChange={(e) => setManualMovementAt(e.currentTarget.value)}
+              className="h-12 flex-1"
+            />
+            <Button type="button" variant="outline" onClick={handlePasteResponse} className="h-12 flex-shrink-0 px-4 text-base">
+              Colar resultado
+            </Button>
+            <button
+              type="button"
+              onClick={() => setResultOpen((v) => !v)}
+              className="flex h-12 flex-shrink-0 items-center gap-1 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm text-slate-500"
+            >
+              {resultOpen ? "Ocultar" : "Mostrar"}
+              <ChevronRight className={`h-4 w-4 transition-transform duration-200 ${resultOpen ? "rotate-90" : ""}`} />
+            </button>
+          </div>
         </div>
+        {pasteConfirmed && (
+          <p className="flex items-center gap-1.5 text-sm font-medium text-emerald-600">
+            <CheckCircle2 className="h-4 w-4" />
+            Texto colado com sucesso.
+          </p>
+        )}
         <textarea
           name="chatGptResponse"
           value={chatGptResponse}
           onChange={(e) => setChatGptResponse(e.target.value)}
           placeholder="Cole aqui o JSON do ChatGPT."
-          className="min-h-[220px] w-full rounded-lg border border-slate-300 bg-white px-3 py-3 text-base text-slate-700 outline-none"
+          className={`min-h-[220px] w-full rounded-lg border border-slate-300 bg-white px-3 py-3 text-base text-slate-700 outline-none ${resultOpen ? "" : "hidden"}`}
         />
 
         <div className="border-t border-slate-200 pt-3" />

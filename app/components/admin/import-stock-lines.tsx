@@ -86,6 +86,16 @@ function hasCostDiscrepancy(
   return discrepancy > COST_DISCREPANCY_THRESHOLD;
 }
 
+function hasCostAmountDiscrepancy(
+  costAmount: number | null | undefined,
+  hint: { lastCostPerUnit: number | null; avgCostPerUnit: number | null } | null,
+) {
+  if (!hint?.lastCostPerUnit || hint.lastCostPerUnit <= 0) return false;
+  const converted = Number(costAmount);
+  if (!Number.isFinite(converted) || converted <= 0) return false;
+  return Math.abs(converted - hint.lastCostPerUnit) / hint.lastCostPerUnit > COST_DISCREPANCY_THRESHOLD;
+}
+
 function CostHistoryHint({
   hint,
   discrepancy,
@@ -156,8 +166,9 @@ function EditableTwoLevelRow({
     if (fetcher.data?.status !== 200) return;
     if (fetcher.data?.payload?.updatedLineId !== line.id) return;
     hasSubmittedRef.current = false;
-    onStopEditing();
     revalidator.revalidate();
+    if (fetcher.data?.payload?.updatedLineStatus === 'pending_cost_review') return;
+    onStopEditing();
   }, [fetcher.state, fetcher.data, line.id, revalidator, onStopEditing]);
 
   useEffect(() => {
@@ -197,6 +208,12 @@ function EditableTwoLevelRow({
     if (!costAmt || costAmt <= 0 || !movUnit || !targetUnit) return null;
     if (movUnit === targetUnit) return { convertedCostAmount: costAmt, conversionSource: 'same-unit', conversionFactorUsed: 1 };
     if (manualFactor > 0) return { convertedCostAmount: costAmt / manualFactor, conversionSource: 'manual', conversionFactorUsed: manualFactor };
+
+    const itemConversions: Array<{ purchaseUm: string; factor: number }> = selectedItem?.ItemPurchaseConversion ?? [];
+    const matchedConversion = itemConversions.find((c) => normalizeUnit(c?.purchaseUm) === movUnit);
+    if (matchedConversion && targetUnit === normalizeUnit(selectedItem?.consumptionUm) && Number(matchedConversion.factor) > 0) {
+      return { convertedCostAmount: costAmt / Number(matchedConversion.factor), conversionSource: 'item_purchase_factor', conversionFactorUsed: Number(matchedConversion.factor) };
+    }
 
     const itemFactor = Number(selectedItem?.purchaseToConsumptionFactor ?? NaN);
     const itemPurchaseUm = normalizeUnit(selectedItem?.purchaseUm);
@@ -255,6 +272,8 @@ function EditableTwoLevelRow({
   const hint = itemCostHints[line.mappedItemId] ?? null;
   const discrepancy = hasCostDiscrepancy(line, itemCostHints);
   const displayConvertedCost = isEditing ? (conversionPreview?.convertedCostAmount ?? null) : line.convertedCostAmount;
+  const editDisplayCostAmount = conversionPreview?.convertedCostAmount ?? derivedCostAmount;
+  const editDiscrepancy = hasCostAmountDiscrepancy(editDisplayCostAmount, hint);
   const displayTargetUnit = isEditing
     ? normalizeUnit(selectedItem?.consumptionUm || selectedItem?.purchaseUm)
     : line.targetUnit;
@@ -362,12 +381,10 @@ function EditableTwoLevelRow({
           <TableCell className="min-w-[130px] px-3 py-3 text-right font-mono text-xs tabular-nums">
             {isEditing ? (
               <div className="space-y-0.5 text-right">
-                <div className={cn(conversionPreview ? 'text-slate-700' : 'text-slate-400')}>
-                  {conversionPreview ? formatMoney(conversionPreview.convertedCostAmount) : '-'}
+                <div className={cn(editDiscrepancy ? 'text-red-600' : editDisplayCostAmount != null ? 'text-slate-700' : 'text-slate-400')}>
+                  {editDisplayCostAmount != null ? formatMoney(editDisplayCostAmount) : '-'}
+                  <CostHistoryHint hint={hint} discrepancy={editDiscrepancy} />
                 </div>
-                {conversionPreview && (
-                  <div className="text-[10px] text-slate-400">{conversionPreview.conversionSource}</div>
-                )}
               </div>
             ) : (
               <div className={cn(discrepancy ? 'text-red-600' : 'text-slate-700')}>
@@ -646,8 +663,9 @@ function LineCard({
     if (fetcher.data?.status !== 200) return;
     if (fetcher.data?.payload?.updatedLineId !== line.id) return;
     hasSubmittedRef.current = false;
-    onStopEditing();
     revalidator.revalidate();
+    if (fetcher.data?.payload?.updatedLineStatus === 'pending_cost_review') return;
+    onStopEditing();
   }, [fetcher.state, fetcher.data, line.id, revalidator, onStopEditing]);
 
   useEffect(() => {
@@ -686,6 +704,11 @@ function LineCard({
     if (!costAmt || costAmt <= 0 || !movUnit || !targetUnit) return null;
     if (movUnit === targetUnit) return { convertedCostAmount: costAmt, conversionSource: 'same-unit', conversionFactorUsed: 1 };
     if (manualFactor > 0) return { convertedCostAmount: costAmt / manualFactor, conversionSource: 'manual', conversionFactorUsed: manualFactor };
+    const itemConversions: Array<{ purchaseUm: string; factor: number }> = selectedItem?.ItemPurchaseConversion ?? [];
+    const matchedConversion = itemConversions.find((c) => normalizeUnit(c?.purchaseUm) === movUnit);
+    if (matchedConversion && targetUnit === normalizeUnit(selectedItem?.consumptionUm) && Number(matchedConversion.factor) > 0) {
+      return { convertedCostAmount: costAmt / Number(matchedConversion.factor), conversionSource: 'item_purchase_factor', conversionFactorUsed: Number(matchedConversion.factor) };
+    }
     const itemFactor = Number(selectedItem?.purchaseToConsumptionFactor ?? NaN);
     const itemPurchaseUm = normalizeUnit(selectedItem?.purchaseUm);
     const itemConsumptionUm = normalizeUnit(selectedItem?.consumptionUm);
@@ -741,6 +764,9 @@ function LineCard({
   const hint = itemCostHints[line.mappedItemId] ?? null;
   const discrepancy = hasCostDiscrepancy(line, itemCostHints);
   const displayConvertedCost = isEditing ? (conversionPreview?.convertedCostAmount ?? null) : line.convertedCostAmount;
+  const editDisplayCostAmount = conversionPreview?.convertedCostAmount ?? derivedCostAmount;
+  const editDiscrepancy = hasCostAmountDiscrepancy(editDisplayCostAmount, hint);
+  const displayDiscrepancy = isEditing ? editDiscrepancy : discrepancy;
   const displayTargetUnit = isEditing
     ? normalizeUnit(selectedItem?.consumptionUm || selectedItem?.purchaseUm)
     : line.targetUnit;
@@ -962,13 +988,21 @@ function LineCard({
 
                 {/* Custo unit. calculado */}
                 <div className="w-28 shrink-0">
-                  <div className={cn('mb-1.5 flex items-center gap-1 text-[10px] font-black uppercase tracking-widest', discrepancy ? 'text-red-600' : 'text-slate-400')}>
-                    {discrepancy ? <AlertTriangle className="h-3 w-3 shrink-0" /> : null}
+                  <div className={cn('mb-1.5 flex items-center gap-1 text-[10px] font-black uppercase tracking-widest', displayDiscrepancy ? 'text-red-600' : 'text-slate-400')}>
+                    {displayDiscrepancy ? <AlertTriangle className="h-3 w-3 shrink-0" /> : null}
                     <span>Custo unit.</span>
                   </div>
                   {isEditing ? (
-                    <div className={cn('rounded-lg border px-3 py-2 text-sm font-semibold tabular-nums', conversionPreview ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-slate-200 bg-slate-50 text-slate-400')}>
-                      {conversionPreview ? formatMoney(conversionPreview.convertedCostAmount) : '—'}
+                    <div className={cn(
+                      'rounded-lg border px-3 py-2 text-sm font-semibold tabular-nums',
+                      editDiscrepancy
+                        ? 'border-red-200 bg-red-50 text-red-600'
+                        : editDisplayCostAmount != null
+                          ? 'border-slate-200 bg-slate-50 text-slate-700'
+                          : 'border-slate-200 bg-slate-50 text-slate-400',
+                    )}>
+                      {editDisplayCostAmount != null ? formatMoney(editDisplayCostAmount) : '—'}
+                      <CostHistoryHint hint={hint} discrepancy={editDiscrepancy} />
                     </div>
                   ) : (
                     <div className={cn('rounded-lg border px-3 py-2 text-sm font-semibold tabular-nums', discrepancy ? 'border-red-200 bg-red-50 text-red-600' : 'border-slate-200 bg-slate-50 text-slate-700')}>

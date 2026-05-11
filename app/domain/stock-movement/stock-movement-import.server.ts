@@ -4,6 +4,7 @@ import prismaClient from '~/lib/prisma/client.server';
 import { itemVariationPrismaEntity } from '~/domain/item/item-variation.prisma.entity.server';
 import { itemCostVariationPrismaEntity } from '~/domain/item/item-cost-variation.prisma.entity.server';
 import { isItemCostExcludedFromMetrics, normalizeItemCostToConsumptionUnit } from '~/domain/item/item-cost-metrics.server';
+import { normalizeSupplierName } from '~/domain/supplier/supplier.prisma.entity.server';
 
 const SOURCE_SYSTEM = 'saipos';
 const SOURCE_TYPE_FILE = 'file_upload';
@@ -515,6 +516,15 @@ function resolveSupplierFromLookup(
         supplierNameNormalized: note.supplierNameNormalized,
         supplierCnpj: note.supplierCnpj,
         supplierMatchSource: 'notes_json_name',
+      };
+    }
+    if (suppliers.length > 1) {
+      return {
+        supplierId: null,
+        supplierName: note.supplierName,
+        supplierNameNormalized: note.supplierNameNormalized,
+        supplierCnpj: note.supplierCnpj,
+        supplierMatchSource: 'notes_json_name_ambiguous',
       };
     }
   }
@@ -1376,6 +1386,15 @@ async function resolveDirectSupplierFromLookup(
         supplierMatchSource: 'chatgpt_cnpj',
       };
     }
+    if (suppliers.length > 1) {
+      return {
+        supplierId: null,
+        supplierName,
+        supplierNameNormalized,
+        supplierCnpj,
+        supplierMatchSource: 'chatgpt_cnpj_ambiguous',
+      };
+    }
   }
 
   if (supplierNameNormalized) {
@@ -1389,13 +1408,23 @@ async function resolveDirectSupplierFromLookup(
         supplierMatchSource: 'chatgpt_name',
       };
     }
+    if (suppliers.length > 1 && !supplierCnpjDigits) {
+      return {
+        supplierId: null,
+        supplierName,
+        supplierNameNormalized,
+        supplierCnpj,
+        supplierMatchSource: 'chatgpt_name_ambiguous',
+      };
+    }
   }
 
   if (supplierName) {
     const db = prismaClient as any;
+    const normalizedSupplierName = normalizeSupplierName(supplierName);
     const createdSupplier = await db.supplier.create({
       data: {
-        name: supplierName,
+        name: normalizedSupplierName,
         cnpj: supplierCnpj,
       },
       select: {
@@ -1420,8 +1449,8 @@ async function resolveDirectSupplierFromLookup(
 
     return {
       supplierId: createdSupplier.id,
-      supplierName,
-      supplierNameNormalized,
+      supplierName: normalizedSupplierName,
+      supplierNameNormalized: createdNameNormalized,
       supplierCnpj,
       supplierMatchSource: 'chatgpt_auto_created',
     };
@@ -2977,6 +3006,129 @@ export async function importStockMovementImportBatchLine(params: { batchId: stri
   });
   const summary = await refreshBatchSummary(params.batchId);
   return { ...result, skipped: false, reason: null, summary };
+}
+
+export async function updateImportedStockMovementBatchDate(params: {
+  batchId: string;
+  movementAt: Date;
+  actor?: string | null;
+}) {
+  const db = prismaClient as any;
+  const movementAt = params.movementAt && !Number.isNaN(params.movementAt.getTime()) ? params.movementAt : null;
+  if (!movementAt) throw new Error('Data da movimentação inválida');
+
+  const batch = await db.stockMovementImportBatch.findUnique({
+    where: { id: params.batchId },
+    select: { id: true },
+  });
+  if (!batch) throw new Error('Lote não encontrado');
+
+  const movements = await db.stockMovement.findMany({
+    where: {
+      importBatchId: params.batchId,
+      deletedAt: null,
+    },
+    select: {
+      id: true,
+      importLineId: true,
+      movementAt: true,
+    },
+  });
+  if (movements.length <= 0) {
+    throw new Error('Este lote não tem movimentações ativas para alterar.');
+  }
+
+  const movementIds = movements.map((movement: { id: string }) => movement.id);
+  const lineIds = Array.from(
+    new Set(
+      movements
+        .map((movement: { importLineId?: string | null }) => str(movement.importLineId))
+        .filter(Boolean),
+    ),
+  );
+  const changedAt = new Date();
+  const movementDateEdit = {
+    editedAt: changedAt.toISOString(),
+    editedBy: str(params.actor) || null,
+    mode: 'batch_movement_date_edit',
+    movementAt: movementAt.toISOString(),
+    previousMovementDates: movements.map((movement: { id: string; movementAt?: Date | null }) => ({
+      movementId: movement.id,
+      movementAt: movement.movementAt ? new Date(movement.movementAt).toISOString() : null,
+    })),
+  };
+
+  await db.$transaction(async (tx: any) => {
+    if (lineIds.length > 0) {
+      await tx.stockMovementImportBatchLine.updateMany({
+        where: {
+          batchId: params.batchId,
+          id: { in: lineIds },
+        },
+        data: { movementAt },
+      });
+    }
+
+    await tx.stockMovement.updateMany({
+      where: {
+        id: { in: movementIds },
+        importBatchId: params.batchId,
+        deletedAt: null,
+      },
+      data: { movementAt },
+    });
+
+    const movementRows = await tx.stockMovement.findMany({
+      where: { id: { in: movementIds } },
+      select: { id: true, metadata: true },
+    });
+
+    for (const movement of movementRows) {
+      const metadata =
+        typeof movement.metadata === 'object' && movement.metadata && !Array.isArray(movement.metadata)
+          ? { ...(movement.metadata as Record<string, unknown>) }
+          : {};
+      const editHistory = Array.isArray(metadata.editHistory) ? [...(metadata.editHistory as any[])] : [];
+      await tx.stockMovement.update({
+        where: { id: movement.id },
+        data: {
+          metadata: {
+            ...metadata,
+            movementDateEditedAt: changedAt.toISOString(),
+            movementDateEditedBy: str(params.actor) || null,
+            editHistory: [...editHistory, movementDateEdit],
+          },
+        },
+      });
+    }
+
+    await tx.itemCostVariation.updateMany({
+      where: {
+        referenceType: COST_REFERENCE_TYPE_MOVEMENT,
+        referenceId: { in: movementIds },
+      },
+      data: { validFrom: movementAt },
+    });
+
+    await tx.itemCostVariationHistory.updateMany({
+      where: {
+        referenceType: COST_REFERENCE_TYPE_MOVEMENT,
+        referenceId: { in: movementIds },
+      },
+      data: { validFrom: movementAt },
+    });
+
+    await tx.stockMovementImportBatch.update({
+      where: { id: params.batchId },
+      data: {
+        periodStart: movementAt,
+        periodEnd: movementAt,
+      },
+    });
+  });
+
+  await refreshBatchSummary(params.batchId);
+  return { updatedMovements: movementIds.length, updatedLines: lineIds.length };
 }
 
 function batchImportProgressFromBatch(batch: any, summary?: BatchSummary | null): BatchImportProgress {
