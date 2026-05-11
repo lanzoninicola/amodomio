@@ -6,6 +6,7 @@ import SubmitButton from "~/components/primitives/submit-button/submit-button";
 import { Input } from "~/components/ui/input";
 import { Separator } from "~/components/ui/separator";
 import { toast } from "~/components/ui/use-toast";
+import { buildAdminItemsMeta } from "~/domain/item/admin-items-meta";
 import { associateItemTag, listItemTags, removeItemTag } from "~/domain/item/item-tags.server";
 import BadgeTag from "~/domain/tags/components/badge-tag";
 import { tagPrismaEntity } from "~/domain/tags/tag.prisma.entity.server";
@@ -13,6 +14,8 @@ import prismaClient from "~/lib/prisma/client.server";
 import { badRequest, ok, serverError } from "~/utils/http-response.server";
 import { jsonParse, jsonStringify } from "~/utils/json-helper";
 import tryit from "~/utils/try-it";
+
+export const meta = buildAdminItemsMeta("Tags de venda");
 
 export async function loader({ params }: LoaderFunctionArgs) {
   try {

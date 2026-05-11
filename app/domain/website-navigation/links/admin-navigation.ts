@@ -678,6 +678,12 @@ const ADMIN_NAVIGATION_LINKS: WebsiteNavigationConfig = {
           items: [],
           disabled: false,
         },
+        {
+          title: "Pixel Facebook",
+          href: "/admin/marketing/facebook-pixel",
+          items: [],
+          disabled: false,
+        },
       ],
     },
   ],

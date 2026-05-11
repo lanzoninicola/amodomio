@@ -2,9 +2,12 @@ import type { LoaderFunctionArgs } from "@remix-run/node";
 import { Link, useLoaderData, useOutletContext } from "@remix-run/react";
 import { Badge } from "~/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "~/components/ui/table";
+import { buildAdminItemsMeta } from "~/domain/item/admin-items-meta";
 import { listStockMovementImportMovements } from "~/domain/stock-movement/stock-movement-import.server";
 import { badRequest, ok, serverError } from "~/utils/http-response.server";
 import type { AdminItemOutletContext } from "./admin.items.$id";
+
+export const meta = buildAdminItemsMeta("Movimentações de estoque");
 
 const WINDOW_DAYS = 30;
 const PAGE_SIZE = 100;

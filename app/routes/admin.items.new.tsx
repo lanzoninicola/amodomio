@@ -8,9 +8,12 @@ import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
 import { ITEM_UNIT_OPTIONS, normalizeItemUnit } from "~/domain/item/item-units";
+import { buildAdminItemsMeta } from "~/domain/item/admin-items-meta";
 import { getAvailableItemUnits } from "~/domain/item/item-units.server";
 import prismaClient from "~/lib/prisma/client.server";
 import { badRequest, ok, serverError } from "~/utils/http-response.server";
+
+export const meta = buildAdminItemsMeta("Novo item", { itemScoped: false });
 
 const ITEM_CLASSIFICATIONS = [
   "insumo",

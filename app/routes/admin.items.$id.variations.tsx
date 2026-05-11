@@ -4,8 +4,11 @@ import { useMemo, useState } from "react";
 import { Button } from "~/components/ui/button";
 import { SelectSeparator } from "~/components/ui/select";
 import { Separator } from "~/components/ui/separator";
+import { buildAdminItemsMeta } from "~/domain/item/admin-items-meta";
 import prismaClient from "~/lib/prisma/client.server";
 import { badRequest, ok, serverError } from "~/utils/http-response.server";
+
+export const meta = buildAdminItemsMeta("Variações");
 
 type VariationOption = {
   id: string;

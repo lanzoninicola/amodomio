@@ -6,6 +6,9 @@ import { Separator } from "~/components/ui/separator";
 import { Button } from "~/components/ui/button";
 import { SelectSeparator } from "~/components/ui/select";
 import { ExternalLink, Sparkles } from "lucide-react";
+import { buildAdminItemsMeta } from "~/domain/item/admin-items-meta";
+
+export const meta = buildAdminItemsMeta("Receitas");
 
 function formatRecipeCreatedAt(value: string | Date | null | undefined) {
   if (!value) return null;

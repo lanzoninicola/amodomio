@@ -3,7 +3,10 @@ import { useEffect } from "react";
 import { NativeItemSellingPriceCard } from "~/components/admin/native-item-selling-price-card";
 import { Button } from "~/components/ui/button";
 import { toast } from "~/components/ui/use-toast";
+import { buildAdminItemsMeta } from "~/domain/item/admin-items-meta";
 import type { AdminItemVendaPrecosOutletContext } from "./admin.items.$id.venda.precos";
+
+export const meta = buildAdminItemsMeta("Editar preços de venda");
 
 function ChannelPriceRow(props: {
   channel: AdminItemVendaPrecosOutletContext["channels"][number];

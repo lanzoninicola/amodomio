@@ -1,6 +1,9 @@
 import { Link, useOutletContext } from "@remix-run/react";
 import { Button } from "~/components/ui/button";
+import { buildAdminItemsMeta } from "~/domain/item/admin-items-meta";
 import type { AdminItemOutletContext } from "./admin.items.$id";
+
+export const meta = buildAdminItemsMeta("Fichas de custo");
 
 export default function AdminItemCostSheetsTab() {
   const { item } = useOutletContext<AdminItemOutletContext>();

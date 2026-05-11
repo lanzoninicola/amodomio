@@ -1,12 +1,11 @@
 import type { Tag } from "@prisma/client";
 import { Link } from "@remix-run/react";
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { ChevronRight, X } from "lucide-react";
+import { ArrowRight, X } from "lucide-react";
 import { LikeIt } from "~/domain/cardapio/components/cardapio-item-action-bar/cardapio-item-action-bar";
 import CardapioItemImageSingle from "~/domain/cardapio/components/cardapio-item-image-single/cardapio-item-image-single";
 import type { ThreadSectionProfile } from "~/domain/cardapio/components/section-thread-header/section-thread-header";
 import { getOrCreateMenuItemInterestClientId } from "~/domain/cardapio/menu-item-interest/menu-item-interest.client";
-import { Dialog, DialogContent, DialogTitle } from "~/components/ui/dialog";
 import { Separator } from "~/components/ui/separator";
 import { cn } from "~/lib/utils";
 import formatMoneyString from "~/utils/format-money-string";
@@ -14,6 +13,9 @@ import {
     type CardapioIndexItem,
     getCardapioInterestItemId,
     getCardapioItemHref,
+    getGroupedItemsDescription,
+    getGroupedItemsList,
+    getPrimaryCardapioMedia,
     getVisiblePublicPriceVariations,
     itemHasPublicTag,
     type GroupedItems,
@@ -68,9 +70,9 @@ export function CardapioCatalogSection({
             const filteredGroups = items
                 .map((group) => ({
                     ...group,
-                    menuItems: group.menuItems.filter(hasTag),
+                    items: group.items.filter(hasTag),
                 }))
-                .filter((group) => group.menuItems.length > 0);
+                .filter((group) => group.items.length > 0);
 
             setCurrentItems(filteredGroups);
             return;
@@ -140,15 +142,11 @@ export function CardapioCatalogSection({
                     >
                         <CardapioGroupHeader
                             title={group.group}
-                            subtitle={
-                                group.description?.trim() ||
-                                group.menuItems?.[0]?.MenuItemGroup?.description?.trim() ||
-                                ""
-                            }
+                            subtitle={getGroupedItemsDescription(group)}
                             profile={SECTION_THREAD_PROFILE_BY_SECTION.chef}
                         />
                         <CardapioItemsGrid
-                            items={group.menuItems}
+                            items={getGroupedItemsList(group)}
                             interestTrackingEnabled={interestTrackingEnabled}
                             likesEnabled={likesEnabled}
                         />
@@ -327,10 +325,7 @@ function CardapioGridItem({
 }) {
     const localRef = useRef<HTMLLIElement | null>(null);
     const [isMediaFullscreen, setIsMediaFullscreen] = useState(false);
-    const [isPriceDialogOpen, setIsPriceDialogOpen] = useState(false);
-    const featuredImage =
-        item.MenuItemGalleryImage?.find((img) => img.isPrimary) ||
-        item.MenuItemGalleryImage?.[0];
+    const featuredImage = getPrimaryCardapioMedia(item);
     const featuredMediaUrl = featuredImage?.secureUrl || "";
     const featuredMediaKind =
         featuredImage?.kind === "video" ||
@@ -381,8 +376,8 @@ function CardapioGridItem({
     }, [isExpanded, onClick]);
 
     const visiblePrices = getVisiblePublicPriceVariations(item);
-    const firstPrice = visiblePrices[0];
-    const hasMultiplePrices = visiblePrices.length > 1;
+    const featuredPrice = getFeaturedCatalogPrice(visiblePrices);
+    const secondaryPrices = visiblePrices.filter((variation) => variation.id !== featuredPrice?.id);
 
     return (
         <li
@@ -452,73 +447,62 @@ function CardapioGridItem({
                     </span>
                 </div>
 
-                {firstPrice ? (
-                    <div className="flex items-center justify-between mt-auto">
-                        {!isDesktop && hasMultiplePrices ? (
-                            <button
-                                type="button"
-                                className="text-left"
-                                aria-label={`Ver outros tamanhos de ${item.name}`}
-                                onClick={(event) => {
-                                    event.stopPropagation();
-                                    setIsPriceDialogOpen(true);
-                                }}
-                            >
-                                <span className="block font-neue text-[10px] uppercase tracking-widest text-zinc-500">
-                                    {firstPrice.label}
+                {featuredPrice ? (
+                    <div className="relative mt-auto min-w-0 pb-1">
+                        <div className="min-w-0">
+                            <div className="inline-flex max-w-full flex-col rounded-xl bg-white/[0.07] px-3 py-2.5">
+                                <span className="block truncate font-neue text-[9px] font-semibold uppercase leading-none tracking-[0.16em] text-zinc-300">
+                                    {getCatalogVariationLabel(featuredPrice.label)}
                                 </span>
-                                <span className="font-neue font-bold text-xl text-white leading-tight">
-                                    {formatMoneyString(firstPrice.priceAmount)}
-                                </span>
-                            </button>
-                        ) : (
-                            <div>
-                                <span className="block font-neue text-[10px] uppercase tracking-widest text-zinc-500">
-                                    {firstPrice.label}
-                                </span>
-                                <span className="font-neue font-bold text-xl text-white leading-tight">
-                                    {formatMoneyString(firstPrice.priceAmount)}
+                                <span className="mt-1.5 block whitespace-nowrap font-neue text-[1.85rem] font-bold leading-none text-white sm:text-[2.15rem]">
+                                    {formatMoneyString(featuredPrice.priceAmount)}
                                 </span>
                             </div>
-                        )}
+
+                            {secondaryPrices.length > 0 ? (
+                                <div className="mt-2.5 flex flex-col gap-1.5 pr-14">
+                                    {secondaryPrices.map((variation) => (
+                                        <div key={variation.id} className="min-w-0">
+                                            <span className="block truncate font-neue text-[8px] font-semibold uppercase leading-none tracking-[0.14em] text-zinc-500">
+                                                {getCatalogVariationLabel(variation.label)}
+                                            </span>
+                                            <span className="mt-0.5 block whitespace-nowrap font-neue text-base font-bold leading-none text-white/80">
+                                                {formatMoneyString(variation.priceAmount)}
+                                            </span>
+                                        </div>
+                                    ))}
+                                </div>
+                            ) : null}
+                        </div>
 
                         {isDesktop ? (
                             <Link
                                 to={getCardapioItemHref(item)}
-                                className="h-9 w-9 rounded-full bg-white flex items-center justify-center flex-shrink-0"
+                                className="absolute bottom-[-0.25rem] right-0 flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-white text-black shadow-[0_12px_24px_rgba(0,0,0,0.3)] sm:h-14 sm:w-14"
                                 aria-label={`Abrir ${item.name}`}
                                 onClick={(event) => {
                                     event.stopPropagation();
                                     onOpenDetail?.();
                                 }}
                             >
-                                <ChevronRight className="h-5 w-5 text-black" />
+                                <ArrowRight className="h-7 w-7 sm:h-8 sm:w-8" strokeWidth={2.2} />
                             </Link>
                         ) : (
                             <button
                                 type="button"
-                                className="h-9 w-9 rounded-full bg-white flex items-center justify-center flex-shrink-0"
+                                className="absolute bottom-[-0.25rem] right-0 flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-white text-black shadow-[0_12px_24px_rgba(0,0,0,0.3)] sm:h-14 sm:w-14"
                                 aria-label={`Alternar detalhes de ${item.name}`}
                                 onClick={(event) => {
                                     event.stopPropagation();
                                     onClick();
                                 }}
                             >
-                                <ChevronRight className="h-5 w-5 text-black" />
+                                <ArrowRight className="h-7 w-7 sm:h-8 sm:w-8" strokeWidth={2.2} />
                             </button>
                         )}
                     </div>
                 ) : null}
             </div>
-
-            {!isDesktop ? (
-                <CardapioItemPriceDialog
-                    item={item}
-                    featuredImageUrl={featuredImage?.secureUrl || ""}
-                    open={isPriceDialogOpen}
-                    onOpenChange={setIsPriceDialogOpen}
-                />
-            ) : null}
 
             {!isDesktop && isMediaFullscreen ? (
                 <div
@@ -574,77 +558,15 @@ function CardapioGridItem({
     );
 }
 
-function CardapioItemPriceDialog({
-    item,
-    featuredImageUrl,
-    open,
-    onOpenChange,
-}: {
-    item: CardapioIndexItem;
-    featuredImageUrl: string;
-    open: boolean;
-    onOpenChange: (open: boolean) => void;
-}) {
-    const variations = getVisiblePublicPriceVariations(item);
-    const itemInitial = item.name?.charAt(0).toUpperCase() ?? "?";
+function getFeaturedCatalogPrice(
+    variations: Array<{
+        id: string;
+        isReference?: boolean | null;
+    }>
+) {
+    return variations.find((variation) => variation.isReference) ?? variations[0] ?? null;
+}
 
-    return (
-        <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-[calc(100vw-1.5rem)] rounded-[1.25rem] border-none bg-transparent p-0 shadow-none sm:max-w-sm [&>button]:rounded-full [&>button]:bg-black/60 [&>button]:text-white [&>button]:opacity-100 [&>button]:ring-0 [&>button]:ring-offset-0">
-                <DialogTitle className="sr-only">Outros tamanhos de {item.name}</DialogTitle>
-
-                <div className="overflow-hidden rounded-[1.25rem] bg-zinc-900 text-white">
-                    <div className="relative h-[170px] overflow-hidden">
-                        {featuredImageUrl ? (
-                            <CardapioItemImageSingle
-                                src={featuredImageUrl}
-                                placeholder={item.imagePlaceholderURL || ""}
-                                placeholderIcon={false}
-                                cnPlaceholderText="font-lora font-semibold text-white/80"
-                                cnPlaceholderContainer="from-zinc-900 via-zinc-900 to-zinc-800"
-                                cnContainer="w-full h-full"
-                                enableOverlay={false}
-                            />
-                        ) : (
-                            <div className="flex h-full w-full flex-col items-center justify-center bg-gradient-to-b from-zinc-800 to-zinc-950 px-6 text-center">
-                                <span className="font-lora text-6xl font-bold leading-none text-white/80">
-                                    {itemInitial}
-                                </span>
-                                <span className="mt-3 font-neue text-[10px] uppercase tracking-[0.2em] text-white/40">
-                                    {item.name}
-                                </span>
-                            </div>
-                        )}
-                    </div>
-
-                    <div className="px-4 pb-5 pt-4">
-                        <div className="mb-4">
-                            <p className="font-neue text-[10px] uppercase tracking-[0.28em] text-zinc-500">
-                                Tamanhos
-                            </p>
-                            <h3 className="mt-2 font-neue text-lg font-semibold uppercase leading-tight">
-                                {item.name}
-                            </h3>
-                        </div>
-
-                        <div className="space-y-2">
-                            {variations.map((variation) => (
-                                <div
-                                    key={variation.id}
-                                    className="flex items-center justify-between rounded-xl border border-white/10 bg-white/5 px-3 py-3"
-                                >
-                                    <span className="font-neue text-sm uppercase tracking-wide text-zinc-200">
-                                        {variation.label}
-                                    </span>
-                                    <span className="font-neue text-base font-bold leading-none text-white">
-                                        {formatMoneyString(variation.priceAmount)}
-                                    </span>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                </div>
-            </DialogContent>
-        </Dialog>
-    );
+function getCatalogVariationLabel(label: string) {
+    return label.trim().replace(/^tamanho\s+/i, "");
 }

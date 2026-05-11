@@ -17,6 +17,11 @@ enum RecipeType {
   pizzaTopping @map("pizza-topping")
 }
 
+enum FacebookPixelIntegrationMode {
+  direct
+  gtm
+}
+
 model Recipe {
   id               String             @id @default(uuid())
   name             String
@@ -1416,6 +1421,38 @@ model Setting {
   updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
 
   @@map("settings")
+}
+
+model CardapioFacebookPixelConfig {
+  id             String                       @id @default(uuid())
+  name           String
+  routePath      String                       @unique @map("route_path")
+  enabled        Boolean                      @default(false)
+  mode           FacebookPixelIntegrationMode @default(direct)
+  pixelId        String?                      @map("pixel_id")
+  gtmContainerId String?                      @map("gtm_container_id")
+  createdAt      DateTime                     @default(now()) @map("created_at")
+  updatedAt      DateTime                     @default(now()) @updatedAt @map("updated_at")
+  events         CardapioFacebookPixelEvent[]
+
+  @@map("cardapio_facebook_pixel_configs")
+}
+
+model CardapioFacebookPixelEvent {
+  id         String                     @id @default(uuid())
+  configId   String                     @map("config_id")
+  eventKey   String                     @map("event_key")
+  eventName  String                     @map("event_name")
+  trigger    String
+  enabled    Boolean                    @default(true)
+  payloadJson String?                   @map("payload_json")
+  createdAt  DateTime                   @default(now()) @map("created_at")
+  updatedAt  DateTime                   @default(now()) @updatedAt @map("updated_at")
+  config     CardapioFacebookPixelConfig @relation(fields: [configId], references: [id], onDelete: Cascade)
+
+  @@unique([configId, eventKey], map: "cardapio_facebook_pixel_events_config_id_event_key_key")
+  @@index([configId, trigger], map: "cardapio_facebook_pixel_events_config_id_trigger_idx")
+  @@map("cardapio_facebook_pixel_events")
 }
 
 enum UserRole {

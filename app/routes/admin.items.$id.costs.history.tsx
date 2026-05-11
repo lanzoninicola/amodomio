@@ -17,8 +17,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "~/components/u
 import { Input } from "~/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
 import { toast } from "~/components/ui/use-toast";
+import { buildAdminItemsMeta } from "~/domain/item/admin-items-meta";
 import { getItemCostSourceLabel, ITEM_COST_SOURCE_OPTIONS } from "~/domain/costs/item-cost-sources";
 import type { AdminItemOutletContext } from "./admin.items.$id";
+
+export const meta = buildAdminItemsMeta("Histórico de custos");
 
 const BRL = new Intl.NumberFormat("pt-BR", {
   style: "currency",

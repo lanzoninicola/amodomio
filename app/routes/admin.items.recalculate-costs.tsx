@@ -2,12 +2,15 @@ import type { ActionFunctionArgs } from "@remix-run/node";
 import { Form, useActionData, useNavigation } from "@remix-run/react";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
+import { buildAdminItemsMeta } from "~/domain/item/admin-items-meta";
 import { ok, serverError } from "~/utils/http-response.server";
 import {
   scanItemsForRecalculation,
   recalculateAllItemsCostHistory,
 } from "~/domain/item/item-cost-recalculate.server";
 import type { ScanResult, BulkRecalculateResult } from "~/domain/item/item-cost-recalculate.server";
+
+export const meta = buildAdminItemsMeta("Recalcular custos", { itemScoped: false });
 
 // ─── action ───────────────────────────────────────────────────────────────────
 

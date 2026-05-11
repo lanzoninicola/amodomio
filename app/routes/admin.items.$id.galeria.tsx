@@ -1,1 +1,1 @@
-export { loader, default } from "./admin.items.$id.venda.galeria";
+export { loader, meta, default } from "./admin.items.$id.venda.galeria";

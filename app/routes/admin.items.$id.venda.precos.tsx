@@ -3,6 +3,7 @@ import { Link, Outlet, useActionData, useLoaderData, useLocation, useOutletConte
 import { Eye, Pencil } from "lucide-react";
 import { useEffect } from "react";
 import { toast } from "~/components/ui/use-toast";
+import { buildAdminItemsMeta } from "~/domain/item/admin-items-meta";
 import type { ComputedSellingPriceBreakdown } from "~/domain/cardapio/menu-item-selling-price-utility.entity";
 import {
   buildNativeSellingPriceUpsertPayload,
@@ -18,6 +19,8 @@ import prismaClient from "~/lib/prisma/client.server";
 import { badRequest, ok, serverError } from "~/utils/http-response.server";
 import { lastUrlSegment } from "~/utils/url";
 import type { AdminItemVendaOutletContext } from "./admin.items.$id.venda";
+
+export const meta = buildAdminItemsMeta("Preços de venda");
 
 function parseMoneyInput(value: FormDataEntryValue | null) {
   const raw = String(value || "").trim().replace(/\s+/g, "");

@@ -1,6 +1,9 @@
 import { Link, Outlet } from "@remix-run/react";
 import { ChevronLeft, PlusCircle } from "lucide-react";
 import Container from "~/components/layout/container/container";
+import { buildAdminItemsMeta } from "~/domain/item/admin-items-meta";
+
+export const meta = buildAdminItemsMeta("Itens", { itemScoped: false });
 
 export default function AdminItemsOutlet() {
   return (
