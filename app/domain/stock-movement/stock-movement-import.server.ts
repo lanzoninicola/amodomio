@@ -2621,6 +2621,7 @@ export async function approveBatchLineCostReview(params: {
   batchId: string;
   lineId: string;
   actor?: string | null;
+  requestOrigin?: string | null;
 }) {
   const db = prismaClient as any;
   const line = await db.stockMovementImportBatchLine.findUnique({ where: { id: params.lineId } });
@@ -2690,6 +2691,7 @@ export async function approveBatchLineCostReview(params: {
   await sendCostReviewApprovalNotification({
     batchId: params.batchId,
     batchName: batch?.name || params.batchId,
+    requestOrigin: params.requestOrigin || null,
     lineId: params.lineId,
     ingredientName: line.ingredientName || '',
     mappedItemName: line.mappedItemName || null,
@@ -2705,6 +2707,7 @@ export async function approveBatchLineCostReview(params: {
 async function sendCostReviewApprovalNotification(params: {
   batchId: string;
   batchName: string;
+  requestOrigin: string | null;
   lineId: string;
   ingredientName: string;
   mappedItemName: string | null;
@@ -2739,6 +2742,9 @@ async function sendCostReviewApprovalNotification(params: {
       v != null
         ? v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
         : '-';
+    const batchDetailUrl = params.requestOrigin
+      ? new URL(`/admin/import-stock-movements/${params.batchId}`, params.requestOrigin).toString()
+      : null;
 
     const lines = [
       `✅ *Aprovação de custo*`,
@@ -2747,6 +2753,7 @@ async function sendCostReviewApprovalNotification(params: {
       `*Custo aprovado:* ${fmt(params.convertedCostAmount)}${params.targetUnit ? `/${params.targetUnit}` : ''}`,
       `*Último custo:* ${fmt(params.lastCostPerUnit)}`,
       `*Lote:* ${params.batchName}`,
+      batchDetailUrl ? `*Detalhe do lote:* ${batchDetailUrl}` : null,
       params.approvedBy ? `*Aprovado por:* ${params.approvedBy}` : null,
     ].filter(Boolean).join('\n');
 

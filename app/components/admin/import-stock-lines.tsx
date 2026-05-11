@@ -195,7 +195,7 @@ function EditableTwoLevelRow({
     return null;
   }, [derivedCostAmount, manualConversionFactorDraft, measurementConversions, movementUnitDraft, selectedItem]);
 
-  function handleSave() {
+  function handleSave({ approveCostReview = false }: { approveCostReview?: boolean } = {}) {
     hasSubmittedRef.current = true;
     const fd = new FormData();
     fd.set('_action', 'batch-edit-line');
@@ -215,7 +215,7 @@ function EditableTwoLevelRow({
     fd.set('motivo', line.motivo || '');
     fd.set('invoiceNumber', line.invoiceNumber || '');
     fd.set('observation', line.observation || '');
-    fd.set('autoApproveCostReview', 'off');
+    fd.set('autoApproveCostReview', approveCostReview ? 'on' : 'off');
     fd.set('importAfterSave', 'off');
     fetcher.submit(fd, { method: 'post', action: `/admin/import-stock-movements/${selectedBatchId}` });
   }
@@ -234,6 +234,7 @@ function EditableTwoLevelRow({
   const displayTargetUnit = isEditing
     ? normalizeUnit(selectedItem?.consumptionUm || selectedItem?.purchaseUm)
     : line.targetUnit;
+  const requiresCostApproval = line.status === 'pending_cost_review';
 
   return (
     <TwoLevelLineRow
@@ -397,7 +398,7 @@ function EditableTwoLevelRow({
             </TableCell>
           ) : null}
           <TableCell className="px-3 py-3 text-xs">
-            <LineStatusBadge line={line} batchId={selectedBatchId} />
+            <LineStatusBadge line={line} />
             {line.errorMessage ? (
               <div className="mt-1 max-w-[180px] text-[11px] text-red-700">{line.errorMessage}</div>
             ) : null}
@@ -406,21 +407,34 @@ function EditableTwoLevelRow({
             <div className="flex flex-col items-center gap-1">
               {isEditing ? (
                 <>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="icon"
-                        className="h-7 w-7 border-emerald-300 hover:bg-emerald-50"
-                        onClick={handleSave}
-                        disabled={isSaving}
-                      >
-                        {isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5 text-emerald-600" />}
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>Salvar</TooltipContent>
-                  </Tooltip>
+                  {requiresCostApproval ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="h-7 border-amber-300 bg-amber-50 px-2 text-[11px] font-bold text-amber-800 hover:bg-amber-100"
+                      onClick={() => handleSave({ approveCostReview: true })}
+                      disabled={isSaving}
+                    >
+                      {isSaving ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <Check className="mr-1 h-3 w-3" />}
+                      Salvar e aprovar
+                    </Button>
+                  ) : (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          className="h-7 w-7 border-emerald-300 hover:bg-emerald-50"
+                          onClick={() => handleSave()}
+                          disabled={isSaving}
+                        >
+                          {isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5 text-emerald-600" />}
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>Salvar ajustes</TooltipContent>
+                    </Tooltip>
+                  )}
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <Button
@@ -523,13 +537,7 @@ function EditableTwoLevelRow({
   );
 }
 
-function LineStatusBadge({ line, batchId }: { line: any; batchId: string }) {
-  const fetcher = useFetcher<any>();
-  const isApproving =
-    fetcher.state !== 'idle' &&
-    String(fetcher.formData?.get('_action') || '') === 'batch-approve-cost-review' &&
-    String(fetcher.formData?.get('lineId') || '') === String(line.id);
-
+function LineStatusBadge({ line }: { line: any }) {
   if (line.status !== 'pending_cost_review') {
     return (
       <Badge variant="outline" className={statusBadgeClass(String(line.status))}>
@@ -539,23 +547,9 @@ function LineStatusBadge({ line, batchId }: { line: any; batchId: string }) {
   }
 
   return (
-    <fetcher.Form method="post" action={`/admin/import-stock-movements/${batchId}`} preventScrollReset>
-      <input type="hidden" name="_action" value="batch-approve-cost-review" />
-      <input type="hidden" name="batchId" value={batchId} />
-      <input type="hidden" name="lineId" value={line.id} />
-      <button
-        type="submit"
-        className={cn(
-          'inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium transition hover:bg-amber-100',
-          statusBadgeClass(String(line.status)),
-        )}
-        disabled={isApproving}
-        title="Aprovar revisão de custo e marcar como ready"
-      >
-        {isApproving ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
-        {isApproving ? 'Aprovando...' : line.status}
-      </button>
-    </fetcher.Form>
+    <Badge variant="outline" className={statusBadgeClass(String(line.status))}>
+      Revisar custo
+    </Badge>
   );
 }
 
@@ -612,6 +606,7 @@ function LineCard({
   const fetcher = useFetcher<any>();
   const revalidator = useRevalidator();
   const hasSubmittedRef = useRef(false);
+  const [noteDetailsOpen, setNoteDetailsOpen] = useState(false);
 
   const [movementUnitDraft, setMovementUnitDraft] = useState(
     String(line.movementUnit || line.unitEntry || '').toUpperCase(),
@@ -687,7 +682,7 @@ function LineCard({
     return null;
   }, [derivedCostAmount, manualConversionFactorDraft, measurementConversions, movementUnitDraft, selectedItem]);
 
-  function handleSave() {
+  function handleSave({ approveCostReview = false }: { approveCostReview?: boolean } = {}) {
     hasSubmittedRef.current = true;
     const fd = new FormData();
     fd.set('_action', 'batch-edit-line');
@@ -707,7 +702,7 @@ function LineCard({
     fd.set('motivo', line.motivo || '');
     fd.set('invoiceNumber', line.invoiceNumber || '');
     fd.set('observation', line.observation || '');
-    fd.set('autoApproveCostReview', 'off');
+    fd.set('autoApproveCostReview', approveCostReview ? 'on' : 'off');
     fd.set('importAfterSave', 'off');
     fetcher.submit(fd, { method: 'post', action: `/admin/import-stock-movements/${batchId}` });
   }
@@ -727,6 +722,7 @@ function LineCard({
     ? normalizeUnit(selectedItem?.consumptionUm || selectedItem?.purchaseUm)
     : line.targetUnit;
   const canFullEdit = !!line.mappedItemId && !['pending_mapping', 'pending_supplier', 'skipped_duplicate', 'ignored'].includes(line.status);
+  const requiresCostApproval = line.status === 'pending_cost_review';
 
   const isReady = line.status === 'ready';
   const isImported = line.status === 'imported';
@@ -740,260 +736,338 @@ function LineCard({
   const iconBgClass = isError ? 'bg-red-100' : isPending ? 'bg-amber-50' : isDuplicate ? 'bg-amber-50' : isImported ? 'bg-blue-100' : isReady ? 'bg-emerald-100' : 'bg-slate-100';
 
   return (
-    <div className={cn('overflow-hidden rounded-xl border bg-white', borderClass)}>
-      {/* Seção da nota (XML) */}
-      <div className={cn('flex items-start gap-3 border-b px-4 py-3', headerClass)}>
-        <div className={cn('mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg', iconBgClass)}>
-          {isImported
-            ? <CheckCircle2 className="h-4 w-4 text-blue-500" />
-            : isReady
-              ? <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-              : isError
-                ? <AlertTriangle className="h-4 w-4 text-red-500" />
-                : isPending
-                  ? <AlertTriangle className="h-4 w-4 text-amber-500" />
-                  : <FileText className="h-4 w-4 text-slate-400" />
-          }
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="mb-0.5 text-[10px] font-semibold uppercase tracking-widest text-slate-400">Dados da nota (XML)</div>
-          <a
-            href={`https://www.google.com/search?tbm=isch&q=${encodeURIComponent(String(line.ingredientName || '').trim())}`}
-            target="_blank"
-            rel="noreferrer"
-            className="block truncate text-sm font-semibold text-slate-900 hover:underline hover:underline-offset-2"
-          >
-            {line.ingredientName || '-'}
-          </a>
-          <div className="mt-0.5 text-xs text-slate-500">
-            Cód: {formatDocumentLabel(line.invoiceNumber)}
-            {line.costAmount != null ? ` • Preço: ${formatMoney(line.costAmount)}` : ''}
-            {line.qtyEntry != null ? ` • Qtd: ${line.qtyEntry} ${line.unitEntry || ''}` : ''}
+    <>
+      <Dialog open={noteDetailsOpen} onOpenChange={setNoteDetailsOpen}>
+        <DialogContent className="max-w-2xl rounded-2xl">
+          <DialogHeader>
+            <DialogTitle>Dados da nota (XML)</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-3 text-sm">
+            <div>
+              <div className="text-[11px] font-semibold uppercase tracking-widest text-slate-400">Produto no XML</div>
+              <div className="font-semibold text-slate-900">{line.ingredientName || '-'}</div>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <div className="text-[11px] font-semibold uppercase tracking-widest text-slate-400">Documento</div>
+                <div className="text-slate-700">{formatDocumentLabel(line.invoiceNumber)}</div>
+              </div>
+              <div>
+                <div className="text-[11px] font-semibold uppercase tracking-widest text-slate-400">Data de entrada</div>
+                <div className="text-slate-700">{formatDate(line.movementAt)}</div>
+              </div>
+              <div>
+                <div className="text-[11px] font-semibold uppercase tracking-widest text-slate-400">Fornecedor</div>
+                <div className="text-slate-700">{line.supplierName || '-'}</div>
+              </div>
+              <div>
+                <div className="text-[11px] font-semibold uppercase tracking-widest text-slate-400">CNPJ</div>
+                <div className="text-slate-700">{line.supplierCnpj || '-'}</div>
+              </div>
+              <div>
+                <div className="text-[11px] font-semibold uppercase tracking-widest text-slate-400">Preço entrada</div>
+                <div className="text-slate-700">{line.costAmount != null ? formatMoney(line.costAmount) : '-'}</div>
+              </div>
+              <div>
+                <div className="text-[11px] font-semibold uppercase tracking-widest text-slate-400">Quantidade entrada</div>
+                <div className="text-slate-700">{line.qtyEntry != null ? `${line.qtyEntry} ${line.unitEntry || ''}` : '-'}</div>
+              </div>
+              <div>
+                <div className="text-[11px] font-semibold uppercase tracking-widest text-slate-400">Custo total</div>
+                <div className="text-slate-700">{line.costTotalAmount != null ? formatMoney(line.costTotalAmount) : '-'}</div>
+              </div>
+              <div>
+                <div className="text-[11px] font-semibold uppercase tracking-widest text-slate-400">Reconciliação</div>
+                <div className="text-slate-700">{supplierReconciliationLabel(line)}</div>
+              </div>
+            </div>
+            {line.motivo ? (
+              <div>
+                <div className="text-[11px] font-semibold uppercase tracking-widest text-slate-400">Origem</div>
+                <div className="text-slate-700">{line.motivo}</div>
+              </div>
+            ) : null}
+            {line.observation ? (
+              <div>
+                <div className="text-[11px] font-semibold uppercase tracking-widest text-slate-400">Observação</div>
+                <div className="text-slate-700">{line.observation}</div>
+              </div>
+            ) : null}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <div className={cn('overflow-hidden rounded-xl border bg-white', borderClass)}>
+        {/* Seção da nota (XML) */}
+        <div className={cn('flex items-start gap-3 border-b px-4 py-3', headerClass)}>
+          <div className={cn('mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg', iconBgClass)}>
+            {isImported
+              ? <CheckCircle2 className="h-4 w-4 text-blue-500" />
+              : isReady
+                ? <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                : isError
+                  ? <AlertTriangle className="h-4 w-4 text-red-500" />
+                  : isPending
+                    ? <AlertTriangle className="h-4 w-4 text-amber-500" />
+                    : <FileText className="h-4 w-4 text-slate-400" />
+            }
+          </div>
+          <div className="min-w-0 flex-1">
+            <button
+              type="button"
+              onClick={() => setNoteDetailsOpen(true)}
+              className="mb-0.5 text-left text-[10px] font-semibold uppercase tracking-widest text-slate-400 transition hover:text-slate-700 hover:underline hover:underline-offset-2"
+            >
+              Dados da nota (XML)
+            </button>
+            <a
+              href={`https://www.google.com/search?tbm=isch&q=${encodeURIComponent(String(line.ingredientName || '').trim())}`}
+              target="_blank"
+              rel="noreferrer"
+              className="block truncate text-sm font-semibold text-slate-900 hover:underline hover:underline-offset-2"
+            >
+              {line.ingredientName || '-'}
+            </a>
+            <div className="mt-0.5 text-xs text-slate-500">
+              {line.costAmount != null ? `Preço entrada: ${formatMoney(line.costAmount)}` : 'Preço entrada: -'}
+              {' • '}
+              {line.qtyEntry != null ? `Quantidade entrada: ${line.qtyEntry} ${line.unitEntry || ''}` : 'Quantidade entrada: -'}
+            </div>
+          </div>
+          <div className="flex shrink-0 flex-col items-end gap-1.5 self-center">
+            <CardHeaderStatus status={line.status} />
           </div>
         </div>
-        <div className="flex shrink-0 flex-col items-end gap-1.5 self-center">
-          <CardHeaderStatus status={line.status} />
-          <span className="text-right text-[11px] text-slate-400">
-            {line.motivo ? `${line.motivo} • ` : ''}{formatDate(line.movementAt)}{line.supplierName ? ` • ${line.supplierName}` : ''}
-          </span>
-        </div>
-      </div>
 
-      {/* Seção do sistema / movimento */}
-      <div className="flex items-start gap-3 overflow-x-auto px-5 py-4">
-        <div className="flex min-w-0 flex-1 items-start gap-3">
+        {/* Seção do sistema / movimento */}
+        <div className="flex items-start gap-3 overflow-x-auto px-5 py-4">
+          <div className="flex min-w-0 flex-1 items-start gap-3">
 
-          {/* ── IGNORADO ── */}
-          {line.status === 'ignored' ? (
-            <div className="text-sm text-slate-400">Linha ignorada manualmente.</div>
+            {/* ── IGNORADO ── */}
+            {line.status === 'ignored' ? (
+              <div className="text-sm text-slate-400">Linha ignorada manualmente.</div>
 
-            /* ── FORNECEDOR PENDENTE ── */
-          ) : line.status === 'pending_supplier' ? (
-            <div className="min-w-0 flex-1">
-              <div className="mb-1 text-[10px] font-black uppercase tracking-widest text-amber-600">Fornecedor não vinculado</div>
-              <div className="text-sm text-slate-500">Concilie o fornecedor para continuar a importação.</div>
-            </div>
-
-            /* ── DUPLICADO ── */
-          ) : line.status === 'skipped_duplicate' ? (
-            <div className="w-80 shrink-0">
-              <div className="mb-1.5 text-[10px] font-black uppercase tracking-widest text-amber-600">Vínculo local</div>
-              <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5">
-                <span className="flex-1 truncate text-sm font-semibold text-slate-600">{line.mappedItemName || '-'}</span>
+              /* ── FORNECEDOR PENDENTE ── */
+            ) : line.status === 'pending_supplier' ? (
+              <div className="min-w-0 flex-1">
+                <div className="mb-1 text-[10px] font-black uppercase tracking-widest text-amber-600">Fornecedor não vinculado</div>
+                <div className="text-sm text-slate-500">Concilie o fornecedor para continuar a importação.</div>
               </div>
-            </div>
 
-            /* ── PENDENTE MAPEAMENTO / INVÁLIDO sem item / ERRO sem item ── */
-          ) : (line.status === 'pending_mapping' || (line.status === 'invalid' && !line.mappedItemId) || (line.status === 'error' && !line.mappedItemId)) ? (
-            <>
-              <div className="min-w-[280px] flex-1">
-                <div className="mb-1.5 text-[10px] font-black uppercase tracking-widest text-red-500">Produto não vinculado</div>
-                <ItemSystemMapperCell line={line} items={items} batchId={batchId} unitOptions={unitOptions} categories={categories} costHint={hint} onItemSelected={onStartEditing} />
-              </div>
-              <div className="w-20 shrink-0 opacity-40 grayscale">
-                <div className="mb-1.5 text-[10px] font-black uppercase tracking-widest text-slate-400">UM</div>
-                <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm font-semibold text-slate-600">
-                  {line.unitEntry || '-'}
+              /* ── DUPLICADO ── */
+            ) : line.status === 'skipped_duplicate' ? (
+              <div className="w-80 shrink-0">
+                <div className="mb-1.5 text-[10px] font-black uppercase tracking-widest text-amber-600">Vínculo local</div>
+                <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5">
+                  <span className="flex-1 truncate text-sm font-semibold text-slate-600">{line.mappedItemName || '-'}</span>
                 </div>
               </div>
-              <div className="w-24 shrink-0 opacity-40 grayscale">
-                <div className="mb-1.5 text-[10px] font-black uppercase tracking-widest text-slate-400">Qtd entrada</div>
-                <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm font-semibold tabular-nums text-slate-600">
-                  {line.qtyEntry ?? '-'}
+
+              /* ── PENDENTE MAPEAMENTO / INVÁLIDO sem item / ERRO sem item ── */
+            ) : (line.status === 'pending_mapping' || (line.status === 'invalid' && !line.mappedItemId) || (line.status === 'error' && !line.mappedItemId)) ? (
+              <>
+                <div className="min-w-[280px] flex-1">
+                  <div className="mb-1.5 text-[10px] font-black uppercase tracking-widest text-red-500">Produto não vinculado</div>
+                  <ItemSystemMapperCell line={line} items={items} batchId={batchId} unitOptions={unitOptions} categories={categories} costHint={hint} onItemSelected={onStartEditing} />
                 </div>
-              </div>
-            </>
-
-            /* ── READY / IMPORTED / PENDING_COST_REVIEW / INVALID+item / ERROR+item / PENDING_CONVERSION ── */
-          ) : (
-            <>
-              <div className="min-w-[220px] flex-1">
-                <div className="mb-1.5 text-[10px] font-black uppercase tracking-widest text-slate-400">Vincular produto</div>
-                <ItemSystemMapperCell line={line} items={items} batchId={batchId} unitOptions={unitOptions} categories={categories} costHint={hint} onItemSelected={onStartEditing} />
-                {!isEditing && (line.status === 'invalid' || line.status === 'error') && line.errorMessage ? (
-                  <div className="mt-1 text-[11px] font-medium text-red-500">{line.errorMessage}</div>
-                ) : null}
-              </div>
-
-              {/* UM */}
-              <div className="w-20 shrink-0">
-                <div className="mb-1.5 text-[10px] font-black uppercase tracking-widest text-slate-400">UM</div>
-                {isEditing ? (
-                  <Select value={movementUnitDraft || '__EMPTY__'} onValueChange={(v) => setMovementUnitDraft(v === '__EMPTY__' ? '' : v)}>
-                    <SelectTrigger className="h-9 bg-white text-xs"><SelectValue placeholder="UM" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__EMPTY__">Sel.</SelectItem>
-                      {availableMovementUnits.map((unit) => <SelectItem key={unit} value={unit}>{unit}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                ) : (
-                  <div className="cursor-pointer rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-700" onClick={() => canFullEdit && onStartEditing()}>
-                    {displayTargetUnit || line.movementUnit || '-'}
+                <div className="w-20 shrink-0 opacity-40 grayscale">
+                  <div className="mb-1.5 text-[10px] font-black uppercase tracking-widest text-slate-400">UM</div>
+                  <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm font-semibold text-slate-600">
+                    {line.unitEntry || '-'}
                   </div>
-                )}
-              </div>
-
-              {/* Demanda */}
-              <div className="w-24 shrink-0">
-                <div className="mb-1.5 text-[10px] font-black uppercase tracking-widest text-slate-400">Demanda</div>
-                {isEditing ? (
-                  <DecimalInput name="qtyEntry" defaultValue={qtyEntryDraft} onValueChange={setQtyEntryDraft} fractionDigits={3} className="h-9 w-full bg-white text-sm" />
-                ) : (
-                  <div className="cursor-pointer rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold tabular-nums text-slate-700" onClick={() => canFullEdit && onStartEditing()}>
-                    {line.qtyConsumption ?? line.qtyEntry ?? '-'}
+                </div>
+                <div className="w-24 shrink-0 opacity-40 grayscale">
+                  <div className="mb-1.5 text-[10px] font-black uppercase tracking-widest text-slate-400">Qtd entrada</div>
+                  <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm font-semibold tabular-nums text-slate-600">
+                    {line.qtyEntry ?? '-'}
                   </div>
-                )}
-              </div>
+                </div>
+              </>
 
-              {/* Custo total */}
-              <div className="w-28 shrink-0">
-                <div className="mb-1.5 text-[10px] font-black uppercase tracking-widest text-slate-400">Custo total</div>
-                {isEditing ? (
-                  <DecimalInput name="costTotalAmount" defaultValue={costTotalAmountDraft} onValueChange={setCostTotalAmountDraft} fractionDigits={2} className="h-9 w-full bg-white text-sm" />
-                ) : (
-                  <div className="cursor-pointer rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold tabular-nums text-slate-700" onClick={() => canFullEdit && onStartEditing()}>
-                    {line.costTotalAmount != null ? formatMoney(line.costTotalAmount) : '-'}
-                  </div>
-                )}
-              </div>
+              /* ── READY / IMPORTED / PENDING_COST_REVIEW / INVALID+item / ERROR+item / PENDING_CONVERSION ── */
+            ) : (
+              <>
+                <div className="min-w-[220px] flex-1">
+                  <div className="mb-1.5 text-[10px] font-black uppercase tracking-widest text-slate-400">Vincular produto</div>
+                  <ItemSystemMapperCell line={line} items={items} batchId={batchId} unitOptions={unitOptions} categories={categories} costHint={hint} onItemSelected={onStartEditing} />
+                  {!isEditing && (line.status === 'invalid' || line.status === 'error') && line.errorMessage ? (
+                    <div className="mt-1 text-[11px] font-medium text-red-500">{line.errorMessage}</div>
+                  ) : null}
+                </div>
 
-              {/* Custo unit. calculado */}
-              <div className="w-28 shrink-0">
-                <div className="mb-1.5 text-[10px] font-black uppercase tracking-widest text-slate-400">Custo unit.</div>
-                {isEditing ? (
-                  <div className={cn('rounded-lg border px-3 py-2 text-sm font-semibold tabular-nums', conversionPreview ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-slate-200 bg-slate-50 text-slate-400')}>
-                    {conversionPreview ? formatMoney(conversionPreview.convertedCostAmount) : '—'}
-                  </div>
-                ) : (
-                  <div className={cn('rounded-lg border px-3 py-2 text-sm font-semibold tabular-nums', discrepancy ? 'border-red-200 bg-red-50 text-red-600' : 'border-slate-200 bg-slate-50 text-slate-700')}>
-                    {displayConvertedCost != null ? formatMoney(displayConvertedCost) : '-'}
-                    {discrepancy && hint?.lastCostPerUnit != null ? (
-                      <div className="text-[10px] font-normal text-red-500">último: {formatMoney(hint.lastCostPerUnit)}</div>
-                    ) : null}
-                  </div>
-                )}
-              </div>
-
-              {showFactor ? (
-                <div className="w-16 shrink-0">
-                  <div className="mb-1.5 text-[10px] font-black uppercase tracking-widest text-slate-400">Fator</div>
+                {/* UM */}
+                <div className="w-20 shrink-0">
+                  <div className="mb-1.5 text-[10px] font-black uppercase tracking-widest text-slate-400">UM</div>
                   {isEditing ? (
-                    <Input value={manualConversionFactorDraft} onChange={(e) => setManualConversionFactorDraft(e.currentTarget.value)} placeholder="auto" className="h-9 bg-white text-xs" />
+                    <Select value={movementUnitDraft || '__EMPTY__'} onValueChange={(v) => setMovementUnitDraft(v === '__EMPTY__' ? '' : v)}>
+                      <SelectTrigger className="h-9 bg-white text-xs"><SelectValue placeholder="UM" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__EMPTY__">Sel.</SelectItem>
+                        {availableMovementUnits.map((unit) => <SelectItem key={unit} value={unit}>{unit}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
                   ) : (
-                    <div className="cursor-pointer rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-500" onClick={() => canFullEdit && onStartEditing()}>
-                      {line.conversionFactorUsed ? (Number(line.conversionFactorUsed) === 1 ? '1:1' : Number(line.conversionFactorUsed).toFixed(3)) : '-'}
+                    <div className="cursor-pointer rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-700" onClick={() => canFullEdit && onStartEditing()}>
+                      {displayTargetUnit || line.movementUnit || '-'}
                     </div>
                   )}
                 </div>
-              ) : null}
+
+                {/* Demanda */}
+                <div className="w-24 shrink-0">
+                  <div className="mb-1.5 text-[10px] font-black uppercase tracking-widest text-slate-400">Quantitade</div>
+                  {isEditing ? (
+                    <DecimalInput name="qtyEntry" defaultValue={qtyEntryDraft} onValueChange={setQtyEntryDraft} fractionDigits={3} className="h-9 w-full bg-white text-sm" />
+                  ) : (
+                    <div className="cursor-pointer rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold tabular-nums text-slate-700" onClick={() => canFullEdit && onStartEditing()}>
+                      {line.qtyConsumption ?? line.qtyEntry ?? '-'}
+                    </div>
+                  )}
+                </div>
+
+                {/* Custo total */}
+                <div className="w-28 shrink-0">
+                  <div className="mb-1.5 text-[10px] font-black uppercase tracking-widest text-slate-400">Custo total</div>
+                  {isEditing ? (
+                    <DecimalInput name="costTotalAmount" defaultValue={costTotalAmountDraft} onValueChange={setCostTotalAmountDraft} fractionDigits={2} className="h-9 w-full bg-white text-sm" />
+                  ) : (
+                    <div className="cursor-pointer rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold tabular-nums text-slate-700" onClick={() => canFullEdit && onStartEditing()}>
+                      {line.costTotalAmount != null ? formatMoney(line.costTotalAmount) : '-'}
+                    </div>
+                  )}
+                </div>
+
+                {/* Custo unit. calculado */}
+                <div className="w-28 shrink-0">
+                  <div className="mb-1.5 text-[10px] font-black uppercase tracking-widest text-slate-400">Custo unit.</div>
+                  {isEditing ? (
+                    <div className={cn('rounded-lg border px-3 py-2 text-sm font-semibold tabular-nums', conversionPreview ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-slate-200 bg-slate-50 text-slate-400')}>
+                      {conversionPreview ? formatMoney(conversionPreview.convertedCostAmount) : '—'}
+                    </div>
+                  ) : (
+                    <div className={cn('rounded-lg border px-3 py-2 text-sm font-semibold tabular-nums', discrepancy ? 'border-red-200 bg-red-50 text-red-600' : 'border-slate-200 bg-slate-50 text-slate-700')}>
+                      {displayConvertedCost != null ? formatMoney(displayConvertedCost) : '-'}
+                      {discrepancy && hint?.lastCostPerUnit != null ? (
+                        <div className="text-[10px] font-normal text-red-500">último: {formatMoney(hint.lastCostPerUnit)}</div>
+                      ) : null}
+                    </div>
+                  )}
+                </div>
+
+                {showFactor ? (
+                  <div className="w-16 shrink-0">
+                    <div className="mb-1.5 text-[10px] font-black uppercase tracking-widest text-slate-400">Fator</div>
+                    {isEditing ? (
+                      <Input value={manualConversionFactorDraft} onChange={(e) => setManualConversionFactorDraft(e.currentTarget.value)} placeholder="auto" className="h-9 bg-white text-xs" />
+                    ) : (
+                      <div className="cursor-pointer rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-500" onClick={() => canFullEdit && onStartEditing()}>
+                        {line.conversionFactorUsed ? (Number(line.conversionFactorUsed) === 1 ? '1:1' : Number(line.conversionFactorUsed).toFixed(3)) : '-'}
+                      </div>
+                    )}
+                  </div>
+                ) : null}
 
 
-            </>
-          )}
-        </div>
+              </>
+            )}
+          </div>
 
-        {/* Botões */}
-        <div className="flex shrink-0 items-start gap-1 pt-6">
-          {(line.status === 'pending_mapping' || (line.status === 'invalid' && !line.mappedItemId) || (line.status === 'error' && !line.mappedItemId)) ? (
-            <p className="mr-1 max-w-[90px] text-right text-[11px] font-bold leading-snug text-red-500">Vínculo obrigatório para prosseguir.</p>
-          ) : line.status === 'skipped_duplicate' ? (
-            <p className="mr-1 max-w-[110px] text-right text-[11px] font-bold leading-snug text-amber-600">Este item já aparece em outra linha desta nota.</p>
-          ) : null}
+          {/* Botões */}
+          <div className="flex shrink-0 items-start gap-1 pt-6">
+            {(line.status === 'pending_mapping' || (line.status === 'invalid' && !line.mappedItemId) || (line.status === 'error' && !line.mappedItemId)) ? (
+              <p className="mr-1 max-w-[90px] text-right text-[11px] font-bold leading-snug text-red-500">Vínculo obrigatório para prosseguir.</p>
+            ) : line.status === 'skipped_duplicate' ? (
+              <p className="mr-1 max-w-[110px] text-right text-[11px] font-bold leading-snug text-amber-600">Este item já aparece em outra linha desta nota.</p>
+            ) : null}
 
-          {isEditing ? (
-            <>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button type="button" variant="outline" size="icon" className="h-9 w-9 border-emerald-300 hover:bg-emerald-50" onClick={handleSave} disabled={isSaving}>
-                    {isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5 text-emerald-600" />}
+            {isEditing ? (
+              <>
+                {requiresCostApproval ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-9 border-amber-300 bg-amber-50 px-3 text-xs font-bold text-amber-800 hover:bg-amber-100"
+                    onClick={() => handleSave({ approveCostReview: true })}
+                    disabled={isSaving}
+                  >
+                    {isSaving ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Check className="mr-1.5 h-3.5 w-3.5" />}
+                    Salvar e aprovar
                   </Button>
-                </TooltipTrigger>
-                <TooltipContent>Salvar</TooltipContent>
-              </Tooltip>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button type="button" variant="outline" size="icon" className="h-9 w-9" onClick={handleCancel} disabled={isSaving}>
-                    <X className="h-3.5 w-3.5" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>Cancelar</TooltipContent>
-              </Tooltip>
-            </>
-          ) : (
-            <div className="flex gap-1">
-              {canFullEdit && (
+                ) : (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button type="button" variant="outline" size="icon" className="h-9 w-9 border-emerald-300 hover:bg-emerald-50" onClick={() => handleSave()} disabled={isSaving}>
+                        {isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5 text-emerald-600" />}
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Salvar ajustes</TooltipContent>
+                  </Tooltip>
+                )}
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <Button type="button" variant="ghost" size="icon" className="h-9 w-9 text-slate-400 hover:text-slate-700" onClick={onStartEditing}>
-                      <Pencil className="h-3.5 w-3.5" />
+                    <Button type="button" variant="outline" size="icon" className="h-9 w-9" onClick={handleCancel} disabled={isSaving}>
+                      <X className="h-3.5 w-3.5" />
                     </Button>
                   </TooltipTrigger>
-                  <TooltipContent>Editar linha</TooltipContent>
+                  <TooltipContent>Cancelar</TooltipContent>
                 </Tooltip>
-              )}
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button asChild variant="ghost" size="icon" className="h-9 w-9 text-slate-400 hover:text-slate-700">
-                    <Link to={`/admin/import-stock-movements/${batchId}/line/${line.id}?returnTo=${encodeURIComponent(`${location.pathname}${location.search}`)}`} target="_blank" rel="noreferrer">
-                      <Layers className="h-3.5 w-3.5" />
-                    </Link>
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>Ver detalhe completo</TooltipContent>
-              </Tooltip>
-              <Form method="post" action={`/admin/import-stock-movements/${batchId}`} preventScrollReset>
-                <input type="hidden" name="_action" value={line.status === 'ignored' ? 'batch-unignore-line' : 'batch-ignore-line'} />
-                <input type="hidden" name="batchId" value={batchId} />
-                <input type="hidden" name="lineId" value={line.id} />
+              </>
+            ) : (
+              <div className="flex gap-1">
+                {canFullEdit && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button type="button" variant="ghost" size="icon" className="h-9 w-9 text-slate-400 hover:text-slate-700" onClick={onStartEditing}>
+                        <Pencil className="h-3.5 w-3.5" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Editar linha</TooltipContent>
+                  </Tooltip>
+                )}
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <Button type="submit" variant="ghost" size="icon" className="h-9 w-9 text-slate-400 hover:text-slate-700">
-                      {line.status === 'ignored' ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
+                    <Button asChild variant="ghost" size="icon" className="h-9 w-9 text-slate-400 hover:text-slate-700">
+                      <Link to={`/admin/import-stock-movements/${batchId}/line/${line.id}?returnTo=${encodeURIComponent(`${location.pathname}${location.search}`)}`} target="_blank" rel="noreferrer">
+                        <Layers className="h-3.5 w-3.5" />
+                      </Link>
                     </Button>
                   </TooltipTrigger>
-                  <TooltipContent>{line.status === 'ignored' ? 'Reativar' : 'Ignorar'}</TooltipContent>
+                  <TooltipContent>Ver detalhe completo</TooltipContent>
                 </Tooltip>
-              </Form>
-              {line.status === 'error' ? (
                 <Form method="post" action={`/admin/import-stock-movements/${batchId}`} preventScrollReset>
-                  <input type="hidden" name="_action" value="batch-retry-line-error" />
+                  <input type="hidden" name="_action" value={line.status === 'ignored' ? 'batch-unignore-line' : 'batch-ignore-line'} />
                   <input type="hidden" name="batchId" value={batchId} />
                   <input type="hidden" name="lineId" value={line.id} />
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <Button type="submit" variant="ghost" size="icon" className="h-9 w-9 text-slate-400 hover:text-slate-700">
-                        <RotateCcw className="h-3.5 w-3.5" />
+                        {line.status === 'ignored' ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
                       </Button>
                     </TooltipTrigger>
-                    <TooltipContent>Retentar</TooltipContent>
+                    <TooltipContent>{line.status === 'ignored' ? 'Reativar' : 'Ignorar'}</TooltipContent>
                   </Tooltip>
                 </Form>
-              ) : null}
-            </div>
-          )}
+                {line.status === 'error' ? (
+                  <Form method="post" action={`/admin/import-stock-movements/${batchId}`} preventScrollReset>
+                    <input type="hidden" name="_action" value="batch-retry-line-error" />
+                    <input type="hidden" name="batchId" value={batchId} />
+                    <input type="hidden" name="lineId" value={line.id} />
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button type="submit" variant="ghost" size="icon" className="h-9 w-9 text-slate-400 hover:text-slate-700">
+                          <RotateCcw className="h-3.5 w-3.5" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>Retentar</TooltipContent>
+                    </Tooltip>
+                  </Form>
+                ) : null}
+              </div>
+            )}
+          </div>
         </div>
       </div>
-    </div>
+    </>
   );
 }
 
@@ -1300,7 +1374,7 @@ export function AdminImportStockMovementsBatchLinesRoute({
                     <>
                       <TableHead className="min-w-[260px] px-3 py-2 text-xs">Produto</TableHead>
                       <TableHead className="px-3 py-2 text-xs">UM</TableHead>
-                      <TableHead className="px-3 py-2 text-right text-xs">Demanda</TableHead>
+                      <TableHead className="px-3 py-2 text-right text-xs">Quantitade</TableHead>
                       <TableHead className="px-3 py-2 text-right text-xs">Custo unit.</TableHead>
                       <TableHead className="px-3 py-2 text-right text-xs">Custo total</TableHead>
                       {showFactor ? <TableHead className="px-3 py-2 text-xs">Fator / Conversão</TableHead> : null}
@@ -1397,7 +1471,7 @@ export function AdminImportStockMovementsBatchLinesRoute({
                           )}
                         </TableCell>
                         <TableCell className="px-3 py-2 text-xs">
-                          <LineStatusBadge line={line} batchId={selectedBatch.id} />
+                          <LineStatusBadge line={line} />
                           {line.errorMessage ? (
                             <div className="mt-1 max-w-[180px] text-[11px] text-red-700">{line.errorMessage}</div>
                           ) : null}

@@ -387,7 +387,6 @@ export function ItemSystemMapperCell({
   const mapItemFetcher = useFetcher<typeof action>();
   const createItemFetcher = useFetcher<typeof action>();
   const createUmFetcher = useFetcher<typeof action>();
-  const approveCostFetcher = useFetcher<any>();
   const [createUmDialogOpen, setCreateUmDialogOpen] = useState(false);
   const [umTabelaDialogOpen, setUmTabelaDialogOpen] = useState(false);
   const [umKind, setUmKind] = useState('custom');
@@ -900,20 +899,12 @@ export function ItemSystemMapperCell({
         ))}
       </mapItemFetcher.Form>
       {!compact && line.status === 'pending_cost_review' && (
-        <approveCostFetcher.Form method="post" action={`/admin/import-stock-movements/${batchId}`} preventScrollReset>
-          <input type="hidden" name="_action" value="batch-approve-cost-review" />
-          <input type="hidden" name="lineId" value={line.id} />
-          <button
-            type="submit"
-            disabled={approveCostFetcher.state !== 'idle'}
-            className="mt-1 flex w-full items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-left transition hover:border-amber-300 hover:bg-amber-100 disabled:opacity-60"
-          >
-            <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-500" />
-            <span className="flex-1 text-[11px] font-medium text-amber-800">
-              {approveCostFetcher.state !== 'idle' ? 'Aprovando...' : 'Custo acima do histórico — clique para aprovar'}
-            </span>
-          </button>
-        </approveCostFetcher.Form>
+        <div className="mt-1 flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left">
+          <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-800" />
+          <span className="flex-1 text-[11px] font-medium text-amber-800">
+            Custo acima do histórico. Edite a linha e use Salvar e aprovar para liberar a importação.
+          </span>
+        </div>
       )}
     </div>
   );
@@ -1169,6 +1160,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
   try {
     const user = await authenticator.isAuthenticated(request);
     const actor = (user as any)?.email || (user as any)?.displayName || (user as any)?.name || null;
+    const requestOrigin = new URL(request.url).origin;
 
     const routeBatchId = String(params.batchId || '').trim();
     if (!routeBatchId) return badRequest('Lote inválido');
@@ -1272,7 +1264,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
           select: { status: true },
         });
         if (String(updatedLine?.status || '') === 'pending_cost_review') {
-          await approveBatchLineCostReview({ batchId, lineId, actor });
+          await approveBatchLineCostReview({ batchId, lineId, actor, requestOrigin });
           autoApprovedCostReview = true;
         }
       }
@@ -1291,7 +1283,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
     if (_action === 'batch-approve-cost-review') {
       const lineId = str(formData.get('lineId'));
       if (!lineId) return badRequest('Linha inválida');
-      await approveBatchLineCostReview({ batchId, lineId, actor });
+      await approveBatchLineCostReview({ batchId, lineId, actor, requestOrigin });
       return ok({ approvedLineId: lineId });
     }
 
