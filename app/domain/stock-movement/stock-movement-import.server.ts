@@ -79,6 +79,31 @@ function str(value: unknown) {
   return String(value ?? '').trim();
 }
 
+function formatBatchDateLabel(value: Date) {
+  return value.toLocaleDateString('pt-BR');
+}
+
+function formatBatchNameWithImportDates(params: {
+  currentName: string;
+  documentDate: Date;
+  importDate: Date;
+}) {
+  const currentName = str(params.currentName) || 'Importação de movimentações';
+  const documentDateLabel = formatBatchDateLabel(params.documentDate);
+  const importDateLabel = formatBatchDateLabel(params.importDate);
+  const dateLabel = `${documentDateLabel} (importado em ${importDateLabel})`;
+  const trailingDatePattern = /(\s*(?:-\s*)?)\d{2}\/\d{2}\/\d{4}(?:\s*\([^)]*\))?\s*$/;
+
+  if (trailingDatePattern.test(currentName)) {
+    return currentName.replace(trailingDatePattern, (_, separator: string) => {
+      const safeSeparator = String(separator || ' ').trim() === '-' ? ' - ' : ' ';
+      return `${safeSeparator}${dateLabel}`;
+    });
+  }
+
+  return `${currentName} ${dateLabel}`;
+}
+
 function normalizeName(value: unknown) {
   return str(value)
     .normalize('NFD')
@@ -2098,6 +2123,25 @@ export async function reapplyAliasesToAllPendingBatches() {
   return batches.length;
 }
 
+export async function refreshStockMovementImportBatchMappings(batchId: string) {
+  const db = prismaClient as any;
+  const normalizedBatchId = str(batchId);
+  if (!normalizedBatchId || typeof db.stockMovementImportBatchLine?.count !== 'function') return 0;
+
+  const pendingUnmappedLines = await db.stockMovementImportBatchLine.count({
+    where: {
+      batchId: normalizedBatchId,
+      appliedAt: null,
+      mappedItemId: null,
+      status: { in: ['draft', 'pending_mapping', 'invalid', 'error'] },
+    },
+  });
+
+  if (pendingUnmappedLines <= 0) return 0;
+  await recomputeBatchLines(normalizedBatchId);
+  return pendingUnmappedLines;
+}
+
 export async function setBatchLineManualConversion(params: {
   batchId: string;
   lineId: string;
@@ -2948,7 +2992,7 @@ function batchImportProgressFromBatch(batch: any, summary?: BatchSummary | null)
   };
 }
 
-export async function startStockMovementImportBatch(params: { batchId: string; actor?: string | null }) {
+export async function startStockMovementImportBatch(params: { batchId: string; actor?: string | null; movementAt?: Date | null }) {
   const db = prismaClient as any;
   const batch = await db.stockMovementImportBatch.findUnique({ where: { id: params.batchId } });
   if (!batch) throw new Error('Lote não encontrado');
@@ -2959,8 +3003,9 @@ export async function startStockMovementImportBatch(params: { batchId: string; a
   }
 
   await recomputeBatchLines(params.batchId);
-  const readyLines = await getBatchReadyLines(params.batchId);
+  let readyLines = await getBatchReadyLines(params.batchId);
   const startedAt = new Date();
+  const movementAt = params.movementAt && !Number.isNaN(params.movementAt.getTime()) ? params.movementAt : null;
 
   if (readyLines.length <= 0) {
     await db.stockMovementImportBatch.update({
@@ -2980,9 +3025,26 @@ export async function startStockMovementImportBatch(params: { batchId: string; a
     return batchImportProgressFromBatch(refreshedBatch, summary);
   }
 
+  if (movementAt) {
+    await db.stockMovementImportBatchLine.updateMany({
+      where: { id: { in: readyLines.map((line: any) => line.id) } },
+      data: { movementAt },
+    });
+    readyLines = await getBatchReadyLines(params.batchId);
+  }
+
   await db.stockMovementImportBatch.update({
     where: { id: params.batchId },
     data: {
+      ...(movementAt
+        ? {
+            name: formatBatchNameWithImportDates({
+              currentName: batch.name,
+              documentDate: movementAt,
+              importDate: startedAt,
+            }),
+          }
+        : {}),
       importStatus: 'importing',
       importStartedAt: startedAt,
       importFinishedAt: null,
@@ -3096,7 +3158,7 @@ export async function importStockMovementImportBatchStep(params: { batchId: stri
   };
 }
 
-export async function importStockMovementImportBatch(params: { batchId: string; actor?: string | null }) {
+export async function importStockMovementImportBatch(params: { batchId: string; actor?: string | null; movementAt?: Date | null }) {
   await startStockMovementImportBatch(params);
   let lastStep = await importStockMovementImportBatchStep({ ...params, limit: 5 });
   while (!lastStep.done) {
@@ -3456,7 +3518,10 @@ export async function getStockMovementImportBatchView(batchId: string) {
   const db = prismaClient as any;
   if (!batchId || typeof db.stockMovementImportBatch?.findUnique !== 'function') return null;
   await ensureSyntheticInvoiceNumbersForVisionBatch(batchId);
-  await refreshBatchSummary(batchId);
+  const remappedLineCount = await refreshStockMovementImportBatchMappings(batchId);
+  if (remappedLineCount <= 0) {
+    await refreshBatchSummary(batchId);
+  }
 
   const [batch, lines, items, changes] = await Promise.all([
     db.stockMovementImportBatch.findUnique({ where: { id: batchId } }),

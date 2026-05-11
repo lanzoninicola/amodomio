@@ -56,11 +56,102 @@ export function getItemBaseUnit(item: { purchaseUm?: string | null; consumptionU
   return item?.consumptionUm || item?.purchaseUm || '-';
 }
 
+function normalizeUnit(value: unknown) {
+  const normalized = String(value || '').trim().toUpperCase();
+  return normalized || null;
+}
+
+function parseDecimal(value: unknown) {
+  const normalized = String(value || '').trim().replace(',', '.');
+  const amount = Number(normalized);
+  return Number.isFinite(amount) ? amount : NaN;
+}
+
+function findMeasurementConversion(
+  measurementConversions: Array<{ fromUnit: string; toUnit: string; factor: number }>,
+  fromUnit: string | null,
+  toUnit: string | null,
+) {
+  if (!fromUnit || !toUnit || fromUnit === toUnit) return null;
+
+  for (const row of measurementConversions) {
+    const rowFrom = normalizeUnit(row?.fromUnit);
+    const rowTo = normalizeUnit(row?.toUnit);
+    const factor = Number(row?.factor ?? NaN);
+    if (!rowFrom || !rowTo || !(factor > 0)) continue;
+    if (rowFrom === fromUnit && rowTo === toUnit) return { factor, mode: 'direct' as const };
+    if (rowFrom === toUnit && rowTo === fromUnit) return { factor, mode: 'reverse' as const };
+  }
+
+  return null;
+}
+
+function getItemTargetUnit(item: any) {
+  return normalizeUnit(item?.consumptionUm || item?.purchaseUm);
+}
+
+function resolveConvertedCostPreview(params: {
+  costAmount: number;
+  movementUnit: string | null;
+  targetUnit: string | null;
+  selectedItem: any;
+  manualConversionFactor: unknown;
+  measurementConversions: Array<{ fromUnit: string; toUnit: string; factor: number }>;
+}) {
+  const costAmount = Number(params.costAmount);
+  const movementUnit = normalizeUnit(params.movementUnit);
+  const targetUnit = normalizeUnit(params.targetUnit);
+  if (!Number.isFinite(costAmount) || costAmount <= 0 || !movementUnit || !targetUnit) return null;
+
+  if (movementUnit === targetUnit) {
+    return { convertedCostAmount: costAmount, conversionSource: 'same-unit', conversionFactorUsed: 1 };
+  }
+
+  const manualFactor = parseDecimal(params.manualConversionFactor);
+  if (manualFactor > 0) {
+    return { convertedCostAmount: costAmount / manualFactor, conversionSource: 'manual', conversionFactorUsed: manualFactor };
+  }
+
+  const itemConsumptionUm = normalizeUnit(params.selectedItem?.consumptionUm);
+  const itemPurchaseUm = normalizeUnit(params.selectedItem?.purchaseUm);
+  const itemConversions: Array<{ purchaseUm?: string | null; factor?: number | null }> = Array.isArray(params.selectedItem?.ItemPurchaseConversion)
+    ? params.selectedItem.ItemPurchaseConversion
+    : [];
+  const matchedConversion = itemConversions.find((conversion) => normalizeUnit(conversion?.purchaseUm) === movementUnit);
+  const matchedFactor = Number(matchedConversion?.factor ?? NaN);
+
+  if (matchedConversion && itemConsumptionUm && targetUnit === itemConsumptionUm && matchedFactor > 0) {
+    return { convertedCostAmount: costAmount / matchedFactor, conversionSource: 'item_purchase_factor', conversionFactorUsed: matchedFactor };
+  }
+
+  const itemFactor = Number(params.selectedItem?.purchaseToConsumptionFactor ?? NaN);
+  if (itemPurchaseUm && itemConsumptionUm && itemFactor > 0) {
+    if (movementUnit === itemPurchaseUm && targetUnit === itemConsumptionUm) {
+      return { convertedCostAmount: costAmount / itemFactor, conversionSource: 'item_purchase_factor', conversionFactorUsed: itemFactor };
+    }
+    if (movementUnit === itemConsumptionUm && targetUnit === itemPurchaseUm) {
+      return { convertedCostAmount: costAmount * itemFactor, conversionSource: 'item_purchase_factor_reverse', conversionFactorUsed: itemFactor };
+    }
+  }
+
+  const measured = findMeasurementConversion(params.measurementConversions, movementUnit, targetUnit);
+  if (measured) {
+    return {
+      convertedCostAmount: measured.mode === 'direct' ? costAmount / measured.factor : costAmount * measured.factor,
+      conversionSource: measured.mode === 'direct' ? 'measurement_conversion_direct' : 'measurement_conversion_reverse',
+      conversionFactorUsed: measured.factor,
+    };
+  }
+
+  return null;
+}
+
 export function StockMovementEditor({
   row,
   items,
   suppliers,
   unitOptions,
+  measurementConversions = [],
   returnTo,
   actionPath = '/admin/stock-movements',
 }: {
@@ -68,6 +159,7 @@ export function StockMovementEditor({
   items: any[];
   suppliers: any[];
   unitOptions: string[];
+  measurementConversions?: Array<{ fromUnit: string; toUnit: string; factor: number }>;
   returnTo: string;
   actionPath?: string;
 }) {
@@ -112,6 +204,7 @@ export function StockMovementEditor({
   );
   const [supplierIdDraft, setSupplierIdDraft] = useState(String(line?.supplierId || row?.supplierId || ''));
   const [mappedItemIdDraft, setMappedItemIdDraft] = useState(String(line?.mappedItemId || row?.itemId || ''));
+  const [manualConversionFactorDraft, setManualConversionFactorDraft] = useState(String(line?.manualConversionFactor ?? ''));
   const [itemPickerOpen, setItemPickerOpen] = useState(false);
 
   useEffect(() => {
@@ -127,7 +220,8 @@ export function StockMovementEditor({
     );
     setSupplierIdDraft(String(line?.supplierId || row?.supplierId || ''));
     setMappedItemIdDraft(String(line?.mappedItemId || row?.itemId || ''));
-  }, [line?.costAmount, line?.costTotalAmount, line?.mappedItemId, line?.movementUnit, line?.qtyEntry, line?.supplierId, line?.unitConsumption, line?.unitEntry, movementUnitInitial, row?.itemId, row?.supplierId]);
+    setManualConversionFactorDraft(String(line?.manualConversionFactor ?? ''));
+  }, [line?.costAmount, line?.costTotalAmount, line?.manualConversionFactor, line?.mappedItemId, line?.movementUnit, line?.qtyEntry, line?.supplierId, line?.unitConsumption, line?.unitEntry, movementUnitInitial, row?.itemId, row?.supplierId]);
 
   useEffect(() => {
     if (fetcher.state !== 'idle') return;
@@ -156,6 +250,7 @@ export function StockMovementEditor({
 
   const selectedSupplier = supplierOptions.find((supplier) => supplier.id === supplierIdDraft) || null;
   const selectedMappedItem = itemOptions.find((item) => item.id === mappedItemIdDraft) || null;
+  const selectedTargetUnit = getItemTargetUnit(selectedMappedItem);
   const importedIngredientName = String(line.ingredientName || '').trim();
   const supplierNameHiddenValue = selectedSupplier?.name || row.supplierName || line.supplierName || '';
   const supplierCnpjHiddenValue = selectedSupplier?.cnpj || row.supplierCnpj || line.supplierCnpj || '';
@@ -167,6 +262,14 @@ export function StockMovementEditor({
       ? costTotalAmountDraft / qtyEntryDraft
       : NaN;
   const hasValidPricing = Number.isFinite(costTotalAmountDraft) && costTotalAmountDraft > 0 && Number.isFinite(computedUnitCost) && computedUnitCost > 0;
+  const convertedCostPreview = resolveConvertedCostPreview({
+    costAmount: computedUnitCost,
+    movementUnit: movementUnitDraft,
+    targetUnit: selectedTargetUnit,
+    selectedItem: selectedMappedItem,
+    manualConversionFactor: manualConversionFactorDraft,
+    measurementConversions,
+  });
 
   const importSnapshot = {
     qtyEntry: line.qtyEntry,
@@ -193,9 +296,8 @@ export function StockMovementEditor({
       )}
 
       {fetcher.data?.message || rollbackFetcher.data?.message ? (
-        <div className={`rounded-xl px-3 py-2 text-sm ${
-          (rollbackFetcher.data?.status ?? fetcher.data?.status) >= 400 ? 'bg-red-50 text-red-700' : 'bg-emerald-50 text-emerald-700'
-        }`}>
+        <div className={`rounded-xl px-3 py-2 text-sm ${(rollbackFetcher.data?.status ?? fetcher.data?.status) >= 400 ? 'bg-red-50 text-red-700' : 'bg-emerald-50 text-emerald-700'
+          }`}>
           {rollbackFetcher.data?.message || fetcher.data.message}
         </div>
       ) : null}
@@ -215,13 +317,12 @@ export function StockMovementEditor({
         <input type="hidden" name="costAmount" value={hasValidPricing ? computedUnitCost.toFixed(6) : ''} />
 
         <div className="grid gap-6 2xl:grid-cols-[minmax(0,1fr)_360px] xl:grid-cols-[minmax(0,1fr)_340px]">
-          <div className="space-y-6">
+          <div className="space-y-8">
             <section className="space-y-4">
               <div className="mb-4">
-                <h2 className="text-base font-semibold text-slate-950">Dados do lançamento</h2>
-                <p className="text-sm text-slate-500">Edite a identificação da nota e a origem textual do movimento.</p>
+                <h2 className="text-base font-semibold text-slate-950 border p-2  bg-slate-200 rounded-sm">Dados do lançamento</h2>
               </div>
-              <div className="grid gap-4 md:grid-cols-2">
+              <div className="grid gap-4 md:grid-cols-4">
                 <div className="space-y-1.5">
                   <Label htmlFor="movementAt">Data da movimentação</Label>
                   <Input id="movementAt" name="movementAt" type="datetime-local" defaultValue={formatDateTimeLocalValue(line.movementAt || row.movementAt)} disabled={isSubmitting} />
@@ -230,116 +331,176 @@ export function StockMovementEditor({
                   <Label htmlFor="invoiceNumber">Documento</Label>
                   <Input id="invoiceNumber" name="invoiceNumber" defaultValue={line.invoiceNumber || row.invoiceNumber || ''} disabled={isSubmitting} />
                 </div>
-                <div className="space-y-2 md:col-span-2">
-                  <Label>Ingrediente / item do sistema</Label>
-                  {canRemapItem ? (
-                    <Popover open={itemPickerOpen} onOpenChange={setItemPickerOpen}>
-                      <PopoverTrigger asChild>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          role="combobox"
-                          aria-expanded={itemPickerOpen}
-                          disabled={isSubmitting}
-                          className="h-10 w-full justify-between bg-white font-normal"
-                        >
-                          <span className="truncate text-left">{itemButtonLabel}</span>
-                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent
-                        className="w-[min(520px,calc(100vw-2rem))] p-0"
-                        align="start"
-                        side="bottom"
-                        collisionPadding={16}
-                      >
-                        <Command>
-                          <CommandInput placeholder="Buscar item do sistema..." />
-                          <CommandList className="max-h-[min(45vh,320px)]">
-                            <CommandEmpty>Nenhum item encontrado.</CommandEmpty>
-                            <CommandItem
-                              value="sem item mapeado"
-                              onSelect={() => {
-                                setMappedItemIdDraft('');
-                                setItemPickerOpen(false);
-                              }}
+                <div className="space-y-1.5 md:col-span-2">
+                  <Label>Fornecedor informado</Label>
+                  <Select value={supplierIdDraft || '__EMPTY__'} onValueChange={(value) => setSupplierIdDraft(value === '__EMPTY__' ? '' : value)} disabled={isSubmitting}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Sem vínculo" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__EMPTY__">Sem vínculo</SelectItem>
+                      {supplierOptions.map((supplier) => (
+                        <SelectItem key={supplier.id} value={supplier.id}>
+                          {supplier.name} {supplier.cnpj ? `• ${supplier.cnpj}` : ''}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2 md:col-span-4 ">
+                  <div className="grid md:grid-cols-2 gap-x-4">
+                    <div>
+                      <Label>Ingrediente / item do sistema</Label>
+                      {canRemapItem ? (
+                        <Popover open={itemPickerOpen} onOpenChange={setItemPickerOpen}>
+                          <PopoverTrigger asChild>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              role="combobox"
+                              aria-expanded={itemPickerOpen}
+                              disabled={isSubmitting}
+                              className="h-10 w-full justify-between bg-white font-normal"
                             >
-                              <Check className={cn('mr-2 h-4 w-4', mappedItemIdDraft ? 'opacity-0' : 'opacity-100')} />
-                              <span className="truncate">Sem item mapeado</span>
-                            </CommandItem>
-                            {ITEM_CLASSIFICATION_ORDER.map((classification) => {
-                              const groupItems = itemOptions.filter((item) => (item.classification || 'outro') === classification);
-                              if (groupItems.length === 0) return null;
-                              return (
-                                <CommandGroup key={classification} heading={ITEM_CLASSIFICATION_LABELS[classification] ?? classification}>
-                                  {groupItems.map((item) => (
-                                    <CommandItem
-                                      key={item.id}
-                                      value={`${item.name} ${item.classification || ''} ${item.purchaseUm || ''} ${item.consumptionUm || ''} ${item.id}`}
-                                      onSelect={() => {
-                                        setMappedItemIdDraft(item.id);
-                                        setItemPickerOpen(false);
-                                      }}
-                                    >
-                                      <Check className={cn('mr-2 h-4 w-4', mappedItemIdDraft === item.id ? 'opacity-100' : 'opacity-0')} />
-                                      <div className="flex min-w-0 flex-1 items-center justify-between gap-2">
-                                        <span className="truncate">
-                                          {item.name} ({getItemBaseUnit(item)})
-                                        </span>
-                                        <Link
-                                          to={`/admin/items/${item.id}/main`}
-                                          className="shrink-0 rounded border border-slate-300 px-2 py-0.5 text-[11px] font-medium text-slate-700 hover:bg-slate-100"
-                                          onMouseDown={(event) => {
-                                            event.preventDefault();
-                                            event.stopPropagation();
-                                          }}
-                                          onClick={(event) => {
-                                            event.stopPropagation();
+                              <span className="truncate text-left">{itemButtonLabel}</span>
+                              <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent
+                            className="w-[min(520px,calc(100vw-2rem))] p-0"
+                            align="start"
+                            side="bottom"
+                            collisionPadding={16}
+                          >
+                            <Command>
+                              <CommandInput placeholder="Buscar item do sistema..." />
+                              <CommandList className="max-h-[min(45vh,320px)]">
+                                <CommandEmpty>Nenhum item encontrado.</CommandEmpty>
+                                <CommandItem
+                                  value="sem item mapeado"
+                                  onSelect={() => {
+                                    setMappedItemIdDraft('');
+                                    setItemPickerOpen(false);
+                                  }}
+                                >
+                                  <Check className={cn('mr-2 h-4 w-4', mappedItemIdDraft ? 'opacity-0' : 'opacity-100')} />
+                                  <span className="truncate">Sem item mapeado</span>
+                                </CommandItem>
+                                {ITEM_CLASSIFICATION_ORDER.map((classification) => {
+                                  const groupItems = itemOptions.filter((item) => (item.classification || 'outro') === classification);
+                                  if (groupItems.length === 0) return null;
+                                  return (
+                                    <CommandGroup key={classification} heading={ITEM_CLASSIFICATION_LABELS[classification] ?? classification}>
+                                      {groupItems.map((item) => (
+                                        <CommandItem
+                                          key={item.id}
+                                          value={`${item.name} ${item.classification || ''} ${item.purchaseUm || ''} ${item.consumptionUm || ''} ${item.id}`}
+                                          onSelect={() => {
+                                            setMappedItemIdDraft(item.id);
+                                            setItemPickerOpen(false);
                                           }}
                                         >
-                                          Abrir
-                                        </Link>
-                                      </div>
-                                    </CommandItem>
-                                  ))}
-                                </CommandGroup>
-                              );
-                            })}
-                          </CommandList>
-                        </Command>
-                      </PopoverContent>
-                    </Popover>
-                  ) : (
-                    <div className="flex min-h-10 items-center rounded-md border border-slate-200 bg-slate-50 px-3 text-sm text-slate-700">
-                      <span className="truncate">{itemButtonLabel}</span>
+                                          <Check className={cn('mr-2 h-4 w-4', mappedItemIdDraft === item.id ? 'opacity-100' : 'opacity-0')} />
+                                          <div className="flex min-w-0 flex-1 items-center justify-between gap-2">
+                                            <span className="truncate">
+                                              {item.name} ({getItemBaseUnit(item)})
+                                            </span>
+                                            <Link
+                                              to={`/admin/items/${item.id}/main`}
+                                              className="shrink-0 rounded border border-slate-300 px-2 py-0.5 text-[11px] font-medium text-slate-700 hover:bg-slate-100"
+                                              onMouseDown={(event) => {
+                                                event.preventDefault();
+                                                event.stopPropagation();
+                                              }}
+                                              onClick={(event) => {
+                                                event.stopPropagation();
+                                              }}
+                                            >
+                                              Abrir
+                                            </Link>
+                                          </div>
+                                        </CommandItem>
+                                      ))}
+                                    </CommandGroup>
+                                  );
+                                })}
+                              </CommandList>
+                            </Command>
+                          </PopoverContent>
+                        </Popover>
+                      ) : (
+                        <div className="flex py-2 items-center rounded-md border border-slate-200 bg-slate-50 px-3 text-sm text-slate-700">
+                          <span className="truncate">{itemButtonLabel}</span>
+                        </div>
+                      )}
                     </div>
-                  )}
-                  <div className="space-y-1 text-xs text-slate-500">
-                    <p>Origem importada: <span className="font-medium text-slate-700">{importedIngredientName || '-'}</span></p>
-                    <p>O texto importado continua salvo para rastreabilidade.</p>
-                    {!canRemapItem ? (
-                      <p className="text-amber-700">
-                        Item em somente leitura neste estado. Reverta a movimentação para trocar o item.
-                      </p>
-                    ) : null}
+                    <div className='p-4 border rounded-lg'>
+                      <div className="space-y-1 text-xs text-slate-500">
+                        <p>Origem importada: <span className="font-medium text-slate-700">{importedIngredientName || '-'}</span></p>
+                        <Separator className="my-2" />
+                        {!canRemapItem ? (
+                          <div className='flex flex-col gap-4' >
+                            <p className="text-amber-700">
+                              Item em somente leitura neste estado. Se você precisa remapear esta linha para outro item, reverta a movimentação agora.
+                            </p>
+                            {isActiveMovement ? (
+                              <section className="flex flex-row gap-4 items-center">
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  disabled={isSubmitting}
+                                  className="w-full border-amber-300 bg-white text-amber-900 hover:bg-amber-100"
+                                  onClick={() => {
+                                    const formData = new FormData();
+                                    formData.set('_action', 'movement-rollback-line');
+                                    formData.set('movementId', String(row.id || ''));
+                                    formData.set('batchId', String(row.batchId || ''));
+                                    formData.set('lineId', String(row.lineId || ''));
+                                    rollbackFetcher.submit(formData, { method: 'post', action: actionPath });
+                                  }}
+                                >
+                                  {isRollingBack && rollbackAction === 'movement-rollback-line' ? 'Revertendo...' : 'Trocar o item'}
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  disabled={isSubmitting}
+                                  className="w-full border-rose-300 bg-white text-rose-900 hover:bg-rose-100"
+                                  onClick={() => {
+                                    const formData = new FormData();
+                                    formData.set('_action', 'movement-rollback-and-ignore-line');
+                                    formData.set('movementId', String(row.id || ''));
+                                    formData.set('batchId', String(row.batchId || ''));
+                                    formData.set('lineId', String(row.lineId || ''));
+                                    rollbackFetcher.submit(formData, { method: 'post', action: actionPath });
+                                  }}
+                                >
+                                  {isRollingBack && rollbackAction === 'movement-rollback-and-ignore-line'
+                                    ? 'Revertendo e ignorando...'
+                                    : 'Reverter e ignorar esta linha'}
+                                </Button>
+                              </section>
+                            ) : null}
+                          </div>
+
+
+                        ) : null}
+                      </div>
+                    </div>
                   </div>
+
+
                 </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="motivo">Motivo</Label>
-                  <Input id="motivo" name="motivo" defaultValue={line.motivo || ''} disabled={isSubmitting} />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="identification">Identificação</Label>
-                  <Input id="identification" name="identification" defaultValue={line.identification || ''} disabled={isSubmitting} />
-                </div>
+
+
+
               </div>
               <Separator />
             </section>
 
             <section className="space-y-4">
               <div className="mb-4">
-                <h2 className="text-base font-semibold text-slate-950">Quantidade e custo</h2>
-                <p className="text-sm text-slate-500">Informe o custo total da nota. O custo unitário é recalculado automaticamente com base na quantidade digitada.</p>
+                <h2 className="text-base font-semibold text-slate-950 border p-2  bg-slate-200 rounded-sm">Quantidade e custo</h2>
               </div>
 
               <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-5 xl:grid-cols-4">
@@ -368,12 +529,25 @@ export function StockMovementEditor({
                   <MoneyInput id="costTotalAmount" name="costTotalAmount" defaultValue={costTotalAmountDraft} className="h-10 w-full" onValueChange={setCostTotalAmountDraft} disabled={isSubmitting} />
                 </div>
                 <div className="rounded-xl bg-slate-50/80 px-4 py-3 2xl:col-span-2">
-                  <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Custo unitário calculado</div>
+                  <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Custo unitário da movimentação</div>
                   <div className="mt-2 text-lg font-semibold text-slate-950">
                     {hasValidPricing ? formatMoney(computedUnitCost) : '-'}
                   </div>
                   <div className="mt-1 text-xs text-slate-500">
                     {hasValidPricing ? `por ${movementUnitDraft || 'unidade'}` : 'Preencha quantidade e custo total'}
+                  </div>
+                  <div className="mt-3 border-t border-slate-200 pt-3">
+                    <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Custo unitário convertido calculado</div>
+                    <div className="mt-1 text-sm font-semibold text-slate-950">
+                      {convertedCostPreview ? formatMoney(convertedCostPreview.convertedCostAmount) : '-'}
+                    </div>
+                    <div className="mt-0.5 text-xs text-slate-500">
+                      {convertedCostPreview
+                        ? `por ${selectedTargetUnit || '-'}${convertedCostPreview.conversionFactorUsed ? ` • fator ${Number(convertedCostPreview.conversionFactorUsed).toFixed(2)}` : ''}`
+                        : selectedMappedItem
+                          ? `Sem conversão para ${selectedTargetUnit || '-'}`
+                          : 'Selecione um item para calcular a conversão'}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -407,30 +581,27 @@ export function StockMovementEditor({
 
             <section className="space-y-4">
               <div className="mb-4">
-                <h2 className="text-base font-semibold text-slate-950">Vínculos e observações</h2>
-                <p className="text-sm text-slate-500">Associe o fornecedor e o item do sistema usados no processamento do custo.</p>
+                <h2 className="text-base font-semibold text-slate-950 border p-2  bg-slate-200 rounded-sm">Vínculos e observações</h2>
               </div>
 
               <div className="grid gap-4 md:grid-cols-6">
-                <div className="space-y-1.5 md:col-span-4">
-                  <Label>Fornecedor informado</Label>
-                  <Select value={supplierIdDraft || '__EMPTY__'} onValueChange={(value) => setSupplierIdDraft(value === '__EMPTY__' ? '' : value)} disabled={isSubmitting}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Sem vínculo" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__EMPTY__">Sem vínculo</SelectItem>
-                      {supplierOptions.map((supplier) => (
-                        <SelectItem key={supplier.id} value={supplier.id}>
-                          {supplier.name} {supplier.cnpj ? `• ${supplier.cnpj}` : ''}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                <div className="space-y-1.5 md:col-span-2">
+                  <Label htmlFor="motivo">Motivo</Label>
+                  <Input id="motivo" name="motivo" defaultValue={line.motivo || ''} disabled={isSubmitting} />
+                </div>
+                <div className="space-y-1.5 md:col-span-2">
+                  <Label htmlFor="identification">Identificação</Label>
+                  <Input id="identification" name="identification" defaultValue={line.identification || ''} disabled={isSubmitting} />
                 </div>
                 <div className="space-y-1.5 md:col-span-2">
                   <Label htmlFor="manualConversionFactor">Fator manual</Label>
-                  <Input id="manualConversionFactor" name="manualConversionFactor" defaultValue={line.manualConversionFactor ?? ''} disabled={isSubmitting} />
+                  <Input
+                    id="manualConversionFactor"
+                    name="manualConversionFactor"
+                    value={manualConversionFactorDraft}
+                    onChange={(event) => setManualConversionFactorDraft(event.target.value)}
+                    disabled={isSubmitting}
+                  />
                 </div>
                 <div className="space-y-1.5 md:col-span-4">
                   <Label htmlFor="observation">Observação</Label>
@@ -452,7 +623,8 @@ export function StockMovementEditor({
                   {line.conversionFactorUsed ? ` • fator ${Number(line.conversionFactorUsed).toFixed(6)}` : ''}
                 </div>
                 <div>
-                  <span className="font-medium text-slate-900">Custo convertido:</span> {formatMoney(line.convertedCostAmount)} / {line.targetUnit || '-'}
+                  <span className="font-medium text-slate-900">Custo convertido:</span>{' '}
+                  {convertedCostPreview ? formatMoney(convertedCostPreview.convertedCostAmount) : formatMoney(line.convertedCostAmount)} / {selectedTargetUnit || line.targetUnit || '-'}
                 </div>
                 <div>
                   <span className="font-medium text-slate-900">Lote:</span>{' '}
@@ -469,51 +641,7 @@ export function StockMovementEditor({
               <Separator />
             </section>
 
-            {isActiveMovement ? (
-              <section className="space-y-3 rounded-2xl border border-amber-200 bg-amber-50/80 p-4">
-                <div className="text-xs font-semibold uppercase tracking-wide text-amber-800">Trocar item</div>
-                <p className="text-sm text-amber-900">
-                  Se você precisa remapear esta linha para outro item, reverta a movimentação agora. Depois disso, a tela recarrega já liberando a troca do item.
-                </p>
-                <p className="text-xs text-amber-800">
-                  Se o item atual já recebeu atualizações de custo depois desta importação, o sistema preserva o custo mais recente durante a reversão.
-                </p>
-                <Button
-                  type="button"
-                  variant="outline"
-                  disabled={isSubmitting}
-                  className="w-full border-amber-300 bg-white text-amber-900 hover:bg-amber-100"
-                  onClick={() => {
-                    const formData = new FormData();
-                    formData.set('_action', 'movement-rollback-line');
-                    formData.set('movementId', String(row.id || ''));
-                    formData.set('batchId', String(row.batchId || ''));
-                    formData.set('lineId', String(row.lineId || ''));
-                    rollbackFetcher.submit(formData, { method: 'post', action: actionPath });
-                  }}
-                >
-                  {isRollingBack && rollbackAction === 'movement-rollback-line' ? 'Revertendo...' : 'Reverter agora para trocar o item'}
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  disabled={isSubmitting}
-                  className="w-full border-rose-300 bg-white text-rose-900 hover:bg-rose-100"
-                  onClick={() => {
-                    const formData = new FormData();
-                    formData.set('_action', 'movement-rollback-and-ignore-line');
-                    formData.set('movementId', String(row.id || ''));
-                    formData.set('batchId', String(row.batchId || ''));
-                    formData.set('lineId', String(row.lineId || ''));
-                    rollbackFetcher.submit(formData, { method: 'post', action: actionPath });
-                  }}
-                >
-                  {isRollingBack && rollbackAction === 'movement-rollback-and-ignore-line'
-                    ? 'Revertendo e ignorando...'
-                    : 'Reverter e ignorar esta linha'}
-                </Button>
-              </section>
-            ) : null}
+
 
             <section className="space-y-3">
               <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Origem importada</div>

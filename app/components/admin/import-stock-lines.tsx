@@ -1,5 +1,5 @@
 import { Form, Link, useFetcher, useLocation, useOutletContext, useParams, useRevalidator } from '@remix-run/react';
-import { EyeOff, Eye, Loader2, Pencil, RotateCcw, AlignJustify, Layers, X, Check, LayoutGrid, FileText, AlertTriangle, CheckCircle2, Download } from 'lucide-react';
+import { EyeOff, Eye, Loader2, Pencil, RotateCcw, AlignJustify, Layers, X, Check, LayoutGrid, FileText, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { TwoLevelLineRow } from '~/components/admin/import-stock-two-level-row';
@@ -19,6 +19,7 @@ import {
   formatDate,
   formatDocumentLabel,
   formatMoney,
+  ImportBatchSubmitDialog,
   ItemSystemMapperCell,
   LINE_STATUS_GUIDE,
   statusBadgeClass,
@@ -83,6 +84,29 @@ function hasCostDiscrepancy(
   if (!Number.isFinite(converted) || converted <= 0) return false;
   const discrepancy = Math.abs(converted - hint.lastCostPerUnit) / hint.lastCostPerUnit;
   return discrepancy > COST_DISCREPANCY_THRESHOLD;
+}
+
+function CostHistoryHint({
+  hint,
+  discrepancy,
+}: {
+  hint: { lastCostPerUnit: number | null; avgCostPerUnit: number | null } | null;
+  discrepancy: boolean;
+}) {
+  if (!hint || (hint.lastCostPerUnit == null && hint.avgCostPerUnit == null)) return null;
+
+  return (
+    <div className="mt-1 flex flex-col gap-0.5 text-[10px] font-normal leading-tight">
+      {hint.lastCostPerUnit != null ? (
+        <div className={cn(discrepancy ? 'text-red-500' : 'text-slate-500')}>
+          último: {formatMoney(hint.lastCostPerUnit)}
+        </div>
+      ) : null}
+      {hint.avgCostPerUnit != null ? (
+        <div className="text-slate-500">médio: {formatMoney(hint.avgCostPerUnit)}</div>
+      ) : null}
+    </div>
+  );
 }
 
 function EditableTwoLevelRow({
@@ -292,6 +316,7 @@ function EditableTwoLevelRow({
                 unitOptions={unitOptions}
                 categories={categories}
                 costHint={hint}
+                showCostHint={false}
                 onItemSelected={onStartEditing}
               />
             )}
@@ -345,12 +370,10 @@ function EditableTwoLevelRow({
                 )}
               </div>
             ) : (
-              <span className={cn(discrepancy ? 'text-red-600' : 'text-slate-700')}>
+              <div className={cn(discrepancy ? 'text-red-600' : 'text-slate-700')}>
                 {displayConvertedCost != null ? formatMoney(displayConvertedCost) : '-'}
-                {discrepancy && hint?.lastCostPerUnit != null ? (
-                  <div className="text-[11px] text-slate-500">último: {formatMoney(hint.lastCostPerUnit)}</div>
-                ) : null}
-              </span>
+                <CostHistoryHint hint={hint} discrepancy={discrepancy} />
+              </div>
             )}
           </TableCell>
           <TableCell className="min-w-[130px] px-3 py-3 text-right font-mono text-xs tabular-nums text-slate-700">
@@ -889,7 +912,7 @@ function LineCard({
               <>
                 <div className="min-w-[220px] flex-1">
                   <div className="mb-1.5 text-[10px] font-black uppercase tracking-widest text-slate-400">Vincular produto</div>
-                  <ItemSystemMapperCell line={line} items={items} batchId={batchId} unitOptions={unitOptions} categories={categories} costHint={hint} onItemSelected={onStartEditing} />
+                  <ItemSystemMapperCell line={line} items={items} batchId={batchId} unitOptions={unitOptions} categories={categories} costHint={hint} showCostHint={false} onItemSelected={onStartEditing} />
                   {!isEditing && (line.status === 'invalid' || line.status === 'error') && line.errorMessage ? (
                     <div className="mt-1 text-[11px] font-medium text-red-500">{line.errorMessage}</div>
                   ) : null}
@@ -939,7 +962,10 @@ function LineCard({
 
                 {/* Custo unit. calculado */}
                 <div className="w-28 shrink-0">
-                  <div className="mb-1.5 text-[10px] font-black uppercase tracking-widest text-slate-400">Custo unit.</div>
+                  <div className={cn('mb-1.5 flex items-center gap-1 text-[10px] font-black uppercase tracking-widest', discrepancy ? 'text-red-600' : 'text-slate-400')}>
+                    {discrepancy ? <AlertTriangle className="h-3 w-3 shrink-0" /> : null}
+                    <span>Custo unit.</span>
+                  </div>
                   {isEditing ? (
                     <div className={cn('rounded-lg border px-3 py-2 text-sm font-semibold tabular-nums', conversionPreview ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-slate-200 bg-slate-50 text-slate-400')}>
                       {conversionPreview ? formatMoney(conversionPreview.convertedCostAmount) : '—'}
@@ -947,9 +973,7 @@ function LineCard({
                   ) : (
                     <div className={cn('rounded-lg border px-3 py-2 text-sm font-semibold tabular-nums', discrepancy ? 'border-red-200 bg-red-50 text-red-600' : 'border-slate-200 bg-slate-50 text-slate-700')}>
                       {displayConvertedCost != null ? formatMoney(displayConvertedCost) : '-'}
-                      {discrepancy && hint?.lastCostPerUnit != null ? (
-                        <div className="text-[10px] font-normal text-red-500">último: {formatMoney(hint.lastCostPerUnit)}</div>
-                      ) : null}
+                      <CostHistoryHint hint={hint} discrepancy={discrepancy} />
                     </div>
                   )}
                 </div>
@@ -1443,6 +1467,7 @@ export function AdminImportStockMovementsBatchLinesRoute({
                               unitOptions={unitOptions}
                               categories={categories}
                               costHint={hint}
+                              showCostHint={false}
                             />
                           )}
                         </TableCell>
@@ -1462,11 +1487,7 @@ export function AdminImportStockMovementsBatchLinesRoute({
                                 {line.conversionSource || '-'}
                                 {showFactor && line.conversionFactorUsed ? ` • fator ${Number(line.conversionFactorUsed).toFixed(6)}` : ''}
                               </div>
-                              {line.status !== 'ready' && discrepancy && hint?.lastCostPerUnit != null ? (
-                                <div className="mt-1 text-[11px] font-medium text-red-600">
-                                  último: {formatMoney(hint.lastCostPerUnit)} / {line.targetUnit || '-'}
-                                </div>
-                              ) : null}
+                              <CostHistoryHint hint={hint} discrepancy={discrepancy} />
                             </>
                           )}
                         </TableCell>
@@ -1649,18 +1670,13 @@ export function AdminImportStockMovementsBatchLinesRoute({
                     </button>
                   </Form>
                 )}
-                <Form method="post" action={`/admin/import-stock-movements/${batchId}`}>
-                  <input type="hidden" name="_action" value="batch-import" />
-                  <input type="hidden" name="batchId" value={selectedBatch.id} />
-                  <button
-                    type="submit"
-                    disabled={(summary?.readyToImport || 0) <= 0 || isImportingBatch}
-                    className="flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-40"
-                  >
-                    {isImportingBatch ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-                    Importar {(summary?.readyToImport || 0) > 0 ? `(${summary.readyToImport})` : ''}
-                  </button>
-                </Form>
+                <ImportBatchSubmitDialog
+                  batchId={selectedBatch.id}
+                  readyToImport={summary?.readyToImport || 0}
+                  isImportingBatch={isImportingBatch}
+                  lines={lines}
+                  variant="primary"
+                />
               </div>
               {importDisabledReason && (
                 <span className="text-[11px] text-slate-400">{importDisabledReason}</span>

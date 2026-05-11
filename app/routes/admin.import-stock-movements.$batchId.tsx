@@ -17,7 +17,7 @@ import {
 import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandSeparator } from '~/components/ui/command';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '~/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '~/components/ui/dialog';
 import { Input } from '~/components/ui/input';
 import { Label } from '~/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '~/components/ui/popover';
@@ -227,6 +227,19 @@ function deriveUnitCost(totalAmount: unknown, quantity: unknown) {
   return Number.isFinite(unitCost) && unitCost > 0 ? unitCost : null;
 }
 
+function todayDateInputValue() {
+  const now = new Date();
+  const local = new Date(now.getTime() - now.getTimezoneOffset() * 60000);
+  return local.toISOString().slice(0, 10);
+}
+
+function parseDateInputAsLocalNoon(value: string) {
+  const raw = String(value || '').trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) return null;
+  const parsed = new Date(`${raw}T12:00:00`);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
 export function formatDate(value: any) {
   if (!value) return '-';
   const d = new Date(value);
@@ -308,6 +321,116 @@ export function statusBadgeClass(status: string) {
 
 const toolbarBtnRed = 'flex flex-col items-center justify-center gap-1 px-4 py-2.5 text-red-700 hover:bg-red-50 transition min-w-[64px] h-full';
 
+export function ImportBatchSubmitDialog({
+  batchId,
+  readyToImport,
+  isImportingBatch,
+  lines = [],
+  variant = 'toolbar',
+}: {
+  batchId: string;
+  readyToImport: number;
+  isImportingBatch: boolean;
+  lines?: any[];
+  variant?: 'toolbar' | 'primary';
+}) {
+  const [open, setOpen] = useState(false);
+  const disabled = readyToImport <= 0 || isImportingBatch;
+  const buttonClass =
+    variant === 'primary'
+      ? 'flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-40'
+      : 'flex flex-col items-center justify-center gap-1 px-4 py-2.5 text-emerald-700 hover:bg-emerald-50 transition min-w-[64px] disabled:opacity-40 disabled:cursor-not-allowed';
+  const label = `Importar${readyToImport > 0 ? ` (${readyToImport})` : ''}`;
+  const readyLines = lines.filter((line) => String(line?.status || '') === 'ready');
+  const documentNumbers = Array.from(new Set(
+    readyLines
+      .map((line) => String(line?.invoiceNumber || '').trim())
+      .filter(Boolean),
+  ));
+  const supplierNames = Array.from(new Set(
+    readyLines
+      .map((line) => String(line?.supplierName || '').trim())
+      .filter(Boolean),
+  ));
+
+  function copyModalText(value: string, label: string) {
+    const text = String(value || '').trim();
+    if (!text) return;
+    void navigator.clipboard.writeText(text).then(
+      () => toast({ title: `${label} copiado`, description: text }),
+      () => toast({ title: 'Não foi possível copiar', description: text, variant: 'destructive' }),
+    );
+  }
+
+  function ClickableTextList({ label, values }: { label: string; values: string[] }) {
+    if (values.length === 0) return null;
+    return (
+      <div className="space-y-1.5">
+        <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">{label}</div>
+        <div className="flex flex-wrap gap-2">
+          {values.map((value) => (
+            <button
+              key={value}
+              type="button"
+              className="rounded-md border border-slate-200 bg-slate-50 px-2.5 py-1 text-left text-xs font-medium text-slate-700 transition hover:border-slate-300 hover:bg-white hover:text-slate-950"
+              onClick={() => copyModalText(value, label)}
+            >
+              {label === 'Documento' ? formatDocumentLabel(value) : value}
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <button type="button" disabled={disabled} className={buttonClass}>
+          {isImportingBatch ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+          <span className={variant === 'primary' ? '' : 'text-[11px] font-medium'}>{label}</span>
+        </button>
+      </DialogTrigger>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Data do documento</DialogTitle>
+          <DialogDescription>
+            As movimentações de estoque serão criadas com esta data, não com a data da importação.
+          </DialogDescription>
+        </DialogHeader>
+        {(documentNumbers.length > 0 || supplierNames.length > 0) ? (
+          <div className="space-y-3">
+            <ClickableTextList label="Documento" values={documentNumbers} />
+            <ClickableTextList label="Fornecedor" values={supplierNames} />
+          </div>
+        ) : null}
+        <Form
+          method="post"
+          action={`/admin/import-stock-movements/${batchId}`}
+          className="space-y-4"
+          onSubmit={() => setOpen(false)}
+        >
+          <input type="hidden" name="_action" value="batch-import" />
+          <input type="hidden" name="batchId" value={batchId} />
+          <div className="flex flex-col gap-4 md:grid md:grid-cols-2 items-center">
+            <Label htmlFor={`batch-movement-date-${batchId}`}>Data da movimentação</Label>
+            <Input
+              id={`batch-movement-date-${batchId}`}
+              name="movementDate"
+              type="date"
+              defaultValue={todayDateInputValue()}
+              required
+            />
+          </div>
+          <Button type="submit" className="w-full bg-emerald-600 text-white hover:bg-emerald-700">
+            Importar {readyToImport > 0 ? `(${readyToImport})` : ''}
+          </Button>
+        </Form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export function DeleteBatchButton({ batchId, batchName, status }: { batchId: string; batchName: string; status: string }) {
   const isValidated = status === 'validated';
 
@@ -364,6 +487,7 @@ export function ItemSystemMapperCell({
   categories = [],
   costHint,
   compact = false,
+  showCostHint = true,
   onItemSelected,
 }: {
   line: any;
@@ -373,6 +497,7 @@ export function ItemSystemMapperCell({
   categories?: Array<{ id: string; name: string }>;
   costHint?: { lastCostPerUnit: number | null; avgCostPerUnit: number | null } | null;
   compact?: boolean;
+  showCostHint?: boolean;
   onItemSelected?: () => void;
 }) {
   const [itemPickerOpen, setItemPickerOpen] = useState(false);
@@ -804,7 +929,7 @@ export function ItemSystemMapperCell({
                   </button>
                 </DialogTrigger>
                 <DialogContent
-                  className="max-w-lg"
+                  className="max-w-3xl"
                   onCloseAutoFocus={(event) => { event.preventDefault(); }}
                 >
                   <DialogHeader>
@@ -817,6 +942,7 @@ export function ItemSystemMapperCell({
                           <TableHead className="px-3 py-2 text-xs">UM de compra</TableHead>
                           <TableHead className="px-3 py-2 text-right text-xs">Fator</TableHead>
                           <TableHead className="px-3 py-2 text-xs">UM base</TableHead>
+                          <TableHead className="px-3 py-2 text-xs">Explicação</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -825,6 +951,9 @@ export function ItemSystemMapperCell({
                             <TableCell className="px-3 py-2 text-xs font-semibold text-emerald-700">{selectedItem.consumptionUm}</TableCell>
                             <TableCell className="px-3 py-2 text-right text-xs font-mono text-slate-500">1</TableCell>
                             <TableCell className="px-3 py-2 text-xs text-slate-500">base</TableCell>
+                            <TableCell className="px-3 py-2 text-xs leading-relaxed text-slate-600">
+                              Esta é a unidade base do item. Cada 1 {selectedItem.consumptionUm} movimenta 1 {selectedItem.consumptionUm} no estoque.
+                            </TableCell>
                           </TableRow>
                         )}
                         {selectedItem?.purchaseUm && selectedItem.purchaseUm !== selectedItem.consumptionUm && (
@@ -836,6 +965,11 @@ export function ItemSystemMapperCell({
                                 : '-'}
                             </TableCell>
                             <TableCell className="px-3 py-2 text-xs text-slate-500">{selectedItem.consumptionUm || '-'}</TableCell>
+                            <TableCell className="px-3 py-2 text-xs leading-relaxed text-slate-600">
+                              {selectedItem.purchaseToConsumptionFactor && selectedItem.consumptionUm
+                                ? `Cada 1 ${selectedItem.purchaseUm} da nota entra como ${Number(selectedItem.purchaseToConsumptionFactor).toLocaleString('pt-BR', { maximumFractionDigits: 4 })} ${selectedItem.consumptionUm} no estoque.`
+                                : 'Conversão principal do item, mas ainda falta fator ou UM base para explicar o impacto no estoque.'}
+                            </TableCell>
                           </TableRow>
                         )}
                         {(selectedItem?.ItemPurchaseConversion ?? []).map((c: { purchaseUm: string; factor: number }) => (
@@ -845,11 +979,16 @@ export function ItemSystemMapperCell({
                               {Number(c.factor).toLocaleString('pt-BR', { maximumFractionDigits: 4 })}
                             </TableCell>
                             <TableCell className="px-3 py-2 text-xs text-slate-500">{selectedItem?.consumptionUm || '-'}</TableCell>
+                            <TableCell className="px-3 py-2 text-xs leading-relaxed text-slate-600">
+                              {selectedItem?.consumptionUm
+                                ? `Cada 1 ${c.purchaseUm} da nota entra como ${Number(c.factor).toLocaleString('pt-BR', { maximumFractionDigits: 4 })} ${selectedItem.consumptionUm} no estoque.`
+                                : 'Conversão cadastrada, mas o item ainda não tem UM base para explicar o impacto no estoque.'}
+                            </TableCell>
                           </TableRow>
                         ))}
                         {!selectedItem?.consumptionUm && (selectedItem?.ItemPurchaseConversion ?? []).length === 0 && (
                           <TableRow>
-                            <TableCell colSpan={3} className="px-3 py-4 text-center text-xs text-slate-400">
+                            <TableCell colSpan={4} className="px-3 py-4 text-center text-xs text-slate-400">
                               Nenhuma conversão configurada.
                             </TableCell>
                           </TableRow>
@@ -887,7 +1026,7 @@ export function ItemSystemMapperCell({
             </>
           )}
         </div>}
-        {!compact && (costHint && (costHint.lastCostPerUnit != null || costHint.avgCostPerUnit != null) ? (
+        {!compact && showCostHint && (costHint && (costHint.lastCostPerUnit != null || costHint.avgCostPerUnit != null) ? (
           <div className="text-[11px] text-slate-500">
             {costHint.lastCostPerUnit != null && <>último: {formatMoney(costHint.lastCostPerUnit)}</>}
             {costHint.avgCostPerUnit != null && (
@@ -897,6 +1036,9 @@ export function ItemSystemMapperCell({
         ) : (
           <div className="text-[11px] text-slate-500">{line.mappingSource || '-'}</div>
         ))}
+        {!compact && !showCostHint ? (
+          <div className="text-[11px] text-slate-500">{line.mappingSource || '-'}</div>
+        ) : null}
       </mapItemFetcher.Form>
       {!compact && line.status === 'pending_cost_review' && (
         <div className="mt-1 flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left">
@@ -1409,7 +1551,9 @@ export async function action({ request, params }: ActionFunctionArgs) {
     }
 
     if (_action === 'batch-import') {
-      await startStockMovementImportBatch({ batchId, actor });
+      const movementDate = parseDateInputAsLocalNoon(str(formData.get('movementDate')));
+      if (!movementDate) return badRequest('Informe a data do documento');
+      await startStockMovementImportBatch({ batchId, actor, movementAt: movementDate });
       return redirect(redirectToCurrentPath(request, `/admin/import-stock-movements/${batchId}`));
     }
 
@@ -1667,18 +1811,12 @@ export default function AdminImportStockMovementsBatchDetailRoute() {
 
             {/* Grupo 1: Importar, Desfazer, Arquivar, Eliminar */}
             <div className="flex items-stretch overflow-hidden rounded-lg border border-slate-200">
-              <Form method="post">
-                <input type="hidden" name="_action" value="batch-import" />
-                <input type="hidden" name="batchId" value={selectedBatch.id} />
-                <button
-                  type="submit"
-                  disabled={summary.readyToImport <= 0 || isImportingBatch}
-                  className="flex flex-col items-center justify-center gap-1 px-4 py-2.5 text-emerald-700 hover:bg-emerald-50 transition min-w-[64px] disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  <Download className="h-4 w-4" />
-                  <span className="text-[11px] font-medium">Importar ({summary.readyToImport})</span>
-                </button>
-              </Form>
+              <ImportBatchSubmitDialog
+                batchId={selectedBatch.id}
+                readyToImport={summary.readyToImport}
+                isImportingBatch={isImportingBatch}
+                lines={lines}
+              />
 
               {summary.error > 0 ? (
                 <>
