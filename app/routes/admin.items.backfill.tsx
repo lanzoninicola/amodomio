@@ -2,9 +2,12 @@ import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import { Form, useActionData, useLoaderData } from "@remix-run/react";
 import { Button } from "~/components/ui/button";
 import { toast } from "~/components/ui/use-toast";
+import { buildAdminItemsMeta } from "~/domain/item/admin-items-meta";
 import { runBackfillLegacySellingInfoToItems } from "~/domain/item/item-selling-info-backfill.server";
 import prismaClient from "~/lib/prisma/client.server";
 import { ok, serverError } from "~/utils/http-response.server";
+
+export const meta = buildAdminItemsMeta("Backfill de itens", { itemScoped: false });
 
 async function runBackfillMenuItemsToItems() {
   const db = prismaClient as any;

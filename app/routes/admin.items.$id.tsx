@@ -43,6 +43,9 @@ import {
 import prismaClient from "~/lib/prisma/client.server";
 import { badRequest, ok, serverError } from "~/utils/http-response.server";
 import { lastUrlSegment } from "~/utils/url";
+import { buildAdminItemsMeta } from "~/domain/item/admin-items-meta";
+
+export const meta = buildAdminItemsMeta("Detalhes");
 
 export const ITEM_CLASSIFICATIONS = [
   "insumo",

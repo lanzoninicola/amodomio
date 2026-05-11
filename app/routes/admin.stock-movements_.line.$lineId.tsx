@@ -16,6 +16,11 @@ function sanitizeReturnTo(value: string, fallback: string) {
   return value.startsWith('/') ? value : fallback;
 }
 
+function normalizeItemUnit(value: unknown) {
+  const normalized = String(value || '').trim().toUpperCase();
+  return normalized || null;
+}
+
 export async function loader({ request, params }: LoaderFunctionArgs) {
   try {
     const lineId = str(params.lineId || null);
@@ -27,7 +32,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       str(url.searchParams.get('returnTo')),
       `/admin/stock-movements?lineId=${encodeURIComponent(lineId)}&status=all`,
     );
-    const [result, items, suppliers] = await Promise.all([
+    const [result, items, suppliers, measurementConversionsRaw] = await Promise.all([
       listStockMovementImportMovements({
         lineId,
         status: 'all',
@@ -36,7 +41,15 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       }),
       db.item.findMany({
         where: { active: true },
-        select: { id: true, name: true, classification: true, purchaseUm: true, consumptionUm: true },
+        select: {
+          id: true,
+          name: true,
+          classification: true,
+          purchaseUm: true,
+          consumptionUm: true,
+          purchaseToConsumptionFactor: true,
+          ItemPurchaseConversion: { select: { purchaseUm: true, factor: true } },
+        },
         orderBy: [{ name: 'asc' }],
         take: 2000,
       }),
@@ -45,6 +58,16 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           select: { id: true, name: true, cnpj: true },
           orderBy: [{ name: 'asc' }],
           take: 2000,
+        })
+        : [],
+      typeof db.measurementUnitConversion?.findMany === 'function'
+        ? db.measurementUnitConversion.findMany({
+          where: { active: true },
+          select: {
+            factor: true,
+            FromUnit: { select: { code: true } },
+            ToUnit: { select: { code: true } },
+          },
         })
         : [],
     ]);
@@ -56,8 +79,19 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     const row = result.rows[0];
     const mappedItemId = str(row.itemId || row.Line?.mappedItemId || row.ImportLine?.mappedItemId || null) || undefined;
     const unitOptions = await getAvailableItemUnits(mappedItemId);
+    const measurementConversions = (measurementConversionsRaw as Array<{
+      factor: number;
+      FromUnit?: { code?: string | null } | null;
+      ToUnit?: { code?: string | null } | null;
+    }>).flatMap((row) => {
+      const fromUnit = normalizeItemUnit(row?.FromUnit?.code);
+      const toUnit = normalizeItemUnit(row?.ToUnit?.code);
+      const factor = Number(row?.factor ?? NaN);
+      if (!fromUnit || !toUnit || !(factor > 0)) return [];
+      return [{ fromUnit, toUnit, factor }];
+    });
 
-    return ok({ row, items, suppliers, unitOptions, returnTo });
+    return ok({ row, items, suppliers, unitOptions, measurementConversions, returnTo });
   } catch (error) {
     return serverError(error);
   }
@@ -70,6 +104,7 @@ export default function AdminStockMovementLineDetailRoute() {
   const items = payload.items || [];
   const suppliers = payload.suppliers || [];
   const unitOptions = payload.unitOptions || [];
+  const measurementConversions = payload.measurementConversions || [];
   const returnTo = payload.returnTo || '/admin/stock-movements';
 
   return (
@@ -105,7 +140,7 @@ export default function AdminStockMovementLineDetailRoute() {
         </section>
 
         <section className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200/70">
-          <StockMovementEditor row={row} items={items} suppliers={suppliers} unitOptions={unitOptions} returnTo={returnTo} />
+          <StockMovementEditor row={row} items={items} suppliers={suppliers} unitOptions={unitOptions} measurementConversions={measurementConversions} returnTo={returnTo} />
         </section>
       </div>
     </Container>

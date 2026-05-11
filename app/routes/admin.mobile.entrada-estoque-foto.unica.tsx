@@ -2,7 +2,7 @@ import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import { redirect } from "@remix-run/node";
 import { Form, useActionData, useFetcher, useLoaderData } from "@remix-run/react";
 import { useEffect, useMemo, useState } from "react";
-import { AlertCircle, CheckCircle2, ChevronRight, Loader2 } from "lucide-react";
+import { AlertCircle, CheckCircle2, ChevronRight, Loader2, Pencil, PlusIcon } from "lucide-react";
 import { authenticator } from "~/domain/auth/google.server";
 import CopyButton from "~/components/primitives/copy-button/copy-button";
 import { Button } from "~/components/ui/button";
@@ -173,6 +173,9 @@ export default function AdminMobileEntradaEstoqueFotoUnicaPage() {
   const [supplierName, setSupplierName] = useState("");
   const [manualMovementAt, setManualMovementAt] = useState("");
   const [quickSupplierOpen, setQuickSupplierOpen] = useState(false);
+  const [promptOpen, setPromptOpen] = useState(false);
+  const [resultOpen, setResultOpen] = useState(false);
+  const [pasteConfirmed, setPasteConfirmed] = useState(false);
   const [quickSupplierName, setQuickSupplierName] = useState("");
   const createdSupplier = supplierFetcher.data?.payload?.supplier;
 
@@ -239,39 +242,41 @@ export default function AdminMobileEntradaEstoqueFotoUnicaPage() {
   const handlePasteResponse = async () => {
     if (typeof navigator === "undefined" || !navigator.clipboard?.readText) return;
     const text = await navigator.clipboard.readText();
-    if (text) setChatGptResponse(text);
+    if (text) {
+      setChatGptResponse(text);
+      setPasteConfirmed(true);
+      setTimeout(() => setPasteConfirmed(false), 3000);
+    }
   };
 
   return (
     <div className="space-y-4">
       <div className="border-t border-slate-200 pt-4">
-        <div className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Fornecedor</div>
+        <div className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">(1) Fornecedor</div>
       </div>
 
       <section className="space-y-3">
-        <SearchableSelect
-          value={supplierName}
-          onValueChange={setSupplierName}
-          options={supplierOptions}
-          placeholder="Selecionar fornecedor"
-          searchPlaceholder="Buscar fornecedor..."
-          emptyText="Nenhum fornecedor encontrado."
-          triggerClassName="h-12 w-full max-w-none justify-between rounded-lg border-slate-300 px-4 text-base"
-          contentClassName="w-[var(--radix-popover-trigger-width)] p-0"
-        />
-
         <Collapsible open={quickSupplierOpen} onOpenChange={setQuickSupplierOpen}>
-          <CollapsibleTrigger asChild>
-            <button
-              type="button"
-              className="flex w-full items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-left"
-            >
-              <div className="text-base font-medium text-slate-900">Adicionar fornecedor rapido</div>
-              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-slate-500 transition data-[state=open]:rotate-90">
-                <ChevronRight className="h-4 w-4" />
-              </div>
-            </button>
-          </CollapsibleTrigger>
+          <div className="flex gap-2">
+            <SearchableSelect
+              value={supplierName}
+              onValueChange={setSupplierName}
+              options={supplierOptions}
+              placeholder="Selecionar fornecedor"
+              searchPlaceholder="Buscar fornecedor..."
+              emptyText="Nenhum fornecedor encontrado."
+              triggerClassName="h-12 flex-1 max-w-none justify-between rounded-lg border-slate-300 px-4 text-base"
+              contentClassName="w-[var(--radix-popover-trigger-width)] p-0"
+            />
+            <CollapsibleTrigger asChild>
+              <button
+                type="button"
+                className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 text-slate-500"
+              >
+                <PlusIcon className="h-4 w-4" />
+              </button>
+            </CollapsibleTrigger>
+          </div>
           <CollapsibleContent className="pt-3">
             <supplierFetcher.Form method="post" className="space-y-3">
               <input type="hidden" name="_action" value="supplier-quick-create" />
@@ -291,102 +296,124 @@ export default function AdminMobileEntradaEstoqueFotoUnicaPage() {
       </section>
 
       <div className="border-t border-slate-200 pt-4">
-        <div className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">ChatGPT</div>
+        <div className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">(2) Chat GPT</div>
       </div>
 
       <section className="space-y-2">
-        <div className="grid grid-cols-4 gap-2">
-          <CopyButton
-            textToCopy={promptDraft}
-            label="Copiar prompt"
-            variant="default"
-            classNameButton="col-span-3 h-12 w-full rounded-lg bg-slate-950 px-4 hover:bg-slate-800"
-            classNameLabel="text-base font-medium text-white"
-            classNameIcon="text-white"
-            toastTitle="Prompt copiado"
-            toastContent="Cole no ChatGPT e anexe a foto do cupom."
-          />
-          <a
-            href={CHATGPT_URL}
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex h-12 w-full items-center justify-center rounded-lg border border-slate-300 bg-white text-slate-700"
-            aria-label="Abrir ChatGPT"
-            title="Abrir ChatGPT"
-          >
-            <ChatGptLogoIcon />
-          </a>
-        </div>
-
-        <details className="group rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
-          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 [&::-webkit-details-marker]:hidden">
-            <div className="text-base font-medium text-slate-900">Prompt curto</div>
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-slate-500 transition group-open:rotate-90">
-              <ChevronRight className="h-4 w-4" />
-            </div>
-          </summary>
-          <p className="mt-2 text-sm leading-6 text-slate-600">
-            Leia a imagem anexada e retorne apenas um bloco <code>```json```</code> com{" "}
-            <code>document</code> e <code>lines</code>, sem texto extra. Em <code>document</code>,
-            informe <code>supplierName</code>, <code>supplierCnpj</code>, <code>invoiceNumber</code>,{" "}
-            <code>movementAt</code> (YYYY-MM-DD) e <code>notes</code>. Em <code>lines</code>, liste
-            os itens com <code>rowNumber</code>, <code>ingredientName</code>, <code>qtyEntry</code>,{" "}
-            <code>unitEntry</code>, <code>costAmount</code>, <code>costTotalAmount</code> e{" "}
-            <code>observation</code>. Use <code>null</code> para o que estiver ilegível.
-          </p>
-
-          <div className="mt-3 border-t border-slate-200 pt-3">
-            <div className="mb-2 flex items-center justify-between">
-              <span className="text-sm text-slate-500">Editar prompt completo</span>
+        <Collapsible open={promptOpen} onOpenChange={setPromptOpen}>
+          <div className="flex gap-2">
+            <CopyButton
+              textToCopy={promptDraft}
+              label="Copiar prompt"
+              variant="default"
+              classNameButton="h-12 w-full flex-1 rounded-lg bg-slate-950 px-4 hover:bg-slate-800"
+              classNameLabel="text-base font-medium text-white"
+              classNameIcon="text-white"
+              toastTitle="Prompt copiado"
+              toastContent="Cole no ChatGPT e anexe a foto do cupom."
+            />
+            <CollapsibleTrigger asChild>
               <button
                 type="button"
-                className="text-sm font-medium text-slate-600"
-                onClick={() => setPromptDraft(defaultPrompt)}
+                className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 text-slate-500"
               >
-                Restaurar
+                <Pencil className="h-4 w-4" />
               </button>
-            </div>
-            <textarea
-              value={promptDraft}
-              onChange={(e) => setPromptDraft(e.target.value)}
-              className="min-h-[180px] w-full rounded-md border border-slate-300 bg-white px-3 py-2 font-mono text-[12px] leading-5 text-slate-800 outline-none"
-            />
+            </CollapsibleTrigger>
           </div>
-        </details>
+          <CollapsibleContent className="pt-3">
+            <div className="py-2">
+              <p className="text-sm leading-6 text-slate-600">
+                Leia a imagem anexada e retorne apenas um bloco <code>```json```</code> com{" "}
+                <code>document</code> e <code>lines</code>, sem texto extra. Em <code>document</code>,
+                informe <code>supplierName</code>, <code>supplierCnpj</code>, <code>invoiceNumber</code>,{" "}
+                <code>movementAt</code> (YYYY-MM-DD) e <code>notes</code>. Em <code>lines</code>, liste
+                os itens com <code>rowNumber</code>, <code>ingredientName</code>, <code>qtyEntry</code>,{" "}
+                <code>unitEntry</code>, <code>costAmount</code>, <code>costTotalAmount</code> e{" "}
+                <code>observation</code>. Use <code>null</code> para o que estiver ilegível.
+              </p>
+              <div className="mt-3 border-t border-slate-200 pt-3">
+                <div className="mb-2 flex items-center justify-between">
+                  <span className="text-sm text-slate-500">Editar prompt completo</span>
+                  <button
+                    type="button"
+                    className="text-sm font-medium text-slate-600"
+                    onClick={() => setPromptDraft(defaultPrompt)}
+                  >
+                    Restaurar
+                  </button>
+                </div>
+                <textarea
+                  value={promptDraft}
+                  onChange={(e) => setPromptDraft(e.target.value)}
+                  className="min-h-[180px] w-full rounded-md border border-slate-300 bg-white px-3 py-2 font-mono text-[12px] leading-5 text-slate-800 outline-none"
+                />
+              </div>
+            </div>
+          </CollapsibleContent>
+        </Collapsible>
       </section>
 
-      <div className="flex items-center justify-between border-t border-slate-200 pt-4">
-        <div className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Colar</div>
-        <Button type="button" variant="outline" onClick={handlePasteResponse} className="h-12 px-5 text-base">
-          Colar
-        </Button>
+
+      <section className="space-y-2">
+        <a
+          href={CHATGPT_URL}
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex gap-2 h-12 w-full items-center justify-center rounded-lg border border-slate-300 bg-white text-slate-700"
+          aria-label="Abrir ChatGPT"
+          title="Abrir ChatGPT"
+        >
+          <ChatGptLogoIcon />
+          Abrir Chat GPT
+        </a>
+      </section>
+
+      <div className="border-t border-slate-200 pt-4">
+        <div className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">(3) Resultado</div>
       </div>
 
       <Form method="post" className="space-y-3">
         <input type="hidden" name="_action" value="stock-photo-import" />
         <input type="hidden" name="supplierName" value={supplierName} />
-        <div className="space-y-2">
-          <label htmlFor="manualMovementAt" className="block text-sm font-medium text-slate-700">
+        <div>
+          <label htmlFor="manualMovementAt" className="block text-sm font-medium text-slate-700 mb-1">
             Data efetiva do movimento
           </label>
-          <Input
-            id="manualMovementAt"
-            name="manualMovementAt"
-            type="date"
-            value={manualMovementAt}
-            onChange={(e) => setManualMovementAt(e.currentTarget.value)}
-          />
-          <p className="text-xs leading-5 text-slate-500">
-            Use este campo quando o cupom for de dias ou semanas anteriores. Se preenchido,
-            esta data prevalece sobre a data lida pelo ChatGPT.
-          </p>
+          <div className="flex items-center gap-2">
+            <Input
+              id="manualMovementAt"
+              name="manualMovementAt"
+              type="date"
+              value={manualMovementAt}
+              onChange={(e) => setManualMovementAt(e.currentTarget.value)}
+              className="h-12 flex-1"
+            />
+            <Button type="button" variant="outline" onClick={handlePasteResponse} className="h-12 flex-shrink-0 px-4 text-base">
+              Colar resultado
+            </Button>
+            <button
+              type="button"
+              onClick={() => setResultOpen((v) => !v)}
+              className="flex h-12 flex-shrink-0 items-center gap-1 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm text-slate-500"
+            >
+              {resultOpen ? "Ocultar" : "Mostrar"}
+              <ChevronRight className={`h-4 w-4 transition-transform duration-200 ${resultOpen ? "rotate-90" : ""}`} />
+            </button>
+          </div>
         </div>
+        {pasteConfirmed && (
+          <p className="flex items-center gap-1.5 text-sm font-medium text-emerald-600">
+            <CheckCircle2 className="h-4 w-4" />
+            Texto colado com sucesso.
+          </p>
+        )}
         <textarea
           name="chatGptResponse"
           value={chatGptResponse}
           onChange={(e) => setChatGptResponse(e.target.value)}
           placeholder="Cole aqui o JSON do ChatGPT."
-          className="min-h-[220px] w-full rounded-lg border border-slate-300 bg-white px-3 py-3 text-base text-slate-700 outline-none"
+          className={`min-h-[220px] w-full rounded-lg border border-slate-300 bg-white px-3 py-3 text-base text-slate-700 outline-none ${resultOpen ? "" : "hidden"}`}
         />
 
         <div className="border-t border-slate-200 pt-3" />

@@ -1,5 +1,8 @@
 import { useOutletContext } from "@remix-run/react";
+import { buildAdminItemsMeta } from "~/domain/item/admin-items-meta";
 import type { AdminItemVendaPrecosOutletContext } from "./admin.items.$id.venda.precos";
+
+export const meta = buildAdminItemsMeta("Visualizar preços de venda");
 
 function formatCurrency(value: number | null | undefined) {
   if (value == null) return "-";

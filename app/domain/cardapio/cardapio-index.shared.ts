@@ -2,6 +2,7 @@ export type CardapioPriceVariation = {
     id: string;
     label: string;
     priceAmount: number;
+    isReference?: boolean | null;
     showOnCardapio?: boolean | null;
     profitExpectedPerc?: number | null;
 };
@@ -18,7 +19,7 @@ export type CardapioIndexItem = {
     name: string;
     ingredients?: string | null;
     imagePlaceholderURL?: string | null;
-    MenuItemGalleryImage?: CardapioMedia[] | null;
+    mediaAssets?: CardapioMedia[] | null;
     publicPriceVariations?: CardapioPriceVariation[] | null;
     tags?: {
         all?: string[] | null;
@@ -27,7 +28,7 @@ export type CardapioIndexItem = {
     likes?: {
         amount?: number | null;
     } | null;
-    MenuItemGroup?: {
+    group?: {
         description?: string | null;
     } | null;
 };
@@ -37,7 +38,7 @@ export type GroupedItems = {
     group: string;
     description?: string | null;
     sortOrderIndex?: number | null;
-    menuItems: CardapioIndexItem[];
+    items: CardapioIndexItem[];
 };
 
 export function getVisiblePublicPriceVariations(item: CardapioIndexItem) {
@@ -47,7 +48,15 @@ export function getVisiblePublicPriceVariations(item: CardapioIndexItem) {
 }
 
 export function getPrimaryCardapioMedia(item: CardapioIndexItem) {
-    return item.MenuItemGalleryImage?.find((img) => img.isPrimary) || item.MenuItemGalleryImage?.[0];
+    return item.mediaAssets?.find((img) => img.isPrimary) || item.mediaAssets?.[0];
+}
+
+export function getGroupedItemsList(group: GroupedItems) {
+    return group.items;
+}
+
+export function getGroupedItemsDescription(group: GroupedItems) {
+    return group.description?.trim() || group.items[0]?.group?.description?.trim() || "";
 }
 
 export function itemHasPublicTag(item: Pick<CardapioIndexItem, "tags">, tagName: string) {
@@ -58,12 +67,12 @@ export function itemHasPublicTag(item: Pick<CardapioIndexItem, "tags">, tagName:
 }
 
 export function isGrouped(items: CardapioIndexItem[] | GroupedItems[]): items is GroupedItems[] {
-    return Array.isArray(items) && items.length > 0 && "menuItems" in (items[0] as Record<string, unknown>);
+    return Array.isArray(items) && items.length > 0 && "items" in (items[0] as Record<string, unknown>);
 }
 
 export function getNoveltyItems(input: CardapioIndexItem[] | GroupedItems[]) {
     const flatItems = isGrouped(input)
-        ? input.flatMap((group) => group.menuItems)
+        ? input.flatMap((group) => group.items)
         : input;
 
     return [...flatItems]

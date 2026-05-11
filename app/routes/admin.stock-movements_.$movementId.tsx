@@ -17,6 +17,11 @@ function sanitizeReturnTo(value: string, fallback: string) {
   return value.startsWith('/') ? value : fallback;
 }
 
+function normalizeItemUnit(value: unknown) {
+  const normalized = String(value || '').trim().toUpperCase();
+  return normalized || null;
+}
+
 export async function loader({ request, params }: LoaderFunctionArgs) {
   try {
     const movementId = str(params.movementId || null);
@@ -25,7 +30,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     const db = itemPrismaEntity.client as any;
     const url = new URL(request.url);
     const returnTo = sanitizeReturnTo(str(url.searchParams.get('returnTo')), '/admin/stock-movements');
-    const [result, items, suppliers] = await Promise.all([
+    const [result, items, suppliers, measurementConversionsRaw] = await Promise.all([
       listStockMovementImportMovements({
         movementId,
         status: 'all',
@@ -34,7 +39,15 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       }),
       db.item.findMany({
         where: { active: true },
-        select: { id: true, name: true, classification: true, purchaseUm: true, consumptionUm: true },
+        select: {
+          id: true,
+          name: true,
+          classification: true,
+          purchaseUm: true,
+          consumptionUm: true,
+          purchaseToConsumptionFactor: true,
+          ItemPurchaseConversion: { select: { purchaseUm: true, factor: true } },
+        },
         orderBy: [{ name: 'asc' }],
         take: 2000,
       }),
@@ -45,14 +58,35 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           take: 2000,
         })
         : [],
+      typeof db.measurementUnitConversion?.findMany === 'function'
+        ? db.measurementUnitConversion.findMany({
+          where: { active: true },
+          select: {
+            factor: true,
+            FromUnit: { select: { code: true } },
+            ToUnit: { select: { code: true } },
+          },
+        })
+        : [],
     ]);
 
     const row = result.rows?.[0] || null;
     if (!row) return badRequest('Movimentação não encontrada');
     const mappedItemId = str(row.itemId || row.Line?.mappedItemId || row.ImportLine?.mappedItemId || null) || undefined;
     const unitOptions = await getAvailableItemUnits(mappedItemId);
+    const measurementConversions = (measurementConversionsRaw as Array<{
+      factor: number;
+      FromUnit?: { code?: string | null } | null;
+      ToUnit?: { code?: string | null } | null;
+    }>).flatMap((row) => {
+      const fromUnit = normalizeItemUnit(row?.FromUnit?.code);
+      const toUnit = normalizeItemUnit(row?.ToUnit?.code);
+      const factor = Number(row?.factor ?? NaN);
+      if (!fromUnit || !toUnit || !(factor > 0)) return [];
+      return [{ fromUnit, toUnit, factor }];
+    });
 
-    return ok({ row, items, suppliers, unitOptions, returnTo });
+    return ok({ row, items, suppliers, unitOptions, measurementConversions, returnTo });
   } catch (error) {
     return serverError(error);
   }
@@ -65,10 +99,12 @@ export default function AdminStockMovementDetailRoute() {
   const items = payload.items || [];
   const suppliers = payload.suppliers || [];
   const unitOptions = payload.unitOptions || [];
+  const measurementConversions = payload.measurementConversions || [];
   const returnTo = payload.returnTo || '/admin/stock-movements';
 
   return (
-    <Container fullWidth className=" px-4">
+
+    <Container fullWidth className=" px-4" >
       <div className="mx-auto flex w-full max-w-[1500px] flex-col gap-6">
         <section className="space-y-4 pb-2">
           <Link to={returnTo} className="inline-flex items-center gap-2 text-sm font-semibold text-slate-700 transition hover:text-slate-950">
@@ -100,8 +136,8 @@ export default function AdminStockMovementDetailRoute() {
           <Separator />
         </section>
 
-        <StockMovementEditor row={row} items={items} suppliers={suppliers} unitOptions={unitOptions} returnTo={returnTo} />
+        <StockMovementEditor row={row} items={items} suppliers={suppliers} unitOptions={unitOptions} measurementConversions={measurementConversions} returnTo={returnTo} />
       </div>
-    </Container>
+    </Container >
   );
 }

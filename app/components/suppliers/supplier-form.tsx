@@ -113,6 +113,9 @@ export function SupplierForm({
             name="name"
             required
             defaultValue={defaultValues?.name || ""}
+            onInput={(event) => {
+              event.currentTarget.value = event.currentTarget.value.toLocaleUpperCase("pt-BR");
+            }}
             autoComplete="off"
           />
         </Fieldset>

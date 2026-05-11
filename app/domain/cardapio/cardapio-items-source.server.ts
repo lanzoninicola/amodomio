@@ -1,4 +1,5 @@
 import prismaClient from "~/lib/prisma/client.server";
+import type { CardapioIndexItem, GroupedItems } from "./cardapio-index.shared";
 import {
   MenuItemEntityFindAllOptions,
   MenuItemEntityFindAllParams,
@@ -381,6 +382,25 @@ function toCompatCardapioItem(item: NativeCardapioRow): CardapioCompatItem {
   } as CardapioCompatItem;
 }
 
+function toCardapioIndexItem(item: CardapioCompatItem): CardapioIndexItem {
+  return {
+    id: item.id,
+    slug: item.slug || null,
+    name: item.name,
+    ingredients: item.ingredients || null,
+    imagePlaceholderURL: item.imagePlaceholderURL || null,
+    mediaAssets: (item.MenuItemGalleryImage || []) as any,
+    publicPriceVariations: item.publicPriceVariations || [],
+    tags: item.tags || null,
+    likes: item.likes || null,
+    group: item.MenuItemGroup
+      ? {
+          description: item.MenuItemGroup.description || null,
+        }
+      : null,
+  };
+}
+
 function buildNativeCardapioItemWhere(params: MenuItemEntityFindAllParams = {}) {
   const legacyWhere = (params.where || {}) as Record<string, unknown>;
   const sellingChannelKey = params.sellingChannelKey || "cardapio";
@@ -582,8 +602,8 @@ export async function findAllCardapioItemsGroupedByGroupLight(
       group: group.name,
       description: group.description,
       sortOrderIndex: group.sortOrderIndex,
-      menuItems: group.items,
-    }));
+      items: group.items.map(toCardapioIndexItem),
+    })) as GroupedItems[];
 }
 
 export async function findCardapioItemBySlug(slug: string) {

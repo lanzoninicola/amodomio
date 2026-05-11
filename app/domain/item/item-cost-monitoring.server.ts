@@ -1,5 +1,5 @@
 import prismaClient from "~/lib/prisma/client.server";
-import { capitalizeSupplierName } from "~/domain/supplier/supplier.prisma.entity.server";
+import { normalizeSupplierName } from "~/domain/supplier/supplier.prisma.entity.server";
 import {
   calculateItemCostAverageWindowMetrics,
   calculateItemCostMetrics,
@@ -252,7 +252,7 @@ export async function loadSupplierItemCostsPayload(request: Request) {
     })
   ).map((s: { id: string; name: string }) => ({
     ...s,
-    name: capitalizeSupplierName(s.name),
+    name: normalizeSupplierName(s.name),
   }));
 
   if (!supplierName) {

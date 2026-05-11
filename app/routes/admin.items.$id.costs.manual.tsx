@@ -6,11 +6,14 @@ import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
 import { toast } from "~/components/ui/use-toast";
+import { buildAdminItemsMeta } from "~/domain/item/admin-items-meta";
 import {
   getItemCostSourceLabel,
   ITEM_COST_SOURCE_OPTIONS,
 } from "~/domain/costs/item-cost-sources";
 import type { AdminItemOutletContext } from "./admin.items.$id";
+
+export const meta = buildAdminItemsMeta("Levantamento de custos");
 
 function getSupplierNameFromMetadata(metadata: unknown): string | null {
   if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return null;

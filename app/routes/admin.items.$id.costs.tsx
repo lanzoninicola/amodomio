@@ -1,5 +1,8 @@
 import { Link, Outlet, useLocation, useOutletContext } from "@remix-run/react";
+import { buildAdminItemsMeta } from "~/domain/item/admin-items-meta";
 import type { AdminItemOutletContext } from "./admin.items.$id";
+
+export const meta = buildAdminItemsMeta("Custos");
 
 const COSTS_TABS = [
   { name: "Custos atuais", href: "" },

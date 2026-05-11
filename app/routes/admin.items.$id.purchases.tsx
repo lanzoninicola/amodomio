@@ -7,7 +7,10 @@ import { Button } from "~/components/ui/button";
 import { Label } from "~/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "~/components/ui/table";
+import { buildAdminItemsMeta } from "~/domain/item/admin-items-meta";
 import type { AdminItemOutletContext } from "./admin.items.$id";
+
+export const meta = buildAdminItemsMeta("Compras");
 
 export default function AdminItemPurchasesTab() {
   const { item, costMetrics, averageWindowDays, unitOptions, measurementUnits, restrictedUnits, linkedUnitCodes } =

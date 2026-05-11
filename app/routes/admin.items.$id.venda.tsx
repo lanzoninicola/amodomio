@@ -1,9 +1,12 @@
 import type { LoaderFunctionArgs } from "@remix-run/node";
 import { Link, Outlet, useLoaderData, useLocation } from "@remix-run/react";
 import { FileText, Store, Tags } from "lucide-react";
+import { buildAdminItemsMeta } from "~/domain/item/admin-items-meta";
 import { loadItemSellingOverview } from "~/domain/item/item-selling-overview.server";
 import { badRequest, ok, serverError } from "~/utils/http-response.server";
 import { lastUrlSegment } from "~/utils/url";
+
+export const meta = buildAdminItemsMeta("Venda");
 
 const vendaNavigation = [
   { name: "Comercial", href: "comercial", icon: FileText },

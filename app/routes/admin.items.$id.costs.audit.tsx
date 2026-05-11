@@ -1,5 +1,8 @@
 import { Link, useOutletContext } from "@remix-run/react";
+import { buildAdminItemsMeta } from "~/domain/item/admin-items-meta";
 import type { AdminItemOutletContext } from "./admin.items.$id";
+
+export const meta = buildAdminItemsMeta("Auditoria de custos");
 
 const BRL = new Intl.NumberFormat("pt-BR", {
   style: "currency",

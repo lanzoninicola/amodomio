@@ -14,6 +14,7 @@ import {
     buildRandomGroups,
     type CardapioIndexItem,
     getCardapioItemHref,
+    getGroupedItemsList,
     getItemMarginPerc,
     getNoveltyItems,
     getPrimaryCardapioMedia,
@@ -35,7 +36,7 @@ export function CardapioHighlightsSection({
     reelsEnabled: boolean;
 }) {
     const noveltyItems = getNoveltyItems(items);
-    const flatItems = isGrouped(items) ? items.flatMap((group) => group.menuItems) : items;
+    const flatItems = isGrouped(items) ? items.flatMap((group) => getGroupedItemsList(group)) : items;
     const topMarginItems = [...flatItems]
         .sort((a, b) => getItemMarginPerc(b) - getItemMarginPerc(a))
         .slice(0, 12);

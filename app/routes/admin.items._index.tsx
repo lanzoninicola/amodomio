@@ -12,10 +12,13 @@ import {
 } from "~/components/ui/pagination";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "~/components/ui/table";
+import { buildAdminItemsMeta } from "~/domain/item/admin-items-meta";
 import { calculateItemCostMetrics, getItemAverageCostWindowDays } from "~/domain/item/item-cost-metrics.server";
 import { itemVariationPrismaEntity } from "~/domain/item/item-variation.prisma.entity.server";
 import prismaClient from "~/lib/prisma/client.server";
 import { badRequest, ok, serverError } from "~/utils/http-response.server";
+
+export const meta = buildAdminItemsMeta("Itens", { itemScoped: false });
 
 const ITEM_CLASSIFICATIONS = [
   "insumo",

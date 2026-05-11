@@ -30,6 +30,8 @@ import CardapioDatabaseUnavailable from "~/domain/cardapio/components/cardapio-d
 import CardapioErrorRedirect from "~/domain/cardapio/components/cardapio-error-redirect/cardapio-error-redirect";
 import RouteProgressBar from "~/components/route-progress-bar/route-progress-bar";
 import { isDatabaseConnectivityError } from "~/lib/errors/connectivity";
+import CardapioFacebookPixel from "~/domain/cardapio/components/cardapio-facebook-pixel";
+import { trackCardapioFacebookPixelTrigger } from "~/domain/cardapio/facebook-pixel.client";
 
 
 /**
@@ -129,11 +131,15 @@ export async function loader({ request }: LoaderFunctionArgs) {
         throw new Error("SIMULACAO_ERRO_CARDAPIO_LAYOUT");
     }
 
+    const { getFacebookPixelRuntimeConfigForPath } = await import("~/domain/cardapio/facebook-pixel.server");
+    const facebookPixel = await getFacebookPixelRuntimeConfigForPath(url.pathname);
+
     return defer({
         fazerPedidoPublicURL: fPUrl,
         showLojaFechadaMessage,
         notificationsEnabled,
         vapidPublicKey: process.env.VAPID_PUBLIC_KEY ?? null,
+        facebookPixel,
     })
 
 }
@@ -144,7 +150,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 export default function CardapioWeb() {
     const currentPage = useCurrentPage();
 
-    const { showLojaFechadaMessage, notificationsEnabled } = useLoaderData<typeof loader>()
+    const { showLojaFechadaMessage, notificationsEnabled, facebookPixel } = useLoaderData<typeof loader>()
 
     // const sessionId = useClientSessionId();
 
@@ -159,6 +165,7 @@ export default function CardapioWeb() {
     return (
         <NotificationCenterProvider enabled={notificationsEnabled}>
             <RouteProgressBar />
+            {facebookPixel ? <CardapioFacebookPixel config={facebookPixel} /> : null}
             {showLojaFechadaMessage && <BannerFechado />}
             <CardapioHeader />
 
@@ -272,7 +279,13 @@ function CardapioHeader() {
                                 <Suspense fallback={<Loading />}>
                                     <Await resolve={fazerPedidoPublicURL}>
                                         {(url) => {
-                                            return <FazerPedidoButton cnLabel="text-2xl tracking-wider" externalLinkURL={url} />
+                                            return (
+                                                <FazerPedidoButton
+                                                    cnLabel="text-2xl tracking-wider"
+                                                    externalLinkURL={url}
+                                                    onClick={() => trackCardapioFacebookPixelTrigger("fazer_pedido_click")}
+                                                />
+                                            )
                                         }}
                                     </Await>
                                 </Suspense>
@@ -457,6 +470,7 @@ function CardapioFooter() {
                         <FazerPedidoButton
                             cnLabel="text-md tracking-wider font-semibold font-neue"
                             externalLinkURL={url}
+                            onClick={() => trackCardapioFacebookPixelTrigger("fazer_pedido_click")}
                         />
                     )}
                 </Await>

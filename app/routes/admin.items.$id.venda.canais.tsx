@@ -1,9 +1,12 @@
 import type { ActionFunctionArgs } from "@remix-run/node";
 import { Form, useActionData, useOutletContext } from "@remix-run/react";
 import { Switch } from "~/components/ui/switch";
+import { buildAdminItemsMeta } from "~/domain/item/admin-items-meta";
 import type { AdminItemVendaOutletContext } from "./admin.items.$id.venda";
 import prismaClient from "~/lib/prisma/client.server";
 import { badRequest, ok, serverError } from "~/utils/http-response.server";
+
+export const meta = buildAdminItemsMeta("Venda por canais");
 
 function formatPercent(value: number) {
   return `${Number(value || 0).toFixed(2)}%`;

@@ -20,6 +20,7 @@ interface FazerPedidoButtonProps {
     variant?: Variant;
     externalLinkURL?: string;
     ariaLabel?: string;
+    onClick?: React.MouseEventHandler<HTMLAnchorElement>;
 }
 
 export default function FazerPedidoButton({
@@ -34,6 +35,7 @@ export default function FazerPedidoButton({
     variant = 'primary',
     externalLinkURL = WEBSITE_LINKS.cardapioFallbackURL.href,
     ariaLabel,
+    onClick,
 }: FazerPedidoButtonProps) {
     const brandColors = useBrandColors();
 
@@ -86,7 +88,12 @@ export default function FazerPedidoButton({
             style={dynamicStyle}
             aria-busy={loading || undefined}
             onClick={(e) => {
-                if (!isInteractive) e.preventDefault();
+                if (!isInteractive) {
+                    e.preventDefault();
+                    return;
+                }
+
+                onClick?.(e);
             }}
         >
             <div className="flex items-center justify-between gap-4">

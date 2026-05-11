@@ -1,10 +1,13 @@
 import type { LoaderFunctionArgs } from "@remix-run/node";
 import { useLoaderData } from "@remix-run/react";
 import MenuItemAssetsForm from "~/domain/menu-item-assets/components/menu-item-assets-form";
+import { buildAdminItemsMeta } from "~/domain/item/admin-items-meta";
 import { getItemAssetsApiEndpoints } from "~/domain/menu-item-assets/menu-item-assets.shared";
 import { listItemAssetsAdmin } from "~/domain/item/item-assets.server";
 import prismaClient from "~/lib/prisma/client.server";
 import { badRequest, ok, serverError } from "~/utils/http-response.server";
+
+export const meta = buildAdminItemsMeta("Galeria de venda");
 
 export async function loader({ params }: LoaderFunctionArgs) {
   try {

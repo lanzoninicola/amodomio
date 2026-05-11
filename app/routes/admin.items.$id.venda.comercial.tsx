@@ -8,9 +8,12 @@ import { Separator } from "~/components/ui/separator";
 import { Input } from "~/components/ui/input";
 import { Textarea } from "~/components/ui/textarea";
 import { toast } from "~/components/ui/use-toast";
+import { buildAdminItemsMeta } from "~/domain/item/admin-items-meta";
 import prismaClient from "~/lib/prisma/client.server";
 import { slugifyString } from "~/utils/slugify";
 import { badRequest, ok, serverError } from "~/utils/http-response.server";
+
+export const meta = buildAdminItemsMeta("Venda comercial");
 
 function toBool(value: FormDataEntryValue | null) {
   return value === "on" || value === "true";
