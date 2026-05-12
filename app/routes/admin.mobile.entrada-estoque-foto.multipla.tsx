@@ -26,7 +26,22 @@ import {
 import prismaClient from "~/lib/prisma/client.server";
 import { badRequest, ok, serverError } from "~/utils/http-response.server";
 
-const CHATGPT_URL = "https://chatgpt.com/";
+const CHATGPT_WEB_URL = "https://chatgpt.com/";
+const CHATGPT_APP_URL = "chatgpt://";
+
+function openChatGPT() {
+  window.location.href = CHATGPT_APP_URL;
+  const timeout = setTimeout(() => {
+    window.location.href = CHATGPT_WEB_URL;
+  }, 1500);
+  const handleVisibility = () => {
+    if (document.hidden) {
+      clearTimeout(timeout);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    }
+  };
+  document.addEventListener("visibilitychange", handleVisibility);
+}
 
 function ChatGptLogoIcon() {
   return (
@@ -182,6 +197,7 @@ export default function AdminMobileEntradaEstoqueFotoMultiplaPage() {
   const [promptOpen, setPromptOpen] = useState(false);
   const [pasteConfirmed, setPasteConfirmed] = useState(false);
   const [resultOpen, setResultOpen] = useState(false);
+  const [dateOpen, setDateOpen] = useState(false);
 
   const defaultPrompt = buildMultiStockPhotoPrompt({ returnUrl, promptTemplate });
   const currentPreviewSignature = `${chatGptResponse.trim()}::${manualMovementAt}`;
@@ -189,6 +205,8 @@ export default function AdminMobileEntradaEstoqueFotoMultiplaPage() {
   useEffect(() => {
     if (previewFetcher.state === "idle" && previewFetcher.data?.status === 200) {
       setLastPreviewedSignature(currentPreviewSignature);
+      const missingDate = previewFetcher.data?.payload?.groups?.some((g: any) => !g.movementAt);
+      if (missingDate) setDateOpen(true);
     }
   }, [currentPreviewSignature, previewFetcher.state, previewFetcher.data]);
 
@@ -199,10 +217,12 @@ export default function AdminMobileEntradaEstoqueFotoMultiplaPage() {
     lineCount: number;
   }> | undefined;
 
+  const missingDateFromChatGpt = previewPayload?.groups?.some((g: any) => !g.movementAt);
   const hasUpToDatePreview =
     Boolean(chatGptResponse.trim()) &&
     lastPreviewedSignature === currentPreviewSignature &&
-    previewFetcher.data?.status === 200;
+    previewFetcher.data?.status === 200 &&
+    (!missingDateFromChatGpt || Boolean(manualMovementAt));
 
   const validationStatus =
     previewFetcher.state !== "idle"
@@ -289,39 +309,58 @@ export default function AdminMobileEntradaEstoqueFotoMultiplaPage() {
       </section>
 
       <section className="space-y-2">
-        <a
-          href={CHATGPT_URL}
-          target="_blank"
-          rel="noreferrer"
+        <button
+          type="button"
+          onClick={openChatGPT}
           className="inline-flex gap-2 h-12 w-full items-center justify-center rounded-lg border border-slate-300 bg-white text-slate-700"
           aria-label="Abrir ChatGPT"
           title="Abrir ChatGPT"
         >
           <ChatGptLogoIcon />
           Abrir Chat GPT
-        </a>
+        </button>
       </section>
 
-      <div className="border-t border-slate-200 pt-4">
+      <div className="border-t border-slate-200 pt-4 flex items-center justify-between">
         <div className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">(3) Resultado</div>
+        <button
+          type="button"
+          onClick={() => setDateOpen((v) => !v)}
+          className="flex h-8 flex-shrink-0 items-center gap-1 rounded-xl bg-slate-50 px-3 text-sm text-slate-900"
+        >
+          {dateOpen ? "Ocultar data" : "Data movimento"}
+          <ChevronRight className={`h-4 w-4 transition-transform duration-200 ${dateOpen ? "rotate-90" : ""}`} />
+        </button>
       </div>
 
       <Form method="post" className="space-y-3">
         <input type="hidden" name="_action" value="stock-photo-import" />
-        <div>
-          <label htmlFor="manualMovementAtMulti" className="block text-sm font-medium text-slate-700 mb-1">
-            Data efetiva do movimento
-          </label>
+        <div className="space-y-2">
+          {dateOpen && (
+            <div className="space-y-1.5">
+              {missingDateFromChatGpt && !manualMovementAt && (
+                <p className="flex items-center gap-1.5 text-sm font-medium text-amber-600">
+                  <AlertCircle className="h-4 w-4 shrink-0" />
+                  ChatGPT não identificou a data. Informe a data do movimento.
+                </p>
+              )}
+              <div className="flex items-center gap-3">
+                <label htmlFor="manualMovementAtMulti" className="text-sm font-medium text-slate-700 whitespace-nowrap w-28 shrink-0">
+                  Data movimento
+                </label>
+                <Input
+                  id="manualMovementAtMulti"
+                  name="manualMovementAt"
+                  type="date"
+                  value={manualMovementAt}
+                  onChange={(e) => setManualMovementAt(e.currentTarget.value)}
+                  className={`h-12 flex-1 ${missingDateFromChatGpt && !manualMovementAt ? "border-amber-400 focus-visible:ring-amber-400" : ""}`}
+                />
+              </div>
+            </div>
+          )}
           <div className="flex items-center gap-2">
-            <Input
-              id="manualMovementAtMulti"
-              name="manualMovementAt"
-              type="date"
-              value={manualMovementAt}
-              onChange={(e) => setManualMovementAt(e.currentTarget.value)}
-              className="h-12 flex-1"
-            />
-            <Button type="button" variant="outline" onClick={handlePasteResponse} className="h-12 flex-shrink-0 px-4 text-base">
+            <Button type="button" variant="outline" onClick={handlePasteResponse} className="h-12 flex-1 text-base">
               Colar resultado
             </Button>
             <button
