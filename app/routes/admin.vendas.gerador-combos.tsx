@@ -7,7 +7,6 @@ import {
   ExternalLink,
   ListFilter,
   Plus,
-  Search,
   Trash2,
   XCircle,
 } from "lucide-react";
@@ -15,6 +14,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
+import { SearchableSelect, type SearchableSelectOption } from "~/components/ui/searchable-select";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "~/components/ui/table";
 import { pickLatestActiveSheet } from "~/domain/item/item-selling-price-calculation.server";
@@ -61,6 +61,11 @@ type ComboItemOption = {
 type ComboLine = {
   optionId: string;
   quantity: number;
+};
+
+type VariationFilterOption = {
+  key: string;
+  label: string;
 };
 
 function formatMoney(value: number | null | undefined) {
@@ -121,7 +126,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
   try {
     const db = prismaClient as any;
     const url = new URL(request.url);
-    const q = String(url.searchParams.get("q") || "").trim();
     const tagId = String(url.searchParams.get("tagId") || "").trim();
     const selectedChannelKeyParam = String(url.searchParams.get("channel") || "").trim().toLowerCase();
 
@@ -164,7 +168,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
     if (!selectedChannel) {
       return ok({
-        filters: { q, tagId: "", channel: "" },
+        filters: { tagId: "", channel: "" },
         channels: [],
         tags: [],
         options: [],
@@ -189,15 +193,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
     };
 
     const and: any[] = [];
-    if (q) {
-      and.push({
-        OR: [
-          { name: { contains: q, mode: "insensitive" } },
-          { description: { contains: q, mode: "insensitive" } },
-          { ItemSellingInfo: { is: { slug: { contains: q, mode: "insensitive" } } } },
-        ],
-      });
-    }
     if (selectedTag) {
       and.push({
         ItemTag: {
@@ -271,7 +266,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
         { Item: { name: "asc" } },
         { ItemVariation: { isReference: "desc" } },
       ],
-      take: 250,
+      take: 500,
     });
 
     const itemIds = Array.from(new Set((priceRows || []).map((row: any) => String(row.itemId)).filter(Boolean)));
@@ -283,22 +278,22 @@ export async function loader({ request }: LoaderFunctionArgs) {
       itemIds.length === 0 || itemVariationIds.length === 0
         ? []
         : await db.itemCostSheet.findMany({
-            where: {
-              itemId: { in: itemIds },
-              itemVariationId: { in: itemVariationIds },
-              isActive: true,
-            },
-            select: {
-              id: true,
-              name: true,
-              itemId: true,
-              itemVariationId: true,
-              costAmount: true,
-              updatedAt: true,
-              activatedAt: true,
-            },
-            orderBy: [{ activatedAt: "desc" }, { updatedAt: "desc" }],
-          });
+          where: {
+            itemId: { in: itemIds },
+            itemVariationId: { in: itemVariationIds },
+            isActive: true,
+          },
+          select: {
+            id: true,
+            name: true,
+            itemId: true,
+            itemVariationId: true,
+            costAmount: true,
+            updatedAt: true,
+            activatedAt: true,
+          },
+          orderBy: [{ activatedAt: "desc" }, { updatedAt: "desc" }],
+        });
 
     const activeSheetsByVariation = new Map<string, any[]>();
     for (const sheet of activeSheets || []) {
@@ -346,7 +341,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
     return ok({
       filters: {
-        q,
         tagId: selectedTag ? String(selectedTag.id) : "",
         channel: selectedChannel.key,
       },
@@ -369,7 +363,7 @@ export default function AdminVendasGeradorCombosPage() {
   const loaderData = useLoaderData<typeof loader>();
   const hasLoaderError = Boolean(loaderData?.status && loaderData.status >= 400);
   const payload = (loaderData?.payload || {}) as {
-    filters: { q: string; tagId: string; channel: string };
+    filters: { tagId: string; channel: string };
     channels: ChannelOption[];
     tags: TagOption[];
     options: ComboItemOption[];
@@ -381,23 +375,63 @@ export default function AdminVendasGeradorCombosPage() {
     };
   };
 
-  const [search, setSearch] = useState(payload.filters?.q || "");
   const [selectedOptionId, setSelectedOptionId] = useState(payload.options?.[0]?.optionId || "");
+  const [variationFilter, setVariationFilter] = useState("__all__");
   const [lines, setLines] = useState<ComboLine[]>([]);
   const [targetMargin, setTargetMargin] = useState(String(payload.summary?.targetMarginPerc || 30));
   const [manualPrice, setManualPrice] = useState("");
 
   useEffect(() => {
-    const nextOption = payload.options?.[0]?.optionId || "";
-    const stillAvailable = (payload.options || []).some((option) => option.optionId === selectedOptionId);
-    if (!stillAvailable) setSelectedOptionId(nextOption);
-  }, [payload.options, selectedOptionId]);
-
-  useEffect(() => {
+    setVariationFilter("__all__");
     setTargetMargin(String(payload.summary?.targetMarginPerc || 30));
     setManualPrice("");
     setLines([]);
   }, [payload.filters?.channel, payload.summary?.targetMarginPerc]);
+
+  const variationOptions = useMemo<VariationFilterOption[]>(() => {
+    const byKey = new Map<string, VariationFilterOption>();
+    for (const option of payload.options || []) {
+      const key = option.variationCode || option.variationName || option.itemVariationId;
+      if (!key || byKey.has(key)) continue;
+      byKey.set(key, {
+        key,
+        label: option.variationName || option.variationCode || "Sem variacao",
+      });
+    }
+    return Array.from(byKey.values()).sort((a, b) => a.label.localeCompare(b.label, "pt-BR"));
+  }, [payload.options]);
+
+  const filteredOptions = useMemo(() => {
+    if (variationFilter === "__all__") return payload.options || [];
+    return (payload.options || []).filter((option) => {
+      const key = option.variationCode || option.variationName || option.itemVariationId;
+      return key === variationFilter;
+    });
+  }, [payload.options, variationFilter]);
+
+  const itemSelectOptions = useMemo<SearchableSelectOption[]>(() => {
+    return filteredOptions.map((option) => ({
+      value: option.optionId,
+      label: `${option.itemName} - ${option.variationName} - ${formatMoney(option.priceAmount)}`,
+      searchText: [
+        option.itemName,
+        option.variationName,
+        option.variationCode,
+        option.itemSlug,
+        option.categoryName,
+        option.groupName,
+        option.tags.map((tag) => tag.name).join(" "),
+      ]
+        .filter(Boolean)
+        .join(" "),
+    }));
+  }, [filteredOptions]);
+
+  useEffect(() => {
+    const nextOption = filteredOptions?.[0]?.optionId || "";
+    const stillAvailable = (filteredOptions || []).some((option) => option.optionId === selectedOptionId);
+    if (!stillAvailable) setSelectedOptionId(nextOption);
+  }, [filteredOptions, selectedOptionId]);
 
   const optionById = useMemo(() => {
     return new Map((payload.options || []).map((option) => [option.optionId, option]));
@@ -521,22 +555,6 @@ export default function AdminVendasGeradorCombosPage() {
       </section>
 
       <Form method="get" className="flex flex-wrap items-center gap-5">
-        <div className="relative flex min-w-[260px] flex-1 items-center">
-          <Search className="pointer-events-none absolute left-3 h-4 w-4 text-slate-400" />
-          <input
-            id="q"
-            name="q"
-            type="search"
-            value={search}
-            onChange={(event) => setSearch(event.currentTarget.value)}
-            placeholder="Pesquise por item, descricao ou slug"
-            className="h-9 w-full rounded-md border border-slate-300 bg-white py-2 pl-9 pr-10 text-sm focus:border-slate-400 focus:outline-none"
-          />
-          <button type="submit" className="absolute right-2 rounded p-0.5 text-slate-400 hover:text-slate-600" title="Filtrar">
-            <ListFilter className="h-4 w-4" />
-          </button>
-        </div>
-
         <Select name="channel" defaultValue={payload.filters?.channel || ""}>
           <SelectTrigger className="h-auto w-auto min-w-[150px] gap-1 border-0 p-0 text-sm font-medium text-blue-600 shadow-none focus:ring-0 [&>svg]:h-3 [&>svg]:w-3 [&>svg]:text-blue-400">
             <SelectValue placeholder="canal" />
@@ -572,26 +590,62 @@ export default function AdminVendasGeradorCombosPage() {
       </Form>
 
       <section className="grid gap-5 xl:grid-cols-[minmax(0,1.5fr)_minmax(320px,0.8fr)]">
-        <div className="space-y-4 rounded-md border border-slate-200 bg-white p-4">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
+        <div className="space-y-4 ">
+          <div className="flex flex-col gap-3 xl:flex-row xl:items-end">
+            <div className="w-full space-y-1 xl:w-52">
+              <label className="text-xs font-semibold uppercase text-slate-500">
+                Variacao
+              </label>
+              <Select value={variationFilter} onValueChange={setVariationFilter}>
+                <SelectTrigger className="h-10 w-full">
+                  <SelectValue placeholder="Todas" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__all__">Todas</SelectItem>
+                  {variationOptions.map((variation) => (
+                    <SelectItem key={variation.key} value={variation.key}>
+                      {variation.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
             <div className="min-w-0 flex-1 space-y-1">
-              <label htmlFor="item-option" className="text-xs font-semibold uppercase text-slate-500">
+              <label className="text-xs font-semibold uppercase text-slate-500">
                 Item do combo
               </label>
-              <select
-                id="item-option"
+              <SearchableSelect
                 value={selectedOptionId}
-                onChange={(event) => setSelectedOptionId(event.currentTarget.value)}
-                className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900 focus:border-slate-400 focus:outline-none"
-              >
-                {(payload.options || []).map((option) => (
-                  <option key={option.optionId} value={option.optionId}>
-                    {option.itemName} · {option.variationName} · {formatMoney(option.priceAmount)}
-                  </option>
-                ))}
-              </select>
+                onValueChange={setSelectedOptionId}
+                options={itemSelectOptions}
+                placeholder={filteredOptions.length === 0 ? "Nenhum item disponivel" : "Procure um item"}
+                searchPlaceholder="Digite nome, tag, categoria ou variacao"
+                emptyText="Nenhum item encontrado."
+                triggerClassName="h-10 w-full max-w-none text-sm"
+                contentClassName="w-[560px]"
+                renderOption={(option, selected) => {
+                  const item = optionById.get(option.value);
+                  return (
+                    <div className="flex min-w-0 flex-1 items-center justify-between gap-3">
+                      <div className="min-w-0 space-y-0.5">
+                        <div className={`truncate text-sm ${selected ? "font-semibold text-slate-950" : "font-medium text-slate-800"}`}>
+                          {item?.itemName || option.label}
+                        </div>
+                        <div className="truncate text-xs text-slate-500">
+                          {item?.variationName || "-"} · {item?.categoryName || item?.groupName || "sem categoria"}
+                        </div>
+                      </div>
+                      <div className="shrink-0 text-right text-xs">
+                        <div className="font-semibold text-slate-900">{formatMoney(item?.priceAmount)}</div>
+                        <div className="text-slate-500">custo {formatMoney(item?.costAmount)}</div>
+                      </div>
+                    </div>
+                  );
+                }}
+              />
             </div>
-            <Button type="button" onClick={addSelectedLine} className="gap-2" disabled={!selectedOptionId}>
+            <Button type="button" onClick={addSelectedLine} className="gap-2" disabled={!selectedOptionId || filteredOptions.length === 0}>
               <Plus className="h-4 w-4" />
               adicionar
             </Button>
