@@ -4,9 +4,12 @@ import { Suspense, useState } from "react";
 
 import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 import { loadRevenueGroupData } from "~/domain/dashboard/kpi-loader.server";
-import type { WeekdayChart } from "~/domain/dashboard/kpi-loader.server";
+import type { StockVsRevenueMonth, WeekdayChart } from "~/domain/dashboard/kpi-loader.server";
 import {
   fmtBRL,
   MultiLineChart,
@@ -19,6 +22,9 @@ import {
   type MonthlyChartModal,
   type ChartModal,
 } from "~/domain/dashboard/dashboard-ui";
+
+const REVENUE_MONTH_OPTIONS = [3, 6, 9, 12] as const;
+type RevenueMonthOption = typeof REVENUE_MONTH_OPTIONS[number];
 
 // ─── loader ───────────────────────────────────────────────────────────────────
 
@@ -146,12 +152,126 @@ function WeekdayChartCard({ chart, onExpand }: { chart: WeekdayChart; onExpand: 
   );
 }
 
+// ─── StockVsRevenueCard ──────────────────────────────────────────────────────
+
+function formatRatio(value: number | null) {
+  if (value == null || !Number.isFinite(value)) return "—";
+  return `${value.toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
+}
+
+function fmtChartBRL(value: number) {
+  return value.toLocaleString("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+    notation: "compact",
+    maximumFractionDigits: 1,
+  });
+}
+
+function stockRatioBadgeClass(value: number | null) {
+  if (value == null) return "border-slate-200 bg-slate-50 text-slate-500";
+  if (value >= 100) return "border-red-200 bg-red-50 text-red-700";
+  if (value >= 80) return "border-orange-200 bg-orange-50 text-orange-700";
+  if (value >= 50) return "border-amber-200 bg-amber-50 text-amber-700";
+  return "border-emerald-200 bg-emerald-50 text-emerald-700";
+}
+
+function stockRatioLabel(value: number | null) {
+  if (value == null) return "Sem faturamento";
+  if (value >= 100) return "Superou";
+  if (value >= 80) return "Crítico";
+  if (value >= 50) return "Atenção";
+  return "Normal";
+}
+
+function StockVsRevenueCard({
+  rows,
+}: {
+  rows: StockVsRevenueMonth[];
+}) {
+  const chartSeries = [
+    { label: "Faturamento", data: rows.map(row => row.revenueTotal) },
+    { label: "Entradas de insumos", data: rows.map(row => row.stockInputTotal) },
+  ];
+  const labels = rows.map(row => row.label);
+  const current = rows.find(row => row.isCurrent) ?? rows.at(-1);
+
+  return (
+    <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1.1fr)_minmax(360px,0.9fr)] gap-4">
+      <Card className="p-4">
+        <CardContent className="p-0">
+          <ChartHeader
+            title="Insumos x Faturamento"
+            subtitle="Entradas de estoque comparadas ao faturamento KDS"
+          />
+          <MultiLineChart series={chartSeries} xLabels={labels} h={150} />
+          <div className="mt-3 grid grid-cols-3 gap-3">
+            <div>
+              <p className="text-[10px] uppercase tracking-wide text-slate-400">Mês atual</p>
+              <p className="text-sm font-semibold text-slate-900">{current?.label ?? "—"}</p>
+            </div>
+            <div>
+              <p className="text-[10px] uppercase tracking-wide text-slate-400">Entradas</p>
+              <p className="text-sm font-semibold text-slate-900">{fmtBRL(current?.stockInputTotal ?? 0)}</p>
+            </div>
+            <div>
+              <p className="text-[10px] uppercase tracking-wide text-slate-400">% do fat.</p>
+              <p className="text-sm font-semibold text-slate-900">{formatRatio(current?.stockToRevenuePct ?? null)}</p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="p-4">
+        <CardContent className="p-0">
+          <div className="mb-3">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-slate-500">Leitura por período</p>
+            <p className="text-[11px] text-slate-400 mt-0.5">Compra/movimentação de insumos, não CMV realizado.</p>
+          </div>
+          <Table>
+            <TableHeader>
+              <TableRow className="hover:bg-transparent">
+                <TableHead className="text-xs">Mês</TableHead>
+                <TableHead className="text-xs text-right">Insumos</TableHead>
+                <TableHead className="text-xs text-right">%</TableHead>
+                <TableHead className="text-xs text-right">Status</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {rows.map(row => (
+                <TableRow key={row.monthKey} className="hover:bg-slate-50">
+                  <TableCell className="py-2 text-xs">
+                    <div className="font-medium text-slate-900">{row.label}</div>
+                    <div className="text-[10px] text-slate-400">{fmtBRL(row.revenueTotal)}</div>
+                  </TableCell>
+                  <TableCell className="py-2 text-xs text-right font-mono text-slate-700">
+                    {fmtBRL(row.stockInputTotal)}
+                  </TableCell>
+                  <TableCell className="py-2 text-xs text-right font-mono text-slate-700">
+                    {formatRatio(row.stockToRevenuePct)}
+                  </TableCell>
+                  <TableCell className="py-2 text-right">
+                    <Badge variant="outline" className={stockRatioBadgeClass(row.stockToRevenuePct)}>
+                      {stockRatioLabel(row.stockToRevenuePct)}
+                    </Badge>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
 // ─── LeftColumn ───────────────────────────────────────────────────────────────
 
 function LeftColumn({
   monthlyRevenue,
   previousYearMonthlyRevenue,
   avgProfitMarginPerc,
+  stockVsRevenue,
   weekdayCharts,
   onExpandMonthly,
   onExpandWeekday,
@@ -159,11 +279,13 @@ function LeftColumn({
   monthlyRevenue: Array<{ monthKey: string; label: string; total: number; isCurrent: boolean }>;
   previousYearMonthlyRevenue: Array<{ monthKey: string; label: string; total: number }> | null;
   avgProfitMarginPerc: number | null;
+  stockVsRevenue: StockVsRevenueMonth[];
   weekdayCharts: WeekdayChart[];
   onExpandMonthly: (modal: MonthlyChartModal) => void;
   onExpandWeekday: (chart: WeekdayChart) => void;
 }) {
   const [showAiPrompt, setShowAiPrompt] = useState(false);
+  const [revenueMonths, setRevenueMonths] = useState<RevenueMonthOption>(3);
 
   const currentMonth = monthlyRevenue.find(m => m.isCurrent);
   const currentRevenue = currentMonth?.total ?? 0;
@@ -171,20 +293,24 @@ function LeftColumn({
     ? currentRevenue * (avgProfitMarginPerc / 100)
     : null;
 
+  const visibleMonthlyRevenue = monthlyRevenue.slice(-revenueMonths);
+  const visiblePreviousYearMonthlyRevenue = previousYearMonthlyRevenue?.slice(-revenueMonths) ?? null;
+  const revenuePeriodLabel = `Últimos ${revenueMonths} meses`;
   const chartSeries = [
-    { label: "Ano atual", data: monthlyRevenue.map(m => m.total) },
-    ...(previousYearMonthlyRevenue
-      ? [{ label: "Ano anterior", data: previousYearMonthlyRevenue.map(m => m.total) }]
+    { label: "Ano atual", data: visibleMonthlyRevenue.map(m => m.total) },
+    ...(visiblePreviousYearMonthlyRevenue
+      ? [{ label: "Ano anterior", data: visiblePreviousYearMonthlyRevenue.map(m => m.total) }]
       : []),
   ];
-  const chartLabels = monthlyRevenue.map(m => m.label);
+  const chartLabels = visibleMonthlyRevenue.map(m => m.label);
+  const visibleStockVsRevenue = stockVsRevenue.slice(-revenueMonths);
 
   function buildRevenuePrompt() {
     const fmtN = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 0 });
     const fmtPct1 = (v: number) => `${v >= 0 ? "+" : ""}${v.toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
 
-    const revenueLines = monthlyRevenue.map((m, i) => {
-      const ly = previousYearMonthlyRevenue?.[i];
+    const revenueLines = visibleMonthlyRevenue.map((m, i) => {
+      const ly = visiblePreviousYearMonthlyRevenue?.[i];
       const yoy = ly && ly.total > 0
         ? ` (vs ano anterior: ${fmtN(ly.total)}, ${fmtPct1(((m.total - ly.total) / ly.total) * 100)})`
         : "";
@@ -202,14 +328,20 @@ function LeftColumn({
     const profitLine = avgProfitMarginPerc != null && estimatedProfit != null
       ? `\nMargem média: ${avgProfitMarginPerc.toLocaleString("pt-BR", { minimumFractionDigits: 1 })}% → Lucro presumido ${currentMonth?.label ?? ""}: ${fmtN(estimatedProfit)}`
       : "";
+    const stockLines = visibleStockVsRevenue.map(row => (
+      `  - ${row.label}: insumos ${fmtN(row.stockInputTotal)} / faturamento ${fmtN(row.revenueTotal)} (${formatRatio(row.stockToRevenuePct)})`
+    )).join("\n");
 
     return `Você é um consultor de negócios especializado em restaurantes e pizzarias. Analise os dados de faturamento abaixo e forneça insights práticos e ações concretas.
 
 ## DADOS DE FATURAMENTO
 
-Faturamento mensal (últimos 3 meses):
+Faturamento mensal (${revenuePeriodLabel.toLowerCase()}):
 ${revenueLines}
 ${profitLine}
+
+Entradas de insumos vs faturamento:
+${stockLines}
 
 Faturamento por dia da semana (por semana do mês):
 ${weekdayLines}
@@ -262,21 +394,54 @@ Seja direto e objetivo. Prefiro sugestões específicas ao meu contexto a consel
 
       <Card className="p-4">
         <CardContent className="p-0">
-          <ChartHeader
-            title="Faturamento Global"
-            subtitle="Últimos 3 meses (KDS)"
-            onExpand={() => onExpandMonthly({ type: "monthly", values: monthlyRevenue.map(m => m.total), labels: chartLabels, breakdown: monthlyRevenue })}
+          <div className="flex items-start justify-between gap-3">
+            <ChartHeader
+              title="Faturamento Global"
+              subtitle={`${revenuePeriodLabel} (KDS)`}
+              onExpand={() => onExpandMonthly({
+                type: "monthly",
+                values: visibleMonthlyRevenue.map(m => m.total),
+                labels: chartLabels,
+                breakdown: visibleMonthlyRevenue,
+                periodLabel: revenuePeriodLabel,
+              })}
+            />
+            <Select
+              value={String(revenueMonths)}
+              onValueChange={(value) => setRevenueMonths(Number(value) as RevenueMonthOption)}
+            >
+              <SelectTrigger className="h-8 w-[118px] text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {REVENUE_MONTH_OPTIONS.map(months => (
+                  <SelectItem key={months} value={String(months)}>
+                    {months} meses
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <MultiLineChart
+            series={chartSeries}
+            xLabels={chartLabels}
+            yMin={20000}
+            yMax={100000}
+            h={160}
+            showPointValues
+            pointValueSeriesIndexes={[0]}
+            formatPointValue={fmtChartBRL}
+            pointMinWidth={96}
           />
-          <MultiLineChart series={chartSeries} xLabels={chartLabels} yMin={20000} yMax={100000} />
           <div className="mt-3 flex gap-4 flex-wrap">
-            {monthlyRevenue.map(m => (
+            {visibleMonthlyRevenue.map((m, index) => (
               <div key={m.monthKey}>
                 <p className="text-[10px] uppercase tracking-wide text-slate-400">{m.label}</p>
                 <p className={`text-sm font-semibold ${m.isCurrent ? "text-slate-900" : "text-slate-600"}`}>
                   {fmtBRL(m.total)}
                 </p>
-                {previousYearMonthlyRevenue && (() => {
-                  const ly = previousYearMonthlyRevenue[monthlyRevenue.indexOf(m)];
+                {visiblePreviousYearMonthlyRevenue && (() => {
+                  const ly = visiblePreviousYearMonthlyRevenue[index];
                   if (!ly || ly.total === 0) return null;
                   const delta = m.total - ly.total;
                   const pct = (delta / ly.total) * 100;
@@ -291,6 +456,8 @@ Seja direto e objetivo. Prefiro sugestões específicas ao meu contexto a consel
           </div>
         </CardContent>
       </Card>
+
+      <StockVsRevenueCard rows={visibleStockVsRevenue} />
 
       <div className="grid grid-cols-2 gap-4">
         {weekdayCharts.filter(c => c.weekday !== 1 && c.weekday !== 2).map(chart => (
@@ -323,6 +490,7 @@ export default function DashboardFaturamento() {
               monthlyRevenue={data.monthlyRevenue}
               previousYearMonthlyRevenue={data.previousYearMonthlyRevenue}
               avgProfitMarginPerc={data.avgProfitMarginPerc}
+              stockVsRevenue={data.stockVsRevenue}
               weekdayCharts={data.weekdayCharts}
               onExpandMonthly={setChartModal}
               onExpandWeekday={(chart) => setChartModal({ type: "weekday", chart })}
@@ -338,7 +506,7 @@ export default function DashboardFaturamento() {
             <>
               <DialogHeader>
                 <DialogTitle className="text-sm font-semibold uppercase tracking-widest text-slate-500">
-                  Faturamento Global — Últimos 3 meses
+                  Faturamento Global — {chartModal.periodLabel}
                 </DialogTitle>
               </DialogHeader>
               <LineAreaChart data={chartModal.values} labels={chartModal.labels} title="monthly-modal" h={200} />

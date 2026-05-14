@@ -1,12 +1,14 @@
 import { defer } from "@remix-run/node";
 import type { LoaderFunctionArgs } from "@remix-run/node";
 import { Await, useLoaderData, useFetcher, useNavigate, useSearchParams } from "@remix-run/react";
+import { LineChart, PackageSearch } from "lucide-react";
 import { Suspense, useState, useMemo, useEffect } from "react";
 
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 import { loadItemsGroupData, loadCostVarGroupData } from "~/domain/dashboard/kpi-loader.server";
 import type { TopItem, ImpactItem, CostVarItem, CostVarImpactItem, MissingUmItem } from "~/domain/dashboard/kpi-loader.server";
@@ -26,6 +28,7 @@ import {
   type TrendModal,
   LineAreaChart,
 } from "~/domain/dashboard/dashboard-ui";
+import uppercase from "~/utils/to-uppercase";
 
 // ─── loader ───────────────────────────────────────────────────────────────────
 
@@ -137,11 +140,10 @@ function IngredientImpactModal({
               <button
                 key={v.id}
                 onClick={() => setSelectedId(v.id)}
-                className={`px-2.5 py-1 rounded-full text-[11px] font-medium border transition-colors ${
-                  effectiveId === v.id
-                    ? "bg-slate-900 text-white border-slate-900"
-                    : "bg-white text-slate-600 border-slate-200 hover:border-slate-400"
-                }`}
+                className={`px-2.5 py-1 rounded-full text-[11px] font-medium border transition-colors ${effectiveId === v.id
+                  ? "bg-slate-900 text-white border-slate-900"
+                  : "bg-white text-slate-600 border-slate-200 hover:border-slate-400"
+                  }`}
               >
                 {v.name}
               </button>
@@ -309,8 +311,8 @@ function NetAvgCard({ netAvg, total, increased, decreased, avgIncrease, avgDecre
     const headline = netAvg > 0
       ? `Seu custo de insumos subiu ${fmt1(Math.abs(netAvg))}% em ${monthLabel} — sua margem encolheu na mesma proporção, a menos que os preços de venda tenham acompanhado.`
       : netAvg < 0
-      ? `Seu custo de insumos caiu ${fmt1(Math.abs(netAvg))}% em ${monthLabel} — sua margem melhorou na mesma proporção se os preços de venda ficaram estáveis.`
-      : `As variações se equilibraram em ${monthLabel} — o custo médio dos insumos ficou praticamente estável.`;
+        ? `Seu custo de insumos caiu ${fmt1(Math.abs(netAvg))}% em ${monthLabel} — sua margem melhorou na mesma proporção se os preços de venda ficaram estáveis.`
+        : `As variações se equilibraram em ${monthLabel} — o custo médio dos insumos ficou praticamente estável.`;
 
     const actions: string[] = netAvg > 0 ? [
       `Verifique os ${increased} insumos que subiram e priorize os que têm mais receitas dependentes (veja a tabela "Por Impacto").`,
@@ -340,9 +342,9 @@ function NetAvgCard({ netAvg, total, increased, decreased, avgIncrease, avgDecre
               title="Como é calculado?"
             >
               <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <circle cx="8" cy="8" r="7.5" stroke="currentColor"/>
-                <path d="M6.5 6C6.5 5.17 7.17 4.5 8 4.5C8.83 4.5 9.5 5.17 9.5 6C9.5 6.83 8.83 7.5 8 7.5V9" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
-                <circle cx="8" cy="11" r="0.7" fill="currentColor"/>
+                <circle cx="8" cy="8" r="7.5" stroke="currentColor" />
+                <path d="M6.5 6C6.5 5.17 7.17 4.5 8 4.5C8.83 4.5 9.5 5.17 9.5 6C9.5 6.83 8.83 7.5 8 7.5V9" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+                <circle cx="8" cy="11" r="0.7" fill="currentColor" />
               </svg>
             </button>
           </div>
@@ -391,6 +393,129 @@ function NetAvgCard({ netAvg, total, increased, decreased, avgIncrease, avgDecre
   );
 }
 
+// ─── Cost AI prompt ──────────────────────────────────────────────────────────
+
+function CostAiPromptAction({
+  all,
+  byImpact,
+  momRef,
+}: {
+  all: CostVarItem[];
+  byImpact: CostVarImpactItem[];
+  momRef: { year: number; month: number };
+}) {
+  const [showCostAiPrompt, setShowCostAiPrompt] = useState(false);
+
+  const prevMonthLabel = new Date(momRef.year, momRef.month - 2, 1).toLocaleDateString("pt-BR", { month: "long" });
+  const currMonthLabel = new Date(momRef.year, momRef.month - 1, 1).toLocaleDateString("pt-BR", { month: "long" });
+
+  const increased = all.filter(i => i.pctDelta > 0);
+  const decreased = all.filter(i => i.pctDelta < 0);
+  const netAvg = all.length > 0
+    ? all.reduce((s, i) => s + i.pctDelta, 0) / all.length
+    : null;
+  const latestCurrentDate = all
+    .map(i => i.currentDate)
+    .filter(Boolean)
+    .sort()
+    .at(-1) ?? null;
+
+  const momItems = all.filter(i => i.momPctDelta !== null);
+  const momNetAvg = momItems.length > 0
+    ? momItems.reduce((s, i) => s + (i.momPctDelta ?? 0), 0) / momItems.length
+    : null;
+
+  function buildCostPrompt() {
+    const fmtPct1 = (v: number) => `${v >= 0 ? "+" : ""}${v.toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
+    const fmtBRLm = (v: number) => `R$ ${v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    const monthRef = latestCurrentDate
+      ? new Date(latestCurrentDate).toLocaleDateString("pt-BR", { month: "long", year: "numeric" })
+      : "mês corrente";
+
+    const sortedUp = [...increased].sort((a, b) => b.pctDelta - a.pctDelta);
+    const sortedDown = [...decreased].sort((a, b) => a.pctDelta - b.pctDelta);
+
+    const upLines = sortedUp.map(i => {
+      const mom = i.momPctDelta != null ? `, MoM ${fmtPct1(i.momPctDelta)}` : "";
+      return `  - ${i.name}: ${fmtBRLm(i.previous)} → ${fmtBRLm(i.current)} (Δ ${fmtPct1(i.pctDelta)}${mom})`;
+    }).join("\n");
+
+    const downLines = sortedDown.map(i => {
+      const mom = i.momPctDelta != null ? `, MoM ${fmtPct1(i.momPctDelta)}` : "";
+      return `  - ${i.name}: ${fmtBRLm(i.previous)} → ${fmtBRLm(i.current)} (Δ ${fmtPct1(i.pctDelta)}${mom})`;
+    }).join("\n");
+
+    const impactLines = byImpact.slice(0, 5).map(i => {
+      const mom = i.momPctDelta != null ? `, MoM ${fmtPct1(i.momPctDelta)}` : "";
+      return `  - ${i.name}: ${i.recipeUsageCount} receita${i.recipeUsageCount !== 1 ? "s" : ""} afetada${i.recipeUsageCount !== 1 ? "s" : ""}, Δ ${fmtPct1(i.pctDelta)}${mom}`;
+    }).join("\n");
+
+    const netLine = netAvg != null ? `Variação líquida média — Δ recente: ${fmtPct1(netAvg)}` : "";
+    const momNetLine = momNetAvg != null
+      ? `Variação líquida média — MoM (${prevMonthLabel}→${currMonthLabel}): ${fmtPct1(momNetAvg)}`
+      : "";
+
+    const divergent = all
+      .filter(i => i.momPctDelta != null && Math.abs((i.momPctDelta ?? 0) - i.pctDelta) > 5)
+      .sort((a, b) => Math.abs((b.momPctDelta ?? 0) - b.pctDelta) - Math.abs((a.momPctDelta ?? 0) - a.pctDelta))
+      .slice(0, 5);
+    const divergentLines = divergent.map(i =>
+      `  - ${i.name}: Δ recente ${fmtPct1(i.pctDelta)} vs MoM ${fmtPct1(i.momPctDelta!)}`
+    ).join("\n");
+
+    return `Você é um consultor de negócios especializado em restaurantes e pizzarias. Analise os dados abaixo e forneça recomendações práticas considerando tanto a variação recente quanto a tendência mês a mês.
+
+## CONTEXTO
+
+- **Δ recente**: comparação entre os dois últimos preços registrados de cada insumo (pode abranger qualquer intervalo de tempo)
+- **MoM (${prevMonthLabel}→${currMonthLabel})**: preço vigente no fim de ${prevMonthLabel} vs preço vigente no fim de ${currMonthLabel} — comparação calendário fixa, ideal para tendência estratégica
+
+## RESUMO — ${monthRef.toUpperCase()}
+
+${netLine}
+${momNetLine}
+
+## INSUMOS QUE SUBIRAM (${increased.length} no total)
+${upLines || "  (nenhum)"}
+
+## INSUMOS QUE CAÍRAM (${decreased.length} no total)
+${downLines || "  (nenhum)"}
+
+## TOP INSUMOS POR IMPACTO NAS RECEITAS
+${impactLines || "  (sem dados)"}
+${divergent.length > 0 ? `
+## DIVERGÊNCIA Δ RECENTE vs MoM (possível reversão ou aceleração de tendência)
+${divergentLines}` : ""}
+
+## O QUE PRECISO
+
+1. **Prioridade imediata**: quais insumos merecem atenção urgente considerando Δ recente E MoM?
+2. **Tendências preocupantes**: algum insumo que caiu no recente mas subiu no MoM (ou vice-versa)? O que isso sinaliza?
+3. **Impacto na margem**: com base nos insumos mais usados em receitas, como isso afeta meu lucro?
+4. **Ações de curto prazo** (próximas 2 semanas):
+   - Negociação com fornecedores: quais e como abordar?
+   - Substituição de ingredientes: onde é viável sem impactar qualidade?
+   - Ajuste de cardápio: algum item merece revisão de preço ou descontinuação?
+5. **1 oportunidade** que você enxerga nos insumos que caíram de preço.
+
+Seja direto e objetivo. Prefiro sugestões específicas ao meu contexto a conselhos genéricos.`;
+  }
+
+  return (
+    <>
+      <AiPromptButton onClick={() => setShowCostAiPrompt(true)} />
+
+      {showCostAiPrompt && (
+        <AiPromptModal
+          title="Prompt — Análise de Custos de Insumos"
+          prompt={buildCostPrompt()}
+          onClose={() => setShowCostAiPrompt(false)}
+        />
+      )}
+    </>
+  );
+}
+
 // ─── CostVarTables ────────────────────────────────────────────────────────────
 
 function CostVarTables({ byAbs, byPct, byImpact, missingConsumptionUm, all, momRef }: {
@@ -404,6 +529,7 @@ function CostVarTables({ byAbs, byPct, byImpact, missingConsumptionUm, all, momR
   const [showAllAbs, setShowAllAbs] = useState(false);
   const [showAllPct, setShowAllPct] = useState(false);
   const [showAllImpact, setShowAllImpact] = useState(false);
+  const [variationFilter, setVariationFilter] = useState<"positive" | "negative" | "all">("positive");
 
   const [impactModal, setImpactModal] = useState<CostVarItem | null>(null);
   const impactFetcher = useFetcher<IngredientImpactData>();
@@ -432,10 +558,27 @@ function CostVarTables({ byAbs, byPct, byImpact, missingConsumptionUm, all, momR
     navigate(`?${params.toString()}`, { replace: true });
   }
 
+  function onVariationFilterChange(value: "positive" | "negative" | "all") {
+    setVariationFilter(value);
+    setShowAllAbs(false);
+    setShowAllPct(false);
+    setShowAllImpact(false);
+  }
+
+  const filterByDirection = <T extends CostVarItem>(items: T[]) => {
+    if (variationFilter === "positive") return items.filter(item => item.pctDelta > 0);
+    if (variationFilter === "negative") return items.filter(item => item.pctDelta < 0);
+    return items;
+  };
+
+  const filteredByAbs = useMemo(() => filterByDirection(byAbs), [byAbs, variationFilter]);
+  const filteredByPct = useMemo(() => filterByDirection(byPct), [byPct, variationFilter]);
+  const filteredByImpact = useMemo(() => filterByDirection(byImpact), [byImpact, variationFilter]);
+
   // Previous month label for display
   const prevMomDate = new Date(momRef.year, momRef.month - 2, 1);
-  const prevMonthLabel = prevMomDate.toLocaleDateString("pt-BR", { month: "short" });
-  const currMonthLabel = new Date(momRef.year, momRef.month - 1, 1).toLocaleDateString("pt-BR", { month: "short" });
+  const prevMonthLabel = prevMomDate.toLocaleDateString("pt-BR", { month: "long" });
+  const currMonthLabel = new Date(momRef.year, momRef.month - 1, 1).toLocaleDateString("pt-BR", { month: "long" });
 
   function openImpact(item: CostVarItem) {
     setImpactModal(item);
@@ -515,7 +658,7 @@ function CostVarTables({ byAbs, byPct, byImpact, missingConsumptionUm, all, momR
           Variação de Custo — {mode === "abs" ? "Por Valor Absoluto" : "Por Percentual"}
         </p>
         <p className="text-[11px] text-slate-400 mb-3">
-          Top {items.length} maiores variações {mode === "abs" ? "em R$" : "em %"}
+          {items.length} variação{items.length !== 1 ? "ões" : ""} {mode === "abs" ? "em R$" : "em %"}
         </p>
         {items.length === 0
           ? <p className="text-sm text-slate-400 py-4 text-center">Sem variações registradas.</p>
@@ -529,8 +672,16 @@ function CostVarTables({ byAbs, byPct, byImpact, missingConsumptionUm, all, momR
                     <TableHead className="text-xs text-right">Antes</TableHead>
                     <TableHead className="text-xs text-right">Depois</TableHead>
                     <TableHead className="text-xs text-right">{mode === "abs" ? "Δ R$" : "Δ %"}</TableHead>
-                    <TableHead className="text-xs text-right text-slate-400">Antes ({prevMonthLabel})</TableHead>
-                    <TableHead className="text-xs text-right text-slate-400">Depois ({currMonthLabel})</TableHead>
+                    <TableHead className="text-xs text-right text-slate-400">
+                      <div className="inline-flex gap-x-1 justify-center">
+                        Antes
+                        <span className="font-semibold uppercase text-slate-500"> ({prevMonthLabel})</span>
+                      </div>
+                    </TableHead>
+                    <TableHead className="text-xs text-right text-slate-400"><div className="inline-flex gap-x-1 justify-center">
+                      Depois
+                      <span className="font-semibold uppercase text-slate-500"> ({currMonthLabel})</span>
+                    </div></TableHead>
                     <TableHead className="text-xs text-right text-slate-400">MoM Δ%</TableHead>
                     <TableHead className="w-7" />
                   </TableRow>
@@ -572,8 +723,6 @@ function CostVarTables({ byAbs, byPct, byImpact, missingConsumptionUm, all, momR
     </Card>
   );
 
-  const [showCostAiPrompt, setShowCostAiPrompt] = useState(false);
-
   const increased = all.filter(i => i.pctDelta > 0);
   const decreased = all.filter(i => i.pctDelta < 0);
   const avgIncrease = increased.length > 0
@@ -606,96 +755,30 @@ function CostVarTables({ byAbs, byPct, byImpact, missingConsumptionUm, all, momR
 
   const fmtMom = (v: number) => `${v > 0 ? "+" : ""}${v.toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
 
-  function buildCostPrompt() {
-    const fmtPct1 = (v: number) => `${v >= 0 ? "+" : ""}${v.toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
-    const fmtBRLm = (v: number) => `R$ ${v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-    const monthRef = latestCurrentDate
-      ? new Date(latestCurrentDate).toLocaleDateString("pt-BR", { month: "long", year: "numeric" })
-      : "mês corrente";
-
-    const sortedUp = [...increased].sort((a, b) => b.pctDelta - a.pctDelta);
-    const sortedDown = [...decreased].sort((a, b) => a.pctDelta - b.pctDelta);
-
-    const upLines = sortedUp.map(i => {
-      const mom = i.momPctDelta != null ? `, MoM ${fmtPct1(i.momPctDelta)}` : "";
-      return `  - ${i.name}: ${fmtBRLm(i.previous)} → ${fmtBRLm(i.current)} (Δ ${fmtPct1(i.pctDelta)}${mom})`;
-    }).join("\n");
-
-    const downLines = sortedDown.map(i => {
-      const mom = i.momPctDelta != null ? `, MoM ${fmtPct1(i.momPctDelta)}` : "";
-      return `  - ${i.name}: ${fmtBRLm(i.previous)} → ${fmtBRLm(i.current)} (Δ ${fmtPct1(i.pctDelta)}${mom})`;
-    }).join("\n");
-
-    const impactLines = byImpact.slice(0, 5).map(i => {
-      const mom = i.momPctDelta != null ? `, MoM ${fmtPct1(i.momPctDelta)}` : "";
-      return `  - ${i.name}: ${i.recipeUsageCount} receita${i.recipeUsageCount !== 1 ? "s" : ""} afetada${i.recipeUsageCount !== 1 ? "s" : ""}, Δ ${fmtPct1(i.pctDelta)}${mom}`;
-    }).join("\n");
-
-    const netLine = netAvg != null ? `Variação líquida média — Δ recente: ${fmtPct1(netAvg)}` : "";
-    const momNetLine = momNetAvg != null
-      ? `Variação líquida média — MoM (${prevMonthLabel}→${currMonthLabel}): ${fmtPct1(momNetAvg)}`
-      : "";
-
-    // Items where MoM diverges significantly from the recent delta (potential trend signal)
-    const divergent = all
-      .filter(i => i.momPctDelta != null && Math.abs((i.momPctDelta ?? 0) - i.pctDelta) > 5)
-      .sort((a, b) => Math.abs((b.momPctDelta ?? 0) - b.pctDelta) - Math.abs((a.momPctDelta ?? 0) - a.pctDelta))
-      .slice(0, 5);
-    const divergentLines = divergent.map(i =>
-      `  - ${i.name}: Δ recente ${fmtPct1(i.pctDelta)} vs MoM ${fmtPct1(i.momPctDelta!)}`
-    ).join("\n");
-
-    return `Você é um consultor de negócios especializado em restaurantes e pizzarias. Analise os dados abaixo e forneça recomendações práticas considerando tanto a variação recente quanto a tendência mês a mês.
-
-## CONTEXTO
-
-- **Δ recente**: comparação entre os dois últimos preços registrados de cada insumo (pode abranger qualquer intervalo de tempo)
-- **MoM (${prevMonthLabel}→${currMonthLabel})**: preço vigente no fim de ${prevMonthLabel} vs preço vigente no fim de ${currMonthLabel} — comparação calendário fixa, ideal para tendência estratégica
-
-## RESUMO — ${monthRef.toUpperCase()}
-
-${netLine}
-${momNetLine}
-
-## INSUMOS QUE SUBIRAM (${increased.length} no total)
-${upLines || "  (nenhum)"}
-
-## INSUMOS QUE CAÍRAM (${decreased.length} no total)
-${downLines || "  (nenhum)"}
-
-## TOP INSUMOS POR IMPACTO NAS RECEITAS
-${impactLines || "  (sem dados)"}
-${divergent.length > 0 ? `
-## DIVERGÊNCIA Δ RECENTE vs MoM (possível reversão ou aceleração de tendência)
-${divergentLines}` : ""}
-
-## O QUE PRECISO
-
-1. **Prioridade imediata**: quais insumos merecem atenção urgente considerando Δ recente E MoM?
-2. **Tendências preocupantes**: algum insumo que caiu no recente mas subiu no MoM (ou vice-versa)? O que isso sinaliza?
-3. **Impacto na margem**: com base nos insumos mais usados em receitas, como isso afeta meu lucro?
-4. **Ações de curto prazo** (próximas 2 semanas):
-   - Negociação com fornecedores: quais e como abordar?
-   - Substituição de ingredientes: onde é viável sem impactar qualidade?
-   - Ajuste de cardápio: algum item merece revisão de preço ou descontinuação?
-5. **1 oportunidade** que você enxerga nos insumos que caíram de preço.
-
-Seja direto e objetivo. Prefiro sugestões específicas ao meu contexto a conselhos genéricos.`;
-  }
-
   return (
     <>
       <MissingConsumptionUmAlert items={missingConsumptionUm} />
 
-      <AiPromptButton onClick={() => setShowCostAiPrompt(true)} />
-
-      {showCostAiPrompt && (
-        <AiPromptModal
-          title="Prompt — Análise de Custos de Insumos"
-          prompt={buildCostPrompt()}
-          onClose={() => setShowCostAiPrompt(false)}
-        />
-      )}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-slate-500">
+            Tabelas de variação
+          </p>
+          <p className="text-[11px] text-slate-400">
+            Filtre as listas por sentido da variação recente.
+          </p>
+        </div>
+        <Select value={variationFilter} onValueChange={onVariationFilterChange}>
+          <SelectTrigger className="h-8 w-[170px] text-xs">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="positive">Aumentos de custo</SelectItem>
+            <SelectItem value="negative">Quedas de custo</SelectItem>
+            <SelectItem value="all">Todas</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
 
       {(avgIncrease !== null || avgDecrease !== null) && (
         <div className="grid grid-cols-2 gap-6">
@@ -804,14 +887,14 @@ Seja direto e objetivo. Prefiro sugestões específicas ao meu contexto a consel
         </div>
       )}
 
-      {byImpact.length > 0 && (
+      {filteredByImpact.length > 0 && (
         <Card>
           <CardContent className="p-4">
             <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-slate-500 mb-1">
               Variação de Custo — Por Impacto nas Receitas
             </p>
             <p className="text-[11px] text-slate-400 mb-3">
-              Top {byImpact.length} — variação ponderada pelo número de receitas que usam o insumo
+              {filteredByImpact.length} variação{filteredByImpact.length !== 1 ? "ões" : ""} — ponderadas pelo número de receitas que usam o insumo
             </p>
             <Table>
               <TableHeader>
@@ -829,7 +912,7 @@ Seja direto e objetivo. Prefiro sugestões específicas ao meu contexto a consel
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {byImpact.slice(0, showAllImpact ? byImpact.length : VISIBLE).map((item, i) => (
+                {filteredByImpact.slice(0, showAllImpact ? filteredByImpact.length : VISIBLE).map((item, i) => (
                   <TableRow key={`${item.itemId}-${i}`} className="hover:bg-slate-50">
                     <TableCell className="text-xs text-slate-400">{i + 1}</TableCell>
                     <TableCell className="text-xs font-medium">
@@ -857,13 +940,13 @@ Seja direto e objetivo. Prefiro sugestões específicas ao meu contexto a consel
                 ))}
               </TableBody>
             </Table>
-            <ShowMore expanded={showAllImpact} total={byImpact.length} visible={VISIBLE} onClick={() => setShowAllImpact(v => !v)} />
+            <ShowMore expanded={showAllImpact} total={filteredByImpact.length} visible={VISIBLE} onClick={() => setShowAllImpact(v => !v)} />
           </CardContent>
         </Card>
       )}
 
-      {varTable(byAbs, showAllAbs, () => setShowAllAbs(v => !v), "abs")}
-      {varTable(byPct, showAllPct, () => setShowAllPct(v => !v), "pct")}
+      {varTable(filteredByAbs, showAllAbs, () => setShowAllAbs(v => !v), "abs")}
+      {varTable(filteredByPct, showAllPct, () => setShowAllPct(v => !v), "pct")}
 
       {impactModal && (
         <IngredientImpactModal
@@ -900,7 +983,7 @@ function ItemsTables({
           <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-slate-500 mb-1">
             Top {topImpact.length} Insumos Mais Impactantes
           </p>
-          <p className="text-[11px] text-slate-400 mb-3">Custo acumulado nas receitas — clique para ver andamento</p>
+          <p className="text-[11px] text-slate-400 mb-3">Custo acumulado nas receitas — use as ações para abrir custo ou estoque</p>
           {topImpact.length === 0
             ? <p className="text-sm text-slate-400 py-4 text-center">Sem dados de receitas.</p>
             : (
@@ -911,26 +994,69 @@ function ItemsTables({
                       <TableHead className="text-xs w-6">#</TableHead>
                       <TableHead className="text-xs">Insumo</TableHead>
                       <TableHead className="text-xs text-right">Usos</TableHead>
+                      <TableHead className="text-xs text-right">Último custo</TableHead>
+                      <TableHead className="text-xs text-right">Custo médio</TableHead>
+                      <TableHead className="text-xs text-right">Custo mínimo</TableHead>
+                      <TableHead className="text-xs text-right">Custo máximo</TableHead>
                       <TableHead className="text-xs text-right">Impacto total</TableHead>
+                      <TableHead className="text-xs text-center">Custo</TableHead>
+                      <TableHead className="text-xs text-center">Estoque</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {topImpact.slice(0, showAllImpact ? topImpact.length : VISIBLE).map((item, i) => (
-                      <TableRow
-                        key={item.itemId}
-                        className="cursor-pointer hover:bg-slate-50"
-                        onClick={() => onImpactTrend({
-                          title: item.name,
-                          consumptionUm: item.consumptionUm,
-                          trend: item.trend,
-                          latestCost: item.latestCostPerConsumptionUnit,
-                          avgCost: null,
-                        })}
-                      >
+                      <TableRow key={item.itemId} className="hover:bg-slate-50">
                         <TableCell className="text-xs text-slate-400">{i + 1}</TableCell>
                         <TableCell className="text-xs font-medium">{item.name}</TableCell>
                         <TableCell className="text-xs text-right text-slate-500">{item.recipeUsageCount}x</TableCell>
+                        <TableCell className="text-xs text-right font-mono text-slate-700">
+                          {fmtCost(item.latestCostPerConsumptionUnit, item.consumptionUm)}
+                        </TableCell>
+                        <TableCell className="text-xs text-right font-mono text-slate-500">
+                          {fmtCost(item.averageCostPerConsumptionUnit, item.consumptionUm)}
+                        </TableCell>
+                        <TableCell className="text-xs text-right font-mono text-slate-500">
+                          <div>{fmtCost(item.minStockMovementCost, item.consumptionUm)}</div>
+                          {fmtDateShort(item.minStockMovementCostDate) ? (
+                            <div className="text-[10px] text-slate-400">{fmtDateShort(item.minStockMovementCostDate)}</div>
+                          ) : null}
+                        </TableCell>
+                        <TableCell className="text-xs text-right font-mono text-slate-500">
+                          <div>{fmtCost(item.maxStockMovementCost, item.consumptionUm)}</div>
+                          {fmtDateShort(item.maxStockMovementCostDate) ? (
+                            <div className="text-[10px] text-slate-400">{fmtDateShort(item.maxStockMovementCostDate)}</div>
+                          ) : null}
+                        </TableCell>
                         <TableCell className="text-xs text-right font-mono">{fmtMoney(item.totalCostImpact)}</TableCell>
+                        <TableCell className="text-center">
+                          <button
+                            type="button"
+                            title="Ver grafo de movimentação do custo"
+                            aria-label={`Ver grafo de movimentação do custo de ${item.name}`}
+                            onClick={() => onImpactTrend({
+                              title: item.name,
+                              consumptionUm: item.consumptionUm,
+                              trend: item.trend,
+                              latestCost: item.latestCostPerConsumptionUnit,
+                              avgCost: item.averageCostPerConsumptionUnit,
+                            })}
+                            className="inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-400 transition hover:bg-slate-100 hover:text-slate-900"
+                          >
+                            <LineChart className="h-4 w-4" />
+                          </button>
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <a
+                            href={`/admin/items/${item.itemId}/stock-movements`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            title="Ver movimentação de estoque"
+                            aria-label={`Ver movimentação de estoque de ${item.name}`}
+                            className="inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-400 transition hover:bg-slate-100 hover:text-slate-900"
+                          >
+                            <PackageSearch className="h-4 w-4" />
+                          </a>
+                        </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -1000,16 +1126,12 @@ export default function DashboardCustos() {
   return (
     <>
       <div className="flex flex-col gap-6">
-
-        <Suspense fallback={<><TableCardSkeleton /><TableCardSkeleton /><TableCardSkeleton /></>}>
-          <Await resolve={costVarData} errorElement={<SectionError label="tabelas de variação" />}>
+        <Suspense fallback={<div className="h-8 w-full animate-pulse rounded-md border border-slate-200 bg-slate-50" />}>
+          <Await resolve={costVarData} errorElement={null}>
             {(data) => (
-              <CostVarTables
-                byAbs={data.byAbs}
-                byPct={data.byPct}
-                byImpact={data.byImpact}
-                missingConsumptionUm={data.missingConsumptionUm}
+              <CostAiPromptAction
                 all={data.all}
+                byImpact={data.byImpact}
                 momRef={data.momRef}
               />
             )}
@@ -1023,6 +1145,21 @@ export default function DashboardCustos() {
                 {...data}
                 onItemTrend={setTrendModal}
                 onImpactTrend={setTrendModal}
+              />
+            )}
+          </Await>
+        </Suspense>
+
+        <Suspense fallback={<><TableCardSkeleton /><TableCardSkeleton /><TableCardSkeleton /></>}>
+          <Await resolve={costVarData} errorElement={<SectionError label="tabelas de variação" />}>
+            {(data) => (
+              <CostVarTables
+                byAbs={data.byAbs}
+                byPct={data.byPct}
+                byImpact={data.byImpact}
+                missingConsumptionUm={data.missingConsumptionUm}
+                all={data.all}
+                momRef={data.momRef}
               />
             )}
           </Await>
@@ -1049,7 +1186,9 @@ export default function DashboardCustos() {
                       data={trendModal.trend.map(p => p.value)}
                       labels={trendModal.trend.map(p => p.label)}
                       title={`trend-${trendModal.title}`}
-                      h={200}
+                      h={220}
+                      showPointValues
+                      formatValue={(value) => fmtMoney(value)}
                     />
                   )}
                 <div className="mt-4 flex gap-6">
