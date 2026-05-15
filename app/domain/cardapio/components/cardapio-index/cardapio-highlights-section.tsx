@@ -1,12 +1,16 @@
 import { Link } from "@remix-run/react";
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { ChevronRight, Heart, X } from "lucide-react";
+import { Bookmark, ChevronRight, Heart, MessageCircle, Share2, ShoppingBag, X } from "lucide-react";
 import SectionThreadHeader, {
     type ThreadSectionProfile,
 } from "~/domain/cardapio/components/section-thread-header/section-thread-header";
 import CardapioItemImageSingle from "~/domain/cardapio/components/cardapio-item-image-single/cardapio-item-image-single";
 import Logo from "~/components/primitives/logo/logo";
+import ExternalLink from "~/components/primitives/external-link/external-link";
 import { Carousel, CarouselContent, CarouselItem } from "~/components/ui/carousel";
+import FazerPedidoButton from "~/domain/cardapio/components/fazer-pedido-button/fazer-pedido-button";
+import { LikeIt } from "~/domain/cardapio/components/cardapio-item-action-bar/cardapio-item-action-bar";
+import WEBSITE_LINKS from "~/domain/website-navigation/links/website-links";
 import { cn } from "~/lib/utils";
 import capitalize from "~/utils/capitalize";
 import formatMoneyString from "~/utils/format-money-string";
@@ -19,6 +23,7 @@ import {
     getNoveltyItems,
     getPrimaryCardapioMedia,
     getVisiblePublicPriceVariations,
+    itemHasPublicTag,
     type GroupedItems,
     isGrouped,
 } from "~/domain/cardapio/cardapio-index.shared";
@@ -49,6 +54,11 @@ export function CardapioHighlightsSection({
 
     return (
         <>
+            <CardapioSocialFeed
+                items={flatItems}
+                likesEnabled={likesEnabled}
+            />
+
             {noveltyItems.length > 0 ? <NoveltiesHeroSection items={noveltyItems} /> : null}
 
             <div className="gap-4 md:flex md:flex-row md:items-start">
@@ -94,6 +104,274 @@ export function CardapioHighlightsSection({
             <div className="mx-4 my-4 h-[2px] bg-zinc-900" />
         </>
     );
+}
+
+type FeedCategoryKey = "sugestoes" | "curtidas" | "classicas" | "premium" | "vegetarianas";
+
+const FEED_CATEGORIES: Array<{ key: FeedCategoryKey; label: string }> = [
+    { key: "sugestoes", label: "Sugestões" },
+    { key: "curtidas", label: "Mais curtidas" },
+    { key: "classicas", label: "Clássicas" },
+    { key: "premium", label: "Premium" },
+    { key: "vegetarianas", label: "Vegetarianas" },
+];
+
+function CardapioSocialFeed({
+    items,
+    likesEnabled,
+}: {
+    items: CardapioIndexItem[];
+    likesEnabled: boolean;
+}) {
+    const [activeCategory, setActiveCategory] = useState<FeedCategoryKey>("sugestoes");
+    const feedRef = useRef<HTMLDivElement>(null);
+
+    const feedItems = getSocialFeedItems(items, activeCategory);
+
+    useEffect(() => {
+        feedRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+    }, [activeCategory]);
+
+    if (!feedItems.length) return null;
+
+    return (
+        <section className="relative mb-6 bg-zinc-950 text-white md:-mx-0 md:bg-[#111]">
+            <div className="mx-auto w-full md:max-w-[460px] md:py-4">
+                <div className="sticky top-[50px] z-20 flex gap-2 overflow-x-auto border-b border-white/10 bg-black/70 px-3 py-3 backdrop-blur-xl md:top-[70px] md:rounded-t-[1.75rem] no-scrollbar">
+                    {FEED_CATEGORIES.map((category) => (
+                        <button
+                            key={category.key}
+                            type="button"
+                            onClick={() => setActiveCategory(category.key)}
+                            className={cn(
+                                "relative whitespace-nowrap px-1 pb-1 font-neue text-[12px] font-semibold uppercase leading-none text-white/55 transition-colors",
+                                activeCategory === category.key ? "text-white" : "hover:text-white"
+                            )}
+                        >
+                            {category.label}
+                            <span
+                                className={cn(
+                                    "absolute bottom-[-0.35rem] left-0 h-[2px] rounded-full bg-white transition-all",
+                                    activeCategory === category.key ? "w-full opacity-100" : "w-0 opacity-0"
+                                )}
+                            />
+                        </button>
+                    ))}
+                </div>
+
+                <div
+                    ref={feedRef}
+                    className="h-[calc(100dvh-50px)] snap-y snap-mandatory overflow-y-auto overscroll-contain bg-black md:h-[min(820px,calc(100dvh-86px))] md:rounded-b-[1.75rem] md:border md:border-white/10 md:shadow-2xl"
+                >
+                    {feedItems.map((item, index) => (
+                        <SocialFeedItem
+                            key={`${activeCategory}-${item.id}`}
+                            item={item}
+                            likesEnabled={likesEnabled}
+                            eager={index <= 1}
+                        />
+                    ))}
+                </div>
+            </div>
+        </section>
+    );
+}
+
+function SocialFeedItem({
+    item,
+    likesEnabled,
+    eager,
+}: {
+    item: CardapioIndexItem;
+    likesEnabled: boolean;
+    eager: boolean;
+}) {
+    const [saved, setSaved] = useState(false);
+    const media = getPrimaryCardapioMedia(item);
+    const mediaUrl = media?.secureUrl || "";
+    const isVideo =
+        media?.kind === "video" ||
+        /\.(mp4|mov|webm|m4v|ogg|ogv)(\?|$)/i.test(mediaUrl);
+    const featuredPrice = getSocialFeedPrice(item);
+
+    const shareItem = useCallback(() => {
+        if (typeof navigator === "undefined" || !navigator.share) return;
+        navigator.share({
+            title: item.name,
+            text: item.ingredients || `Conheça ${item.name} no cardápio A Modo Mio.`,
+            url: `${window.location.origin}${getCardapioItemHref(item)}`,
+        }).catch(() => null);
+    }, [item]);
+
+    return (
+        <article className="relative h-[calc(100dvh-50px)] snap-start snap-always overflow-hidden bg-zinc-950 md:h-[min(820px,calc(100dvh-86px))]">
+            <div className="absolute inset-0">
+                {mediaUrl && isVideo ? (
+                    <video
+                        src={mediaUrl}
+                        className="h-full w-full object-cover"
+                        autoPlay
+                        muted
+                        playsInline
+                        loop
+                        preload={eager ? "metadata" : "none"}
+                    />
+                ) : (
+                    <div className="h-full w-full scale-[1.03] animate-[pulse_8s_ease-in-out_infinite] motion-reduce:animate-none">
+                        <CardapioItemImageSingle
+                            src={mediaUrl}
+                            placeholder={item.imagePlaceholderURL || ""}
+                            placeholderIcon={false}
+                            placeholderText={item.name}
+                            cnPlaceholderContainer="from-zinc-950 via-zinc-900 to-zinc-800"
+                            cnPlaceholderText="font-lora text-7xl text-white/70"
+                            cnContainer="h-full w-full"
+                            enableOverlay={false}
+                        />
+                    </div>
+                )}
+            </div>
+
+            <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-black/25" />
+            <div className="absolute inset-x-0 bottom-0 z-10 pb-[max(1.25rem,env(safe-area-inset-bottom))] pl-5 pr-24">
+                <Link to={getCardapioItemHref(item)} className="group block">
+                    <h2 className="font-lora text-4xl font-bold leading-[0.95] text-white drop-shadow-lg transition group-hover:opacity-85">
+                        {item.name}
+                    </h2>
+                    {item.ingredients ? (
+                        <p className="mt-3 line-clamp-3 font-neue text-[15px] leading-snug text-white/85 drop-shadow">
+                            {capitalize(item.ingredients)}
+                        </p>
+                    ) : null}
+                    {featuredPrice ? (
+                        <p className="mt-4 font-neue text-sm font-semibold uppercase tracking-wide text-white">
+                            A partir de {formatMoneyString(featuredPrice.priceAmount)}
+                        </p>
+                    ) : null}
+                </Link>
+
+                <div className="mt-4 max-w-[15rem]">
+                    <FazerPedidoButton
+                        label="Adicionar ao pedido"
+                        size="sm"
+                        variant="secondary"
+                        cnContainer="rounded-full bg-white/95 px-4 py-2.5 shadow-xl"
+                        cnLabel="text-[12px]"
+                        ariaLabel={`Adicionar ${item.name} ao pedido`}
+                    />
+                </div>
+            </div>
+
+            <div className="absolute bottom-8 right-3 z-20 flex flex-col items-center gap-3 pb-[env(safe-area-inset-bottom)]">
+                {likesEnabled ? (
+                    <LikeIt
+                        item={item as unknown as React.ComponentProps<typeof LikeIt>["item"]}
+                        size={25}
+                        color="white"
+                        cnContainer="h-12 w-12 rounded-full bg-black/35 p-0 backdrop-blur-md hover:bg-black/45"
+                        cnIcon="drop-shadow"
+                    />
+                ) : null}
+                <SocialFeedAction
+                    label="Salvar"
+                    active={saved}
+                    onClick={() => setSaved((current) => !current)}
+                    icon={<Bookmark className={cn("h-5 w-5", saved ? "fill-white" : "fill-none")} />}
+                />
+                <SocialFeedAction
+                    label="Compartilhar"
+                    onClick={shareItem}
+                    icon={<Share2 className="h-5 w-5" />}
+                />
+                <Link
+                    to={getCardapioItemHref(item)}
+                    className="flex flex-col items-center gap-1 text-white"
+                    aria-label={`Ver detalhes de ${item.name}`}
+                >
+                    <span className="flex h-12 w-12 items-center justify-center rounded-full bg-black/35 backdrop-blur-md">
+                        <MessageCircle className="h-5 w-5" />
+                    </span>
+                    <span className="font-neue text-[9px] font-semibold uppercase leading-none text-white/80">
+                        Detalhes
+                    </span>
+                </Link>
+                <ExternalLink
+                    to={WEBSITE_LINKS.cardapioFallbackURL.href}
+                    ariaLabel={`Pedir ${item.name}`}
+                    className="flex flex-col items-center gap-1 text-white"
+                >
+                    <span className="flex h-12 w-12 items-center justify-center rounded-full bg-white text-black shadow-xl">
+                        <ShoppingBag className="h-5 w-5" />
+                    </span>
+                    <span className="font-neue text-[9px] font-semibold uppercase leading-none text-white/80">
+                        Pedir
+                    </span>
+                </ExternalLink>
+            </div>
+        </article>
+    );
+}
+
+function SocialFeedAction({
+    label,
+    icon,
+    active,
+    onClick,
+}: {
+    label: string;
+    icon: React.ReactNode;
+    active?: boolean;
+    onClick: () => void;
+}) {
+    return (
+        <button
+            type="button"
+            onClick={onClick}
+            className={cn("flex flex-col items-center gap-1 text-white", active ? "text-white" : "text-white/90")}
+            aria-label={label}
+        >
+            <span className="flex h-12 w-12 items-center justify-center rounded-full bg-black/35 backdrop-blur-md">
+                {icon}
+            </span>
+            <span className="font-neue text-[9px] font-semibold uppercase leading-none text-white/80">
+                {label}
+            </span>
+        </button>
+    );
+}
+
+function getSocialFeedItems(items: CardapioIndexItem[], category: FeedCategoryKey) {
+    const tagged = (tag: string) => items.filter((item) => itemHasPublicTag(item, tag));
+    const sortedByLikes = [...items].sort((a, b) => (b.likes?.amount ?? 0) - (a.likes?.amount ?? 0));
+    const sortedByMargin = [...items].sort((a, b) => getItemMarginPerc(b) - getItemMarginPerc(a));
+
+    const byCategory: Record<FeedCategoryKey, CardapioIndexItem[]> = {
+        sugestoes: [...sortedByMargin].sort((a, b) => {
+            const aPremium = getPremiumScore(a);
+            const bPremium = getPremiumScore(b);
+            return bPremium - aPremium || getItemMarginPerc(b) - getItemMarginPerc(a) || (b.likes?.amount ?? 0) - (a.likes?.amount ?? 0);
+        }),
+        curtidas: sortedByLikes,
+        classicas: tagged("classica").length ? tagged("classica") : tagged("clássica"),
+        premium: tagged("premium").length ? tagged("premium") : sortedByMargin.filter((item) => getPremiumScore(item) > 0),
+        vegetarianas: tagged("vegetariana").length ? tagged("vegetariana") : tagged("vegetarianas"),
+    };
+
+    const selectedItems = byCategory[category].length ? byCategory[category] : byCategory.sugestoes;
+    return selectedItems.slice(0, 16);
+}
+
+function getPremiumScore(item: CardapioIndexItem) {
+    const source = `${item.name} ${item.ingredients || ""}`.toLocaleLowerCase();
+    return ["mortazza", "burrata", "pistache", "pistacchio", "trufa", "parma", "gorgonzola"].reduce(
+        (score, term) => score + (source.includes(term) ? 1 : 0),
+        0
+    );
+}
+
+function getSocialFeedPrice(item: CardapioIndexItem) {
+    const prices = getVisiblePublicPriceVariations(item);
+    return prices.find((variation) => variation.isReference) ?? prices[0] ?? null;
 }
 
 function NoveltiesHeroSection({ items }: { items: CardapioIndexItem[] }) {
