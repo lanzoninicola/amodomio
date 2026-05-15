@@ -4,6 +4,11 @@ Este documento descreve a linha de raciocinio para uma futura pagina administrat
 
 O objetivo aqui nao e definir a implementacao final, mas registrar a modelagem, as fontes de verdade e os limites de escopo para que a primeira versao seja pequena, auditavel e alinhada com o fluxo nativo de `Item`.
 
+Para a politica geral de preco de venda, fontes de verdade, formula de DNA,
+margem por canal e regra de marketplace, leia primeiro
+`app/domain/sell-price/README.md`. Este documento trata somente da ferramenta
+de simulacao de combos.
+
 ## Decisao principal
 
 A pagina deve nascer como uma ferramenta de simulacao comercial, nao como um novo cadastro persistente.
@@ -162,7 +167,7 @@ Esse valor serve como referencia comercial para desconto.
 
 ### Preco sugerido por margem
 
-Formula conceitual:
+Formula conceitual simplificada para simulacao:
 
 ```txt
 precoSugerido = custoTotal / (1 - margemAlvo)
@@ -171,8 +176,9 @@ precoSugerido = custoTotal / (1 - margemAlvo)
 Observacoes:
 
 - `margemAlvo` deve ser tratada como percentual decimal no calculo;
-- a tela deve explicitar se impostos, taxas de canal ou marketplace entram no calculo;
-- se houver regra de DNA aplicavel ao canal, ela deve ser considerada em uma segunda etapa, nao no MVP simples.
+- a regra consolidada de DNA, taxas de canal e marketplace esta em
+  `app/domain/sell-price/README.md`;
+- se o MVP nao aplicar toda a politica de preco, a tela deve deixar isso claro.
 
 ### Desconto equivalente
 
