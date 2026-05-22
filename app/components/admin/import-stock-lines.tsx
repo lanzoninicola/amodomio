@@ -119,6 +119,77 @@ function CostHistoryHint({
   );
 }
 
+function ItemUnitsHeaderSummary({ item }: { item: any | null }) {
+  const unitRows = useMemo(() => {
+    if (!item) return [];
+    const rows: Array<{ unit: string; explanation: string; highlight?: boolean }> = [];
+    const seen = new Set<string>();
+    const baseUnit = normalizeUnit(item.consumptionUm);
+
+    if (baseUnit) {
+      rows.push({ unit: baseUnit, explanation: 'base do estoque', highlight: true });
+      seen.add(baseUnit);
+    }
+
+    const purchaseUnit = normalizeUnit(item.purchaseUm);
+    if (purchaseUnit && !seen.has(purchaseUnit)) {
+      const factor = Number(item.purchaseToConsumptionFactor ?? NaN);
+      rows.push({
+        unit: purchaseUnit,
+        explanation: factor > 0 && baseUnit
+          ? `1 ${purchaseUnit} = ${factor.toLocaleString('pt-BR', { maximumFractionDigits: 4 })} ${baseUnit}`
+          : 'sem fator',
+      });
+      seen.add(purchaseUnit);
+    }
+
+    for (const conversion of item.ItemPurchaseConversion ?? []) {
+      const unit = normalizeUnit(conversion?.purchaseUm);
+      if (!unit || seen.has(unit)) continue;
+      const factor = Number(conversion?.factor ?? NaN);
+      rows.push({
+        unit,
+        explanation: factor > 0 && baseUnit
+          ? `1 ${unit} = ${factor.toLocaleString('pt-BR', { maximumFractionDigits: 4 })} ${baseUnit}`
+          : 'sem fator',
+      });
+      seen.add(unit);
+    }
+
+    return rows;
+  }, [item]);
+
+  return (
+    <div className="min-w-0">
+      {unitRows.length > 0 ? (
+        <div className="pt-0.5">
+          {unitRows.slice(0, 4).map((row) => (
+            <div
+              key={row.unit}
+              className={cn(
+                'grid grid-cols-[52px_minmax(0,1fr)] gap-2 py-0.5 text-[11px] leading-tight',
+                row.highlight ? 'font-semibold text-slate-800' : 'text-slate-600',
+              )}
+            >
+              <div className="truncate">{row.unit}</div>
+              <div className="truncate text-slate-500">{row.explanation}</div>
+            </div>
+          ))}
+          {unitRows.length > 4 ? (
+            <div className="mt-0.5 text-[10px] text-slate-400">
+              +{unitRows.length - 4} UM(s)
+            </div>
+          ) : null}
+        </div>
+      ) : (
+        <div className="text-[11px] leading-snug text-slate-500">
+          {item ? 'Item sem UM configurada.' : 'Vincule um item para ver as UMs disponíveis.'}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function EditableTwoLevelRow({
   line,
   items,
@@ -848,42 +919,47 @@ function LineCard({
 
       <div className={cn('overflow-hidden rounded-xl border bg-white', borderClass)}>
         {/* Seção da nota (XML) */}
-        <div className={cn('flex items-start gap-3 border-b px-4 py-3', headerClass)}>
-          <div className={cn('mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg', iconBgClass)}>
-            {isImported
-              ? <CheckCircle2 className="h-4 w-4 text-blue-500" />
-              : isReady
-                ? <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                : isError
-                  ? <AlertTriangle className="h-4 w-4 text-red-500" />
-                  : isPending
-                    ? <AlertTriangle className="h-4 w-4 text-amber-500" />
-                    : <FileText className="h-4 w-4 text-slate-400" />
-            }
-          </div>
-          <div className="min-w-0 flex-1">
-            <button
-              type="button"
-              onClick={() => setNoteDetailsOpen(true)}
-              className="mb-0.5 text-left text-[10px] font-semibold uppercase tracking-widest text-slate-400 transition hover:text-slate-700 hover:underline hover:underline-offset-2"
-            >
-              Dados da nota (XML)
-            </button>
-            <a
-              href={`https://www.google.com/search?tbm=isch&q=${encodeURIComponent(String(line.ingredientName || '').trim())}`}
-              target="_blank"
-              rel="noreferrer"
-              className="block truncate text-sm font-semibold text-slate-900 hover:underline hover:underline-offset-2"
-            >
-              {line.ingredientName || '-'}
-            </a>
-            <div className="mt-0.5 text-xs text-slate-500">
-              {line.costAmount != null ? `Preço entrada: ${formatMoney(line.costAmount)}` : 'Preço entrada: -'}
-              {' • '}
-              {line.qtyEntry != null ? `Quantidade entrada: ${line.qtyEntry} ${line.unitEntry || ''}` : 'Quantidade entrada: -'}
+        <div className={cn('grid gap-3 border-b px-4 py-3 lg:grid-cols-[minmax(360px,1fr)_minmax(300px,360px)_190px]', headerClass)}>
+          <div className="flex min-w-0 items-start gap-3">
+            <div className={cn('mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg', iconBgClass)}>
+              {isImported
+                ? <CheckCircle2 className="h-4 w-4 text-blue-500" />
+                : isReady
+                  ? <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                  : isError
+                    ? <AlertTriangle className="h-4 w-4 text-red-500" />
+                    : isPending
+                      ? <AlertTriangle className="h-4 w-4 text-amber-500" />
+                      : <FileText className="h-4 w-4 text-slate-400" />
+              }
+            </div>
+            <div className="min-w-0 flex-1">
+              <button
+                type="button"
+                onClick={() => setNoteDetailsOpen(true)}
+                className="mb-0.5 text-left text-[10px] font-semibold uppercase tracking-widest text-slate-400 transition hover:text-slate-700 hover:underline hover:underline-offset-2"
+              >
+                Dados da nota (XML)
+              </button>
+              <a
+                href={`https://www.google.com/search?tbm=isch&q=${encodeURIComponent(String(line.ingredientName || '').trim())}`}
+                target="_blank"
+                rel="noreferrer"
+                className="block truncate text-sm font-semibold text-slate-900 hover:underline hover:underline-offset-2"
+              >
+                {line.ingredientName || '-'}
+              </a>
+              <div className="mt-0.5 text-xs text-slate-500">
+                {line.costAmount != null ? `Preço entrada: ${formatMoney(line.costAmount)}` : 'Preço entrada: -'}
+                {' • '}
+                {line.qtyEntry != null ? `Quantidade entrada: ${line.qtyEntry} ${line.unitEntry || ''}` : 'Quantidade entrada: -'}
+              </div>
             </div>
           </div>
-          <div className="flex shrink-0 flex-col items-end gap-1.5 self-center">
+
+          <ItemUnitsHeaderSummary item={selectedItem} />
+
+          <div className="flex shrink-0 flex-col items-start gap-1.5 self-center lg:items-end">
             <CardHeaderStatus status={line.status} />
           </div>
         </div>

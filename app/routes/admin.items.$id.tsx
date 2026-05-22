@@ -3,6 +3,7 @@ import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import { Link, Outlet, useActionData, useLoaderData, useLocation, useNavigate } from "@remix-run/react";
 import { useEffect, useState } from "react";
 import { ChevronLeft } from "lucide-react";
+import { randomUUID } from "node:crypto";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -683,7 +684,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
       await db.itemPurchaseConversion.upsert({
         where: { itemId_purchaseUm: { itemId: id, purchaseUm } },
-        create: { id: crypto.randomUUID(), itemId: id, purchaseUm, factor },
+        create: { id: randomUUID(), itemId: id, purchaseUm, factor },
         update: { factor },
       });
 
@@ -869,7 +870,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
       if (!unit || unit.scope !== "restricted") return badRequest("Unidade inválida ou não restrita");
       await db.itemUnit.upsert({
         where: { itemId_unitCode: { itemId: id, unitCode } },
-        create: { id: crypto.randomUUID(), itemId: id, unitCode },
+        create: { id: randomUUID(), itemId: id, unitCode },
         update: {},
       });
       return ok("Unidade vinculada");
@@ -901,7 +902,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
       const newRecipe = await db.recipe.create({
         data: {
-          id: crypto.randomUUID(),
+          id: randomUUID(),
           name: currentItem.name,
           itemId: id,
         },

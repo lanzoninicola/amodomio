@@ -1,6 +1,7 @@
 import type { ActionFunctionArgs } from "@remix-run/node";
 import { Form, useActionData, useOutletContext } from "@remix-run/react";
 import { Switch } from "~/components/ui/switch";
+import { invalidateCardapioIndexCache } from "~/domain/cardapio/cardapio-cache.server";
 import { buildAdminItemsMeta } from "~/domain/item/admin-items-meta";
 import type { AdminItemVendaOutletContext } from "./admin.items.$id.venda";
 import prismaClient from "~/lib/prisma/client.server";
@@ -34,7 +35,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
     const [item, channel] = await Promise.all([
       db.item.findUnique({ where: { id: itemId }, select: { id: true, name: true } }),
-      db.itemSellingChannel.findUnique({ where: { id: itemSellingChannelId }, select: { id: true, name: true } }),
+      db.itemSellingChannel.findUnique({ where: { id: itemSellingChannelId }, select: { id: true, key: true, name: true } }),
     ]);
 
     if (!item) return badRequest("Item não encontrado");
@@ -42,6 +43,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
     if (actionName === "toggle-item-channel-visible") {
       const visible = String(formData.get("visible") || "").trim() === "true";
+      const channelKey = String(channel.key || "").toLowerCase();
       const channelItem = await db.itemSellingChannelItem.findFirst({
         where: {
           itemId,
@@ -56,6 +58,38 @@ export async function action({ request, params }: ActionFunctionArgs) {
         return badRequest("Vincule o item ao canal antes de controlar a visibilidade.");
       }
 
+      if (visible && channelKey !== "cardapio") {
+        const cardapioChannelItem = await db.itemSellingChannelItem.findFirst({
+          where: {
+            itemId,
+            ItemSellingChannel: {
+              key: "cardapio",
+            },
+          },
+          select: {
+            visible: true,
+          },
+        });
+
+        if (cardapioChannelItem?.visible !== true) {
+          return badRequest("Para exibir em outros canais, primeiro deixe o item visível no cardápio.");
+        }
+      }
+
+      if (!visible && channelKey === "cardapio") {
+        await db.itemSellingChannelItem.updateMany({
+          where: {
+            itemId,
+          },
+          data: {
+            visible: false,
+          },
+        });
+        await invalidateCardapioIndexCache();
+
+        return ok("Item ocultado no cardápio e em todos os outros canais de venda.");
+      }
+
       await db.itemSellingChannelItem.update({
         where: {
           id: channelItem.id,
@@ -64,6 +98,10 @@ export async function action({ request, params }: ActionFunctionArgs) {
           visible,
         },
       });
+
+      if (channelKey === "cardapio") {
+        await invalidateCardapioIndexCache();
+      }
 
       return ok(
         visible
@@ -126,6 +164,7 @@ export default function AdminItemVendaCanaisRoute() {
   const actionData = useActionData<typeof action>();
   const { channels } = useOutletContext<AdminItemVendaOutletContext>();
   const enabledChannels = channels.filter((channel) => channel.enabledForItem);
+  const cardapioVisible = channels.some((channel) => channel.key === "cardapio" && channel.visibleForItem);
 
   return (
     <div className="space-y-4">
@@ -247,11 +286,14 @@ export default function AdminItemVendaCanaisRoute() {
                         <div>
                           <div className="text-xs font-semibold text-slate-900">Visivel neste canal</div>
                           <div className="text-xs text-slate-500">
-                            Controla a exposicao publica sem desfazer o vinculo comercial.
+                            {channel.key !== "cardapio" && !cardapioVisible
+                              ? "Oculto enquanto o cardapio estiver oculto."
+                              : "Controla a exposicao publica sem desfazer o vinculo comercial."}
                           </div>
                         </div>
                         <Switch
                           checked={channel.visibleForItem}
+                          disabled={channel.key !== "cardapio" && !cardapioVisible}
                           onCheckedChange={(checked) => {
                             const input = document.getElementById(
                               `channel-visible-${channel.key}`

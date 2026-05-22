@@ -203,6 +203,37 @@ export async function getRecipeCompositionCostSnapshot(
 
 export const getRecipeCostSheetSnapshot = getRecipeCompositionCostSnapshot;
 
+export async function getItemCostSheetItemSnapshot(
+  db: any,
+  itemId: string
+) {
+  const item = await db.item.findUnique({
+    where: { id: itemId },
+    select: {
+      id: true,
+      name: true,
+      classification: true,
+      purchaseUm: true,
+      consumptionUm: true,
+    },
+  });
+  if (!item) throw new Error("Item não encontrado");
+
+  const costInfo = await resolveItemCostSnapshot({
+    db,
+    itemId,
+  });
+  const unitCostAmount = Number(costInfo.avgUnitCostAmount || costInfo.lastUnitCostAmount || 0);
+  const unit = item.consumptionUm || item.purchaseUm || null;
+
+  return {
+    item,
+    unit,
+    unitCostAmount,
+    note: `snapshot item: custo=${unitCostAmount.toFixed(4)} janela=${Number(costInfo.averageWindowDays || 0)}d amostras=${Number(costInfo.historyCount || 0)}`,
+  };
+}
+
 export async function getItemCostSheetSnapshot(
   db: any,
   itemCostSheetId: string,
@@ -335,6 +366,32 @@ export async function recalcItemCostSheetTotals(db: any, itemCostSheetId: string
           await db.itemCostSheetComponent.update({
             where: { id: component.id },
             data: { notes: snapshot.note },
+          });
+        }
+
+        if (component.type === "item") {
+          const snapshot = await getItemCostSheetItemSnapshot(
+            db,
+            component.refId
+          );
+          await db.itemCostSheetVariationComponent.update({
+            where: { id: value.id },
+            data: {
+              unit: snapshot.unit,
+              unitCostAmount: roundItemCostSheetMoney(snapshot.unitCostAmount),
+              totalCostAmount: calcItemCostSheetTotalCostAmount(
+                snapshot.unitCostAmount,
+                Number(value.quantity || 0),
+                Number(value.wastePerc || 0)
+              ),
+            },
+          });
+          await db.itemCostSheetComponent.update({
+            where: { id: component.id },
+            data: {
+              name: snapshot.item.name,
+              notes: snapshot.note,
+            },
           });
         }
       } catch {

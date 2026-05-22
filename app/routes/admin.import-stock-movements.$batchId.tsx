@@ -2,6 +2,7 @@ import type { ActionFunctionArgs, LoaderFunctionArgs } from '@remix-run/node';
 import { redirect } from '@remix-run/node';
 import { Form, Link, NavLink, Outlet, useActionData, useFetcher, useLoaderData, useNavigation, useRevalidator } from '@remix-run/react';
 import { AlertTriangle, Archive, BarChart2, Calendar as CalendarIcon, Check, ChevronsUpDown, Download, Info, Loader2, RotateCcw, Smartphone, Trash2, Truck, Users } from 'lucide-react';
+import { randomUUID } from 'node:crypto';
 import { useEffect, useRef, useState } from 'react';
 import {
   AlertDialog,
@@ -1637,13 +1638,13 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
       await db.itemUnit.upsert({
         where: { itemId_unitCode: { itemId, unitCode: unit.code } },
-        create: { id: crypto.randomUUID(), itemId, unitCode: unit.code },
+        create: { id: randomUUID(), itemId, unitCode: unit.code },
         update: {},
       });
 
       await db.itemPurchaseConversion.upsert({
         where: { itemId_purchaseUm: { itemId, purchaseUm: unit.code } },
-        create: { id: crypto.randomUUID(), itemId, purchaseUm: unit.code, factor },
+        create: { id: randomUUID(), itemId, purchaseUm: unit.code, factor },
         update: { factor },
       });
 

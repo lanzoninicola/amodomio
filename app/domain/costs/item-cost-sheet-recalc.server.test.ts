@@ -114,6 +114,9 @@ describe("recalcItemCostSheetTotals", () => {
       recipe: {
         findUnique: vi.fn(),
       },
+      item: {
+        findUnique: vi.fn(),
+      },
       itemCostVariation: {
         findMany: vi.fn().mockResolvedValue([]),
       },
@@ -230,6 +233,65 @@ describe("recalcItemCostSheetTotals", () => {
     await recalcItemCostSheetTotals(db, "root-1");
 
     expect(db.itemCostSheetVariationComponent.update).not.toHaveBeenCalled();
+  });
+
+  it("recalcula linha item referenciada usando o custo atual do item", async () => {
+    db.itemCostSheet.findUnique.mockResolvedValue({
+      id: "root-1",
+      itemVariationId: "var-pizza",
+      baseItemCostSheetId: null,
+    });
+    db.itemCostSheet.findMany
+      .mockResolvedValueOnce([{ id: "root-1", itemVariationId: "var-pizza" }])
+      .mockResolvedValueOnce([]);
+    db.itemCostSheetComponent.findMany.mockResolvedValue([
+      {
+        id: "comp-packaging",
+        type: "item",
+        refId: "item-packaging",
+        ItemCostSheetVariationComponent: [
+          {
+            id: "vc-packaging",
+            itemVariationId: "var-pizza",
+            quantity: 1,
+            wastePerc: 10,
+            totalCostAmount: 0,
+          },
+        ],
+      },
+    ]);
+    db.item.findUnique.mockResolvedValue({
+      id: "item-packaging",
+      name: "Caixa pizza",
+      classification: "embalagem",
+      purchaseUm: "UN",
+      consumptionUm: "UN",
+    });
+    mocks.resolveItemCostSnapshot.mockResolvedValue({
+      itemVariationId: "packaging-var",
+      lastUnitCostAmount: 1.5,
+      avgUnitCostAmount: 2,
+      averageWindowDays: 30,
+      historyCount: 3,
+    });
+
+    await recalcItemCostSheetTotals(db, "root-1");
+
+    expect(db.itemCostSheetVariationComponent.update).toHaveBeenCalledWith({
+      where: { id: "vc-packaging" },
+      data: {
+        unit: "UN",
+        unitCostAmount: 2,
+        totalCostAmount: 2.2,
+      },
+    });
+    expect(db.itemCostSheetComponent.update).toHaveBeenCalledWith({
+      where: { id: "comp-packaging" },
+      data: {
+        name: "Caixa pizza",
+        notes: "snapshot item: custo=2.0000 janela=30d amostras=3",
+      },
+    });
   });
 
   it("usa a ficha ativa da subreceita quando o ingrediente não possui custo próprio", async () => {

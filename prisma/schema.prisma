@@ -843,6 +843,7 @@ enum ItemCostSheetStatus {
 enum ItemCostSheetLineType {
   recipe
   recipeSheet
+  item
   manual
   labor
 

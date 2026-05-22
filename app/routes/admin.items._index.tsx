@@ -28,8 +28,7 @@ const ITEM_CLASSIFICATIONS = [
   "servico",
   "outro",
 ] as const;
-const ITEM_CLASSIFICATION_TABS = ["insumo", "semi_acabado", "produto_final", "outros"] as const;
-const PRIMARY_ITEM_CLASSIFICATIONS = ["insumo", "semi_acabado", "produto_final"] as const;
+const ITEM_CLASSIFICATION_ORDER = [...ITEM_CLASSIFICATIONS] as const;
 const ITEM_STATUS_FILTERS = ["active", "inactive", "all"] as const;
 
 const PAGE_SIZE = 20;
@@ -109,16 +108,16 @@ function buildClassificationWhere(baseWhere: any, classification: string) {
     AND: Array.isArray(baseWhere?.AND) ? [...baseWhere.AND] : [],
   };
 
-  if (PRIMARY_ITEM_CLASSIFICATIONS.includes(classification as (typeof PRIMARY_ITEM_CLASSIFICATIONS)[number])) {
-    where.classification = classification;
-  } else if (classification === "outros") {
+  if (classification === "outro") {
     where.AND.push({
       OR: [
         { classification: null },
         { classification: "" },
-        { classification: { notIn: [...PRIMARY_ITEM_CLASSIFICATIONS] } },
+        { classification: "outro" },
       ],
     });
+  } else if (classification) {
+    where.classification = classification;
   }
 
   if (where.AND.length === 0) {
@@ -128,12 +127,29 @@ function buildClassificationWhere(baseWhere: any, classification: string) {
   return where;
 }
 
-function getClassificationTabValue(classification?: string | null) {
-  if (!classification || classification === "" || !PRIMARY_ITEM_CLASSIFICATIONS.includes(classification as (typeof PRIMARY_ITEM_CLASSIFICATIONS)[number])) {
-    return "outros" as const;
+function normalizeClassificationValue(classification?: string | null) {
+  const value = String(classification || "").trim();
+  return value || "outro";
+}
+
+function buildClassificationTabs(classificationRows: Array<{ classification?: string | null }>) {
+  const counts = new Map<string, number>();
+
+  for (const row of classificationRows) {
+    const value = normalizeClassificationValue(row.classification);
+    counts.set(value, (counts.get(value) || 0) + 1);
   }
 
-  return classification as (typeof ITEM_CLASSIFICATION_TABS)[number];
+  const knownTabs = ITEM_CLASSIFICATION_ORDER.filter((classification) => (counts.get(classification) || 0) > 0);
+  const unknownTabs = Array.from(counts.keys())
+    .filter((classification) => !ITEM_CLASSIFICATIONS.includes(classification as (typeof ITEM_CLASSIFICATIONS)[number]))
+    .sort((a, b) => a.localeCompare(b, "pt-BR"));
+  const tabs = [...knownTabs, ...unknownTabs];
+
+  return {
+    tabs: tabs.length > 0 ? tabs : ["insumo"],
+    counts: Object.fromEntries(Array.from(counts.entries())),
+  };
 }
 
 function buildPageHref(params: {
@@ -152,8 +168,7 @@ function buildPageHref(params: {
   return `/admin/items?${searchParams.toString()}`;
 }
 
-function formatClassificationTabLabel(value: (typeof ITEM_CLASSIFICATION_TABS)[number]) {
-  if (value === "outros") return "outros";
+function formatClassificationTabLabel(value: string) {
   return value.replaceAll("_", " ");
 }
 
@@ -206,9 +221,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
     const q = String(url.searchParams.get("q") || "").trim();
     const categoryId = String(url.searchParams.get("categoryId") || "").trim();
     const classificationParam = String(url.searchParams.get("classification") || "").trim();
-    const classification = ITEM_CLASSIFICATION_TABS.includes(classificationParam as (typeof ITEM_CLASSIFICATION_TABS)[number])
-      ? classificationParam
-      : "insumo";
     const statusParam = String(url.searchParams.get("status") || "").trim().toLowerCase();
     const status = ITEM_STATUS_FILTERS.includes(statusParam as (typeof ITEM_STATUS_FILTERS)[number])
       ? statusParam
@@ -217,10 +229,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
     const averageWindowDays = await getItemAverageCostWindowDays();
 
     const baseWhere = buildBaseItemWhere({ q, categoryId, status });
-    const where = buildClassificationWhere(baseWhere, classification);
 
-    const [totalItems, menuItemsLinked, categories, classificationRows] = await Promise.all([
-      db.item.count({ where }),
+    const [menuItemsLinked, categories, classificationRows] = await Promise.all([
       db.menuItem.count({
         where: {
           itemId: {
@@ -239,18 +249,12 @@ export async function loader({ request }: LoaderFunctionArgs) {
       }),
     ]);
 
-    const classificationCounts = ITEM_CLASSIFICATION_TABS.reduce(
-      (acc, tabValue) => {
-        acc[tabValue] = 0;
-        return acc;
-      },
-      {} as Record<(typeof ITEM_CLASSIFICATION_TABS)[number], number>,
-    );
-
-    for (const row of classificationRows) {
-      const tabValue = getClassificationTabValue(row.classification);
-      classificationCounts[tabValue] += 1;
-    }
+    const classificationTabData = buildClassificationTabs(classificationRows);
+    const classification = classificationTabData.tabs.includes(classificationParam)
+      ? classificationParam
+      : classificationTabData.tabs[0];
+    const where = buildClassificationWhere(baseWhere, classification);
+    const totalItems = await db.item.count({ where });
 
     const totalPages = Math.max(1, Math.ceil(totalItems / PAGE_SIZE));
     const page = Math.min(requestedPage, totalPages);
@@ -383,7 +387,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
         classification,
         status,
       },
-      classificationCounts,
+      classificationTabs: classificationTabData.tabs,
+      classificationCounts: classificationTabData.counts,
       categories,
       pagination: {
         page,
@@ -559,21 +564,15 @@ export default function AdminItemsIndex() {
   const items = payload.items || [];
   const stats = payload.stats || { totalItems: 0, menuItemsLinked: 0 };
   const filters = payload.filters || { q: "", categoryId: "", classification: "insumo", status: "active" };
-  const classificationCounts = payload.classificationCounts || {
-    insumo: 0,
-    semi_acabado: 0,
-    produto_final: 0,
-    outros: 0,
-  };
+  const classificationTabs = payload.classificationTabs?.length ? payload.classificationTabs : ["insumo"];
+  const classificationCounts = payload.classificationCounts || {};
   const categories = payload.categories || [];
   const categoryNameById = new Map<string, string>(categories.map((category: any) => [category.id, category.name]));
   const pagination = payload.pagination || { page: 1, pageSize: PAGE_SIZE, totalItems: 0, totalPages: 1 };
   const averageWindowDays = payload.averageWindowDays || 30;
-  const classificationTabValue = ITEM_CLASSIFICATION_TABS.includes(
-    filters.classification as (typeof ITEM_CLASSIFICATION_TABS)[number],
-  )
+  const classificationTabValue = classificationTabs.includes(filters.classification)
     ? filters.classification
-    : "insumo";
+    : classificationTabs[0];
   const [categoryFilterValue, setCategoryFilterValue] = useState(filters.categoryId || "__all__");
   const [statusFilterValue, setStatusFilterValue] = useState(filters.status || "active");
   const [selectedItemIds, setSelectedItemIds] = useState<string[]>([]);
@@ -768,7 +767,7 @@ export default function AdminItemsIndex() {
       <div className="overflow-hidden  bg-white">
         <div className="flex items-end justify-between border-b border-slate-200 px-4">
           <div className="flex">
-            {ITEM_CLASSIFICATION_TABS.map((tabValue) => {
+            {classificationTabs.map((tabValue: string) => {
               const isActive = classificationTabValue === tabValue;
               const color = getClassificationTabColor(tabValue);
               return (
@@ -836,7 +835,7 @@ export default function AdminItemsIndex() {
             {items.length === 0 ? (
               <TableRow className="hover:bg-transparent">
                 <TableCell colSpan={9} className="px-4 py-8 text-sm text-slate-500">
-                  Nenhum item encontrado (rode migration e backfill).
+                  Nenhum item encontrado.
                 </TableCell>
               </TableRow>
             ) : (

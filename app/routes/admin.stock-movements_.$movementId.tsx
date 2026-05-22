@@ -1,4 +1,4 @@
-import type { LoaderFunctionArgs } from '@remix-run/node';
+import type { LoaderFunctionArgs, MetaFunction } from '@remix-run/node';
 import { Link, useLoaderData } from '@remix-run/react';
 import { ArrowLeft } from 'lucide-react';
 import Container from '~/components/layout/container/container';
@@ -8,6 +8,8 @@ import { itemPrismaEntity } from '~/domain/item/item.prisma.entity.server';
 import { getAvailableItemUnits } from '~/domain/item/item-units.server';
 import { listStockMovementImportMovements } from '~/domain/stock-movement/stock-movement-import.server';
 import { badRequest, ok, serverError } from '~/utils/http-response.server';
+
+export const meta: MetaFunction = () => [{ title: 'Admin | Editar movimentação de estoque' }];
 
 function str(value: string | null) {
   return String(value || '').trim();

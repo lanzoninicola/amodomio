@@ -66,6 +66,7 @@ Esta seção existe para orientar agentes de IA que precisem ler, editar, valida
 - A ficha agrega componentes de naturezas diferentes:
   - `recipe`: custo calculado a partir da composição da receita técnica
   - `recipeSheet`: custo vindo de outra ficha técnica
+  - `item`: custo vindo de um `Item` comprado, usado hoje para embalagem rastreável
   - `manual`: custo digitado manualmente, como embalagem
   - `labor`: custo manual de mão de obra
 
@@ -124,9 +125,20 @@ Esta seção existe para orientar agentes de IA que precisem ler, editar, valida
     - `wastePerc`
     - `notes`
 
+- `item`
+  - É uma linha referenciada por um `Item` comprado.
+  - Na UI atual é usada para embalagem (`Item.classification = "embalagem"`).
+  - Deve armazenar `refId` do item e parâmetros de consumo na ficha.
+  - `unitCostAmount` vem do snapshot atual de custo do item, calculado a partir das entradas/custos do item.
+  - Na edição manual da linha, o usuário só deve alterar:
+    - `quantity`
+    - `wastePerc`
+    - `notes`
+
 - `manual`
   - É uma linha totalmente editável.
   - Pode nascer de um preset (`ItemCostSheetComponentPreset`) para padronizar custos recorrentes em edição individual e futura edição em lote.
+  - Deve ser usada para exceções sem item rastreável, não como primeira opção para embalagem comprada.
   - Deve aceitar edição de:
     - `name`
     - `notes`
@@ -170,6 +182,12 @@ As ações abaixo vivem em `app/routes/admin.item-cost-sheets.$id.tsx`.
   - Usa snapshot da ficha referenciada por variação
   - Deve bloquear autorreferência e ciclos
 
+- `item-cost-sheet-line-add-item`
+  - Adiciona linha do tipo `item`
+  - Hoje aceita apenas itens ativos classificados como `embalagem`
+  - Usa snapshot de custo atual do item referenciado
+  - Salva o item em `refId` para permitir recálculo rastreável
+
 - `item-cost-sheet-line-add-manual`
   - Adiciona linha `manual`
   - Pode receber `presetId` de um preset ativo do tipo `manual`
@@ -202,6 +220,7 @@ As ações abaixo vivem em `app/routes/admin.item-cost-sheets.$id.tsx`.
 - Não pode haver ciclo em referência `recipeSheet`
 - Não é permitido remover ficha ativa
 - Se uma linha referenciada divergir do snapshot, deve prevalecer a referência para `unitCostAmount`
+- Embalagem comprada deve preferir linha `item`; `manual` fica para custo sem cadastro/rastreio.
 
 ### Regras de interface da aba `/custos`
 
@@ -214,7 +233,7 @@ As ações abaixo vivem em `app/routes/admin.item-cost-sheets.$id.tsx`.
 
 ### Cuidados para agentes de IA
 
-- Não transformar linha referenciada (`recipe` ou `recipeSheet`) em linha manual por edição direta.
+- Não transformar linha referenciada (`recipe`, `recipeSheet` ou `item`) em linha manual por edição direta.
 - Não permitir que `unitCostAmount` digitado sobrescreva referência em linhas referenciadas.
 - Não reintroduzir totais monetários como source of truth dentro da UI de `Recipe`.
 - Ao mexer em `MoneyInput`, lembrar que formulários externos ao `<Form>` exigem repasse do atributo `form` também para o `input hidden`.
@@ -230,4 +249,4 @@ As ações abaixo vivem em `app/routes/admin.item-cost-sheets.$id.tsx`.
 3. Aplicar validações de `quantity`, `unit`, `unitCostAmount` e `wastePerc`.
 4. Atualizar `ItemCostSheetVariationComponent` por variação.
 5. Recalcular totais da ficha.
-6. Preservar a regra de referência como source of truth para `recipe` e `recipeSheet`.
+6. Preservar a regra de referência como source of truth para `recipe`, `recipeSheet` e `item`.

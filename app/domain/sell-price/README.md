@@ -193,12 +193,36 @@ O gerador de combos deve consumir esta politica, nao criar uma segunda regra.
 Para simulacao:
 
 - identidade e variacoes devem vir do fluxo nativo de `Item`;
-- preco individual deve vir de `ItemSellingPriceVariation` no canal selecionado;
-- custo deve vir da ficha ativa da variacao, com fallback sinalizado quando
-  necessario;
-- margem alvo default pode vir do canal, mas a simulacao pode permitir ajuste
-  manual;
+- combos sao avaliados somente no canal proprio `cardapio`;
+- preco individual deve vir de `ItemSellingPriceVariation` do canal proprio;
+- custo deve vir da ficha ativa da variacao;
+- se faltar preco salvo ou ficha ativa, o combo fica invalido para venda;
+- margem alvo deve vir do canal proprio;
 - desconto equivalente deve ser calculado contra a soma dos precos individuais.
+- taxa de marketplace nao entra no calculo de combo.
+
+O calculo de lucro real do combo segue:
+
+```txt
+dnaAmount = comboPrice * dnaPerc
+operationalCost = comboTotalCost + dnaAmount
+profitAmount = comboPrice - operationalCost
+profitPerc = profitAmount / comboPrice
+```
+
+O preco recomendado usa a margem alvo do canal proprio:
+
+```txt
+recommendedPrice = comboTotalCost / (1 - (dnaPerc + targetMarginPerc))
+```
+
+O resultado deve ser arredondado para cima em passos de `0.05`, como a politica
+principal.
+
+Para avaliar a promocao, o simulador tambem deve comparar a venda avulsa dos
+itens com a venda em combo. A venda avulsa usa `individualTotalPrice` como
+receita e o mesmo `comboTotalCost`; a venda em combo usa `comboPrice`. Ambas
+aplicam o DNA atual e mostram lucro e margem resultantes.
 
 Se no futuro o combo virar persistente, a decisao de modelagem deve ser
 explicita: combo como novo `Item` vendavel ou combo como regra promocional.

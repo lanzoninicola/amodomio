@@ -211,8 +211,8 @@ const ADMIN_NAVIGATION_LINKS: WebsiteNavigationConfig = {
               disabled: false,
             },
             {
-              title: "Gerador de combos",
-              href: "/admin/vendas/gerador-combos",
+              title: "Combos",
+              href: "/admin/vendas/combos",
               items: [],
               disabled: false,
             },
@@ -396,6 +396,12 @@ const ADMIN_NAVIGATION_LINKS: WebsiteNavigationConfig = {
             {
               title: "Publicados sem receita",
               href: "/admin/producao/publicados-sem-receita",
+              items: [],
+              disabled: false,
+            },
+            {
+              title: "Ingredientes por sabores",
+              href: "/admin/vendas/ingredientes-sabores",
               items: [],
               disabled: false,
             },

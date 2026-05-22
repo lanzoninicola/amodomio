@@ -15,9 +15,13 @@ A pagina deve nascer como uma ferramenta de simulacao comercial, nao como um nov
 
 Rota proposta:
 
-- `/admin/vendas/gerador-combos`
-- arquivo Remix: `app/routes/admin.vendas.gerador-combos.tsx`
-- menu: `Vendas > Ferramentas > Gerador de combos`
+- `/admin/vendas/combos`
+- arquivo Remix de layout: `app/routes/admin.vendas.combos.tsx`
+- subrotas Remix:
+  - `/admin/vendas/combos/simulador`
+  - `/admin/vendas/combos/simulador/precificacao`
+  - `/admin/vendas/combos/simulador/simulador-venda`
+- menu: `Vendas > Ferramentas > Combos`
 
 Motivo:
 
@@ -139,6 +143,38 @@ A acao `Criar combo como item` deve ficar fora do MVP ate o modelo de persistenc
 
 ## Calculos
 
+### Politica de preco de combo no cardapio proprio
+
+Combos sao simulados somente para o canal proprio `cardapio`.
+
+Regras:
+
+- usar preco individual salvo no canal proprio;
+- usar somente ficha tecnica ativa como custo;
+- usar DNA atual da empresa;
+- usar margem alvo do canal proprio;
+- nao aplicar taxa de marketplace;
+- nao usar fallback silencioso de custo da variacao;
+- nao usar `Recipe` como custo comercial final.
+
+Modos de preco:
+
+```ts
+type ComboPricingMode =
+  | "PERCENTAGE_DISCOUNT"
+  | "FIXED_DISCOUNT"
+  | "FIXED_PRICE";
+```
+
+Status:
+
+```ts
+type ComboPricingStatus =
+  | "HEALTHY"
+  | "BELOW_TARGET_MARGIN"
+  | "BELOW_BREAK_EVEN";
+```
+
 ### Custo total
 
 Formula:
@@ -147,13 +183,10 @@ Formula:
 custoTotal = soma(custoUnitarioDaVariacao * quantidadeNoCombo)
 ```
 
-O custo unitario deve vir da melhor fonte financeira disponivel:
+O custo unitario deve vir da ficha tecnica ativa da variacao.
 
-1. ficha tecnica ativa da variacao;
-2. custo corrente da variacao;
-3. vazio/indisponivel, com alerta na linha.
-
-Nao deve buscar custo em `Recipe` para evitar duplicar a regra financeira que ja pertence a ficha tecnica.
+Se a ficha ativa nao existir, o combo fica invalido para venda. Nao deve buscar
+custo em `Recipe` nem usar custo corrente da variacao como fallback silencioso.
 
 ### Soma individual
 
@@ -165,20 +198,41 @@ precoIndividualTotal = soma(precoAtualNoCanal * quantidadeNoCombo)
 
 Esse valor serve como referencia comercial para desconto.
 
-### Preco sugerido por margem
+### Preco do combo
+
+Desconto percentual:
+
+```txt
+comboPrice = individualTotalPrice * (1 - discountPercentage)
+```
+
+Desconto fixo:
+
+```txt
+comboPrice = individualTotalPrice - discountAmount
+```
+
+Preco fixo:
+
+```txt
+comboPrice = fixedPriceAmount
+```
+
+Mesmo com preco fixo, calcular sempre o desconto equivalente.
+
+### Preco recomendado por margem
 
 Formula conceitual simplificada para simulacao:
 
 ```txt
-precoSugerido = custoTotal / (1 - margemAlvo)
+recommendedPrice = comboTotalCost / (1 - (dnaPerc + targetMarginPerc))
 ```
 
 Observacoes:
 
-- `margemAlvo` deve ser tratada como percentual decimal no calculo;
-- a regra consolidada de DNA, taxas de canal e marketplace esta em
-  `app/domain/sell-price/README.md`;
-- se o MVP nao aplicar toda a politica de preco, a tela deve deixar isso claro.
+- `dnaPerc` vem do DNA atual da empresa;
+- `targetMarginPerc` vem do canal proprio;
+- o resultado deve arredondar para cima em passos de `0.05`.
 
 ### Desconto equivalente
 
@@ -190,18 +244,53 @@ descontoPerc = 1 - (precoCombo / precoIndividualTotal)
 
 Se `precoIndividualTotal` for zero ou ausente, o desconto nao deve ser exibido.
 
+### Lucro real
+
+Como combo nao usa marketplace:
+
+```txt
+channelTaxAmount = 0
+dnaAmount = comboPrice * dnaPerc
+operationalCost = comboTotalCost + dnaAmount
+profitAmount = comboPrice - operationalCost
+profitPerc = profitAmount / comboPrice
+```
+
+### Preco de equilibrio
+
+```txt
+breakEvenPrice = comboTotalCost / (1 - dnaPerc)
+```
+
+### Status comercial
+
+```txt
+se comboPrice < breakEvenPrice:
+  status = "BELOW_BREAK_EVEN"
+senão se profitPerc < targetMarginPerc:
+  status = "BELOW_TARGET_MARGIN"
+senão:
+  status = "HEALTHY"
+```
+
 ## MVP recomendado
 
 A primeira versao deve ser somente simulador.
 
 Inclui:
 
-- rota unica;
+- layout pai em `/admin/vendas/combos`;
+- subpagina principal de simulacao em `/admin/vendas/combos/simulador`;
+- subpagina de precificacao em `/admin/vendas/combos/simulador/precificacao`;
+- subpagina de simulador de venda em `/admin/vendas/combos/simulador/simulador-venda`;
 - loader buscando canais e itens elegiveis;
 - busca e filtro por tag;
 - selecao manual de itens e variacoes;
 - calculo em memoria no cliente a partir do payload carregado;
-- resultado visual com custo, preco sugerido, margem e desconto.
+- resultado visual com soma individual, preco do combo, desconto real, custo,
+  DNA, lucro, margem real, equilibrio, preco recomendado e status.
+- comparativo de venda avulsa dos itens versus venda como combo, mostrando
+  receita, DNA, lucro, margem e diferenca de margem/lucro.
 
 Nao inclui:
 
@@ -279,8 +368,8 @@ Arquivo sugerido:
 
 Responsabilidades:
 
-- listar canais elegiveis;
-- listar itens elegiveis por canal;
+- carregar o canal proprio `cardapio`;
+- listar itens elegiveis no canal proprio;
 - montar payload de variacoes com preco e custo;
 - calcular indicadores no servidor quando houver persistencia;
 - manter a rota como composicao de UI.
@@ -307,11 +396,22 @@ type ComboSimulationLine = {
 };
 
 type ComboSimulationResult = {
-  costTotal: number;
-  individualPriceTotal: number;
-  suggestedPrice: number;
-  discountPerc: number | null;
-  marginPerc: number | null;
+  individualTotalPrice: number;
+  comboPrice: number;
+  equivalentDiscountAmount: number;
+  equivalentDiscountPercentage: number;
+  comboTotalCost: number;
+  dnaPerc: number;
+  dnaAmount: number;
+  operationalCost: number;
+  profitAmount: number;
+  profitPerc: number;
+  breakEvenPrice: number;
+  recommendedPrice: number;
+  targetMarginPerc: number;
+  status: ComboPricingStatus;
+  isValidForSale: boolean;
+  invalidReasons: string[];
 };
 ```
 

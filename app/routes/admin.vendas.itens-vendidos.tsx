@@ -1,8 +1,17 @@
-import type { LoaderFunctionArgs } from "@remix-run/node";
+import { redirect, type LoaderFunctionArgs, type MetaFunction } from "@remix-run/node";
 import { Form, Link, useLoaderData } from "@remix-run/react";
-import { ArrowUpDown, ChevronLeft, ChevronsLeft, ChevronsRight, ListFilter, Search, SlidersHorizontal, XCircle } from "lucide-react";
+import { ArrowUpDown, ChevronLeft, ChevronsLeft, ChevronsRight, Download, ListFilter, Search, SlidersHorizontal, XCircle } from "lucide-react";
 import { useState } from "react";
 import { Badge } from "~/components/ui/badge";
+import { Button } from "~/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "~/components/ui/dialog";
 import {
   Pagination,
   PaginationContent,
@@ -11,15 +20,21 @@ import {
 } from "~/components/ui/pagination";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "~/components/ui/table";
+import { toast } from "~/components/ui/use-toast";
 import prismaClient from "~/lib/prisma/client.server";
 import { ok, serverError } from "~/utils/http-response.server";
 
 const PAGE_SIZE = 20;
 const ITEM_STATUS_FILTERS = ["active", "inactive", "all"] as const;
+const EXPORT_VISIBILITY_FILTERS = ["all", "visible", "hidden"] as const;
 const BRL_FORMATTER = new Intl.NumberFormat("pt-BR", {
   style: "currency",
   currency: "BRL",
 });
+
+export const meta: MetaFunction = () => [
+  { title: "Vendas | Itens vendidos" },
+];
 
 type SellingChannelTab = {
   id: string;
@@ -33,6 +48,8 @@ type TagFilterOption = {
   id: string;
   name: string;
 };
+
+type ExportVisibilityFilter = (typeof EXPORT_VISIBILITY_FILTERS)[number];
 
 type SellingRow = {
   id: string;
@@ -55,6 +72,13 @@ type SellingRow = {
   updatedBy: string | null;
   commerciallyReady: boolean;
 };
+
+function parseExportVisibilityFilter(raw: string | null): ExportVisibilityFilter {
+  const normalized = String(raw || "").trim().toLowerCase();
+  return EXPORT_VISIBILITY_FILTERS.includes(normalized as ExportVisibilityFilter)
+    ? (normalized as ExportVisibilityFilter)
+    : "all";
+}
 
 function parsePage(raw: string | null) {
   const parsed = Number(raw || "1");
@@ -178,12 +202,107 @@ function buildPageHref(params: {
   return `/admin/vendas/itens-vendidos?${searchParams.toString()}`;
 }
 
+function buildExportHref(params: {
+  q: string;
+  status: string;
+  channel: string;
+  tagId: string;
+  exportVisibility?: ExportVisibilityFilter;
+}) {
+  const searchParams = new URLSearchParams();
+  if (params.q) searchParams.set("q", params.q);
+  if (params.status) searchParams.set("status", params.status);
+  if (params.channel) searchParams.set("channel", params.channel);
+  if (params.tagId) searchParams.set("tagId", params.tagId);
+  if (params.exportVisibility && params.exportVisibility !== "all") {
+    searchParams.set("exportVisibility", params.exportVisibility);
+  }
+  return `/admin/vendas/itens-vendidos/export?${searchParams.toString()}`;
+}
+
+function mapSellingRow(item: any): SellingRow {
+  const channelLink = item.ItemSellingChannelItem?.[0] || null;
+  const prices = item.ItemSellingPriceVariation || [];
+  const referencePrice =
+    prices.find((row: any) => row.ItemVariation?.isReference) ||
+    prices[0] ||
+    null;
+  const upcoming = Boolean(item.ItemSellingInfo?.upcoming);
+  const channelVisible = channelLink?.visible === true;
+  const commerciallyReady = Boolean(item.canSell) && Boolean(item.active) && channelVisible && !upcoming && prices.length > 0;
+
+  return {
+    id: String(item.id),
+    name: item.name || "Item sem nome",
+    classification: item.classification || "",
+    active: Boolean(item.active),
+    canSell: Boolean(item.canSell),
+    updatedAt: item.updatedAt ? new Date(item.updatedAt).toISOString() : null,
+    categoryName: item.Category?.name || null,
+    sellingCategoryName: item.ItemSellingInfo?.Category?.name || null,
+    groupName: item.ItemSellingInfo?.ItemGroup?.name || null,
+    slug: item.ItemSellingInfo?.slug || null,
+    upcoming,
+    channelVisible,
+    totalVariations: (item.ItemVariation || []).length,
+    totalPriceEntries: prices.length,
+    channelPriceEntries: prices.length,
+    referenceVariationName: referencePrice?.ItemVariation?.Variation?.name || null,
+    referencePriceAmount: referencePrice ? Number(referencePrice.priceAmount || 0) : null,
+    updatedBy: referencePrice?.updatedBy || null,
+    commerciallyReady,
+  };
+}
+
+function resolveDownloadFilename(contentDisposition: string | null, fallback: string) {
+  if (!contentDisposition) return fallback;
+  const utf8Match = contentDisposition.match(/filename\*=UTF-8''([^;]+)/i);
+  if (utf8Match?.[1]) return decodeURIComponent(utf8Match[1].replaceAll('"', ""));
+  const asciiMatch = contentDisposition.match(/filename="?([^"]+)"?/i);
+  return asciiMatch?.[1] || fallback;
+}
+
+async function downloadJsonFromHref(href: string) {
+  const response = await fetch(href, {
+    headers: {
+      Accept: "application/json",
+    },
+  });
+
+  if (!response.ok) {
+    let message = "Nao foi possivel gerar o JSON.";
+    try {
+      const body = await response.json();
+      message = body?.message || message;
+    } catch {
+      // Keep fallback message when the server did not return JSON.
+    }
+    throw new Error(message);
+  }
+
+  const blob = await response.blob();
+  const filename = resolveDownloadFilename(
+    response.headers.get("Content-Disposition"),
+    `itens-vendidos-${new Date().toISOString().slice(0, 10)}.json`
+  );
+  const objectUrl = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = objectUrl;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(objectUrl);
+}
+
 export async function loader({ request }: LoaderFunctionArgs) {
   try {
     const db = prismaClient as any;
     const url = new URL(request.url);
     const q = String(url.searchParams.get("q") || "").trim();
     const tagId = String(url.searchParams.get("tagId") || "").trim();
+    const exportFormat = String(url.searchParams.get("export") || "").trim().toLowerCase();
+    const exportVisibility = parseExportVisibilityFilter(url.searchParams.get("exportVisibility"));
     const statusParam = String(url.searchParams.get("status") || "").trim().toLowerCase();
     const status = ITEM_STATUS_FILTERS.includes(statusParam as (typeof ITEM_STATUS_FILTERS)[number])
       ? statusParam
@@ -278,6 +397,18 @@ export async function loader({ request }: LoaderFunctionArgs) {
         },
       },
     };
+
+    if (exportFormat === "json") {
+      return redirect(
+        buildExportHref({
+          q,
+          status,
+          channel: String(selectedChannel.key || "").toLowerCase(),
+          tagId: selectedTag ? String(selectedTag.id) : "",
+          exportVisibility,
+        })
+      );
+    }
 
     const [totalItems, activeForSales, visibleInChannel, pricedInChannel, upcomingItems] = await Promise.all([
       db.item.count({ where }),
@@ -397,39 +528,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       take: PAGE_SIZE,
     });
 
-    const rows: SellingRow[] = (items || []).map((item: any) => {
-      const channelLink = item.ItemSellingChannelItem?.[0] || null;
-      const prices = item.ItemSellingPriceVariation || [];
-      const referencePrice =
-        prices.find((row: any) => row.ItemVariation?.isReference) ||
-        prices[0] ||
-        null;
-      const upcoming = Boolean(item.ItemSellingInfo?.upcoming);
-      const channelVisible = channelLink?.visible === true;
-      const commerciallyReady = Boolean(item.canSell) && Boolean(item.active) && channelVisible && !upcoming && prices.length > 0;
-
-      return {
-        id: String(item.id),
-        name: item.name || "Item sem nome",
-        classification: item.classification || "",
-        active: Boolean(item.active),
-        canSell: Boolean(item.canSell),
-        updatedAt: item.updatedAt ? new Date(item.updatedAt).toISOString() : null,
-        categoryName: item.Category?.name || null,
-        sellingCategoryName: item.ItemSellingInfo?.Category?.name || null,
-        groupName: item.ItemSellingInfo?.ItemGroup?.name || null,
-        slug: item.ItemSellingInfo?.slug || null,
-        upcoming,
-        channelVisible,
-        totalVariations: (item.ItemVariation || []).length,
-        totalPriceEntries: prices.length,
-        channelPriceEntries: prices.length,
-        referenceVariationName: referencePrice?.ItemVariation?.Variation?.name || null,
-        referencePriceAmount: referencePrice ? Number(referencePrice.priceAmount || 0) : null,
-        updatedBy: referencePrice?.updatedBy || null,
-        commerciallyReady,
-      };
-    });
+    const rows: SellingRow[] = (items || []).map(mapSellingRow);
 
     return ok({
       filters: {
@@ -464,7 +563,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 export default function AdminVendasItensVendidosPage() {
   const loaderData = useLoaderData<typeof loader>();
   const hasLoaderError = Boolean(loaderData?.status && loaderData.status >= 400);
-  const payload = (loaderData?.payload || {}) as {
+  type LoaderPayload = {
     filters: {
       q: string;
       tagId: string;
@@ -486,15 +585,72 @@ export default function AdminVendasItensVendidosPage() {
       upcomingItems: number;
     };
   };
+  const rawPayload = (loaderData?.payload || {}) as Partial<LoaderPayload>;
+  const payload: LoaderPayload = {
+    filters: {
+      q: "",
+      tagId: "",
+      tagName: null,
+      status: "active",
+      channel: null,
+      channelName: "",
+      page: 1,
+      totalPages: 1,
+      ...(rawPayload.filters || {}),
+    },
+    tabs: Array.isArray(rawPayload.tabs) ? rawPayload.tabs : [],
+    tags: Array.isArray(rawPayload.tags) ? rawPayload.tags : [],
+    rows: Array.isArray(rawPayload.rows) ? rawPayload.rows : [],
+    summary: {
+      totalItems: 0,
+      activeForSales: 0,
+      visibleInChannel: 0,
+      publishedInChannel: 0,
+      upcomingItems: 0,
+      ...(rawPayload.summary || {}),
+    },
+  };
 
-  const [search, setSearch] = useState(payload.filters?.q || "");
+  const filters = payload.filters;
+  const summary = payload.summary;
+  const [search, setSearch] = useState(filters.q || "");
+  const [exportDialogOpen, setExportDialogOpen] = useState(false);
 
-  const currentChannel = payload.filters?.channel || "";
-  const currentStatus = payload.filters?.status || "active";
-  const currentTagId = payload.filters?.tagId || "";
+  const currentChannel = filters.channel || "";
+  const currentStatus = filters.status || "active";
+  const currentTagId = filters.tagId || "";
   const rows = payload.rows || [];
   const tabs = payload.tabs || [];
   const tags = payload.tags || [];
+  const [exportChannel, setExportChannel] = useState(currentChannel || tabs[0]?.key || "");
+  const [exportVisibility, setExportVisibility] = useState<ExportVisibilityFilter>("all");
+  const [isExporting, setIsExporting] = useState(false);
+  const selectedExportTab = tabs.find((tab) => tab.key === exportChannel) || tabs[0] || null;
+  const exportHref = selectedExportTab
+    ? buildExportHref({
+        q: filters.q || "",
+        status: currentStatus,
+        channel: selectedExportTab.key,
+        tagId: currentTagId,
+        exportVisibility,
+      })
+    : "";
+  const handleExportJson = async () => {
+    if (!exportHref || isExporting) return;
+    setIsExporting(true);
+    try {
+      await downloadJsonFromHref(exportHref);
+      setExportDialogOpen(false);
+    } catch (error: any) {
+      toast({
+        title: "Erro",
+        description: error?.message || "Nao foi possivel baixar o JSON.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsExporting(false);
+    }
+  };
 
   if (hasLoaderError) {
     return (
@@ -530,17 +686,90 @@ export default function AdminVendasItensVendidosPage() {
               </p>
             </div>
           </div>
+
+          <Button
+            type="button"
+            variant="outline"
+            className="h-9 w-fit gap-2 border-slate-200 text-slate-700 hover:bg-slate-50"
+            onClick={() => {
+              setExportChannel(currentChannel || tabs[0]?.key || "");
+              setExportVisibility("all");
+              setExportDialogOpen(true);
+            }}
+            disabled={tabs.length === 0}
+          >
+            <Download className="h-4 w-4" />
+            Exportar JSON
+          </Button>
         </div>
       </section>
 
+      <Dialog open={exportDialogOpen} onOpenChange={setExportDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Exportar itens vendidos</DialogTitle>
+            <DialogDescription>
+              Selecione o canal de venda para gerar um JSON com os filtros atuais.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-slate-700" htmlFor="export-channel">
+              Canal de venda
+            </label>
+            <Select value={exportChannel} onValueChange={setExportChannel}>
+              <SelectTrigger id="export-channel" className="h-10 w-full">
+                <SelectValue placeholder="Selecione um canal" />
+              </SelectTrigger>
+              <SelectContent>
+                {tabs.map((tab) => (
+                  <SelectItem key={tab.key} value={tab.key}>
+                    {tab.name} ({tab.count})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-slate-700" htmlFor="export-visibility">
+              Visibilidade no canal
+            </label>
+            <Select value={exportVisibility} onValueChange={(value) => setExportVisibility(value as ExportVisibilityFilter)}>
+              <SelectTrigger id="export-visibility" className="h-10 w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">todos os sabores</SelectItem>
+                <SelectItem value="visible">somente visíveis</SelectItem>
+                <SelectItem value="hidden">somente ocultos</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-slate-500">
+              O arquivo inclui itens, variações, preços do canal e metadados para análise.
+            </p>
+          </div>
+
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setExportDialogOpen(false)}>
+              Cancelar
+            </Button>
+            <Button type="button" onClick={handleExportJson} disabled={!exportHref || isExporting}>
+              <Download className="mr-2 h-4 w-4" />
+              {isExporting ? "Gerando..." : "Baixar JSON"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-slate-500">
-        <span>{payload.summary?.totalItems || 0} item(ns)</span>
+        <span>{summary?.totalItems || 0} item(ns)</span>
         <span>·</span>
-        <span>{payload.summary?.visibleInChannel || 0} visíveis no canal</span>
+        <span>{summary?.visibleInChannel || 0} visíveis no canal</span>
         <span>·</span>
-        <span>{payload.summary?.publishedInChannel || 0} com preço no canal</span>
+        <span>{summary?.publishedInChannel || 0} com preço no canal</span>
         <span>·</span>
-        <span>Pág. {payload.filters.page}/{payload.filters.totalPages}</span>
+        <span>Pág. {filters.page}/{filters.totalPages}</span>
       </div>
 
       <section className="space-y-4">
@@ -584,7 +813,7 @@ export default function AdminVendasItensVendidosPage() {
           <Select name="tagId" defaultValue={currentTagId || "__all__"}>
             <SelectTrigger className="h-auto w-auto gap-1 border-0 p-0 text-sm font-medium text-slate-600 shadow-none focus:ring-0 [&>svg]:h-3 [&>svg]:w-3 [&>svg]:text-slate-400">
               <SelectValue>
-                {payload.filters?.tagName || "todas as tags"}
+                {filters?.tagName || "todas as tags"}
               </SelectValue>
             </SelectTrigger>
             <SelectContent>
@@ -615,7 +844,7 @@ export default function AdminVendasItensVendidosPage() {
               <Link
                 key={tab.key}
                 to={buildPageHref({
-                  q: payload.filters?.q || "",
+                  q: filters?.q || "",
                   status: currentStatus,
                   channel: tab.key,
                   tagId: currentTagId,
@@ -688,7 +917,7 @@ export default function AdminVendasItensVendidosPage() {
 
                   <TableCell>
                     <div className="space-y-2 text-sm">
-                      <div className="font-medium text-slate-900">{payload.filters.channelName}</div>
+                      <div className="font-medium text-slate-900">{filters.channelName}</div>
                       <div className="flex flex-wrap gap-2">
                         <Badge
                           variant="outline"
@@ -755,10 +984,10 @@ export default function AdminVendasItensVendidosPage() {
           </Table>
         </div>
 
-        {payload.filters.totalPages > 1 ? (
+        {filters.totalPages > 1 ? (
           <div className="flex flex-col gap-3 border-t border-slate-200 px-4 py-3 text-sm text-slate-600 lg:flex-row lg:items-center lg:justify-between">
             <div className="text-sm text-slate-500">
-              {payload.summary.totalItems} item(ns) encontrados.
+              {summary.totalItems} item(ns) encontrados.
             </div>
 
             <Pagination className="mx-0 w-auto justify-start">
@@ -766,13 +995,13 @@ export default function AdminVendasItensVendidosPage() {
               <PaginationItem>
                 <PaginationLink
                   href={buildPageHref({
-                    q: payload.filters.q,
+                    q: filters.q,
                     status: currentStatus,
                     channel: currentChannel,
                     tagId: currentTagId,
                     page: 1,
                   })}
-                  className={`h-8 w-8 rounded-md border border-slate-200 bg-white p-0 text-slate-600 hover:bg-slate-50 ${payload.filters.page <= 1 ? "pointer-events-none opacity-40" : ""}`}
+                  className={`h-8 w-8 rounded-md border border-slate-200 bg-white p-0 text-slate-600 hover:bg-slate-50 ${filters.page <= 1 ? "pointer-events-none opacity-40" : ""}`}
                   aria-label="Primeira página"
                 >
                   <ChevronsLeft size={16} />
@@ -782,33 +1011,33 @@ export default function AdminVendasItensVendidosPage() {
               <PaginationItem>
                 <PaginationLink
                   href={buildPageHref({
-                    q: payload.filters.q,
+                    q: filters.q,
                     status: currentStatus,
                     channel: currentChannel,
                     tagId: currentTagId,
-                    page: Math.max(1, payload.filters.page - 1),
+                    page: Math.max(1, filters.page - 1),
                   })}
-                  className={`h-8 w-8 rounded-md border border-slate-200 bg-white p-0 text-slate-600 hover:bg-slate-50 ${payload.filters.page <= 1 ? "pointer-events-none opacity-40" : ""}`}
+                  className={`h-8 w-8 rounded-md border border-slate-200 bg-white p-0 text-slate-600 hover:bg-slate-50 ${filters.page <= 1 ? "pointer-events-none opacity-40" : ""}`}
                   aria-label="Página anterior"
                 >
                   <ChevronLeft size={16} />
                 </PaginationLink>
               </PaginationItem>
 
-              {Array.from({ length: payload.filters.totalPages }, (_, index) => index + 1)
-                .filter((page) => Math.abs(page - payload.filters.page) <= 2)
+              {Array.from({ length: filters.totalPages }, (_, index) => index + 1)
+                .filter((page) => Math.abs(page - filters.page) <= 2)
                 .map((page) => (
                   <PaginationItem key={page}>
                     <PaginationLink
                       href={buildPageHref({
-                        q: payload.filters.q,
+                        q: filters.q,
                         status: currentStatus,
                         channel: currentChannel,
                         tagId: currentTagId,
                         page,
                       })}
                       className="h-8 min-w-8 rounded-md border border-slate-200 bg-white px-2 text-slate-600 hover:bg-slate-50"
-                      isActive={page === payload.filters.page}
+                      isActive={page === filters.page}
                     >
                       {page}
                     </PaginationLink>
@@ -818,13 +1047,13 @@ export default function AdminVendasItensVendidosPage() {
               <PaginationItem>
                 <PaginationLink
                   href={buildPageHref({
-                    q: payload.filters.q,
+                    q: filters.q,
                     status: currentStatus,
                     channel: currentChannel,
                     tagId: currentTagId,
-                    page: Math.min(payload.filters.totalPages, payload.filters.page + 1),
+                    page: Math.min(filters.totalPages, filters.page + 1),
                   })}
-                  className={`h-8 w-8 rounded-md border border-slate-200 bg-white p-0 text-slate-600 hover:bg-slate-50 ${payload.filters.page >= payload.filters.totalPages ? "pointer-events-none opacity-40" : ""}`}
+                  className={`h-8 w-8 rounded-md border border-slate-200 bg-white p-0 text-slate-600 hover:bg-slate-50 ${filters.page >= filters.totalPages ? "pointer-events-none opacity-40" : ""}`}
                   aria-label="Próxima página"
                 >
                   <ChevronsRight size={16} />

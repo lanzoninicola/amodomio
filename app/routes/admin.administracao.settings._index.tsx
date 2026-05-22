@@ -47,6 +47,7 @@ import {
   DEFAULT_COST_REVIEW_WHATSAPP_ENABLED,
   DEFAULT_COST_REVIEW_WHATSAPP_PHONE,
 } from "~/domain/stock-movement/cost-review-notification-settings";
+import { ensureAdminNavigationMenuLayoutSetting } from "~/domain/website-navigation/admin-navigation-settings.server";
 
 const SETTING_TYPES = ["string", "boolean", "float", "int", "json"] as const;
 const REELS_SETTINGS_CONTEXT = "cardapio";
@@ -297,6 +298,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
       },
     });
   }
+
+  await ensureAdminNavigationMenuLayoutSetting();
 
   const settings = await prismaClient.setting.findMany({
     where,

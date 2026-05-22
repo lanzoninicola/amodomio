@@ -380,7 +380,7 @@ export default function AdminRecalculateItemCostSheetsIndex() {
 
       {/* Table */}
       <div className="overflow-hidden bg-white">
-        <Table className="min-w-[800px]">
+        <Table className="min-w-[980px]">
           <TableHeader className="bg-slate-50/90">
             <TableRow className="hover:bg-slate-50/90">
               <TableHead className="h-10 w-12 px-4 text-slate-500">
@@ -401,6 +401,9 @@ export default function AdminRecalculateItemCostSheetsIndex() {
               </TableHead>
               <TableHead className="h-10 px-4 text-xs font-medium text-slate-500">
                 Item
+              </TableHead>
+              <TableHead className="h-10 px-4 text-xs font-medium text-slate-500">
+                Motivo
               </TableHead>
               <TableHead className="h-10 px-4 text-right text-xs font-medium text-slate-500">
                 Componentes
@@ -423,7 +426,7 @@ export default function AdminRecalculateItemCostSheetsIndex() {
             {sheets.length === 0 ? (
               <TableRow className="hover:bg-transparent">
                 <TableCell
-                  colSpan={8}
+                  colSpan={9}
                   className="px-4 py-8 text-center text-sm text-slate-500"
                 >
                   Nenhuma ficha encontrada para os filtros atuais.
@@ -466,6 +469,30 @@ export default function AdminRecalculateItemCostSheetsIndex() {
                     </TableCell>
                     <TableCell className="px-4 py-3 font-medium text-slate-700">
                       {sheet.itemName}
+                    </TableCell>
+                    <TableCell className="max-w-[320px] px-4 py-3 align-top">
+                      <div className="flex flex-col gap-1.5">
+                        <div className="flex flex-wrap gap-1">
+                          {sheet.reasons.map((reason) => (
+                            <Badge
+                              key={`${sheet.rootSheetId}-${reason.code}`}
+                              variant="outline"
+                              className={
+                                reason.code === "costChange"
+                                  ? "border-amber-200 bg-amber-50 text-amber-800"
+                                  : reason.code === "eligible"
+                                    ? "border-blue-200 bg-blue-50 text-blue-700"
+                                    : "border-slate-200 bg-slate-50 text-slate-700"
+                              }
+                            >
+                              {reason.label}
+                            </Badge>
+                          ))}
+                        </div>
+                        <span className="text-xs leading-5 text-slate-500">
+                          {sheet.reasons.map((reason) => reason.detail).join(" · ")}
+                        </span>
+                      </div>
                     </TableCell>
                     <TableCell className="px-4 py-3 text-right font-medium text-slate-800">
                       {sheet.componentCount}

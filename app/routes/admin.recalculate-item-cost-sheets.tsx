@@ -26,7 +26,9 @@ function HowItWorks() {
         </li>
       </ol>
       <p className="text-xs text-slate-500">
-        A operação recompõe componentes do tipo{" "}
+        A lista mostra fichas elegíveis para recálculo. Quando houver histórico
+        recente de custo de insumo ligado ao grafo da ficha, a coluna Motivo
+        mostra o insumo reajustado. A operação recompõe componentes do tipo{" "}
         <code className="rounded bg-slate-100 px-1 font-mono">recipe</code> e{" "}
         <code className="rounded bg-slate-100 px-1 font-mono">recipeSheet</code>
         , atualiza os totais por variação e republica snapshots ativos quando
