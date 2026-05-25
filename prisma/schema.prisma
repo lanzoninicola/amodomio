@@ -780,6 +780,7 @@ model ItemSellingChannelItem {
   itemId               String             @map("item_id")
   itemSellingChannelId String             @map("item_selling_channel_id")
   visible              Boolean            @default(false) @map("visible")
+  sortOrderIndex       Int                @default(0) @map("sort_order_index")
   createdAt            DateTime           @default(now()) @map("created_at")
   updatedAt            DateTime           @default(now()) @updatedAt @map("updated_at")
 
@@ -789,6 +790,7 @@ model ItemSellingChannelItem {
   @@unique([itemId, itemSellingChannelId], map: "item_selling_channel_items_item_channel_unique")
   @@index([itemId], map: "item_selling_channel_items_item_id_idx")
   @@index([itemSellingChannelId], map: "item_selling_channel_items_channel_id_idx")
+  @@index([itemSellingChannelId, sortOrderIndex], map: "item_selling_channel_items_channel_sort_idx")
   @@map("item_selling_channel_items")
 }
 
@@ -843,6 +845,7 @@ enum ItemCostSheetStatus {
 enum ItemCostSheetLineType {
   recipe
   recipeSheet
+  item
   manual
   labor
 

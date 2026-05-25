@@ -1,5 +1,8 @@
 import prismaClient from "~/lib/prisma/client.server";
+import { buildCostImpactGraphForItem } from "~/domain/costs/cost-impact-graph.server";
 import { recalcItemCostSheetTotals } from "~/domain/costs/item-cost-sheet-recalc.server";
+
+const DEFAULT_COST_CHANGE_WINDOW_DAYS = 60;
 
 export interface ItemCostSheetBulkScanFilters {
   rootSheetId?: string;
@@ -7,6 +10,20 @@ export interface ItemCostSheetBulkScanFilters {
   search?: string;
   onlyActive?: boolean;
   onlyWithComponents?: boolean;
+}
+
+export interface ItemCostSheetBulkScanReason {
+  code: "costChange" | "eligible" | "noComponents";
+  label: string;
+  detail: string;
+  count: number;
+}
+
+export interface ItemCostSheetBulkCostChange {
+  itemId: string;
+  itemName: string;
+  costAmount: number;
+  previousCostAmount: number;
 }
 
 export interface ItemCostSheetBulkScanRow {
@@ -19,6 +36,9 @@ export interface ItemCostSheetBulkScanRow {
   variationCount: number;
   costAmount: number;
   updatedAt: Date;
+  reasonSummary: string;
+  reasons: ItemCostSheetBulkScanReason[];
+  costChanges: ItemCostSheetBulkCostChange[];
 }
 
 export interface ItemCostSheetBulkScanResult {
@@ -60,6 +80,149 @@ async function supportsComponentModel(db: any) {
   } catch {
     return false;
   }
+}
+
+function summarizeNames(values: string[], fallback: string) {
+  const names = values.map((value) => String(value || "").trim()).filter(Boolean);
+  if (names.length === 0) return fallback;
+  const visible = names.slice(0, 2).join(", ");
+  const remaining = names.length - 2;
+  return remaining > 0 ? `${visible} +${remaining}` : visible;
+}
+
+function hasMeaningfulCostChange(currentCostAmount: number, previousCostAmount: number) {
+  return (
+    Number(currentCostAmount || 0).toFixed(4) !==
+    Number(previousCostAmount || 0).toFixed(4)
+  );
+}
+
+function formatCostChange(change: ItemCostSheetBulkCostChange) {
+  const previous = Number(change.previousCostAmount || 0).toFixed(2);
+  const current = Number(change.costAmount || 0).toFixed(2);
+  return `${change.itemName} (${previous} -> ${current})`;
+}
+
+async function getCostChangeWindowDays(db: any) {
+  if (typeof db.setting?.findFirst !== "function") return DEFAULT_COST_CHANGE_WINDOW_DAYS;
+
+  const setting = await db.setting.findFirst({
+    where: {
+      context: "items.cost",
+      name: "averageWindowDays",
+    },
+    orderBy: [{ createdAt: "desc" }],
+    select: { value: true },
+  });
+  const parsed = Number(setting?.value ?? DEFAULT_COST_CHANGE_WINDOW_DAYS);
+  if (!Number.isFinite(parsed) || parsed <= 0) return DEFAULT_COST_CHANGE_WINDOW_DAYS;
+  return Math.max(Math.round(parsed), DEFAULT_COST_CHANGE_WINDOW_DAYS);
+}
+
+async function findRecentCostChangesByAffectedSheetId(
+  db: any,
+  candidateRootIds: string[]
+): Promise<Map<string, ItemCostSheetBulkCostChange[]>> {
+  const rootIds = new Set(candidateRootIds.map((id) => String(id || "").trim()).filter(Boolean));
+  const changesBySheetId = new Map<string, ItemCostSheetBulkCostChange[]>();
+  if (rootIds.size === 0 || typeof db.itemCostVariationHistory?.findMany !== "function") {
+    return changesBySheetId;
+  }
+
+  const windowDays = await getCostChangeWindowDays(db);
+  const since = new Date();
+  since.setDate(since.getDate() - windowDays);
+
+  const recentHistory = await db.itemCostVariationHistory.findMany({
+    where: {
+      OR: [{ validFrom: { gte: since } }, { createdAt: { gte: since } }],
+    },
+    orderBy: [{ validFrom: "desc" }, { createdAt: "desc" }],
+    select: {
+      costAmount: true,
+      previousCostAmount: true,
+      ItemVariation: {
+        select: {
+          Item: { select: { id: true, name: true } },
+        },
+      },
+    },
+  });
+
+  const latestByItemId = new Map<string, ItemCostSheetBulkCostChange>();
+  for (const row of recentHistory) {
+    const itemId = String(row.ItemVariation?.Item?.id || "").trim();
+    if (!itemId || latestByItemId.has(itemId)) continue;
+
+    const change = {
+      itemId,
+      itemName: String(row.ItemVariation?.Item?.name || itemId),
+      costAmount: Number(row.costAmount || 0),
+      previousCostAmount: Number(row.previousCostAmount || 0),
+    };
+    if (hasMeaningfulCostChange(change.costAmount, change.previousCostAmount)) {
+      latestByItemId.set(itemId, change);
+    }
+  }
+
+  for (const change of latestByItemId.values()) {
+    const graph = await buildCostImpactGraphForItem(db, change.itemId);
+    for (const affectedSheetId of graph.affectedItemCostSheetIds) {
+      const rootSheetId = String(affectedSheetId || "").trim();
+      if (!rootIds.has(rootSheetId)) continue;
+
+      const existing = changesBySheetId.get(rootSheetId) || [];
+      if (!existing.some((row) => row.itemId === change.itemId)) {
+        existing.push(change);
+        changesBySheetId.set(rootSheetId, existing);
+      }
+    }
+  }
+
+  return changesBySheetId;
+}
+
+function buildRecalculationReasons(params: {
+  componentCount: number;
+  isActive: boolean;
+  costChanges: ItemCostSheetBulkCostChange[];
+}): ItemCostSheetBulkScanReason[] {
+  const reasons: ItemCostSheetBulkScanReason[] = [];
+  const costChangeCount = params.costChanges.length;
+
+  if (costChangeCount > 0) {
+    reasons.push({
+      code: "costChange",
+      label: "Reajuste de insumo",
+      detail: `Insumo(s) com custo alterado: ${summarizeNames(
+        params.costChanges.map(formatCostChange),
+        "historico recente de custo"
+      )}`,
+      count: costChangeCount,
+    });
+  }
+
+  if (params.componentCount > 0) {
+    reasons.push({
+      code: "eligible",
+      label: "Elegível",
+      detail: params.isActive
+        ? "Aparece porque é uma ficha raiz ativa com composição recalculável."
+        : "Aparece porque é uma ficha raiz com composição recalculável.",
+      count: 1,
+    });
+  }
+
+  if (reasons.length === 0) {
+    reasons.push({
+      code: "noComponents",
+      label: "Sem composição",
+      detail: "Sem componentes cadastrados; recálculo normalmente não altera custo",
+      count: 0,
+    });
+  }
+
+  return reasons;
 }
 
 export async function scanItemCostSheetsForBulkRecalculation(
@@ -134,6 +297,8 @@ export async function scanItemCostSheetsForBulkRecalculation(
         select: { itemCostSheetId: true },
       });
 
+  const costChangesBySheetId = await findRecentCostChangesByAffectedSheetId(db, rootIds);
+
   const variationCountByRootId = new Map<string, number>();
   for (const row of allSheets) {
     if (!row.baseItemCostSheetId) continue;
@@ -158,6 +323,13 @@ export async function scanItemCostSheetsForBulkRecalculation(
     .map((sheet: any) => {
       const rootSheetId = String(sheet.id || "");
       const componentCount = Number(componentCountByRootId.get(rootSheetId) || 0);
+      const isActive = Boolean(sheet.isActive);
+      const costChanges = costChangesBySheetId.get(rootSheetId) || [];
+      const reasons = buildRecalculationReasons({
+        componentCount,
+        isActive,
+        costChanges,
+      });
       return {
         rootSheetId,
         itemId: String(sheet.itemId || ""),
@@ -165,11 +337,14 @@ export async function scanItemCostSheetsForBulkRecalculation(
         sheetName:
           String(sheet.name || "").trim() ||
           `Ficha tecnica ${String(sheet.Item?.name || "Item")}`,
-        isActive: Boolean(sheet.isActive),
+        isActive,
         componentCount,
         variationCount: Number(variationCountByRootId.get(rootSheetId) || 1),
         costAmount: Number(sheet.costAmount || 0),
         updatedAt: new Date(sheet.updatedAt),
+        reasonSummary: reasons.map((reason) => reason.label).join(", "),
+        reasons,
+        costChanges,
       };
     })
     .filter((sheet) => (onlyWithComponents ? sheet.componentCount > 0 : true));

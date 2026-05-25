@@ -17,6 +17,12 @@ function dateIntToLocalDate(dateInt: number): Date {
   return new Date(Number(s.slice(0, 4)), Number(s.slice(4, 6)) - 1, Number(s.slice(6, 8)));
 }
 
+function dateIntToDayEnd(dateInt: number): Date {
+  const date = dateIntToLocalDate(dateInt);
+  date.setHours(23, 59, 59, 999);
+  return date;
+}
+
 function getMonthRange(year: number, month: number) {
   const lastDay = new Date(year, month, 0).getDate();
   return { start: ymdToInt(year, month, 1), end: ymdToInt(year, month, lastDay) };
@@ -130,6 +136,11 @@ export type ImpactItem = {
   recipeUsageCount: number;
   totalCostImpact: number;
   latestCostPerConsumptionUnit: number | null;
+  averageCostPerConsumptionUnit: number | null;
+  minStockMovementCost: number | null;
+  minStockMovementCostDate: string | null;
+  maxStockMovementCost: number | null;
+  maxStockMovementCostDate: string | null;
   trend: TrendPoint[];
 };
 
@@ -182,6 +193,17 @@ export type DashboardKpis = {
   topImpact: ImpactItem[];
   costVarByAbs: CostVarItem[];
   costVarByPct: CostVarItem[];
+};
+
+export type StockVsRevenueMonth = {
+  monthKey: string;
+  label: string;
+  revenueTotal: number;
+  stockInputTotal: number;
+  difference: number;
+  stockToRevenuePct: number | null;
+  movementCount: number;
+  isCurrent: boolean;
 };
 
 // ─── weekday series builder ───────────────────────────────────────────────────
@@ -337,6 +359,66 @@ async function loadTopImpact(
 
   if (grouped.size === 0) return [];
 
+  const itemById = new Map<string, any>();
+  for (const { item } of grouped.values()) {
+    itemById.set(String(item.id), item);
+  }
+
+  const stockMovementRows = await db.stockMovement.findMany({
+    where: {
+      itemId: { in: Array.from(itemById.keys()) },
+      deletedAt: null,
+      newCostAtImport: { gt: 0 },
+    },
+    select: {
+      itemId: true,
+      newCostAtImport: true,
+      newCostUnitAtImport: true,
+      movementUnit: true,
+      movementAt: true,
+      appliedAt: true,
+      createdAt: true,
+    },
+  });
+
+  const stockCostRangeByItemId = new Map<
+    string,
+    {
+      min: { cost: number; date: string | null } | null;
+      max: { cost: number; date: string | null } | null;
+    }
+  >();
+
+  for (const movement of stockMovementRows) {
+    const itemId = String(movement.itemId || "");
+    const item = itemById.get(itemId);
+    if (!item) continue;
+
+    const normalizedCost = normalizeItemCostToConsumptionUnit(
+      {
+        costAmount: movement.newCostAtImport,
+        unit: movement.newCostUnitAtImport || movement.movementUnit,
+      },
+      item,
+    );
+    const cost = Number.isFinite(normalizedCost) ? normalizedCost! : Number(movement.newCostAtImport ?? NaN);
+    if (!Number.isFinite(cost) || cost <= 0) continue;
+
+    const date =
+      movement.movementAt instanceof Date
+        ? movement.movementAt.toISOString()
+        : movement.appliedAt instanceof Date
+          ? movement.appliedAt.toISOString()
+          : movement.createdAt instanceof Date
+            ? movement.createdAt.toISOString()
+            : null;
+
+    const current = stockCostRangeByItemId.get(itemId) ?? { min: null, max: null };
+    if (!current.min || cost < current.min.cost) current.min = { cost, date };
+    if (!current.max || cost > current.max.cost) current.max = { cost, date };
+    stockCostRangeByItemId.set(itemId, current);
+  }
+
   // Compute cost metrics and build trend for each item
   const results: ImpactItem[] = Array.from(grouped.values())
     .map(({ item, count }) => {
@@ -352,7 +434,9 @@ async function loadTopImpact(
           : null;
 
       const costPerUnit = metrics?.latestCostPerConsumptionUnit ?? null;
+      const averageCostPerUnit = metrics?.averageCostPerConsumptionUnit ?? null;
       const trendHistory = history.length > 0 ? history : current ? [current] : [];
+      const stockCostRange = stockCostRangeByItemId.get(String(item.id));
 
       return {
         itemId: item.id,
@@ -362,10 +446,15 @@ async function loadTopImpact(
         // impact = recipes × unit cost (proxy when lastTotalCostAmount is 0)
         totalCostImpact: costPerUnit != null ? costPerUnit * count : 0,
         latestCostPerConsumptionUnit: costPerUnit,
+        averageCostPerConsumptionUnit: averageCostPerUnit,
+        minStockMovementCost: stockCostRange?.min?.cost ?? null,
+        minStockMovementCostDate: stockCostRange?.min?.date ?? null,
+        maxStockMovementCost: stockCostRange?.max?.cost ?? null,
+        maxStockMovementCostDate: stockCostRange?.max?.date ?? null,
         trend: buildTrendData(trendHistory, item, chartWindowDays),
       };
     })
-    .filter(Boolean)
+    .filter((item): item is ImpactItem => item != null)
     .sort((a: any, b: any) => b.totalCostImpact - a.totalCostImpact)
     .slice(0, top);
 
@@ -663,37 +752,127 @@ async function loadAvgProfitMargin(): Promise<number | null> {
   return valid.reduce((s: number, v: number) => s + v, 0) / valid.length;
 }
 
+async function getStockInputTotalsByMonth(
+  entries: Array<{ year: number; month: number; range: { start: number; end: number } }>,
+): Promise<Map<string, { total: number; count: number }>> {
+  if (!entries.length) return new Map();
+
+  const db = prismaClient as any;
+  const startDate = dateIntToLocalDate(Math.min(...entries.map(({ range }) => range.start)));
+  const endDate = dateIntToDayEnd(Math.max(...entries.map(({ range }) => range.end)));
+
+  const rows = await db.stockMovement.findMany({
+    where: {
+      deletedAt: null,
+      direction: "entry",
+      OR: [
+        { movementAt: { gte: startDate, lte: endDate } },
+        { movementAt: null, appliedAt: { gte: startDate, lte: endDate } },
+      ],
+    },
+    select: {
+      quantityAmount: true,
+      newCostAtImport: true,
+      movementAt: true,
+      appliedAt: true,
+      createdAt: true,
+      ImportLine: { select: { costTotalAmount: true } },
+    },
+  });
+
+  const allowedMonths = new Set(entries.map(({ year, month }) => `${year}-${String(month).padStart(2, "0")}`));
+  const totals = new Map<string, { total: number; count: number }>();
+
+  for (const row of rows) {
+    const date = row.movementAt || row.appliedAt || row.createdAt;
+    if (!(date instanceof Date) || isNaN(date.getTime())) continue;
+
+    const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+    if (!allowedMonths.has(monthKey)) continue;
+
+    const lineTotal = Number(row.ImportLine?.costTotalAmount ?? NaN);
+    const quantity = Number(row.quantityAmount ?? NaN);
+    const unitCost = Number(row.newCostAtImport ?? NaN);
+    const movementTotal = Number.isFinite(lineTotal) && lineTotal > 0
+      ? lineTotal
+      : Number.isFinite(quantity) && quantity > 0 && Number.isFinite(unitCost) && unitCost > 0
+        ? quantity * unitCost
+        : 0;
+
+    if (!Number.isFinite(movementTotal) || movementTotal <= 0) continue;
+
+    const current = totals.get(monthKey) ?? { total: 0, count: 0 };
+    current.total += movementTotal;
+    current.count += 1;
+    totals.set(monthKey, current);
+  }
+
+  return totals;
+}
+
 /** Group 1 — KDS revenue charts (monthly + weekday comparison) */
 export async function loadRevenueGroupData() {
-  const { m0, m1, m2, mly, m1ly, m2ly, r0, r1, r2, rly, r1ly, r2ly } = computeDateContext();
+  const { m0, m1, mly, r0, r1, rly } = computeDateContext();
 
-  const overallMin = Math.min(r0.start, r1.start, r2.start);
-  const overallMax = Math.max(r0.end, r1.end, r2.end);
-  const overallMinLy = Math.min(rly.start, r1ly.start, r2ly.start);
-  const overallMaxLy = Math.max(rly.end, r1ly.end, r2ly.end);
+  const currentMonthEntries = Array.from({ length: 12 }, (_, index) => {
+    const offset = 11 - index;
+    const monthRef = shiftMonth(m0.year, m0.month, offset);
+    return {
+      ...monthRef,
+      range: offset === 0 ? r0 : getMonthRange(monthRef.year, monthRef.month),
+      isCurrent: offset === 0,
+    };
+  });
 
-  const [revenueCurrentPeriod, revenueLastYear, avgProfitMarginPerc] = await Promise.all([
+  const previousYearMonthEntries = currentMonthEntries.map(({ year, month, isCurrent }) => {
+    const previousYear = year - 1;
+    const lastDay = new Date(previousYear, month, 0).getDate();
+    const endDay = isCurrent ? Math.min(new Date().getDate(), lastDay) : lastDay;
+    return {
+      year: previousYear,
+      month,
+      range: {
+        start: ymdToInt(previousYear, month, 1),
+        end: ymdToInt(previousYear, month, endDay),
+      },
+    };
+  });
+
+  const overallMin = Math.min(...currentMonthEntries.map(({ range }) => range.start));
+  const overallMax = Math.max(...currentMonthEntries.map(({ range }) => range.end));
+  const overallMinLy = Math.min(...previousYearMonthEntries.map(({ range }) => range.start));
+  const overallMaxLy = Math.max(...previousYearMonthEntries.map(({ range }) => range.end));
+
+  const [revenueCurrentPeriod, revenueLastYear, avgProfitMarginPerc, stockInputByMonth] = await Promise.all([
     getRevenueByDate(overallMin, overallMax),
     getRevenueByDate(overallMinLy, overallMaxLy),
     loadAvgProfitMargin(),
+    getStockInputTotalsByMonth(currentMonthEntries),
   ]);
 
-  const monthlyRevenue = [
-    { ...m2, range: r2, isCurrent: false },
-    { ...m1, range: r1, isCurrent: false },
-    { ...m0, range: r0, isCurrent: true },
-  ].map(({ year, month, range, isCurrent }) => ({
+  const monthlyRevenue = currentMonthEntries.map(({ year, month, range, isCurrent }) => ({
     monthKey: `${year}-${String(month).padStart(2, "0")}`,
     label: monthLabel(year, month),
     total: sumRange(revenueCurrentPeriod, range.start, range.end),
     isCurrent,
   }));
 
-  const prevYearRaw = [
-    { ...m2ly, range: r2ly },
-    { ...m1ly, range: r1ly },
-    { ...mly, range: rly },
-  ].map(({ year, month, range }) => ({
+  const stockVsRevenue: StockVsRevenueMonth[] = monthlyRevenue.map((month) => {
+    const stockInput = stockInputByMonth.get(month.monthKey) ?? { total: 0, count: 0 };
+    const stockToRevenuePct = month.total > 0 ? (stockInput.total / month.total) * 100 : null;
+    return {
+      monthKey: month.monthKey,
+      label: month.label,
+      revenueTotal: month.total,
+      stockInputTotal: stockInput.total,
+      difference: month.total - stockInput.total,
+      stockToRevenuePct,
+      movementCount: stockInput.count,
+      isCurrent: month.isCurrent,
+    };
+  });
+
+  const prevYearRaw = previousYearMonthEntries.map(({ year, month, range }) => ({
     monthKey: `${year}-${String(month).padStart(2, "0")}`,
     label: monthLabel(year, month),
     total: sumRange(revenueLastYear, range.start, range.end),
@@ -721,7 +900,7 @@ export async function loadRevenueGroupData() {
     };
   });
 
-  return { monthlyRevenue, previousYearMonthlyRevenue, weekdayCharts, avgProfitMarginPerc };
+  return { monthlyRevenue, previousYearMonthlyRevenue, weekdayCharts, avgProfitMarginPerc, stockVsRevenue };
 }
 
 /** Group 2 — Item cost tables (top expensive + top impactful) */
@@ -742,7 +921,7 @@ export async function loadCostVarGroupData(momRef?: { year: number; month: numbe
   const db = prismaClient as any;
 
   const [{ byAbs, byPct, all, missingConsumptionUm }, ingredientRows] = await Promise.all([
-    loadCostVariations(10, momRef),
+    loadCostVariations(Number.MAX_SAFE_INTEGER, momRef),
     db.recipeIngredient.groupBy({
       by: ["ingredientItemId"],
       _count: { ingredientItemId: true },
@@ -761,8 +940,7 @@ export async function loadCostVarGroupData(momRef?: { year: number; month: numbe
       return { ...item, recipeUsageCount, weightedImpact };
     })
     .filter(item => item.recipeUsageCount > 0)
-    .sort((a, b) => b.weightedImpact - a.weightedImpact)
-    .slice(0, 10);
+    .sort((a, b) => b.weightedImpact - a.weightedImpact);
 
   const now = new Date();
   const resolvedMomRef = momRef ?? { year: now.getFullYear(), month: now.getMonth() + 1 };

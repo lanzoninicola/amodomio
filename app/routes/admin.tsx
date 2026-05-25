@@ -6,7 +6,9 @@ import { authenticator } from "~/domain/auth/google.server";
 import { LoggedUser } from "~/domain/auth/types.server";
 import ADMIN_NAVIGATION_LINKS from "~/domain/website-navigation/links/admin-navigation";
 import { AdminSidebar } from "~/domain/website-navigation/components/admin-sidebar";
+import { AdminFullscreenMenu } from "~/domain/website-navigation/components/admin-fullscreen-menu";
 import { isWhatsappNoResponseEnabled } from "~/domain/crm/whatsapp-no-response-settings.server";
+import { getAdminNavigationMenuLayout } from "~/domain/website-navigation/admin-navigation-settings.server";
 import prismaClient from "~/lib/prisma/client.server";
 import { ok } from "~/utils/http-response.server";
 import { lastUrlSegment } from "~/utils/url";
@@ -89,8 +91,8 @@ export const loader: LoaderFunction = async ({ request }: LoaderFunctionArgs) =>
     const slug = lastUrlSegment(request.url)
     const whatsappNoResponseEnabled = isMobileRoute ? false : await isWhatsappNoResponseEnabled();
 
-    const [pinnedNav, pendingReplyAlerts, topNavItems] = isMobileRoute
-        ? [[], [], []]
+    const [pinnedNav, pendingReplyAlerts, topNavItems, adminNavigationMenuLayout] = isMobileRoute
+        ? [[], [], [], "sidebar" as const]
         : await Promise.all([
             prismaClient.adminNavigationClick.findMany({
                 where: { pinned: true },
@@ -138,6 +140,7 @@ export const loader: LoaderFunction = async ({ request }: LoaderFunctionArgs) =>
                 console.error("[admin.loader] erro ao buscar topNav", error);
                 return [];
             }),
+            getAdminNavigationMenuLayout(),
         ]);
 
     return ok({
@@ -156,6 +159,7 @@ export const loader: LoaderFunction = async ({ request }: LoaderFunctionArgs) =>
             groupTitle: item.groupTitle ?? null,
             pinned: item.pinned ?? false,
         })),
+        adminNavigationMenuLayout,
         whatsappNoResponseEnabled,
         pendingReplyAlerts: pendingReplyAlerts.map((row) => ({
             customerId: row.customer_id,
@@ -183,6 +187,7 @@ export default function AdminOutlet() {
     const pinnedNavHrefs = loaderData?.payload?.pinnedNavHrefs ?? [];
     const pinnedNavItems = loaderData?.payload?.pinnedNavItems ?? [];
     const topNavItems = loaderData?.payload?.topNavItems ?? [];
+    const adminNavigationMenuLayout = loaderData?.payload?.adminNavigationMenuLayout ?? "sidebar";
     const whatsappNoResponseEnabled = loaderData?.payload?.whatsappNoResponseEnabled ?? true;
     const pendingReplyAlerts = (loaderData?.payload?.pendingReplyAlerts ?? []) as PendingReplyAlert[];
     const [isAlertsPanelOpen, setIsAlertsPanelOpen] = useState(false);
@@ -332,8 +337,14 @@ export default function AdminOutlet() {
     return (
         <SidebarProvider data-element="sidebar-provider">
             <RouteProgressBar />
-            <AdminSidebar navigationLinks={ADMIN_NAVIGATION_LINKS} pinnedHrefs={pinnedNavHrefs} pinnedItems={pinnedNavItems} />
-            <SidebarTrigger className="hidden md:flex" />
+            {adminNavigationMenuLayout === "fullscreen" ? (
+                <AdminFullscreenMenu navigationLinks={ADMIN_NAVIGATION_LINKS} pinnedItems={pinnedNavItems} />
+            ) : (
+                <>
+                    <AdminSidebar navigationLinks={ADMIN_NAVIGATION_LINKS} pinnedHrefs={pinnedNavHrefs} pinnedItems={pinnedNavItems} />
+                    <SidebarTrigger className="hidden md:flex" />
+                </>
+            )}
             {whatsappNoResponseEnabled && pendingReplyAlerts.length > 0 && isAlertsPanelOpen ? (
                 <aside
                     ref={panelRef}

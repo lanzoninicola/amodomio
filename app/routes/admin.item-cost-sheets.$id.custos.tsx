@@ -32,6 +32,8 @@ function presetVariationText(preset: {
   return parts.join(" · ");
 }
 
+type AddFormType = "recipe" | "item" | "sheet" | "manual" | "labor";
+
 export default function AdminItemCostSheetCustosTab() {
   const {
     selectedSheet,
@@ -44,6 +46,7 @@ export default function AdminItemCostSheetCustosTab() {
     rootSheetId,
     recipeOptions,
     referenceSheetOptions,
+    packagingItemOptions,
     componentPresets,
   } =
     useOutletContext<AdminItemCostSheetDetailOutletContext>();
@@ -51,8 +54,10 @@ export default function AdminItemCostSheetCustosTab() {
   const [recalcLoading, setRecalcLoading] = useState(false);
   const [selectedRecipeId, setSelectedRecipeId] = useState("");
   const [selectedReferenceSheetId, setSelectedReferenceSheetId] = useState("");
+  const [selectedPackagingItemId, setSelectedPackagingItemId] = useState("");
   const [selectedManualPresetId, setSelectedManualPresetId] = useState("");
   const [selectedLaborPresetId, setSelectedLaborPresetId] = useState("");
+  const [activeAddForm, setActiveAddForm] = useState<AddFormType | null>(null);
   const [selectedRecipeBreakdownTarget, setSelectedRecipeBreakdownTarget] = useState<{
     lineId: string;
     itemVariationId: string;
@@ -108,6 +113,21 @@ export default function AdminItemCostSheetCustosTab() {
       })),
     [availableReferenceSheets]
   );
+  const packagingItemSelectOptions = useMemo<SearchableSelectOption[]>(
+    () =>
+      packagingItemOptions.map((item) => ({
+        value: item.id,
+        label: item.name,
+        searchText: [
+          item.name,
+          item.classification || "",
+          item.purchaseUm || "",
+          item.consumptionUm || "",
+          Number(item.unitCostAmount || 0).toFixed(2),
+        ].filter(Boolean).join(" "),
+      })),
+    [packagingItemOptions]
+  );
   const manualPresetUnit = selectedManualPreset?.unit && unitOptions.includes(String(selectedManualPreset.unit).toUpperCase())
     ? String(selectedManualPreset.unit).toUpperCase()
     : defaultManualUnit;
@@ -133,11 +153,18 @@ export default function AdminItemCostSheetCustosTab() {
   const selectedVariationLabel = selectedVariationSheet
     ? variationLabel(selectedVariationSheet)
     : null;
+  const addFormOptions: Array<{ key: AddFormType; label: string }> = [
+    { key: "recipe", label: "Receita" },
+    { key: "item", label: "Embalagem" },
+    { key: "sheet", label: "Ficha" },
+    { key: "manual", label: "Custo manual" },
+    { key: "labor", label: "Mão de obra" },
+  ];
 
   const rowAlerts = useMemo(() => {
     const result: Record<string, { hasZeroCost: boolean; hasZeroIngredient: boolean }> = {};
     for (const line of compositionRows) {
-      if (line.type !== "recipe" && line.type !== "recipeSheet") continue;
+      if (line.type !== "recipe" && line.type !== "recipeSheet" && line.type !== "item") continue;
       const hasZeroCost = line.variationValues.some((v) => Number(v.unitCostAmount || 0) === 0);
       let hasZeroIngredient = false;
       if (line.type === "recipe") {
@@ -202,10 +229,10 @@ export default function AdminItemCostSheetCustosTab() {
               Gerenciar presets
             </Link>
           </Button>
-          <Form method="post" action={detailPath} onSubmit={() => setRecalcLoading(true)}>
+          <Form method="post" action="/api/item-cost-sheets/recalculate" onSubmit={() => setRecalcLoading(true)}>
             <input type="hidden" name="itemCostSheetId" value={selectedSheet?.id} />
             <input type="hidden" name="redirectTo" value={`${detailPath}/custos`} />
-            <Button type="submit" variant="outline" name="_action" value="item-cost-sheet-line-recalc" className="rounded-full border-slate-200 bg-white text-slate-700 hover:bg-slate-50">
+            <Button type="submit" variant="outline" className="rounded-full border-slate-200 bg-white text-slate-700 hover:bg-slate-50">
               Recalcular ficha
             </Button>
           </Form>
@@ -225,7 +252,27 @@ export default function AdminItemCostSheetCustosTab() {
         </div>
       </div>
 
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[0.85fr_0.85fr_1.15fr_1.15fr]">
+      <div className="space-y-3">
+        <div className="flex flex-wrap items-center gap-2">
+          {addFormOptions.map((option) => {
+            const isSelected = activeAddForm === option.key;
+            return (
+              <Button
+                key={option.key}
+                type="button"
+                variant={isSelected ? "default" : "outline"}
+                className={`rounded-full ${isSelected ? "" : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"}`}
+                onClick={() => setActiveAddForm(isSelected ? null : option.key)}
+              >
+                {option.label}
+              </Button>
+            );
+          })}
+        </div>
+
+        {activeAddForm ? (
+          <div className="max-w-4xl">
+        {activeAddForm === "recipe" ? (
         <Form method="post" action={detailPath} className="space-y-3 rounded-[24px] border border-slate-200 bg-slate-50/60 p-5">
           <input type="hidden" name="itemCostSheetId" value={selectedSheet?.id} />
           <input type="hidden" name="redirectTo" value={`${detailPath}/custos`} />
@@ -283,7 +330,69 @@ export default function AdminItemCostSheetCustosTab() {
             </Button>
           </div>
         </Form>
+        ) : null}
 
+        {activeAddForm === "item" ? (
+        <Form method="post" action={detailPath} className="space-y-3 rounded-[24px] border border-slate-200 bg-slate-50/60 p-5">
+          <input type="hidden" name="itemCostSheetId" value={selectedSheet?.id} />
+          <input type="hidden" name="redirectTo" value={`${detailPath}/custos`} />
+          <div>
+            <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">Adicionar</div>
+            <h5 className="mt-1 text-sm font-semibold text-slate-900">Embalagem comprada</h5>
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500" htmlFor="refItemId">Item</label>
+            <input type="hidden" name="refItemId" value={selectedPackagingItemId} />
+            <SearchableSelect
+              value={selectedPackagingItemId}
+              onValueChange={setSelectedPackagingItemId}
+              options={packagingItemSelectOptions}
+              placeholder="Selecionar embalagem"
+              searchPlaceholder="Buscar embalagem..."
+              emptyText="Nenhuma embalagem encontrada."
+              triggerClassName="h-10 w-full max-w-none justify-between rounded-lg border-slate-200 px-3 text-sm"
+              contentClassName="w-[var(--radix-popover-trigger-width)] p-0"
+              renderOption={(option) => {
+                const item = packagingItemOptions.find((entry) => entry.id === option.value);
+                if (!item) return option.label;
+
+                return (
+                  <div className="flex min-w-0 flex-col">
+                    <span className="truncate text-sm text-slate-900">{option.label}</span>
+                    <span className="text-xs text-slate-500">
+                      {item.consumptionUm || item.purchaseUm || "UN"} · {formatCompactMoney(Number(item.unitCostAmount || 0))}
+                    </span>
+                  </div>
+                );
+              }}
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500" htmlFor="itemQuantity">Quantidade</label>
+              <NumericInput id="itemQuantity" name="quantity" min="0.01" step="0.01" defaultValue="1" decimalScale={2} className="h-10 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm" required />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500" htmlFor="itemWastePerc">Perda %</label>
+              <NumericInput id="itemWastePerc" name="wastePerc" min="0" step="0.01" defaultValue="0" decimalScale={2} className="h-10 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm" />
+            </div>
+          </div>
+          <div className="flex justify-end">
+            <Button
+              type="submit"
+              variant="outline"
+              name="_action"
+              value="item-cost-sheet-line-add-item"
+              className="rounded-full border-slate-200 bg-white text-slate-700 hover:bg-slate-100"
+              disabled={!selectedPackagingItemId}
+            >
+              Adicionar
+            </Button>
+          </div>
+        </Form>
+        ) : null}
+
+        {activeAddForm === "sheet" ? (
         <Form method="post" action={detailPath} className="space-y-3 rounded-[24px] border border-slate-200 bg-slate-50/60 p-5">
           <input type="hidden" name="itemCostSheetId" value={selectedSheet?.id} />
           <input type="hidden" name="redirectTo" value={`${detailPath}/custos`} />
@@ -339,7 +448,9 @@ export default function AdminItemCostSheetCustosTab() {
             </Button>
           </div>
         </Form>
+        ) : null}
 
+        {activeAddForm === "manual" ? (
         <Form method="post" action={detailPath} className="space-y-3 rounded-[24px] border border-slate-200 bg-slate-50/60 p-5">
           <input type="hidden" name="itemCostSheetId" value={selectedSheet?.id} />
           <input type="hidden" name="redirectTo" value={`${detailPath}/custos`} />
@@ -406,7 +517,9 @@ export default function AdminItemCostSheetCustosTab() {
             </Button>
           </div>
         </Form>
+        ) : null}
 
+        {activeAddForm === "labor" ? (
         <Form method="post" action={detailPath} className="space-y-3 rounded-[24px] border border-slate-200 bg-slate-50/60 p-5">
           <input type="hidden" name="itemCostSheetId" value={selectedSheet?.id} />
           <input type="hidden" name="redirectTo" value={`${detailPath}/custos`} />
@@ -473,6 +586,9 @@ export default function AdminItemCostSheetCustosTab() {
             </Button>
           </div>
         </Form>
+        ) : null}
+          </div>
+        ) : null}
       </div>
 
       <section className="">
@@ -486,7 +602,7 @@ export default function AdminItemCostSheetCustosTab() {
           const alerts: AlertEntry[] = [];
 
           for (const line of compositionRows) {
-            if (line.type !== "recipe" && line.type !== "recipeSheet") continue;
+            if (line.type !== "recipe" && line.type !== "recipeSheet" && line.type !== "item") continue;
 
             // top-level zero cost on the sheet row
             const zeroVariations = line.variationValues.filter((v) => Number(v.unitCostAmount || 0) === 0);
@@ -568,8 +684,9 @@ export default function AdminItemCostSheetCustosTab() {
                 </tr>
               ) : (
                 compositionRows.map((line) => {
-                  const refLocked = line.type === "recipe" || line.type === "recipeSheet";
+                  const refLocked = line.type === "recipe" || line.type === "recipeSheet" || line.type === "item";
                   const recipeHref = line.type === "recipe" && line.refId ? `/admin/recipes/${line.refId}` : null;
+                  const itemHref = line.type === "item" && line.refId ? `/admin/items/${line.refId}/main` : null;
                   const lineFormId = `line-form-${line.id}`;
 
                   return (
@@ -592,15 +709,15 @@ export default function AdminItemCostSheetCustosTab() {
                           </div>
                           <div className="space-y-1">
                             <label className="block text-[11px] font-semibold uppercase tracking-wide text-slate-500">Nome</label>
-                            {recipeHref ? (
+                            {recipeHref || itemHref ? (
                               <>
                                 <input type="hidden" name="name" value={line.name} />
                                 <Link
-                                  to={recipeHref}
+                                  to={recipeHref || itemHref || "#"}
                                   target="_blank"
                                   rel="noreferrer"
                                   className="flex h-9 w-full items-center rounded-lg border border-slate-100 bg-slate-50 px-3 text-sm text-slate-700 transition hover:border-blue-200 hover:text-blue-700 hover:underline"
-                                  title="Abrir receita em nova aba"
+                                  title={recipeHref ? "Abrir receita em nova aba" : "Abrir item em nova aba"}
                                 >
                                   <span className="truncate">{line.name}</span>
                                 </Link>

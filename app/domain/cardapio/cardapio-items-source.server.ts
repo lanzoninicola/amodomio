@@ -12,7 +12,9 @@ type CardapioCompatItem = MenuItemWithAssociations & {
   publicPriceVariations?: PublicCardapioVariation[];
 };
 
-type NativeCardapioRow = Awaited<ReturnType<typeof listNativeCardapioItems>>[number];
+type NativeCardapioRow = Awaited<
+  ReturnType<typeof listNativeCardapioItems>
+>[number];
 type CompatTagModel = {
   id: string;
   name: string | null;
@@ -61,10 +63,14 @@ function normalizePublicMediaUrl(url?: string | null) {
   return isCloudinaryUrl(normalized) ? "" : normalized;
 }
 
-function isVideoMedia(media?: { kind?: string | null; secureUrl?: string | null } | null) {
+function isVideoMedia(
+  media?: { kind?: string | null; secureUrl?: string | null } | null
+) {
   const kind = normalizeText(media?.kind).toLowerCase();
   if (kind === "video") return true;
-  return /\.(mp4|mov|webm|m4v|ogg|ogv)(\?|$)/i.test(normalizePublicMediaUrl(media?.secureUrl));
+  return /\.(mp4|mov|webm|m4v|ogg|ogv)(\?|$)/i.test(
+    normalizePublicMediaUrl(media?.secureUrl)
+  );
 }
 
 function uniqueById<T extends { id?: string | null }>(rows: T[]) {
@@ -78,12 +84,15 @@ function uniqueById<T extends { id?: string | null }>(rows: T[]) {
 }
 
 function uniqueStrings(values: string[]) {
-  return Array.from(new Set(values.map((value) => normalizeText(value)).filter(Boolean)));
+  return Array.from(
+    new Set(values.map((value) => normalizeText(value)).filter(Boolean))
+  );
 }
 
 function buildMetaFromTags(tags: Array<{ name?: string | null }>) {
   const names = uniqueStrings(tags.map((tag) => tag?.name || ""));
-  const hasTag = (tagName: string) => names.some((value) => value.toLowerCase() === tagName.toLowerCase());
+  const hasTag = (tagName: string) =>
+    names.some((value) => value.toLowerCase() === tagName.toLowerCase());
 
   return {
     isItalyProduct: hasTag("produtos-italiano"),
@@ -96,7 +105,9 @@ function buildMetaFromTags(tags: Array<{ name?: string | null }>) {
 
 function getFeaturedMedia(galleryAssets?: CompatMediaAsset[] | null) {
   const gallery = (galleryAssets || []).filter(
-    (asset: any) => asset?.visible !== false && Boolean(normalizePublicMediaUrl(asset?.secureUrl))
+    (asset: any) =>
+      asset?.visible !== false &&
+      Boolean(normalizePublicMediaUrl(asset?.secureUrl))
   );
   if (!gallery.length) return null;
   return gallery.find((asset: any) => asset?.isPrimary) || gallery[0] || null;
@@ -140,7 +151,10 @@ function resolveCompatMedia(input: {
   return { mediaUrl, imageUrl, placeholderUrl };
 }
 
-function resolveSortOrderIndex(row: NativeCardapioRow["ItemVariation"][number], fallbackIndex: number) {
+function resolveSortOrderIndex(
+  row: NativeCardapioRow["ItemVariation"][number],
+  fallbackIndex: number
+) {
   if (row?.isReference) return -1;
   if (row?.Variation?.code === "base") return -1;
   return fallbackIndex + 1;
@@ -169,7 +183,9 @@ function buildCompatPriceRows(item: NativeCardapioRow) {
         createdAt: row.createdAt,
         updatedAt: row.updatedAt,
         updatedBy: row.updatedBy || null,
-        ItemSellingChannel: row.ItemSellingChannel ? { ...row.ItemSellingChannel } : null,
+        ItemSellingChannel: row.ItemSellingChannel
+          ? { ...row.ItemSellingChannel }
+          : null,
         MenuItemSize: {
           id: row.ItemVariation?.id || row.id,
           key: code,
@@ -194,12 +210,15 @@ function buildCompatPriceRows(item: NativeCardapioRow) {
     })
     .sort(
       (a: any, b: any) =>
-        Number(a.MenuItemSize?.sortOrderIndex || 0) - Number(b.MenuItemSize?.sortOrderIndex || 0) ||
+        Number(a.MenuItemSize?.sortOrderIndex || 0) -
+          Number(b.MenuItemSize?.sortOrderIndex || 0) ||
         Number(a.priceAmount || 0) - Number(b.priceAmount || 0)
     );
 }
 
-export function buildPublicPriceVariations(item: NativeCardapioRow): PublicCardapioVariation[] {
+export function buildPublicPriceVariations(
+  item: NativeCardapioRow
+): PublicCardapioVariation[] {
   return (item.ItemSellingPriceVariation || [])
     .map((row: any, index: number) => {
       const label = row.ItemVariation?.Variation?.name || "Sem variacao";
@@ -224,7 +243,8 @@ export function buildPublicPriceVariations(item: NativeCardapioRow): PublicCarda
       };
     })
     .sort(
-      (a, b) => a.sortOrderIndex - b.sortOrderIndex || a.priceAmount - b.priceAmount
+      (a, b) =>
+        a.sortOrderIndex - b.sortOrderIndex || a.priceAmount - b.priceAmount
     );
 }
 
@@ -237,14 +257,19 @@ function buildPriceVariations(
     updatedAt?: Date | null;
     updatedBy?: string | null;
     discountPercentage?: number;
-    MenuItemSize?: { id?: string; nameShort?: string | null; name?: string | null } | null;
+    MenuItemSize?: {
+      id?: string;
+      nameShort?: string | null;
+      name?: string | null;
+    } | null;
   }>
 ) {
   return sellingPrices.map((row) => ({
     id: row.id,
     menuItemId: null,
     menuItemVariationId: null,
-    label: row.MenuItemSize?.nameShort || row.MenuItemSize?.name || "Sem variacao",
+    label:
+      row.MenuItemSize?.nameShort || row.MenuItemSize?.name || "Sem variacao",
     basePrice: Number(row.priceAmount || 0),
     amount: Number(row.priceAmount || 0),
     discountPercentage: Number(row.discountPercentage || 0),
@@ -266,11 +291,28 @@ function applyCompatMenuItemFilters(
   const filters = where as Record<string, unknown>;
 
   return records.filter((record) => {
-    if (typeof filters.id === "string" && record.id !== filters.id) return false;
-    if (typeof filters.active === "boolean" && Boolean(record.active) !== filters.active) return false;
-    if (typeof filters.visible === "boolean" && Boolean(record.visible) !== filters.visible) return false;
-    if (typeof filters.upcoming === "boolean" && Boolean(record.upcoming) !== filters.upcoming) return false;
-    if (typeof filters.categoryId === "string" && String(record.categoryId || "") !== filters.categoryId) return false;
+    if (typeof filters.id === "string" && record.id !== filters.id)
+      return false;
+    if (
+      typeof filters.active === "boolean" &&
+      Boolean(record.active) !== filters.active
+    )
+      return false;
+    if (
+      typeof filters.visible === "boolean" &&
+      Boolean(record.visible) !== filters.visible
+    )
+      return false;
+    if (
+      typeof filters.upcoming === "boolean" &&
+      Boolean(record.upcoming) !== filters.upcoming
+    )
+      return false;
+    if (
+      typeof filters.categoryId === "string" &&
+      String(record.categoryId || "") !== filters.categoryId
+    )
+      return false;
     if (
       typeof filters.menuItemGroupId === "string" &&
       String((record as any).menuItemGroupId || "") !== filters.menuItemGroupId
@@ -282,20 +324,27 @@ function applyCompatMenuItemFilters(
   });
 }
 
-function sortCompatMenuItems(records: CardapioCompatItem[], params: MenuItemEntityFindAllParams = {}) {
+function sortCompatMenuItems(
+  records: CardapioCompatItem[],
+  params: MenuItemEntityFindAllParams = {}
+) {
   if (!params?.option?.sorted) return [...records];
   const direction = params.option?.direction === "desc" ? -1 : 1;
   return [...records].sort((a, b) => {
     return (
-      (Number(a.sortOrderIndex || 0) - Number(b.sortOrderIndex || 0)) * direction ||
-      a.name.localeCompare(b.name)
+      (Number(a.sortOrderIndex || 0) - Number(b.sortOrderIndex || 0)) *
+        direction || a.name.localeCompare(b.name)
     );
   });
 }
 
 function toCompatCardapioItem(item: NativeCardapioRow): CardapioCompatItem {
   const sellingInfo = item.ItemSellingInfo;
-  const category = sellingInfo?.Category || { id: "", name: "Sem categoria", type: "menu" };
+  const category = sellingInfo?.Category || {
+    id: "",
+    name: "Sem categoria",
+    type: "menu",
+  };
   const group = sellingInfo?.ItemGroup || {
     id: "__sem_grupo__",
     key: null,
@@ -305,10 +354,14 @@ function toCompatCardapioItem(item: NativeCardapioRow): CardapioCompatItem {
   };
 
   const allTags = uniqueById<CompatTagModel>(
-    (item.ItemTag || []).map((tagRow: any) => tagRow.Tag).filter((tag: any) => Boolean(tag?.id))
+    (item.ItemTag || [])
+      .map((tagRow: any) => tagRow.Tag)
+      .filter((tag: any) => Boolean(tag?.id))
   );
   const publicTags = allTags.filter((tag) => tag.public === true);
-  const galleryAssets = mapCompatGalleryAssets(item.ItemGalleryImage as CompatMediaAsset[] | null | undefined);
+  const galleryAssets = mapCompatGalleryAssets(
+    item.ItemGalleryImage as CompatMediaAsset[] | null | undefined
+  );
   const media = resolveCompatMedia({ galleryAssets });
   const compatMenuItemImage =
     media.imageUrl || media.placeholderUrl
@@ -320,8 +373,11 @@ function toCompatCardapioItem(item: NativeCardapioRow): CardapioCompatItem {
   const sellingPrices = buildCompatPriceRows(item);
   const publicPriceVariations = buildPublicPriceVariations(item);
 
+  const channelLink = (item.ItemSellingChannelItem || [])[0] || null;
   const cardapioChannelVisible =
-    (item.ItemSellingChannelItem || []).some((row: any) => row?.visible === true) || false;
+    (item.ItemSellingChannelItem || []).some(
+      (row: any) => row?.visible === true
+    ) || false;
   const nativeUpcoming = Boolean(sellingInfo?.upcoming);
   const active = Boolean(item.active && item.canSell);
   const visible =
@@ -369,7 +425,7 @@ function toCompatCardapioItem(item: NativeCardapioRow): CardapioCompatItem {
     MenuItemSellingPriceVariationAudit: [] as any,
     MenuItemGalleryImage: galleryAssets as any,
     CostImpactMenuItem: [] as any,
-    sortOrderIndex: 0,
+    sortOrderIndex: Number(channelLink?.sortOrderIndex || 0),
     notesPublic: normalizeText(sellingInfo?.notesPublic) || null,
     slug: normalizeText(sellingInfo?.slug) || item.id,
     likes: { amount: Number(item.ItemLike?.length || 0) },
@@ -401,7 +457,9 @@ function toCardapioIndexItem(item: CardapioCompatItem): CardapioIndexItem {
   };
 }
 
-function buildNativeCardapioItemWhere(params: MenuItemEntityFindAllParams = {}) {
+function buildNativeCardapioItemWhere(
+  params: MenuItemEntityFindAllParams = {}
+) {
   const legacyWhere = (params.where || {}) as Record<string, unknown>;
   const sellingChannelKey = params.sellingChannelKey || "cardapio";
   const where: Record<string, unknown> = {
@@ -458,7 +516,13 @@ async function listNativeCardapioItems(
             select: { id: true, name: true, type: true },
           },
           ItemGroup: {
-            select: { id: true, key: true, name: true, description: true, sortOrderIndex: true },
+            select: {
+              id: true,
+              key: true,
+              name: true,
+              description: true,
+              sortOrderIndex: true,
+            },
           },
         },
       },
@@ -466,11 +530,20 @@ async function listNativeCardapioItems(
         where: {
           ItemSellingChannel: { key: sellingChannelKey },
         },
-        select: { id: true, visible: true, itemSellingChannelId: true },
+        select: {
+          id: true,
+          visible: true,
+          itemSellingChannelId: true,
+          sortOrderIndex: true,
+        },
       },
       ItemGalleryImage: {
         where: { visible: true },
-        orderBy: [{ isPrimary: "desc" }, { sortOrder: "asc" }, { createdAt: "asc" }],
+        orderBy: [
+          { isPrimary: "desc" },
+          { sortOrder: "asc" },
+          { createdAt: "asc" },
+        ],
         select: {
           id: true,
           kind: true,
@@ -551,7 +624,10 @@ export async function findAllCardapioItems(
   params: MenuItemEntityFindAllParams = {},
   options: MenuItemEntityFindAllOptions = {}
 ): Promise<MenuItemWithAssociations[]> {
-  return (await findAllCardapioItemsFromSource(params, options)) as MenuItemWithAssociations[];
+  return (await findAllCardapioItemsFromSource(
+    params,
+    options
+  )) as MenuItemWithAssociations[];
 }
 
 export async function findAllCardapioItemsGroupedByGroupLight(
@@ -572,7 +648,9 @@ export async function findAllCardapioItemsGroupedByGroupLight(
           name: group?.name || "Sem grupo",
           description: group?.description || "",
           sortOrderIndex:
-            typeof group?.sortOrderIndex === "number" ? group.sortOrderIndex : Number.MAX_SAFE_INTEGER,
+            typeof group?.sortOrderIndex === "number"
+              ? group.sortOrderIndex
+              : Number.MAX_SAFE_INTEGER,
           items: [] as CardapioCompatItem[],
         };
       }
@@ -595,14 +673,21 @@ export async function findAllCardapioItemsGroupedByGroupLight(
   return Object.values(grouped)
     .sort(
       (a, b) =>
-        (a.sortOrderIndex - b.sortOrderIndex) * direction || a.name.localeCompare(b.name)
+        (a.sortOrderIndex - b.sortOrderIndex) * direction ||
+        a.name.localeCompare(b.name)
     )
     .map((group) => ({
       groupId: group.id,
       group: group.name,
       description: group.description,
       sortOrderIndex: group.sortOrderIndex,
-      items: group.items.map(toCardapioIndexItem),
+      items: group.items
+        .sort(
+          (a, b) =>
+            (Number(a.sortOrderIndex || 0) - Number(b.sortOrderIndex || 0)) *
+              direction || a.name.localeCompare(b.name)
+        )
+        .map(toCardapioIndexItem),
     })) as GroupedItems[];
 }
 
@@ -623,6 +708,9 @@ export async function findCardapioItemBySlug(slug: string) {
 
   if (!item) return null;
 
-  const rows = await listNativeCardapioItems({ where: { itemId: item.id } as any }, {});
+  const rows = await listNativeCardapioItems(
+    { where: { itemId: item.id } as any },
+    {}
+  );
   return rows.length ? toCompatCardapioItem(rows[0]) : null;
 }

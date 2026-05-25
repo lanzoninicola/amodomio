@@ -25,6 +25,13 @@ import {
   TableHeader,
   TableRow,
 } from "~/components/ui/table";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "~/components/ui/select";
 import { toast } from "~/components/ui/use-toast";
 import RecipeBadge from "~/domain/recipe/components/recipe-badge/recipe-badge";
 import { recipeEntity } from "~/domain/recipe/recipe.entity.server";
@@ -47,7 +54,17 @@ import {
 } from "~/components/ui/pagination";
 
 type RecipeWithMeta = Recipe & {
-  Item: { name: string } | null;
+  Item: {
+    name: string;
+    ItemSellingChannelItem: Array<{
+      visible: boolean;
+      ItemSellingChannel: {
+        id: string;
+        key: string;
+        name: string;
+      };
+    }>;
+  } | null;
 };
 type FilterItem = {
   id: string;
@@ -55,6 +72,12 @@ type FilterItem = {
   classification: string | null;
   consumptionUm: string | null;
 };
+type SellingChannelOption = {
+  id: string;
+  key: string;
+  name: string;
+};
+type ChannelVisibilityFilter = "all" | "visible" | "hidden";
 
 const PAGE_SIZE = 20;
 
@@ -64,10 +87,25 @@ function parsePage(raw: string | null) {
   return Math.max(1, Math.floor(parsed));
 }
 
-function buildPageHref(params: { q: string; itemId: string; page: number }) {
+function parseVisibilityFilter(raw: string | null): ChannelVisibilityFilter {
+  const normalized = String(raw || "").trim().toLowerCase();
+  if (normalized === "visible" || normalized === "hidden") return normalized;
+  return "all";
+}
+
+function buildPageHref(params: {
+  q: string;
+  itemId: string;
+  channelId: string;
+  visibility: ChannelVisibilityFilter;
+  page: number;
+}) {
   const searchParams = new URLSearchParams();
   if (params.q) searchParams.set("q", params.q);
   if (params.itemId) searchParams.set("itemId", params.itemId);
+  if (params.channelId) searchParams.set("channelId", params.channelId);
+  if (params.visibility !== "all")
+    searchParams.set("visibility", params.visibility);
   searchParams.set("page", String(params.page));
   return `/admin/recipes?${searchParams.toString()}`;
 }
@@ -78,11 +116,39 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const url = new URL(request.url);
   const q = String(url.searchParams.get("q") || "").trim();
   const itemId = String(url.searchParams.get("itemId") || "").trim();
+  const channelId = String(url.searchParams.get("channelId") || "").trim();
+  const visibility = parseVisibilityFilter(url.searchParams.get("visibility"));
   const requestedPage = parsePage(url.searchParams.get("page"));
 
   const where: any = {};
-  if (q) where.OR = [{ name: { contains: q, mode: "insensitive" } }];
+  if (q) {
+    where.OR = [
+      { name: { contains: q, mode: "insensitive" } },
+      {
+        RecipeIngredient: {
+          some: {
+            IngredientItem: {
+              name: { contains: q, mode: "insensitive" },
+            },
+          },
+        },
+      },
+    ];
+  }
   if (itemId) where.itemId = itemId;
+  if (channelId || visibility !== "all") {
+    where.Item = {
+      is: {
+        ItemSellingChannelItem: {
+          some: {
+            ...(channelId ? { itemSellingChannelId: channelId } : {}),
+            ...(visibility === "visible" ? { visible: true } : {}),
+            ...(visibility === "hidden" ? { visible: false } : {}),
+          },
+        },
+      },
+    };
+  }
 
   const [countErr, totalItemsRaw] = await tryit(db.recipe.count({ where }));
 
@@ -107,11 +173,38 @@ export async function loader({ request }: LoaderFunctionArgs) {
         orderBy: [{ name: "asc" }],
         take: 500,
       }),
+      db.itemSellingChannel.findMany({
+        select: {
+          id: true,
+          key: true,
+          name: true,
+        },
+        orderBy: [{ sortOrderIndex: "asc" }, { name: "asc" }],
+      }),
       db.recipe.findMany({
         where,
         include: {
           Item: {
-            select: { name: true },
+            select: {
+              name: true,
+              ItemSellingChannelItem: {
+                select: {
+                  visible: true,
+                  ItemSellingChannel: {
+                    select: {
+                      id: true,
+                      key: true,
+                      name: true,
+                    },
+                  },
+                },
+                orderBy: {
+                  ItemSellingChannel: {
+                    sortOrderIndex: "asc",
+                  },
+                },
+              },
+            },
           },
         },
         orderBy: [{ createdAt: "desc" }],
@@ -125,15 +218,18 @@ export async function loader({ request }: LoaderFunctionArgs) {
     return serverError(err);
   }
 
-  const [items, recipesRaw] = result;
+  const [items, channels, recipesRaw] = result;
   const recipes: RecipeWithMeta[] = recipesRaw || [];
 
   return ok({
     recipes,
     items,
+    channels,
     filters: {
       q,
       itemId,
+      channelId,
+      visibility,
     },
     pagination: {
       page,
@@ -165,7 +261,13 @@ export default function RecipesIndex() {
   const loaderData = useLoaderData<typeof loader>();
   const recipes = loaderData?.payload.recipes as RecipeWithMeta[];
   const items = loaderData?.payload.items as FilterItem[];
-  const filters = loaderData?.payload.filters as { q: string; itemId: string };
+  const channels = loaderData?.payload.channels as SellingChannelOption[];
+  const filters = loaderData?.payload.filters as {
+    q: string;
+    itemId: string;
+    channelId: string;
+    visibility: ChannelVisibilityFilter;
+  };
   const pagination = loaderData?.payload.pagination as {
     page: number;
     pageSize: number;
@@ -190,13 +292,25 @@ export default function RecipesIndex() {
   const [filterItemId, setFilterItemId] = useState(
     filters?.itemId || "__all__"
   );
+  const [filterChannelId, setFilterChannelId] = useState(
+    filters?.channelId || "__all__"
+  );
+  const [filterVisibility, setFilterVisibility] =
+    useState<ChannelVisibilityFilter>(filters?.visibility || "all");
 
   useEffect(() => {
     setSearchTerm(filters?.q || "");
     setFilterItemId(filters?.itemId || "__all__");
-  }, [filters?.q, filters?.itemId]);
+    setFilterChannelId(filters?.channelId || "__all__");
+    setFilterVisibility(filters?.visibility || "all");
+  }, [filters?.q, filters?.itemId, filters?.channelId, filters?.visibility]);
 
-  const triggerSubmit = (overrides?: { q?: string; itemId?: string }) => {
+  const triggerSubmit = (overrides?: {
+    q?: string;
+    itemId?: string;
+    channelId?: string;
+    visibility?: ChannelVisibilityFilter;
+  }) => {
     if (!formRef.current) return;
     const formData = new FormData(formRef.current);
     if (overrides?.q !== undefined) formData.set("q", overrides.q);
@@ -204,6 +318,16 @@ export default function RecipesIndex() {
       formData.set(
         "itemId",
         overrides.itemId === "__all__" ? "" : overrides.itemId
+      );
+    if (overrides?.channelId !== undefined)
+      formData.set(
+        "channelId",
+        overrides.channelId === "__all__" ? "" : overrides.channelId
+      );
+    if (overrides?.visibility !== undefined)
+      formData.set(
+        "visibility",
+        overrides.visibility === "all" ? "" : overrides.visibility
       );
     formData.set("page", "1");
     submit(formData, { method: "get", replace: true });
@@ -245,6 +369,16 @@ export default function RecipesIndex() {
                 type="hidden"
                 name="itemId"
                 value={filterItemId === "__all__" ? "" : filterItemId}
+              />
+              <input
+                type="hidden"
+                name="channelId"
+                value={filterChannelId === "__all__" ? "" : filterChannelId}
+              />
+              <input
+                type="hidden"
+                name="visibility"
+                value={filterVisibility === "all" ? "" : filterVisibility}
               />
               <RecipesSearch
                 value={searchTerm}
@@ -313,6 +447,42 @@ export default function RecipesIndex() {
                   );
                 }}
               />
+              <Select
+                value={filterChannelId}
+                onValueChange={(value) => {
+                  setFilterChannelId(value);
+                  triggerSubmit({ channelId: value });
+                }}
+              >
+                <SelectTrigger className="min-w-[190px] max-w-[240px] bg-white">
+                  <SelectValue placeholder="Canal de venda" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__all__">Todos os canais</SelectItem>
+                  {(channels || []).map((channel) => (
+                    <SelectItem key={channel.id} value={channel.id}>
+                      {channel.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select
+                value={filterVisibility}
+                onValueChange={(value) => {
+                  const nextValue = value as ChannelVisibilityFilter;
+                  setFilterVisibility(nextValue);
+                  triggerSubmit({ visibility: nextValue });
+                }}
+              >
+                <SelectTrigger className="min-w-[180px] max-w-[220px] bg-white">
+                  <SelectValue placeholder="Visibilidade" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Toda visibilidade</SelectItem>
+                  <SelectItem value="visible">Visíveis no canal</SelectItem>
+                  <SelectItem value="hidden">Ocultos no canal</SelectItem>
+                </SelectContent>
+              </Select>
             </Form>
 
             <div className="flex flex-wrap items-center gap-5 text-sm text-black">
@@ -391,6 +561,8 @@ export default function RecipesIndex() {
                         ? buildPageHref({
                           q: filters?.q || "",
                           itemId: filters?.itemId || "",
+                          channelId: filters?.channelId || "",
+                          visibility: filters?.visibility || "all",
                           page: 1,
                         })
                         : "#"
@@ -411,6 +583,8 @@ export default function RecipesIndex() {
                         ? buildPageHref({
                           q: filters?.q || "",
                           itemId: filters?.itemId || "",
+                          channelId: filters?.channelId || "",
+                          visibility: filters?.visibility || "all",
                           page: (pagination?.page || 1) - 1,
                         })
                         : "#"
@@ -431,6 +605,8 @@ export default function RecipesIndex() {
                         ? buildPageHref({
                           q: filters?.q || "",
                           itemId: filters?.itemId || "",
+                          channelId: filters?.channelId || "",
+                          visibility: filters?.visibility || "all",
                           page: (pagination?.page || 1) + 1,
                         })
                         : "#"
@@ -451,6 +627,8 @@ export default function RecipesIndex() {
                         ? buildPageHref({
                           q: filters?.q || "",
                           itemId: filters?.itemId || "",
+                          channelId: filters?.channelId || "",
+                          visibility: filters?.visibility || "all",
                           page: pagination?.totalPages || 1,
                         })
                         : "#"
@@ -478,6 +656,8 @@ interface RecipeItemProps {
 }
 
 function RecipeRow({ item }: RecipeItemProps) {
+  const linkedChannels = item.Item?.ItemSellingChannelItem || [];
+
   return (
     <TableRow className="border-slate-100 hover:bg-slate-50/50">
       <TableCell className="px-4 py-3">
@@ -495,12 +675,42 @@ function RecipeRow({ item }: RecipeItemProps) {
       <TableCell className="px-4 py-3">
         <div className="min-w-0">
           {item.Item ? (
-            <span
-              className="truncate text-sm text-slate-700"
-              title={item.Item.name}
-            >
-              {item.Item.name}
-            </span>
+            <div className="flex min-w-0 flex-col gap-1">
+              <Link
+                to={`/admin/items/${item.itemId}`}
+                target="_blank"
+                rel="noreferrer"
+                className="truncate text-sm font-medium text-slate-700 hover:text-slate-950 hover:underline"
+                title={item.Item.name}
+              >
+                {item.Item.name}
+              </Link>
+              <div className="flex flex-wrap gap-1">
+                {linkedChannels.length === 0 ? (
+                  <span className="text-xs text-slate-400">
+                    Sem canal vinculado
+                  </span>
+                ) : (
+                  linkedChannels.slice(0, 3).map((link) => (
+                    <span
+                      key={link.ItemSellingChannel.id}
+                      className={`inline-flex items-center rounded-full border px-1.5 py-0.5 text-[10px] font-medium ${
+                        link.visible
+                          ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                          : "border-slate-200 bg-slate-50 text-slate-500"
+                      }`}
+                    >
+                      {link.ItemSellingChannel.name}
+                    </span>
+                  ))
+                )}
+                {linkedChannels.length > 3 && (
+                  <span className="text-xs text-slate-400">
+                    +{linkedChannels.length - 3}
+                  </span>
+                )}
+              </div>
+            </div>
           ) : (
             <span className="text-sm text-slate-400">Sem item vinculado</span>
           )}
@@ -570,7 +780,7 @@ function RecipesSearch({ ...props }: React.ComponentProps<typeof Input>) {
       <Input
         type="text"
         name="q"
-        placeholder="Buscar receita..."
+        placeholder="Buscar receita ou ingrediente..."
         className="w-full pl-9"
         {...props}
       />

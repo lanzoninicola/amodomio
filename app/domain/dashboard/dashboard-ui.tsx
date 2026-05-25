@@ -14,7 +14,7 @@ export function fmtBRL(v: number) {
 }
 export function fmtCost(v: number | null, unit: string | null) {
   if (v == null || !Number.isFinite(v)) return "—";
-  return `R$ ${v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 4 })}${unit ? `/${unit}` : ""}`;
+  return `R$ ${v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}${unit ? `/${unit}` : ""}`;
 }
 export function fmtMoney(v: number) {
   return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -62,7 +62,21 @@ export function scalePts(values: number[], h: number) {
 
 // ─── SVG charts ───────────────────────────────────────────────────────────────
 
-export function LineAreaChart({ data, labels, title, h = 120 }: { data: number[]; labels: string[]; title: string; h?: number }) {
+export function LineAreaChart({
+  data,
+  labels,
+  title,
+  h = 120,
+  showPointValues = false,
+  formatValue,
+}: {
+  data: number[];
+  labels: string[];
+  title: string;
+  h?: number;
+  showPointValues?: boolean;
+  formatValue?: (value: number) => string;
+}) {
   const pts = scalePts(data, h);
   const gid = `g-${title.replace(/\W/g, "")}`;
   const tick = Math.max(1, Math.ceil(labels.length / 5));
@@ -82,7 +96,21 @@ export function LineAreaChart({ data, labels, title, h = 120 }: { data: number[]
         <line x1={PX} x2={CW - PX} y1={h - PY} y2={h - PY} stroke="#cbd5e1" strokeDasharray="3 4" />
         <path d={ap} fill={`url(#${gid})`} />
         <path d={lp} fill="none" stroke="#0f172a" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round" />
-        {pts.map((p, i) => <circle key={i} cx={p.x} cy={p.y} r="2.8" fill="#0f172a" />)}
+        {pts.map((p, i) => (
+          <g key={i}>
+            <circle cx={p.x} cy={p.y} r="2.8" fill="#0f172a" />
+            {showPointValues ? (
+              <text
+                x={p.x}
+                y={Math.max(8, p.y - 8)}
+                textAnchor="middle"
+                className="fill-slate-700 text-[10px] font-semibold"
+              >
+                {formatValue ? formatValue(data[i]) : data[i].toLocaleString("pt-BR")}
+              </text>
+            ) : null}
+          </g>
+        ))}
       </svg>
       <div className="mt-1 flex justify-between text-[11px] text-slate-500">
         {labels.map((l, i) => i % tick === 0 || i === labels.length - 1
@@ -93,7 +121,27 @@ export function LineAreaChart({ data, labels, title, h = 120 }: { data: number[]
   );
 }
 
-export function MultiLineChart({ series, xLabels, h = 120, yMin, yMax }: { series: Array<{ label: string; data: number[] }>; xLabels: string[]; h?: number; yMin?: number; yMax?: number }) {
+export function MultiLineChart({
+  series,
+  xLabels,
+  h = 120,
+  yMin,
+  yMax,
+  showPointValues = false,
+  pointValueSeriesIndexes,
+  formatPointValue,
+  pointMinWidth = 72,
+}: {
+  series: Array<{ label: string; data: number[] }>;
+  xLabels: string[];
+  h?: number;
+  yMin?: number;
+  yMax?: number;
+  showPointValues?: boolean;
+  pointValueSeriesIndexes?: number[];
+  formatPointValue?: (value: number) => string;
+  pointMinWidth?: number;
+}) {
   const all = series.flatMap(s => s.data).filter(Number.isFinite);
   if (!all.length)
     return <div className="flex items-center justify-center h-20 text-xs text-slate-400 border border-dashed border-slate-200 rounded-xl">Sem dados</div>;
@@ -101,7 +149,9 @@ export function MultiLineChart({ series, xLabels, h = 120, yMin, yMax }: { serie
   const max = yMax !== undefined ? yMax : Math.max(...all);
   const rng = Math.max(max - min, 1);
   const maxLen = Math.max(...series.map(s => s.data.length), 1);
-  const pw = CW - PX * 2;
+  const chartWidth = showPointValues ? Math.max(CW, maxLen * pointMinWidth) : CW;
+  const valueSeriesSet = new Set(pointValueSeriesIndexes ?? series.map((_, index) => index));
+  const pw = chartWidth - PX * 2;
   const ph = h - PY * 2;
   const getPts = (data: number[]) => data.map((v, i) => ({
     x: PX + (i * pw) / Math.max(maxLen - 1, 1),
@@ -109,21 +159,42 @@ export function MultiLineChart({ series, xLabels, h = 120, yMin, yMax }: { serie
   }));
   return (
     <div>
-      <svg viewBox={`0 0 ${CW} ${h}`} className="w-full overflow-visible" style={{ height: h }}>
-        <line x1={PX} x2={CW - PX} y1={h - PY} y2={h - PY} stroke="#cbd5e1" strokeDasharray="3 4" />
-        {series.map((s, si) => {
-          const p = getPts(s.data);
-          if (!p.length) return null;
-          return (
-            <g key={si}>
-              <path d={buildPath(p)} fill="none" stroke={SERIES_COLORS[si]} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-              {p.map((pt, pi) => <circle key={pi} cx={pt.x} cy={pt.y} r="2.4" fill={SERIES_COLORS[si]} />)}
-            </g>
-          );
-        })}
-      </svg>
-      <div className="mt-1 flex justify-between text-[11px] text-slate-500">
-        {xLabels.map((l, i) => <span key={i}>{l}</span>)}
+      <div className="overflow-x-auto pb-1">
+        <div style={{ minWidth: chartWidth }}>
+          <svg viewBox={`0 0 ${chartWidth} ${h}`} className="w-full overflow-visible" style={{ height: h }}>
+            <line x1={PX} x2={chartWidth - PX} y1={h - PY} y2={h - PY} stroke="#cbd5e1" strokeDasharray="3 4" />
+            {series.map((s, si) => {
+              const p = getPts(s.data);
+              if (!p.length) return null;
+              const color = SERIES_COLORS[si] ?? SERIES_COLORS[0];
+              const shouldShowValues = showPointValues && valueSeriesSet.has(si);
+              return (
+                <g key={si}>
+                  <path d={buildPath(p)} fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  {p.map((pt, pi) => (
+                    <g key={pi}>
+                      <circle cx={pt.x} cy={pt.y} r="2.4" fill={color} />
+                      {shouldShowValues ? (
+                        <text
+                          x={pt.x}
+                          y={Math.max(10, pt.y - 7)}
+                          textAnchor="middle"
+                          className="fill-slate-800 text-[9px] font-semibold"
+                          style={{ paintOrder: "stroke", stroke: "#fff", strokeWidth: 3, strokeLinecap: "round", strokeLinejoin: "round" }}
+                        >
+                          {formatPointValue ? formatPointValue(s.data[pi]) : s.data[pi].toLocaleString("pt-BR")}
+                        </text>
+                      ) : null}
+                    </g>
+                  ))}
+                </g>
+              );
+            })}
+          </svg>
+          <div className="mt-1 flex justify-between text-[11px] text-slate-500">
+            {xLabels.map((l, i) => <span key={i}>{l}</span>)}
+          </div>
+        </div>
       </div>
       <div className="mt-2 flex gap-3 flex-wrap">
         {series.map((s, si) => (
@@ -139,7 +210,7 @@ export function MultiLineChart({ series, xLabels, h = 120, yMin, yMax }: { serie
 
 // ─── shared UI pieces ─────────────────────────────────────────────────────────
 
-export function ChartHeader({ title, subtitle, unit, onExpand }: { title: string; subtitle?: string; unit?: string; onExpand: () => void }) {
+export function ChartHeader({ title, subtitle, unit, onExpand }: { title: string; subtitle?: string; unit?: string; onExpand?: () => void }) {
   return (
     <div className="flex items-start justify-between mb-3">
       <div>
@@ -148,11 +219,13 @@ export function ChartHeader({ title, subtitle, unit, onExpand }: { title: string
       </div>
       <div className="flex items-center gap-2">
         {unit && <span className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">{unit}</span>}
-        <Button variant="ghost" size="icon" className="h-6 w-6 text-slate-400 hover:text-slate-700" onClick={onExpand} title="Expandir gráfico">
-          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M15 3h6v6" /><path d="M9 21H3v-6" /><path d="M21 3l-7 7" /><path d="M3 21l7-7" />
-          </svg>
-        </Button>
+        {onExpand ? (
+          <Button variant="ghost" size="icon" className="h-6 w-6 text-slate-400 hover:text-slate-700" onClick={onExpand} title="Expandir gráfico">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M15 3h6v6" /><path d="M9 21H3v-6" /><path d="M21 3l-7 7" /><path d="M3 21l7-7" />
+            </svg>
+          </Button>
+        ) : null}
       </div>
     </div>
   );
@@ -286,6 +359,7 @@ export type MonthlyChartModal = {
   values: number[];
   labels: string[];
   breakdown: Array<{ monthKey: string; label: string; total: number; isCurrent: boolean }>;
+  periodLabel: string;
 };
 export type WeekdayChartModal = { type: "weekday"; chart: WeekdayChart };
 export type ChartModal = MonthlyChartModal | WeekdayChartModal;

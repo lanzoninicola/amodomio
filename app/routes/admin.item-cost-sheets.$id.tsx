@@ -6,6 +6,7 @@ export const shouldRevalidate: ShouldRevalidateFunction = ({ nextUrl }) => {
 };
 import {
   calcItemCostSheetTotalCostAmount,
+  getItemCostSheetItemSnapshot,
   getRecipeCompositionCostSnapshot,
   getItemCostSheetSnapshot,
   recalcItemCostSheetTotals,
@@ -53,6 +54,15 @@ type ComponentPresetRecord = {
   unitCostAmount: number;
   wastePerc: number;
   notes?: string | null;
+};
+
+type PackagingItemOption = {
+  id: string;
+  name: string;
+  classification: string | null;
+  purchaseUm: string | null;
+  consumptionUm: string | null;
+  unitCostAmount: number;
 };
 
 type RecipeCompositionBreakdownLine = {
@@ -564,7 +574,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     const rootSheetId = currentSheet.baseItemCostSheetId || currentSheet.id;
     const isCostsTabRequest = pathname.endsWith("/custos");
 
-    const [recipeSheets, recipes, referenceSheets, componentPresets, recipeSheetDependencyAgg, unitOptions, activeItemVariationIds] = await Promise.all([
+    const [recipeSheets, recipes, referenceSheets, packagingItems, componentPresets, recipeSheetDependencyAgg, unitOptions, activeItemVariationIds] = await Promise.all([
       db.itemCostSheet.findMany({
         where: { OR: [{ id: rootSheetId }, { baseItemCostSheetId: rootSheetId }] },
         include: {
@@ -591,6 +601,20 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           where: { isActive: true, baseItemCostSheetId: null },
           select: { id: true, name: true, itemId: true, costAmount: true },
           orderBy: [{ updatedAt: "desc" }],
+          take: 300,
+        })
+        : Promise.resolve([]),
+      isCostsTabRequest
+        ? db.item.findMany({
+          where: { active: true, classification: "embalagem" },
+          select: {
+            id: true,
+            name: true,
+            classification: true,
+            purchaseUm: true,
+            consumptionUm: true,
+          },
+          orderBy: [{ name: "asc" }],
           take: 300,
         })
         : Promise.resolve([]),
@@ -642,6 +666,21 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         .filter((row: any) => row.refId)
         .map((row: any) => [String(row.refId), Number(row?._count?._all || 0)])
     );
+    const packagingItemOptions = isCostsTabRequest
+      ? await Promise.all(
+        (packagingItems || []).map(async (item: any) => {
+          const snapshot = await getItemCostSheetItemSnapshot(db, String(item.id || ""));
+          return {
+            id: String(item.id || ""),
+            name: String(item.name || ""),
+            classification: item.classification || null,
+            purchaseUm: item.purchaseUm || null,
+            consumptionUm: item.consumptionUm || null,
+            unitCostAmount: Number(snapshot.unitCostAmount || 0),
+          };
+        })
+      )
+      : [];
 
     const compositionRows = await listItemCostSheetCompositionRows(db, {
       itemCostSheetId: rootSheetId,
@@ -669,6 +708,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       recipeCompositionBreakdownByLineId,
       recipeOptions,
       referenceSheetOptions: referenceSheets,
+      packagingItemOptions,
       componentPresets: (componentPresets || []).map((preset: any) => ({
         id: String(preset.id || ""),
         key: String(preset.key || ""),
@@ -804,6 +844,52 @@ export async function action({ request, params }: ActionFunctionArgs) {
         refId: recipeId,
         name: snapshot.recipe.name,
         unit: "receita",
+        quantity,
+        unitCostAmount: roundItemCostSheetMoney(snapshot.unitCostAmount),
+        wastePerc,
+        notes: snapshot.note,
+      });
+
+      await recalcItemCostSheetTotals(db, rootSheetId);
+      return redirect(postRedirectTo);
+    }
+
+    if (_action === "item-cost-sheet-line-add-item") {
+      const itemCostSheetId = String(formData.get("itemCostSheetId") || "").trim();
+      const refItemId = String(formData.get("refItemId") || "").trim();
+      const quantity = Number(String(formData.get("quantity") || "1").replace(",", "."));
+      const wastePerc = Number(String(formData.get("wastePerc") || "0").replace(",", "."));
+      if (!itemCostSheetId) return badRequest("Ficha de custo inválida");
+      if (!refItemId) return badRequest("Selecione a embalagem");
+      if (!(quantity > 0)) return badRequest("Informe uma quantidade válida");
+      if (itemCostSheetId !== currentSheet.id) return badRequest("Ficha de custo divergente");
+
+      const refItem = await db.item.findFirst({
+        where: { id: refItemId, active: true, classification: "embalagem" },
+        select: { id: true },
+      });
+      if (!refItem) return badRequest("Embalagem inválida ou inativa");
+
+      const snapshot = await getItemCostSheetItemSnapshot(db, refItemId);
+      const unit = normalizeUnit(snapshot.unit) || "UN";
+      const variationEntries = targetItemVariationIds.map((targetItemVariationId) => ({
+        itemVariationId: targetItemVariationId,
+        unit,
+        quantity,
+        unitCostAmount: roundItemCostSheetMoney(snapshot.unitCostAmount),
+        wastePerc,
+      }));
+
+      await createItemCostSheetRow({
+        db,
+        itemCostSheetId: rootSheetId,
+        itemVariationId: currentSheet.itemVariationId,
+        targetItemVariationIds,
+        variationEntries,
+        type: "item",
+        refId: refItemId,
+        name: snapshot.item.name,
+        unit,
         quantity,
         unitCostAmount: roundItemCostSheetMoney(snapshot.unitCostAmount),
         wastePerc,
@@ -1042,7 +1128,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
       });
       if (!component) return badRequest("Linha não encontrada");
 
-      const isRefLine = (component.type === "recipe" || component.type === "recipeSheet") && !!component.refId;
+      const isRefLine = (component.type === "recipe" || component.type === "recipeSheet" || component.type === "item") && !!component.refId;
       const variationValues = Array.isArray(component.ItemCostSheetVariationComponent)
         ? component.ItemCostSheetVariationComponent
         : [];
@@ -1143,14 +1229,6 @@ export async function action({ request, params }: ActionFunctionArgs) {
       return redirect(postRedirectTo);
     }
 
-    if (_action === "item-cost-sheet-line-recalc") {
-      const itemCostSheetId = String(formData.get("itemCostSheetId") || "").trim();
-      if (!itemCostSheetId) return badRequest("Ficha de custo inválida");
-      if (itemCostSheetId !== currentSheet.id) return badRequest("Ficha de custo divergente");
-      await recalcItemCostSheetTotals(db, rootSheetId);
-      return redirect(postRedirectTo);
-    }
-
     if (_action === "item-cost-sheet-delete") {
       const itemCostSheetId = String(formData.get("itemCostSheetId") || "").trim();
       if (!itemCostSheetId) return badRequest("Ficha de custo inválida");
@@ -1181,13 +1259,25 @@ export function SheetTypeLabel({ type }: { type: string }) {
       ? "border-emerald-200 bg-emerald-50 text-emerald-700"
       : type === "recipeSheet"
         ? "border-blue-200 bg-blue-50 text-blue-700"
-        : type === "labor"
-          ? "border-amber-200 bg-amber-50 text-amber-700"
-          : "border-slate-200 bg-slate-100 text-slate-700";
+        : type === "item"
+          ? "border-violet-200 bg-violet-50 text-violet-700"
+          : type === "labor"
+            ? "border-amber-200 bg-amber-50 text-amber-700"
+            : "border-slate-200 bg-slate-100 text-slate-700";
+  const label =
+    type === "recipe"
+      ? "receita"
+      : type === "recipeSheet"
+        ? "ficha"
+        : type === "item"
+          ? "item"
+          : type === "labor"
+            ? "mão de obra"
+            : type;
 
   return (
     <span className={`inline-flex rounded-full border px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${className}`}>
-      {type}
+      {label}
     </span>
   );
 }
@@ -1236,6 +1326,7 @@ export type AdminItemCostSheetDetailOutletContext = {
     itemId: string;
     costAmount: number;
   }>;
+  packagingItemOptions: PackagingItemOption[];
   componentPresets: ComponentPresetRecord[];
   unitOptions: string[];
   recipeSheetDependencyCountById: Record<string, number>;
@@ -1282,6 +1373,7 @@ export default function AdminItemCostSheetDetail() {
     itemId: string;
     costAmount: number;
   }>;
+  const packagingItemOptions = (payload.packagingItemOptions || []) as PackagingItemOption[];
   const componentPresets = (payload.componentPresets || []) as ComponentPresetRecord[];
   const unitOptions = (payload.unitOptions || ITEM_UNIT_OPTIONS) as string[];
   const recipeSheetDependencyCountById = (payload.recipeSheetDependencyCountById || {}) as Record<string, number>;
@@ -1325,6 +1417,7 @@ export default function AdminItemCostSheetDetail() {
     recipeCompositionBreakdownByLineId,
     recipeOptions,
     referenceSheetOptions,
+    packagingItemOptions,
     componentPresets,
     unitOptions,
     recipeSheetDependencyCountById,
@@ -1341,7 +1434,7 @@ export default function AdminItemCostSheetDetail() {
   };
 
   return (
-    <div className="min-h-[calc(100vh-8rem)] space-y-6 bg-white p-4 pb-20  md:pb-24">
+    <div className="min-h-[calc(100vh-8rem)] space-y-6 bg-white pb-20  md:pb-24">
 
       <div className="space-y-3">
         <div>

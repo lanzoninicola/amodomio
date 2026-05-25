@@ -53,9 +53,33 @@ export async function buildCostImpactGraphForItem(
     },
     select: { id: true },
   });
+  const directItemComponents = await db.itemCostSheetComponent.findMany({
+    where: { type: "item", refId: sourceItemId },
+    select: {
+      itemCostSheetId: true,
+      ItemCostSheet: {
+        select: {
+          id: true,
+          baseItemCostSheetId: true,
+          itemId: true,
+        },
+      },
+    },
+  });
   const sheetQueue = baseSheetsByItem
     .map((row: any) => String(row.id || "").trim())
     .filter(Boolean);
+  for (const component of directItemComponents) {
+    const rootSheetId = String(
+      component.ItemCostSheet?.baseItemCostSheetId ||
+        component.ItemCostSheet?.id ||
+        component.itemCostSheetId ||
+        ""
+    ).trim();
+    const affectedItemId = String(component.ItemCostSheet?.itemId || "").trim();
+    if (rootSheetId) sheetQueue.push(rootSheetId);
+    if (affectedItemId) affectedItemIds.add(affectedItemId);
+  }
 
   while (sheetQueue.length > 0) {
     const rootSheetId = sheetQueue.shift() as string;

@@ -1,8 +1,39 @@
-import type { ActionFunctionArgs, LoaderFunctionArgs } from '@remix-run/node';
-import { redirect } from '@remix-run/node';
-import { Form, Link, NavLink, Outlet, useActionData, useFetcher, useLoaderData, useNavigation, useRevalidator } from '@remix-run/react';
-import { AlertTriangle, Archive, BarChart2, Calendar as CalendarIcon, Check, ChevronsUpDown, Download, Info, Loader2, RotateCcw, Smartphone, Trash2, Truck, Users } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
+import { redirect } from "@remix-run/node";
+import {
+  Form,
+  Link,
+  NavLink,
+  Outlet,
+  useActionData,
+  useFetcher,
+  useLoaderData,
+  useNavigation,
+  useRevalidator,
+} from "@remix-run/react";
+import {
+  AlertTriangle,
+  Archive,
+  BarChart2,
+  Calendar as CalendarIcon,
+  Check,
+  ChevronsUpDown,
+  Download,
+  Info,
+  Loader2,
+  Activity,
+  Pencil,
+  Plus,
+  RotateCcw,
+  Ruler,
+  Smartphone,
+  Table2,
+  Trash2,
+  Truck,
+  Users,
+} from "lucide-react";
+import { randomUUID } from "node:crypto";
+import { useEffect, useRef, useState } from "react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -13,22 +44,57 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
   AlertDialogTrigger,
-} from '~/components/ui/alert-dialog';
-import { Badge } from '~/components/ui/badge';
-import { Button } from '~/components/ui/button';
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandSeparator } from '~/components/ui/command';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '~/components/ui/dialog';
-import { Input } from '~/components/ui/input';
-import { Label } from '~/components/ui/label';
-import { Popover, PopoverContent, PopoverTrigger } from '~/components/ui/popover';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '~/components/ui/select';
-import { Separator } from '~/components/ui/separator';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '~/components/ui/table';
-import { toast } from '~/components/ui/use-toast';
-import { authenticator } from '~/domain/auth/google.server';
-import { itemPrismaEntity } from '~/domain/item/item.prisma.entity.server';
-import { getAvailableItemUnits } from '~/domain/item/item-units.server';
-import { isItemCostExcludedFromMetrics, normalizeItemCostToConsumptionUnit } from '~/domain/item/item-cost-metrics.server';
+} from "~/components/ui/alert-dialog";
+import { Badge } from "~/components/ui/badge";
+import { Button } from "~/components/ui/button";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+  CommandSeparator,
+} from "~/components/ui/command";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "~/components/ui/dialog";
+import { Input } from "~/components/ui/input";
+import { Label } from "~/components/ui/label";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "~/components/ui/popover";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "~/components/ui/select";
+import { Separator } from "~/components/ui/separator";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "~/components/ui/table";
+import { toast } from "~/components/ui/use-toast";
+import { authenticator } from "~/domain/auth/google.server";
+import { itemPrismaEntity } from "~/domain/item/item.prisma.entity.server";
+import { getAvailableItemUnits } from "~/domain/item/item-units.server";
+import {
+  isItemCostExcludedFromMetrics,
+  normalizeItemCostToConsumptionUnit,
+} from "~/domain/item/item-cost-metrics.server";
 import {
   archiveStockMovementImportBatch,
   deleteStockMovementImportBatch,
@@ -45,33 +111,53 @@ import {
   updateImportedStockMovementBatchDate,
   updateStockMovementImportBatchLineEditableFields,
   reapplyAliasesToAllPendingBatches,
-} from '~/domain/stock-movement/stock-movement-import.server';
-import { DecimalInput } from '~/components/inputs/inputs';
-import { cn } from '~/lib/utils';
-import { badRequest, ok, serverError } from '~/utils/http-response.server';
+} from "~/domain/stock-movement/stock-movement-import.server";
+import { DecimalInput } from "~/components/inputs/inputs";
+import { cn } from "~/lib/utils";
+import { badRequest, ok, serverError } from "~/utils/http-response.server";
 
 const ITEM_CLASSIFICATIONS = [
-  'insumo',
-  'semi_acabado',
-  'produto_final',
-  'embalagem',
-  'servico',
-  'outro',
+  "insumo",
+  "semi_acabado",
+  "produto_final",
+  "embalagem",
+  "servico",
+  "outro",
 ] as const;
 
-const CLASSIFICATION_BADGE: Record<string, { label: string; className: string }> = {
-  insumo: { label: 'insumo', className: 'bg-blue-100 text-blue-700' },
-  semi_acabado: { label: 'semi-acab.', className: 'bg-violet-100 text-violet-700' },
-  produto_final: { label: 'prod. final', className: 'bg-emerald-100 text-emerald-700' },
-  embalagem: { label: 'embalagem', className: 'bg-amber-100 text-amber-700' },
-  servico: { label: 'serviço', className: 'bg-cyan-100 text-cyan-700' },
-  outro: { label: 'outro', className: 'bg-slate-100 text-slate-600' },
+const CLASSIFICATION_BADGE: Record<
+  string,
+  { label: string; className: string }
+> = {
+  insumo: { label: "insumo", className: "bg-blue-100 text-blue-700" },
+  semi_acabado: {
+    label: "semi-acab.",
+    className: "bg-violet-100 text-violet-700",
+  },
+  produto_final: {
+    label: "prod. final",
+    className: "bg-emerald-100 text-emerald-700",
+  },
+  embalagem: { label: "embalagem", className: "bg-amber-100 text-amber-700" },
+  servico: { label: "serviço", className: "bg-cyan-100 text-cyan-700" },
+  outro: { label: "outro", className: "bg-slate-100 text-slate-600" },
 };
 
 function ClassificationBadge({ value }: { value: string | null | undefined }) {
-  const badge = CLASSIFICATION_BADGE[value || ''];
-  if (!badge) return <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-500">{value || '-'}</span>;
-  return <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${badge.className}`}>{badge.label}</span>;
+  const badge = CLASSIFICATION_BADGE[value || ""];
+  if (!badge)
+    return (
+      <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-500">
+        {value || "-"}
+      </span>
+    );
+  return (
+    <span
+      className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${badge.className}`}
+    >
+      {badge.label}
+    </span>
+  );
 }
 
 function resolveLatestCostHint(params: {
@@ -79,13 +165,16 @@ function resolveLatestCostHint(params: {
   historyRows: any[];
 }) {
   const firstHistoryRow = params.historyRows[0];
-  const item = firstHistoryRow?.ItemVariation?.Item || params.currentRows[0]?.ItemVariation?.Item || {};
+  const item =
+    firstHistoryRow?.ItemVariation?.Item ||
+    params.currentRows[0]?.ItemVariation?.Item ||
+    {};
 
   for (const row of params.historyRows) {
     if (isItemCostExcludedFromMetrics(row)) continue;
     const normalized = normalizeItemCostToConsumptionUnit(
       { costAmount: row.costAmount, unit: row.unit, source: row.source },
-      item,
+      item
     );
     if (Number.isFinite(normalized) && Number(normalized) > 0) {
       return Number(normalized);
@@ -95,7 +184,7 @@ function resolveLatestCostHint(params: {
   for (const row of params.currentRows) {
     const normalized = normalizeItemCostToConsumptionUnit(
       { costAmount: row.costAmount, unit: row.unit, source: row.source },
-      row?.ItemVariation?.Item || item,
+      row?.ItemVariation?.Item || item
     );
     if (Number.isFinite(normalized) && Number(normalized) > 0) {
       return Number(normalized);
@@ -107,54 +196,59 @@ function resolveLatestCostHint(params: {
 
 export const LINE_STATUS_GUIDE = [
   {
-    status: 'ready',
-    meaning: 'Linha pronta, com item mapeado e conversão resolvida.',
-    impact: 'Pode ser importada quando o fornecedor do documento já estiver conciliado.',
+    status: "ready",
+    meaning: "Linha pronta, com item mapeado e conversão resolvida.",
+    impact:
+      "Pode ser importada quando o fornecedor do documento já estiver conciliado.",
   },
   {
-    status: 'pending_mapping',
-    meaning: 'Ingrediente ainda não foi vinculado a um item do sistema.',
-    impact: 'Bloqueia a importação até o vínculo ser resolvido.',
+    status: "pending_mapping",
+    meaning: "Ingrediente ainda não foi vinculado a um item do sistema.",
+    impact: "Bloqueia a importação até o vínculo ser resolvido.",
   },
   {
-    status: 'pending_supplier',
-    meaning: 'Documento ainda está sem conciliação de fornecedor.',
-    impact: 'Bloqueia a aplicação da linha até a conciliação do fornecedor.',
+    status: "pending_supplier",
+    meaning: "Documento ainda está sem conciliação de fornecedor.",
+    impact: "Bloqueia a aplicação da linha até a conciliação do fornecedor.",
   },
   {
-    status: 'pending_cost_review',
-    meaning: 'Linha com variacao relevante de custo em relacao ao ultimo valor conhecido.',
-    impact: 'Bloqueia a importação até o usuário revisar e aprovar manualmente.',
+    status: "pending_cost_review",
+    meaning:
+      "Linha com variacao relevante de custo em relacao ao ultimo valor conhecido.",
+    impact:
+      "Bloqueia a importação até o usuário revisar e aprovar manualmente.",
   },
   {
-    status: 'pending_conversion',
-    meaning: 'Não foi encontrada conversão válida de unidade/custo.',
-    impact: 'Bloqueia a importação até informar ou resolver a conversão.',
+    status: "pending_conversion",
+    meaning: "Não foi encontrada conversão válida de unidade/custo.",
+    impact: "Bloqueia a importação até informar ou resolver a conversão.",
   },
   {
-    status: 'skipped_duplicate',
-    meaning: 'Linha detectada como duplicada no lote atual ou já importada antes.',
-    impact: 'Não será importada para evitar duplicidade.',
+    status: "skipped_duplicate",
+    meaning:
+      "Linha detectada como duplicada no lote atual ou já importada antes.",
+    impact: "Não será importada para evitar duplicidade.",
   },
   {
-    status: 'ignored',
-    meaning: 'Linha foi ignorada manualmente pelo usuário.',
-    impact: 'Fica fora da importação enquanto permanecer ignorada.',
+    status: "ignored",
+    meaning: "Linha foi ignorada manualmente pelo usuário.",
+    impact: "Fica fora da importação enquanto permanecer ignorada.",
   },
   {
-    status: 'invalid',
-    meaning: 'Linha inválida por documento, data, motivo ou custo inconsistente.',
-    impact: 'Não pode ser importada.',
+    status: "invalid",
+    meaning:
+      "Linha inválida por documento, data, motivo ou custo inconsistente.",
+    impact: "Não pode ser importada.",
   },
   {
-    status: 'error',
-    meaning: 'Falha durante processamento ou aplicação da linha.',
-    impact: 'Não é importada até corrigir a causa e reprocessar.',
+    status: "error",
+    meaning: "Falha durante processamento ou aplicação da linha.",
+    impact: "Não é importada até corrigir a causa e reprocessar.",
   },
   {
-    status: 'imported',
-    meaning: 'Linha já foi importada como movimentação de estoque.',
-    impact: 'Já entrou no estoque; não deve ser importada novamente.',
+    status: "imported",
+    meaning: "Linha já foi importada como movimentação de estoque.",
+    impact: "Já entrou no estoque; não deve ser importada novamente.",
   },
 ] as const;
 
@@ -162,29 +256,29 @@ const LINE_STATUS_NAV = LINE_STATUS_GUIDE.map((row) => ({
   status: row.status,
   label:
     {
-      ready: 'Prontas',
-      pending_mapping: 'Pend. vínculo',
-      pending_supplier: 'Pend. fornecedor',
-      pending_cost_review: 'Rev. custo',
-      pending_conversion: 'Pend. conversão',
-      skipped_duplicate: 'Duplicadas',
-      ignored: 'Ignoradas',
-      invalid: 'Inválidas',
-      error: 'Erros',
-      imported: 'Importadas',
+      ready: "Prontas",
+      pending_mapping: "Pend. vínculo",
+      pending_supplier: "Pend. fornecedor",
+      pending_cost_review: "Rev. custo",
+      pending_conversion: "Pend. conversão",
+      skipped_duplicate: "Duplicadas",
+      ignored: "Ignoradas",
+      invalid: "Inválidas",
+      error: "Erros",
+      imported: "Importadas",
     }[row.status] || String(row.status),
 }));
 
 function str(value: FormDataEntryValue | null) {
-  return String(value || '').trim();
+  return String(value || "").trim();
 }
 
 function normalizeName(name: string): string {
-  return String(name || '')
+  return String(name || "")
     .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-z0-9\s]/g, '')
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9\s]/g, "")
     .trim();
 }
 
@@ -192,7 +286,10 @@ function tokenize(name: string): string[] {
   return normalizeName(name).split(/\s+/).filter(Boolean);
 }
 
-function computeItemSimilarity(ingredientName: string, itemName: string): number {
+function computeItemSimilarity(
+  ingredientName: string,
+  itemName: string
+): number {
   const a = tokenize(ingredientName);
   const b = tokenize(itemName);
   if (a.length === 0 && b.length === 0) return 1;
@@ -207,16 +304,23 @@ function computeItemSimilarity(ingredientName: string, itemName: string): number
 }
 
 function normalizeItemUnit(value: unknown) {
-  const normalized = String(value || '').trim().toUpperCase();
+  const normalized = String(value || "")
+    .trim()
+    .toUpperCase();
   return normalized || null;
 }
 
-function getItemBaseUnit(item: { purchaseUm?: string | null; consumptionUm?: string | null } | null | undefined) {
-  return item?.consumptionUm || item?.purchaseUm || '-';
+function getItemBaseUnit(
+  item:
+    | { purchaseUm?: string | null; consumptionUm?: string | null }
+    | null
+    | undefined
+) {
+  return item?.consumptionUm || item?.purchaseUm || "-";
 }
 
 function num(value: FormDataEntryValue | null) {
-  const n = Number(String(value || '').replace(',', '.'));
+  const n = Number(String(value || "").replace(",", "."));
   return Number.isFinite(n) ? n : NaN;
 }
 
@@ -234,7 +338,7 @@ function dateInputValueFromDate(value: Date) {
 }
 
 function parseDateInputAsLocalNoon(value: string) {
-  const raw = String(value || '').trim();
+  const raw = String(value || "").trim();
   if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) return null;
   const parsed = new Date(`${raw}T12:00:00`);
   return Number.isNaN(parsed.getTime()) ? null : parsed;
@@ -250,38 +354,38 @@ function firstValidDate(...values: unknown[]) {
 }
 
 export function formatDate(value: any) {
-  if (!value) return '-';
+  if (!value) return "-";
   const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return '-';
-  return d.toLocaleString('pt-BR');
+  if (Number.isNaN(d.getTime())) return "-";
+  return d.toLocaleString("pt-BR");
 }
 
 export function formatMoney(value: any) {
   const n = Number(value);
-  if (!Number.isFinite(n)) return '-';
-  return n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  if (!Number.isFinite(n)) return "-";
+  return n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
 export function formatDocumentLabel(value: any) {
-  const documentNumber = String(value || '').trim();
-  if (!documentNumber) return '-';
-  if (documentNumber.startsWith('CUPOM-')) return 'Cupom fiscal';
+  const documentNumber = String(value || "").trim();
+  if (!documentNumber) return "-";
+  if (documentNumber.startsWith("CUPOM-")) return "Cupom fiscal";
   return documentNumber;
 }
 
 function capitalizeWords(value: string) {
-  return String(value || '')
+  return String(value || "")
     .toLowerCase()
     .replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
 function redirectToCurrentPath(request: Request, fallbackPath: string) {
   const formUrl = new URL(request.url);
-  const pathname = String(formUrl.pathname || '').trim();
+  const pathname = String(formUrl.pathname || "").trim();
   return pathname || fallbackPath;
 }
 
-function summaryFromAny(summary: any) {
+export function summaryFromAny(summary: any) {
   return {
     total: Number(summary?.total || 0),
     ready: Number(summary?.ready || 0),
@@ -299,84 +403,113 @@ function summaryFromAny(summary: any) {
 }
 
 export function supplierReconciliationLabel(line: any) {
-  if (line?.supplierReconciliationStatus === 'manual') return 'conciliado manualmente';
-  if (line?.supplierReconciliationStatus === 'matched' || line?.supplierId) return 'conciliado com cadastro';
-  if (line?.supplierReconciliationStatus === 'unmatched') return 'pendente de conciliação';
-  return 'sem conciliação iniciada';
+  if (line?.supplierReconciliationStatus === "manual")
+    return "conciliado manualmente";
+  if (line?.supplierReconciliationStatus === "matched" || line?.supplierId)
+    return "conciliado com cadastro";
+  if (line?.supplierReconciliationStatus === "unmatched")
+    return "pendente de conciliação";
+  return "sem conciliação iniciada";
 }
 
 export function statusBadgeClass(status: string) {
   switch (status) {
-    case 'ready':
-      return 'border-emerald-200 bg-emerald-50 text-emerald-700';
-    case 'imported':
-      return 'border-blue-200 bg-blue-50 text-blue-700';
-    case 'pending_mapping':
-    case 'pending_supplier':
-    case 'pending_conversion':
-    case 'pending_cost_review':
-      return 'border-amber-200 bg-amber-50 text-amber-700';
-    case 'invalid':
-    case 'error':
-      return 'border-red-200 bg-red-50 text-red-700';
-    case 'skipped_duplicate':
-      return 'border-slate-200 bg-slate-50 text-slate-700';
-    case 'ignored':
-      return 'border-slate-200 bg-slate-100 text-slate-600';
+    case "ready":
+      return "border-emerald-200 bg-emerald-50 text-emerald-700";
+    case "imported":
+      return "border-blue-200 bg-blue-50 text-blue-700";
+    case "pending_mapping":
+    case "pending_supplier":
+    case "pending_conversion":
+    case "pending_cost_review":
+      return "border-amber-200 bg-amber-50 text-amber-700";
+    case "invalid":
+    case "error":
+      return "border-red-200 bg-red-50 text-red-700";
+    case "skipped_duplicate":
+      return "border-slate-200 bg-slate-50 text-slate-700";
+    case "ignored":
+      return "border-slate-200 bg-slate-100 text-slate-600";
     default:
-      return 'border-slate-200 bg-white text-slate-700';
+      return "border-slate-200 bg-white text-slate-700";
   }
 }
 
-const toolbarBtnRed = 'flex flex-col items-center justify-center gap-1 px-4 py-2.5 text-red-700 hover:bg-red-50 transition min-w-[64px] h-full';
+const toolbarBtnRed =
+  "flex flex-col items-center justify-center gap-1 px-4 py-2.5 text-red-700 hover:bg-red-50 transition min-w-[64px] h-full";
 
 export function ImportBatchSubmitDialog({
   batchId,
   readyToImport,
   isImportingBatch,
   lines = [],
-  variant = 'toolbar',
+  variant = "toolbar",
+  buttonClassName,
 }: {
   batchId: string;
   readyToImport: number;
   isImportingBatch: boolean;
   lines?: any[];
-  variant?: 'toolbar' | 'primary';
+  variant?: "toolbar" | "primary";
+  buttonClassName?: string;
 }) {
   const [open, setOpen] = useState(false);
-  const [selectedDateInputValue, setSelectedDateInputValue] = useState(() => dateInputValueFromDate(new Date()));
+  const [selectedDateInputValue, setSelectedDateInputValue] = useState(() =>
+    dateInputValueFromDate(new Date())
+  );
   const disabled = readyToImport <= 0 || isImportingBatch;
-  const buttonClass =
-    variant === 'primary'
-      ? 'flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-40'
-      : 'flex flex-col items-center justify-center gap-1 px-4 py-2.5 text-emerald-700 hover:bg-emerald-50 transition min-w-[64px] disabled:opacity-40 disabled:cursor-not-allowed';
-  const label = `Importar${readyToImport > 0 ? ` (${readyToImport})` : ''}`;
-  const readyLines = lines.filter((line) => String(line?.status || '') === 'ready');
-  const documentNumbers = Array.from(new Set(
-    readyLines
-      .map((line) => String(line?.invoiceNumber || '').trim())
-      .filter(Boolean),
-  ));
-  const supplierNames = Array.from(new Set(
-    readyLines
-      .map((line) => String(line?.supplierName || '').trim())
-      .filter(Boolean),
-  ));
+  const buttonClass = cn(
+    variant === "primary"
+      ? "flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-40"
+      : "flex flex-col items-center justify-center gap-1 px-4 py-2.5 text-emerald-700 hover:bg-emerald-50 transition min-w-[64px] disabled:opacity-40 disabled:cursor-not-allowed",
+    buttonClassName
+  );
+  const label = `Importar${readyToImport > 0 ? ` (${readyToImport})` : ""}`;
+  const readyLines = lines.filter(
+    (line) => String(line?.status || "") === "ready"
+  );
+  const documentNumbers = Array.from(
+    new Set(
+      readyLines
+        .map((line) => String(line?.invoiceNumber || "").trim())
+        .filter(Boolean)
+    )
+  );
+  const supplierNames = Array.from(
+    new Set(
+      readyLines
+        .map((line) => String(line?.supplierName || "").trim())
+        .filter(Boolean)
+    )
+  );
 
   function copyModalText(value: string, label: string) {
-    const text = String(value || '').trim();
+    const text = String(value || "").trim();
     if (!text) return;
     void navigator.clipboard.writeText(text).then(
       () => toast({ title: `${label} copiado`, description: text }),
-      () => toast({ title: 'Não foi possível copiar', description: text, variant: 'destructive' }),
+      () =>
+        toast({
+          title: "Não foi possível copiar",
+          description: text,
+          variant: "destructive",
+        })
     );
   }
 
-  function ClickableTextList({ label, values }: { label: string; values: string[] }) {
+  function ClickableTextList({
+    label,
+    values,
+  }: {
+    label: string;
+    values: string[];
+  }) {
     if (values.length === 0) return null;
     return (
       <div className="space-y-1.5">
-        <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">{label}</div>
+        <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+          {label}
+        </div>
         <div className="flex flex-wrap gap-2">
           {values.map((value) => (
             <button
@@ -385,7 +518,7 @@ export function ImportBatchSubmitDialog({
               className="rounded-md border border-slate-200 bg-slate-50 px-2.5 py-1 text-left text-xs font-medium text-slate-700 transition hover:border-slate-300 hover:bg-white hover:text-slate-950"
               onClick={() => copyModalText(value, label)}
             >
-              {label === 'Documento' ? formatDocumentLabel(value) : value}
+              {label === "Documento" ? formatDocumentLabel(value) : value}
             </button>
           ))}
         </div>
@@ -397,25 +530,37 @@ export function ImportBatchSubmitDialog({
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         <button type="button" disabled={disabled} className={buttonClass}>
-          {isImportingBatch ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-          <span className={variant === 'primary' ? '' : 'text-[11px] font-medium'}>{label}</span>
+          {isImportingBatch ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Download className="h-4 w-4" />
+          )}
+          <span
+            className={variant === "primary" ? "" : "text-[11px] font-medium"}
+          >
+            {label}
+          </span>
         </button>
       </DialogTrigger>
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>Data do documento</DialogTitle>
           <DialogDescription>
-            As movimentações de estoque serão criadas com esta data, não com a data da importação.
+            As movimentações de estoque serão criadas com esta data, não com a
+            data da importação.
           </DialogDescription>
         </DialogHeader>
-        {(documentNumbers.length > 0 || supplierNames.length > 0) ? (
+        {documentNumbers.length > 0 || supplierNames.length > 0 ? (
           <div className="space-y-3">
             <ClickableTextList label="Documento" values={documentNumbers} />
             <ClickableTextList label="Fornecedor" values={supplierNames} />
           </div>
         ) : null}
         <div className="flex items-center gap-3">
-          <Label htmlFor={`batch-movement-date-${batchId}`} className="shrink-0">
+          <Label
+            htmlFor={`batch-movement-date-${batchId}`}
+            className="shrink-0"
+          >
             Data da movimentação
           </Label>
           <Input
@@ -435,9 +580,16 @@ export function ImportBatchSubmitDialog({
         >
           <input type="hidden" name="_action" value="batch-import" />
           <input type="hidden" name="batchId" value={batchId} />
-          <input type="hidden" name="movementDate" value={selectedDateInputValue} />
-          <Button type="submit" className="w-full bg-emerald-600 text-white hover:bg-emerald-700">
-            Importar {readyToImport > 0 ? `(${readyToImport})` : ''}
+          <input
+            type="hidden"
+            name="movementDate"
+            value={selectedDateInputValue}
+          />
+          <Button
+            type="submit"
+            className="w-full bg-emerald-600 text-white hover:bg-emerald-700"
+          >
+            Importar {readyToImport > 0 ? `(${readyToImport})` : ""}
           </Button>
         </Form>
       </DialogContent>
@@ -445,8 +597,16 @@ export function ImportBatchSubmitDialog({
   );
 }
 
-export function DeleteBatchButton({ batchId, batchName, status }: { batchId: string; batchName: string; status: string }) {
-  const isValidated = status === 'validated';
+export function DeleteBatchButton({
+  batchId,
+  batchName,
+  status,
+}: {
+  batchId: string;
+  batchName: string;
+  status: string;
+}) {
+  const isValidated = status === "validated";
 
   if (!isValidated) {
     return (
@@ -473,7 +633,8 @@ export function DeleteBatchButton({ batchId, batchName, status }: { batchId: str
         <AlertDialogHeader>
           <AlertDialogTitle>Eliminar lote validado?</AlertDialogTitle>
           <AlertDialogDescription>
-            O lote <strong>{batchName}</strong> está com status <strong>validated</strong>. Confirme se deseja eliminar este lote.
+            O lote <strong>{batchName}</strong> está com status{" "}
+            <strong>validated</strong>. Confirme se deseja eliminar este lote.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
@@ -482,7 +643,10 @@ export function DeleteBatchButton({ batchId, batchName, status }: { batchId: str
             <input type="hidden" name="_action" value="batch-delete" />
             <input type="hidden" name="batchId" value={batchId} />
             <AlertDialogAction asChild>
-              <Button type="submit" className="bg-red-600 text-white hover:bg-red-700">
+              <Button
+                type="submit"
+                className="bg-red-600 text-white hover:bg-red-700"
+              >
                 Confirmar eliminação
               </Button>
             </AlertDialogAction>
@@ -502,6 +666,7 @@ export function ItemSystemMapperCell({
   costHint,
   compact = false,
   showCostHint = true,
+  mobile = false,
   onItemSelected,
 }: {
   line: any;
@@ -509,53 +674,77 @@ export function ItemSystemMapperCell({
   batchId: string;
   unitOptions: string[];
   categories?: Array<{ id: string; name: string }>;
-  costHint?: { lastCostPerUnit: number | null; avgCostPerUnit: number | null } | null;
+  costHint?: {
+    lastCostPerUnit: number | null;
+    avgCostPerUnit: number | null;
+  } | null;
   compact?: boolean;
   showCostHint?: boolean;
+  mobile?: boolean;
   onItemSelected?: () => void;
 }) {
   const [itemPickerOpen, setItemPickerOpen] = useState(false);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
-  const [selectedItemId, setSelectedItemId] = useState(String(line.mappedItemId || ''));
-  const [classification, setClassification] = useState<(typeof ITEM_CLASSIFICATIONS)[number]>('insumo');
-  const [categoryId, setCategoryId] = useState('__EMPTY__');
+  const [selectedItemId, setSelectedItemId] = useState(
+    String(line.mappedItemId || "")
+  );
+  const [classification, setClassification] =
+    useState<(typeof ITEM_CLASSIFICATIONS)[number]>("insumo");
+  const [categoryId, setCategoryId] = useState("__EMPTY__");
   const [consumptionUm, setConsumptionUm] = useState(() => {
     const normalizedUnit = normalizeItemUnit(line.movementUnit);
-    return normalizedUnit && unitOptions.includes(normalizedUnit) ? normalizedUnit : '__EMPTY__';
+    return normalizedUnit && unitOptions.includes(normalizedUnit)
+      ? normalizedUnit
+      : "__EMPTY__";
   });
   const mapItemFetcher = useFetcher<typeof action>();
   const createItemFetcher = useFetcher<typeof action>();
   const createUmFetcher = useFetcher<typeof action>();
   const [createUmDialogOpen, setCreateUmDialogOpen] = useState(false);
   const [umTabelaDialogOpen, setUmTabelaDialogOpen] = useState(false);
-  const [umKind, setUmKind] = useState('custom');
-  const [umCode, setUmCode] = useState('');
+  const [umKind, setUmKind] = useState("custom");
+  const [umCode, setUmCode] = useState("");
   const [umFactor, setUmFactor] = useState<number>(0);
   const restoreScrollRef = useRef<number | null>(null);
   const commandListRef = useRef<HTMLDivElement>(null);
   const selectedItem = items.find((item) => item.id === selectedItemId);
-  const ingredientName = line.ingredientName || '';
+  const ingredientName = line.ingredientName || "";
   const sortedItems = [...items].sort((a, b) => {
     const scoreA = computeItemSimilarity(ingredientName, a.name);
     const scoreB = computeItemSimilarity(ingredientName, b.name);
     return scoreB - scoreA;
   });
   const isMappingItem =
-    mapItemFetcher.state !== 'idle' &&
-    mapItemFetcher.formData?.get('_action') === 'batch-map-item' &&
-    String(mapItemFetcher.formData?.get('lineId') || '') === String(line.id);
+    mapItemFetcher.state !== "idle" &&
+    mapItemFetcher.formData?.get("_action") === "batch-map-item" &&
+    String(mapItemFetcher.formData?.get("lineId") || "") === String(line.id);
   const isCreatingItem =
-    createItemFetcher.state !== 'idle' &&
-    createItemFetcher.formData?.get('_action') === 'batch-create-and-map-item' &&
-    String(createItemFetcher.formData?.get('lineId') || '') === String(line.id);
+    createItemFetcher.state !== "idle" &&
+    createItemFetcher.formData?.get("_action") ===
+      "batch-create-and-map-item" &&
+    String(createItemFetcher.formData?.get("lineId") || "") === String(line.id);
   const buttonLabel = selectedItem
-    ? `${selectedItem.name} [${selectedItem.classification || '-'}] (${getItemBaseUnit(selectedItem)})`
-    : line.mappedItemName || 'Selecionar item...';
+    ? `${selectedItem.name} [${
+        selectedItem.classification || "-"
+      }] (${getItemBaseUnit(selectedItem)})`
+    : line.mappedItemName || "Selecionar item...";
+  const managementActionClass = cn(
+    mobile
+      ? "inline-flex h-9 w-full min-w-0 items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2 text-[11px] font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
+      : "text-[11px] font-medium text-slate-600 underline underline-offset-2 hover:text-slate-900"
+  );
+  const disabledManagementActionClass = cn(
+    mobile
+      ? "inline-flex h-9 w-full min-w-0 items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-2 text-[11px] font-semibold text-slate-400"
+      : "text-[11px] text-slate-400"
+  );
 
   useEffect(() => {
-    if (createItemFetcher.state !== 'idle') return;
+    if (createItemFetcher.state !== "idle") return;
     if ((createItemFetcher.data as any)?.status !== 200) return;
-    const createdItemId = String((createItemFetcher.data as any)?.payload?.createdItemId || '');
+    const createdItemId = String(
+      (createItemFetcher.data as any)?.payload?.createdItemId || ""
+    );
     if (createdItemId) {
       setSelectedItemId(createdItemId);
     }
@@ -568,24 +757,37 @@ export function ItemSystemMapperCell({
   }, [createItemFetcher.state, createItemFetcher.data]);
 
   useEffect(() => {
-    if (createUmFetcher.state !== 'idle') return;
+    if (createUmFetcher.state !== "idle") return;
     if ((createUmFetcher.data as any)?.status !== 200) return;
     setCreateUmDialogOpen(false);
-    setUmKind('custom');
-    setUmCode('');
+    setUmKind("custom");
+    setUmCode("");
     setUmFactor(0);
   }, [createUmFetcher.state, createUmFetcher.data]);
 
   return (
     <div className="space-y-1">
-      <mapItemFetcher.Form method="post" action={`/admin/import-stock-movements/${batchId}`} className="space-y-1">
+      <mapItemFetcher.Form
+        method="post"
+        action={`/admin/import-stock-movements/${batchId}`}
+        className="space-y-1"
+      >
         <input type="hidden" name="_action" value="batch-map-item" />
         <input type="hidden" name="batchId" value={batchId} />
         <input type="hidden" name="lineId" value={line.id} />
-        <input type="hidden" name="ingredientNameNormalized" value={line.ingredientNameNormalized || ''} />
+        <input
+          type="hidden"
+          name="ingredientNameNormalized"
+          value={line.ingredientNameNormalized || ""}
+        />
         <input type="hidden" name="itemId" value={selectedItemId} />
         <input type="hidden" name="saveAlias" value="on" />
-        <div className="flex min-w-[320px] items-center gap-2">
+        <div
+          className={cn(
+            "flex items-center gap-2",
+            mobile ? "min-w-0 flex-col items-stretch" : "min-w-[320px]"
+          )}
+        >
           <Popover open={itemPickerOpen} onOpenChange={setItemPickerOpen}>
             <PopoverTrigger asChild>
               <Button
@@ -593,25 +795,38 @@ export function ItemSystemMapperCell({
                 variant="outline"
                 role="combobox"
                 aria-expanded={itemPickerOpen}
-                className="h-9 flex-1 justify-between"
+                className={cn(
+                  "flex-1 justify-between",
+                  mobile ? "h-12 w-full rounded-xl px-4 text-base" : "h-9"
+                )}
                 disabled={isMappingItem}
               >
                 <span className="truncate text-left">{buttonLabel}</span>
                 <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
               </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-[420px] p-0" align="start">
+            <PopoverContent
+              className={cn(
+                "p-0",
+                mobile ? "w-[calc(100vw-1.5rem)]" : "w-[420px]"
+              )}
+              align="start"
+            >
               <Command>
                 <CommandInput
                   placeholder="Buscar item do sistema..."
                   onValueChange={() => {
-                    if (commandListRef.current) commandListRef.current.scrollTop = 0;
+                    if (commandListRef.current)
+                      commandListRef.current.scrollTop = 0;
                   }}
                 />
                 <CommandList ref={commandListRef} className="max-h-[45vh]">
                   <CommandEmpty>Nenhum item encontrado.</CommandEmpty>
                   {ITEM_CLASSIFICATIONS.map((classification, idx) => {
-                    const groupItems = sortedItems.filter((item) => (item.classification || 'outro') === classification);
+                    const groupItems = sortedItems.filter(
+                      (item) =>
+                        (item.classification || "outro") === classification
+                    );
                     if (groupItems.length === 0) return null;
                     const badge = CLASSIFICATION_BADGE[classification];
                     return (
@@ -619,37 +834,58 @@ export function ItemSystemMapperCell({
                         {idx > 0 && <CommandSeparator />}
                         <CommandGroup heading={badge?.label ?? classification}>
                           {groupItems.map((item) => {
-                            const score = computeItemSimilarity(ingredientName, item.name);
+                            const score = computeItemSimilarity(
+                              ingredientName,
+                              item.name
+                            );
                             const isHighMatch = score >= 0.5;
                             const isMediumMatch = score >= 0.25 && score < 0.5;
                             return (
                               <CommandItem
                                 key={item.id}
-                                value={`${item.name} ${item.classification || ''} ${item.purchaseUm || ''} ${item.consumptionUm || ''}`}
+                                value={`${item.name} ${
+                                  item.classification || ""
+                                } ${item.purchaseUm || ""} ${
+                                  item.consumptionUm || ""
+                                }`}
                                 onSelect={() => {
                                   setSelectedItemId(item.id);
                                   setItemPickerOpen(false);
                                   onItemSelected?.();
                                   mapItemFetcher.submit(
                                     {
-                                      _action: 'batch-map-item',
+                                      _action: "batch-map-item",
                                       batchId,
                                       lineId: line.id,
-                                      ingredientNameNormalized: line.ingredientNameNormalized || '',
+                                      ingredientNameNormalized:
+                                        line.ingredientNameNormalized || "",
                                       itemId: item.id,
-                                      saveAlias: 'on',
+                                      saveAlias: "on",
                                     },
-                                    { method: 'post', action: `/admin/import-stock-movements/${batchId}`, preventScrollReset: true },
+                                    {
+                                      method: "post",
+                                      action: `/admin/import-stock-movements/${batchId}`,
+                                      preventScrollReset: true,
+                                    }
                                   );
                                 }}
                               >
-                                <Check className={cn('mr-2 h-4 w-4', selectedItemId === item.id ? 'opacity-100' : 'opacity-0')} />
+                                <Check
+                                  className={cn(
+                                    "mr-2 h-4 w-4",
+                                    selectedItemId === item.id
+                                      ? "opacity-100"
+                                      : "opacity-0"
+                                  )}
+                                />
                                 <div className="flex min-w-0 flex-1 items-center justify-between gap-2">
                                   <span className="truncate">
                                     {item.name} ({getItemBaseUnit(item)})
                                   </span>
                                   <div className="flex shrink-0 items-center gap-1">
-                                    <ClassificationBadge value={item.classification} />
+                                    <ClassificationBadge
+                                      value={item.classification}
+                                    />
                                     {isHighMatch && (
                                       <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700">
                                         sugerido
@@ -686,379 +922,697 @@ export function ItemSystemMapperCell({
               </Command>
             </PopoverContent>
           </Popover>
-          <label className="inline-flex items-center gap-1 whitespace-nowrap text-[11px] text-slate-600">
-            <input type="checkbox" name="applyToAllSameIngredient" className="h-3.5 w-3.5" />
+          <label
+            className={cn(
+              "inline-flex items-center gap-1 whitespace-nowrap text-[11px] text-slate-600",
+              mobile && "h-9 text-xs"
+            )}
+          >
+            <input
+              type="checkbox"
+              name="applyToAllSameIngredient"
+              className={cn("h-3.5 w-3.5", mobile && "h-4 w-4")}
+            />
             todas iguais
           </label>
         </div>
-        {!compact && <div className="flex items-center gap-3">
-          <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
-            <DialogTrigger asChild>
-              <Button
-                type="button"
-                variant="ghost"
-                className="h-auto whitespace-nowrap p-0 text-[11px] font-medium text-slate-600 hover:bg-transparent hover:text-slate-900 hover:underline hover:underline-offset-2"
-              >
-                + Novo item
-              </Button>
-            </DialogTrigger>
-            <DialogContent
-              className="max-w-md"
-              onCloseAutoFocus={(event) => {
-                event.preventDefault();
-              }}
-            >
-              <DialogHeader>
-                <DialogTitle>Criar novo item</DialogTitle>
-              </DialogHeader>
-              <createItemFetcher.Form
-                method="post"
-                action={`/admin/import-stock-movements/${batchId}`}
-                className="space-y-3"
-                preventScrollReset
-                onSubmit={() => {
-                  restoreScrollRef.current = window.scrollY;
+        {!compact && (
+          <div
+            className={cn(
+              "flex items-center gap-3",
+              mobile && "grid w-full grid-cols-2 gap-1.5"
+            )}
+          >
+            <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
+              <DialogTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  title="Novo item"
+                  aria-label="Novo item"
+                  className={cn(
+                    "h-auto whitespace-nowrap p-0 text-[11px] font-medium text-slate-600 hover:bg-transparent hover:text-slate-900 hover:underline hover:underline-offset-2",
+                    mobile &&
+                      "h-9 w-full min-w-0 gap-1.5 rounded-lg border border-slate-200 bg-white px-2 text-[11px] font-semibold text-slate-700 shadow-sm hover:bg-slate-50 hover:no-underline"
+                  )}
+                >
+                  {mobile ? (
+                    <>
+                      <Plus className="h-3.5 w-3.5 shrink-0" />
+                      <span className="truncate">Novo item</span>
+                    </>
+                  ) : (
+                    "+ Novo item"
+                  )}
+                </Button>
+              </DialogTrigger>
+              <DialogContent
+                className="max-w-md"
+                onCloseAutoFocus={(event) => {
+                  event.preventDefault();
                 }}
               >
-                <input type="hidden" name="_action" value="batch-create-and-map-item" />
-                <input type="hidden" name="batchId" value={batchId} />
-                <input type="hidden" name="lineId" value={line.id} />
-                <input type="hidden" name="ingredientNameNormalized" value={line.ingredientNameNormalized || ''} />
-                <input type="hidden" name="consumptionUm" value={consumptionUm === '__EMPTY__' ? '' : consumptionUm} />
-                <input type="hidden" name="classification" value={classification} />
-                <input type="hidden" name="categoryId" value={categoryId === '__EMPTY__' ? '' : categoryId} />
-                <div className="space-y-1">
-                  <Label htmlFor={`itemName-${line.id}`}>Nome do item</Label>
-                  <Input
-                    id={`itemName-${line.id}`}
-                    name="itemName"
-                    defaultValue={capitalizeWords(line.ingredientName || '')}
-                    placeholder="Nome do novo item"
-                    disabled={isCreatingItem}
-                    required
+                <DialogHeader>
+                  <DialogTitle>Criar novo item</DialogTitle>
+                </DialogHeader>
+                <createItemFetcher.Form
+                  method="post"
+                  action={`/admin/import-stock-movements/${batchId}`}
+                  className="space-y-3"
+                  preventScrollReset
+                  onSubmit={() => {
+                    restoreScrollRef.current = window.scrollY;
+                  }}
+                >
+                  <input
+                    type="hidden"
+                    name="_action"
+                    value="batch-create-and-map-item"
                   />
-                </div>
-                <div className="space-y-1">
-                  <Label htmlFor={`classification-${line.id}`}>Classificação</Label>
-                  <Select
+                  <input type="hidden" name="batchId" value={batchId} />
+                  <input type="hidden" name="lineId" value={line.id} />
+                  <input
+                    type="hidden"
+                    name="ingredientNameNormalized"
+                    value={line.ingredientNameNormalized || ""}
+                  />
+                  <input
+                    type="hidden"
+                    name="consumptionUm"
+                    value={consumptionUm === "__EMPTY__" ? "" : consumptionUm}
+                  />
+                  <input
+                    type="hidden"
+                    name="classification"
                     value={classification}
-                    onValueChange={(value) => setClassification(value as (typeof ITEM_CLASSIFICATIONS)[number])}
-                    disabled={isCreatingItem}
-                  >
-                    <SelectTrigger id={`classification-${line.id}`} className="h-9">
-                      <SelectValue placeholder="Selecione a classificação" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {ITEM_CLASSIFICATIONS.map((value) => (
-                        <SelectItem key={value} value={value}>
-                          {value}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                {categories.length > 0 && (
+                  />
+                  <input
+                    type="hidden"
+                    name="categoryId"
+                    value={categoryId === "__EMPTY__" ? "" : categoryId}
+                  />
                   <div className="space-y-1">
-                    <Label htmlFor={`categoryId-${line.id}`}>Categoria</Label>
-                    <Select value={categoryId} onValueChange={setCategoryId} disabled={isCreatingItem}>
-                      <SelectTrigger id={`categoryId-${line.id}`} className="h-9">
-                        <SelectValue placeholder="Sem categoria" />
+                    <Label htmlFor={`itemName-${line.id}`}>Nome do item</Label>
+                    <Input
+                      id={`itemName-${line.id}`}
+                      name="itemName"
+                      defaultValue={capitalizeWords(line.ingredientName || "")}
+                      placeholder="Nome do novo item"
+                      disabled={isCreatingItem}
+                      required
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor={`classification-${line.id}`}>
+                      Classificação
+                    </Label>
+                    <Select
+                      value={classification}
+                      onValueChange={(value) =>
+                        setClassification(
+                          value as (typeof ITEM_CLASSIFICATIONS)[number]
+                        )
+                      }
+                      disabled={isCreatingItem}
+                    >
+                      <SelectTrigger
+                        id={`classification-${line.id}`}
+                        className={cn(
+                          mobile ? "h-12 rounded-xl text-base" : "h-9"
+                        )}
+                      >
+                        <SelectValue placeholder="Selecione a classificação" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="__EMPTY__">Sem categoria</SelectItem>
-                        {categories.map((cat) => (
-                          <SelectItem key={cat.id} value={cat.id}>
-                            {cat.name}
+                        {ITEM_CLASSIFICATIONS.map((value) => (
+                          <SelectItem key={value} value={value}>
+                            {value}
                           </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
                   </div>
-                )}
-                <div className="space-y-1">
-                  <Label htmlFor={`consumptionUm-${line.id}`}>Unidade de medida</Label>
-                  <Select value={consumptionUm} onValueChange={setConsumptionUm} disabled={isCreatingItem}>
-                    <SelectTrigger id={`consumptionUm-${line.id}`} className="h-9">
-                      <SelectValue placeholder="Selecionar unidade" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__EMPTY__">Selecionar...</SelectItem>
-                      {unitOptions.map((unit) => (
-                        <SelectItem key={unit} value={unit}>
-                          {unit}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <Button type="submit" className="w-full" disabled={isCreatingItem}>
-                  {isCreatingItem ? 'Criando e vinculando...' : 'Criar e vincular'}
-                </Button>
-              </createItemFetcher.Form>
-            </DialogContent>
-          </Dialog>
-          {selectedItemId ? (
-            <>
-              <Link
-                to={`/admin/items/${selectedItemId}/main`}
-                target="_blank"
-                rel="noreferrer"
-                className="text-[11px] font-medium text-slate-600 underline underline-offset-2 hover:text-slate-900"
-              >
-                Editar item
-              </Link>
-              <Dialog open={createUmDialogOpen} onOpenChange={setCreateUmDialogOpen}>
-                <DialogTrigger asChild>
-                  <button
-                    type="button"
-                    className="text-[11px] font-medium text-slate-600 underline underline-offset-2 hover:text-slate-900"
-                  >
-                    Criar UM
-                  </button>
-                </DialogTrigger>
-                <DialogContent
-                  className="max-w-md"
-                  onCloseAutoFocus={(event) => { event.preventDefault(); }}
-                >
-                  <DialogHeader>
-                    <DialogTitle>Criar unidade de medida</DialogTitle>
-                  </DialogHeader>
-                  {selectedItem?.ItemPurchaseConversion?.length > 0 && (
-                    <div className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2">
-                      <p className="mb-1.5 text-[10px] font-medium uppercase tracking-wide text-slate-400">
-                        Conversões já configuradas
-                      </p>
-                      <div className="space-y-0.5">
-                        {selectedItem.ItemPurchaseConversion.map((c: { purchaseUm: string; factor: number }) => (
-                          <div key={c.purchaseUm} className="flex items-center justify-between gap-2 text-[11px] text-slate-500">
-                            <span className="font-medium text-slate-600">{c.purchaseUm}</span>
-                            <span className="font-mono tabular-nums">
-                              = {Number(c.factor).toLocaleString('pt-BR', { maximumFractionDigits: 4 })} {selectedItem.consumptionUm}
-                            </span>
-                          </div>
+                  {categories.length > 0 && (
+                    <div className="space-y-1">
+                      <Label htmlFor={`categoryId-${line.id}`}>Categoria</Label>
+                      <Select
+                        value={categoryId}
+                        onValueChange={setCategoryId}
+                        disabled={isCreatingItem}
+                      >
+                        <SelectTrigger
+                          id={`categoryId-${line.id}`}
+                          className={cn(
+                            mobile ? "h-12 rounded-xl text-base" : "h-9"
+                          )}
+                        >
+                          <SelectValue placeholder="Sem categoria" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__EMPTY__">
+                            Sem categoria
+                          </SelectItem>
+                          {categories.map((cat) => (
+                            <SelectItem key={cat.id} value={cat.id}>
+                              {cat.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+                  <div className="space-y-1">
+                    <Label htmlFor={`consumptionUm-${line.id}`}>
+                      Unidade de medida
+                    </Label>
+                    <Select
+                      value={consumptionUm}
+                      onValueChange={setConsumptionUm}
+                      disabled={isCreatingItem}
+                    >
+                      <SelectTrigger
+                        id={`consumptionUm-${line.id}`}
+                        className={cn(
+                          mobile ? "h-12 rounded-xl text-base" : "h-9"
+                        )}
+                      >
+                        <SelectValue placeholder="Selecionar unidade" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__EMPTY__">Selecionar...</SelectItem>
+                        {unitOptions.map((unit) => (
+                          <SelectItem key={unit} value={unit}>
+                            {unit}
+                          </SelectItem>
                         ))}
-                      </div>
-                    </div>
-                  )}
-                  {(createUmFetcher.data as any)?.status >= 400 && (
-                    <div className="rounded border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
-                      {(createUmFetcher.data as any)?.message}
-                    </div>
-                  )}
-                  {selectedItem && !selectedItem.consumptionUm && (
-                    <div className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-                      Defina a unidade de consumo do item antes de criar uma UM.
-                    </div>
-                  )}
-                  <createUmFetcher.Form
-                    method="post"
-                    action={`/admin/import-stock-movements/${batchId}`}
-                    className="space-y-3"
-                    preventScrollReset
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <Button
+                    type="submit"
+                    className="w-full"
+                    disabled={isCreatingItem}
                   >
-                    <input type="hidden" name="_action" value="batch-create-um-and-conversion" />
-                    <input type="hidden" name="batchId" value={batchId} />
-                    <input type="hidden" name="itemId" value={selectedItemId} />
-                    <input type="hidden" name="kind" value={umKind} />
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="space-y-1">
-                        <Label htmlFor={`um-code-${line.id}`}>Código</Label>
-                        <Input
-                          id={`um-code-${line.id}`}
-                          name="code"
-                          placeholder="ex: CX12"
-                          required
-                          className="h-9 uppercase"
-                          style={{ textTransform: 'uppercase' }}
-                          value={umCode}
-                          onChange={(e) => setUmCode(e.target.value.toUpperCase())}
-                          disabled={createUmFetcher.state !== 'idle'}
-                        />
-                        <p className="text-[10px] text-slate-400">Maiúsculas, números e _</p>
-                      </div>
-                      <div className="space-y-1">
-                        <Label htmlFor={`um-name-${line.id}`}>Nome</Label>
-                        <Input
-                          id={`um-name-${line.id}`}
-                          name="name"
-                          placeholder="ex: Caixa 12 un"
-                          required
-                          className="h-9"
-                          disabled={createUmFetcher.state !== 'idle'}
-                        />
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="space-y-1">
-                        <Label>Tipo</Label>
-                        <Select value={umKind} onValueChange={setUmKind} disabled={createUmFetcher.state !== 'idle'}>
-                          <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
-                          <SelectContent>
-                            {['weight', 'volume', 'count', 'custom'].map((k) => (
-                              <SelectItem key={k} value={k}>{k}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="space-y-1">
-                        <Label>
-                          Fator (1 {umCode || 'UM'} = ? {selectedItem?.consumptionUm || '?'})
-                        </Label>
-                        <DecimalInput
-                          name="factor"
-                          fractionDigits={4}
-                          placeholder="0,0000"
-                          className="h-9 w-full font-mono tabular-nums"
-                          disabled={createUmFetcher.state !== 'idle'}
-                          onValueChange={setUmFactor}
-                        />
-                      </div>
-                    </div>
-                    {umCode && umFactor > 0 && selectedItem?.consumptionUm && (
-                      <div className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 text-xs text-slate-600">
-                        1 <span className="font-medium text-slate-800">{umCode}</span> equivale a{' '}
-                        <span className="font-mono font-medium text-slate-800 tabular-nums">
-                          {umFactor.toLocaleString('pt-BR', { maximumFractionDigits: 4 })}
-                        </span>{' '}
-                        <span className="font-medium text-slate-800">{selectedItem.consumptionUm}</span>.
+                    {isCreatingItem
+                      ? "Criando e vinculando..."
+                      : "Criar e vincular"}
+                  </Button>
+                </createItemFetcher.Form>
+              </DialogContent>
+            </Dialog>
+            {selectedItemId ? (
+              <>
+                <Link
+                  to={`/admin/items/${selectedItemId}/main`}
+                  target="_blank"
+                  rel="noreferrer"
+                  title="Editar item"
+                  aria-label="Editar item"
+                  className={managementActionClass}
+                >
+                  {mobile ? (
+                    <>
+                      <Pencil className="h-3.5 w-3.5 shrink-0" />
+                      <span className="truncate">Editar item</span>
+                    </>
+                  ) : (
+                    "Editar item"
+                  )}
+                </Link>
+                <Dialog
+                  open={createUmDialogOpen}
+                  onOpenChange={setCreateUmDialogOpen}
+                >
+                  <DialogTrigger asChild>
+                    <button
+                      type="button"
+                      title="Criar UM"
+                      aria-label="Criar UM"
+                      className={managementActionClass}
+                    >
+                      {mobile ? (
+                        <>
+                          <Ruler className="h-3.5 w-3.5 shrink-0" />
+                          <span className="truncate">Criar UM</span>
+                        </>
+                      ) : (
+                        "Criar UM"
+                      )}
+                    </button>
+                  </DialogTrigger>
+                  <DialogContent
+                    className="max-w-md"
+                    onCloseAutoFocus={(event) => {
+                      event.preventDefault();
+                    }}
+                  >
+                    <DialogHeader>
+                      <DialogTitle>Criar unidade de medida</DialogTitle>
+                    </DialogHeader>
+                    {selectedItem?.ItemPurchaseConversion?.length > 0 && (
+                      <div className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2">
+                        <p className="mb-1.5 text-[10px] font-medium uppercase tracking-wide text-slate-400">
+                          Conversões já configuradas
+                        </p>
+                        <div className="space-y-0.5">
+                          {selectedItem.ItemPurchaseConversion.map(
+                            (c: { purchaseUm: string; factor: number }) => (
+                              <div
+                                key={c.purchaseUm}
+                                className="flex items-center justify-between gap-2 text-[11px] text-slate-500"
+                              >
+                                <span className="font-medium text-slate-600">
+                                  {c.purchaseUm}
+                                </span>
+                                <span className="font-mono tabular-nums">
+                                  ={" "}
+                                  {Number(c.factor).toLocaleString("pt-BR", {
+                                    maximumFractionDigits: 4,
+                                  })}{" "}
+                                  {selectedItem.consumptionUm}
+                                </span>
+                              </div>
+                            )
+                          )}
+                        </div>
                       </div>
                     )}
-                    <Button
-                      type="submit"
-                      className="w-full bg-slate-900 hover:bg-slate-700"
-                      disabled={createUmFetcher.state !== 'idle' || !selectedItem?.consumptionUm}
+                    {(createUmFetcher.data as any)?.status >= 400 && (
+                      <div className="rounded border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+                        {(createUmFetcher.data as any)?.message}
+                      </div>
+                    )}
+                    {selectedItem && !selectedItem.consumptionUm && (
+                      <div className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                        Defina a unidade de consumo do item antes de criar uma
+                        UM.
+                      </div>
+                    )}
+                    <createUmFetcher.Form
+                      method="post"
+                      action={`/admin/import-stock-movements/${batchId}`}
+                      className="space-y-3"
+                      preventScrollReset
                     >
-                      {createUmFetcher.state !== 'idle' ? 'Salvando...' : 'Salvar'}
-                    </Button>
-                  </createUmFetcher.Form>
-                </DialogContent>
-              </Dialog>
-              <Dialog open={umTabelaDialogOpen} onOpenChange={setUmTabelaDialogOpen}>
-                <DialogTrigger asChild>
-                  <button
-                    type="button"
-                    className="text-[11px] font-medium text-slate-600 underline underline-offset-2 hover:text-slate-900"
-                  >
-                    Tabela UMs
-                  </button>
-                </DialogTrigger>
-                <DialogContent
-                  className="max-w-3xl"
-                  onCloseAutoFocus={(event) => { event.preventDefault(); }}
+                      <input
+                        type="hidden"
+                        name="_action"
+                        value="batch-create-um-and-conversion"
+                      />
+                      <input type="hidden" name="batchId" value={batchId} />
+                      <input
+                        type="hidden"
+                        name="itemId"
+                        value={selectedItemId}
+                      />
+                      <input type="hidden" name="kind" value={umKind} />
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1">
+                          <Label htmlFor={`um-code-${line.id}`}>Código</Label>
+                          <Input
+                            id={`um-code-${line.id}`}
+                            name="code"
+                            placeholder="ex: CX12"
+                            required
+                            className="h-9 uppercase"
+                            style={{ textTransform: "uppercase" }}
+                            value={umCode}
+                            onChange={(e) =>
+                              setUmCode(e.target.value.toUpperCase())
+                            }
+                            disabled={createUmFetcher.state !== "idle"}
+                          />
+                          <p className="text-[10px] text-slate-400">
+                            Maiúsculas, números e _
+                          </p>
+                        </div>
+                        <div className="space-y-1">
+                          <Label htmlFor={`um-name-${line.id}`}>Nome</Label>
+                          <Input
+                            id={`um-name-${line.id}`}
+                            name="name"
+                            placeholder="ex: Caixa 12 un"
+                            required
+                            className="h-9"
+                            disabled={createUmFetcher.state !== "idle"}
+                          />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1">
+                          <Label>Tipo</Label>
+                          <Select
+                            value={umKind}
+                            onValueChange={setUmKind}
+                            disabled={createUmFetcher.state !== "idle"}
+                          >
+                            <SelectTrigger className="h-9">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {["weight", "volume", "count", "custom"].map(
+                                (k) => (
+                                  <SelectItem key={k} value={k}>
+                                    {k}
+                                  </SelectItem>
+                                )
+                              )}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-1">
+                          <Label>
+                            Fator (1 {umCode || "UM"} = ?{" "}
+                            {selectedItem?.consumptionUm || "?"})
+                          </Label>
+                          <DecimalInput
+                            name="factor"
+                            fractionDigits={4}
+                            placeholder="0,0000"
+                            className="h-9 w-full font-mono tabular-nums"
+                            disabled={createUmFetcher.state !== "idle"}
+                            onValueChange={setUmFactor}
+                          />
+                        </div>
+                      </div>
+                      {umCode &&
+                        umFactor > 0 &&
+                        selectedItem?.consumptionUm && (
+                          <div className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                            1{" "}
+                            <span className="font-medium text-slate-800">
+                              {umCode}
+                            </span>{" "}
+                            equivale a{" "}
+                            <span className="font-mono font-medium text-slate-800 tabular-nums">
+                              {umFactor.toLocaleString("pt-BR", {
+                                maximumFractionDigits: 4,
+                              })}
+                            </span>{" "}
+                            <span className="font-medium text-slate-800">
+                              {selectedItem.consumptionUm}
+                            </span>
+                            .
+                          </div>
+                        )}
+                      <Button
+                        type="submit"
+                        className="w-full bg-slate-900 hover:bg-slate-700"
+                        disabled={
+                          createUmFetcher.state !== "idle" ||
+                          !selectedItem?.consumptionUm
+                        }
+                      >
+                        {createUmFetcher.state !== "idle"
+                          ? "Salvando..."
+                          : "Salvar"}
+                      </Button>
+                    </createUmFetcher.Form>
+                  </DialogContent>
+                </Dialog>
+                <Dialog
+                  open={umTabelaDialogOpen}
+                  onOpenChange={setUmTabelaDialogOpen}
                 >
-                  <DialogHeader>
-                    <DialogTitle>Conversões de UM — {selectedItem?.name}</DialogTitle>
-                  </DialogHeader>
-                  <div className="overflow-auto rounded-xl border border-slate-200">
-                    <Table>
-                      <TableHeader className="bg-slate-50/90">
-                        <TableRow className="hover:bg-slate-50/90">
-                          <TableHead className="px-3 py-2 text-xs">UM de compra</TableHead>
-                          <TableHead className="px-3 py-2 text-right text-xs">Fator</TableHead>
-                          <TableHead className="px-3 py-2 text-xs">UM base</TableHead>
-                          <TableHead className="px-3 py-2 text-xs">Explicação</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {selectedItem?.consumptionUm && (
-                          <TableRow className="border-slate-100 bg-emerald-50/40">
-                            <TableCell className="px-3 py-2 text-xs font-semibold text-emerald-700">{selectedItem.consumptionUm}</TableCell>
-                            <TableCell className="px-3 py-2 text-right text-xs font-mono text-slate-500">1</TableCell>
-                            <TableCell className="px-3 py-2 text-xs text-slate-500">base</TableCell>
-                            <TableCell className="px-3 py-2 text-xs leading-relaxed text-slate-600">
-                              Esta é a unidade base do item. Cada 1 {selectedItem.consumptionUm} movimenta 1 {selectedItem.consumptionUm} no estoque.
-                            </TableCell>
-                          </TableRow>
-                        )}
-                        {selectedItem?.purchaseUm && selectedItem.purchaseUm !== selectedItem.consumptionUm && (
-                          <TableRow className="border-slate-100">
-                            <TableCell className="px-3 py-2 text-xs font-medium text-slate-700">{selectedItem.purchaseUm}</TableCell>
-                            <TableCell className="px-3 py-2 text-right font-mono text-xs tabular-nums text-slate-700">
-                              {selectedItem.purchaseToConsumptionFactor
-                                ? Number(selectedItem.purchaseToConsumptionFactor).toLocaleString('pt-BR', { maximumFractionDigits: 4 })
-                                : '-'}
-                            </TableCell>
-                            <TableCell className="px-3 py-2 text-xs text-slate-500">{selectedItem.consumptionUm || '-'}</TableCell>
-                            <TableCell className="px-3 py-2 text-xs leading-relaxed text-slate-600">
-                              {selectedItem.purchaseToConsumptionFactor && selectedItem.consumptionUm
-                                ? `Cada 1 ${selectedItem.purchaseUm} da nota entra como ${Number(selectedItem.purchaseToConsumptionFactor).toLocaleString('pt-BR', { maximumFractionDigits: 4 })} ${selectedItem.consumptionUm} no estoque.`
-                                : 'Conversão principal do item, mas ainda falta fator ou UM base para explicar o impacto no estoque.'}
-                            </TableCell>
-                          </TableRow>
-                        )}
-                        {(selectedItem?.ItemPurchaseConversion ?? []).map((c: { purchaseUm: string; factor: number }) => (
-                          <TableRow key={c.purchaseUm} className="border-slate-100">
-                            <TableCell className="px-3 py-2 text-xs font-medium text-slate-700">{c.purchaseUm}</TableCell>
-                            <TableCell className="px-3 py-2 text-right font-mono text-xs tabular-nums text-slate-700">
-                              {Number(c.factor).toLocaleString('pt-BR', { maximumFractionDigits: 4 })}
-                            </TableCell>
-                            <TableCell className="px-3 py-2 text-xs text-slate-500">{selectedItem?.consumptionUm || '-'}</TableCell>
-                            <TableCell className="px-3 py-2 text-xs leading-relaxed text-slate-600">
-                              {selectedItem?.consumptionUm
-                                ? `Cada 1 ${c.purchaseUm} da nota entra como ${Number(c.factor).toLocaleString('pt-BR', { maximumFractionDigits: 4 })} ${selectedItem.consumptionUm} no estoque.`
-                                : 'Conversão cadastrada, mas o item ainda não tem UM base para explicar o impacto no estoque.'}
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                        {!selectedItem?.consumptionUm && (selectedItem?.ItemPurchaseConversion ?? []).length === 0 && (
-                          <TableRow>
-                            <TableCell colSpan={4} className="px-3 py-4 text-center text-xs text-slate-400">
-                              Nenhuma conversão configurada.
-                            </TableCell>
-                          </TableRow>
-                        )}
-                      </TableBody>
-                    </Table>
-                  </div>
-                  <div className="flex justify-end">
-                    <Link
-                      to={`/admin/items/${selectedItemId}/main`}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-[11px] font-medium text-slate-600 underline underline-offset-2 hover:text-slate-900"
+                  <DialogTrigger asChild>
+                    <button
+                      type="button"
+                      title="Tabela UMs"
+                      aria-label="Tabela UMs"
+                      className={managementActionClass}
                     >
-                      Gerenciar no item
-                    </Link>
-                  </div>
-                </DialogContent>
-              </Dialog>
-              <Link
-                to={`/admin/stock-movements?itemId=${encodeURIComponent(selectedItemId)}`}
-                target="_blank"
-                rel="noreferrer"
-                className="text-[11px] font-medium text-slate-600 underline underline-offset-2 hover:text-slate-900"
-              >
-                Movimentações estoque
-              </Link>
-            </>
-          ) : (
-            <>
-              <span className="text-[11px] text-slate-400">Editar item</span>
-              <span className="text-[11px] text-slate-400">Criar UM</span>
-              <span className="text-[11px] text-slate-400">Tabela UMs</span>
-              <span className="text-[11px] text-slate-400">Movimentações estoque</span>
-            </>
-          )}
-        </div>}
-        {!compact && showCostHint && (costHint && (costHint.lastCostPerUnit != null || costHint.avgCostPerUnit != null) ? (
-          <div className="text-[11px] text-slate-500">
-            {costHint.lastCostPerUnit != null && <>último: {formatMoney(costHint.lastCostPerUnit)}</>}
-            {costHint.avgCostPerUnit != null && (
-              <> {costHint.lastCostPerUnit != null ? '• ' : ''}médio: {formatMoney(costHint.avgCostPerUnit)}</>
+                      {mobile ? (
+                        <>
+                          <Table2 className="h-3.5 w-3.5 shrink-0" />
+                          <span className="truncate">Tabela UMs</span>
+                        </>
+                      ) : (
+                        "Tabela UMs"
+                      )}
+                    </button>
+                  </DialogTrigger>
+                  <DialogContent
+                    className="max-w-3xl"
+                    onCloseAutoFocus={(event) => {
+                      event.preventDefault();
+                    }}
+                  >
+                    <DialogHeader>
+                      <DialogTitle>
+                        Conversões de UM — {selectedItem?.name}
+                      </DialogTitle>
+                    </DialogHeader>
+                    <div className="overflow-auto rounded-xl border border-slate-200">
+                      <Table>
+                        <TableHeader className="bg-slate-50/90">
+                          <TableRow className="hover:bg-slate-50/90">
+                            <TableHead className="px-3 py-2 text-xs">
+                              UM de compra
+                            </TableHead>
+                            <TableHead className="px-3 py-2 text-right text-xs">
+                              Fator
+                            </TableHead>
+                            <TableHead className="px-3 py-2 text-xs">
+                              UM base
+                            </TableHead>
+                            <TableHead className="px-3 py-2 text-xs">
+                              Explicação
+                            </TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {selectedItem?.consumptionUm && (
+                            <TableRow className="border-slate-100 bg-emerald-50/40">
+                              <TableCell className="px-3 py-2 text-xs font-semibold text-emerald-700">
+                                {selectedItem.consumptionUm}
+                              </TableCell>
+                              <TableCell className="px-3 py-2 text-right text-xs font-mono text-slate-500">
+                                1
+                              </TableCell>
+                              <TableCell className="px-3 py-2 text-xs text-slate-500">
+                                base
+                              </TableCell>
+                              <TableCell className="px-3 py-2 text-xs leading-relaxed text-slate-600">
+                                Esta é a unidade base do item. Cada 1{" "}
+                                {selectedItem.consumptionUm} movimenta 1{" "}
+                                {selectedItem.consumptionUm} no estoque.
+                              </TableCell>
+                            </TableRow>
+                          )}
+                          {selectedItem?.purchaseUm &&
+                            selectedItem.purchaseUm !==
+                              selectedItem.consumptionUm && (
+                              <TableRow className="border-slate-100">
+                                <TableCell className="px-3 py-2 text-xs font-medium text-slate-700">
+                                  {selectedItem.purchaseUm}
+                                </TableCell>
+                                <TableCell className="px-3 py-2 text-right font-mono text-xs tabular-nums text-slate-700">
+                                  {selectedItem.purchaseToConsumptionFactor
+                                    ? Number(
+                                        selectedItem.purchaseToConsumptionFactor
+                                      ).toLocaleString("pt-BR", {
+                                        maximumFractionDigits: 4,
+                                      })
+                                    : "-"}
+                                </TableCell>
+                                <TableCell className="px-3 py-2 text-xs text-slate-500">
+                                  {selectedItem.consumptionUm || "-"}
+                                </TableCell>
+                                <TableCell className="px-3 py-2 text-xs leading-relaxed text-slate-600">
+                                  {selectedItem.purchaseToConsumptionFactor &&
+                                  selectedItem.consumptionUm
+                                    ? `Cada 1 ${
+                                        selectedItem.purchaseUm
+                                      } da nota entra como ${Number(
+                                        selectedItem.purchaseToConsumptionFactor
+                                      ).toLocaleString("pt-BR", {
+                                        maximumFractionDigits: 4,
+                                      })} ${
+                                        selectedItem.consumptionUm
+                                      } no estoque.`
+                                    : "Conversão principal do item, mas ainda falta fator ou UM base para explicar o impacto no estoque."}
+                                </TableCell>
+                              </TableRow>
+                            )}
+                          {(selectedItem?.ItemPurchaseConversion ?? []).map(
+                            (c: { purchaseUm: string; factor: number }) => (
+                              <TableRow
+                                key={c.purchaseUm}
+                                className="border-slate-100"
+                              >
+                                <TableCell className="px-3 py-2 text-xs font-medium text-slate-700">
+                                  {c.purchaseUm}
+                                </TableCell>
+                                <TableCell className="px-3 py-2 text-right font-mono text-xs tabular-nums text-slate-700">
+                                  {Number(c.factor).toLocaleString("pt-BR", {
+                                    maximumFractionDigits: 4,
+                                  })}
+                                </TableCell>
+                                <TableCell className="px-3 py-2 text-xs text-slate-500">
+                                  {selectedItem?.consumptionUm || "-"}
+                                </TableCell>
+                                <TableCell className="px-3 py-2 text-xs leading-relaxed text-slate-600">
+                                  {selectedItem?.consumptionUm
+                                    ? `Cada 1 ${
+                                        c.purchaseUm
+                                      } da nota entra como ${Number(
+                                        c.factor
+                                      ).toLocaleString("pt-BR", {
+                                        maximumFractionDigits: 4,
+                                      })} ${
+                                        selectedItem.consumptionUm
+                                      } no estoque.`
+                                    : "Conversão cadastrada, mas o item ainda não tem UM base para explicar o impacto no estoque."}
+                                </TableCell>
+                              </TableRow>
+                            )
+                          )}
+                          {!selectedItem?.consumptionUm &&
+                            (selectedItem?.ItemPurchaseConversion ?? [])
+                              .length === 0 && (
+                              <TableRow>
+                                <TableCell
+                                  colSpan={4}
+                                  className="px-3 py-4 text-center text-xs text-slate-400"
+                                >
+                                  Nenhuma conversão configurada.
+                                </TableCell>
+                              </TableRow>
+                            )}
+                        </TableBody>
+                      </Table>
+                    </div>
+                    <div className="flex justify-end">
+                      <Link
+                        to={`/admin/items/${selectedItemId}/main`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-[11px] font-medium text-slate-600 underline underline-offset-2 hover:text-slate-900"
+                      >
+                        Gerenciar no item
+                      </Link>
+                    </div>
+                  </DialogContent>
+                </Dialog>
+                <Link
+                  to={`/admin/stock-movements?itemId=${encodeURIComponent(
+                    selectedItemId
+                  )}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  title="Movimentações estoque"
+                  aria-label="Movimentações estoque"
+                  className={cn(managementActionClass, mobile && "col-span-2")}
+                >
+                  {mobile ? (
+                    <>
+                      <Activity className="h-3.5 w-3.5 shrink-0" />
+                      <span className="truncate">Movimentações estoque</span>
+                    </>
+                  ) : (
+                    "Movimentações estoque"
+                  )}
+                </Link>
+              </>
+            ) : (
+              <>
+                <span
+                  className={disabledManagementActionClass}
+                  title="Editar item"
+                  aria-label="Editar item"
+                >
+                  {mobile ? (
+                    <>
+                      <Pencil className="h-3.5 w-3.5 shrink-0" />
+                      <span className="truncate">Editar item</span>
+                    </>
+                  ) : (
+                    "Editar item"
+                  )}
+                </span>
+                <span
+                  className={disabledManagementActionClass}
+                  title="Criar UM"
+                  aria-label="Criar UM"
+                >
+                  {mobile ? (
+                    <>
+                      <Ruler className="h-3.5 w-3.5 shrink-0" />
+                      <span className="truncate">Criar UM</span>
+                    </>
+                  ) : (
+                    "Criar UM"
+                  )}
+                </span>
+                <span
+                  className={disabledManagementActionClass}
+                  title="Tabela UMs"
+                  aria-label="Tabela UMs"
+                >
+                  {mobile ? (
+                    <>
+                      <Table2 className="h-3.5 w-3.5 shrink-0" />
+                      <span className="truncate">Tabela UMs</span>
+                    </>
+                  ) : (
+                    "Tabela UMs"
+                  )}
+                </span>
+                <span
+                  className={cn(
+                    disabledManagementActionClass,
+                    mobile && "col-span-2"
+                  )}
+                  title="Movimentações estoque"
+                  aria-label="Movimentações estoque"
+                >
+                  {mobile ? (
+                    <>
+                      <Activity className="h-3.5 w-3.5 shrink-0" />
+                      <span className="truncate">Movimentações estoque</span>
+                    </>
+                  ) : (
+                    "Movimentações estoque"
+                  )}
+                </span>
+              </>
             )}
           </div>
-        ) : (
-          <div className="text-[11px] text-slate-500">{line.mappingSource || '-'}</div>
-        ))}
+        )}
+        {!compact &&
+          showCostHint &&
+          (costHint &&
+          (costHint.lastCostPerUnit != null ||
+            costHint.avgCostPerUnit != null) ? (
+            <div className="text-[11px] text-slate-500">
+              {costHint.lastCostPerUnit != null && (
+                <>último: {formatMoney(costHint.lastCostPerUnit)}</>
+              )}
+              {costHint.avgCostPerUnit != null && (
+                <>
+                  {" "}
+                  {costHint.lastCostPerUnit != null ? "• " : ""}médio:{" "}
+                  {formatMoney(costHint.avgCostPerUnit)}
+                </>
+              )}
+            </div>
+          ) : (
+            <div className="text-[11px] text-slate-500">
+              {line.mappingSource || "-"}
+            </div>
+          ))}
         {!compact && !showCostHint ? (
-          <div className="text-[11px] text-slate-500">{line.mappingSource || '-'}</div>
+          <div className="text-[11px] text-slate-500">
+            {line.mappingSource || "-"}
+          </div>
         ) : null}
       </mapItemFetcher.Form>
-      {!compact && line.status === 'pending_cost_review' && (
+      {!compact && line.status === "pending_cost_review" && (
         <div className="mt-1 flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left">
           <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-800" />
           <span className="flex-1 text-[11px] font-medium text-amber-800">
-            Custo acima do histórico. Edite a linha e use Salvar e aprovar para liberar a importação.
+            Custo acima do histórico. Edite a linha e use Salvar e aprovar para
+            liberar a importação.
           </span>
         </div>
       )}
@@ -1066,31 +1620,51 @@ export function ItemSystemMapperCell({
   );
 }
 
-function FreightEditButton({ batchId, freightAmount }: { batchId: string; freightAmount: number | null }) {
+function FreightEditButton({
+  batchId,
+  freightAmount,
+}: {
+  batchId: string;
+  freightAmount: number | null;
+}) {
   const fetcher = useFetcher<any>();
   const [open, setOpen] = useState(false);
-  const [value, setValue] = useState(freightAmount != null ? String(freightAmount).replace('.', ',') : '');
-  const isSaving = fetcher.state !== 'idle';
+  const [value, setValue] = useState(
+    freightAmount != null ? String(freightAmount).replace(".", ",") : ""
+  );
+  const isSaving = fetcher.state !== "idle";
 
   useEffect(() => {
-    if (fetcher.state === 'idle' && fetcher.data?.payload?.updatedFreight) {
+    if (fetcher.state === "idle" && fetcher.data?.payload?.updatedFreight) {
       setOpen(false);
     }
   }, [fetcher.state, fetcher.data]);
 
-  const BRL = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
-  const displayValue = freightAmount != null && freightAmount > 0 ? BRL.format(freightAmount) : null;
+  const BRL = new Intl.NumberFormat("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+  });
+  const displayValue =
+    freightAmount != null && freightAmount > 0
+      ? BRL.format(freightAmount)
+      : null;
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         <button
           className="flex flex-col items-center justify-center gap-1 px-4 py-2.5 text-slate-600 hover:bg-slate-50 transition min-w-[64px]"
-          title={displayValue ? `Frete: ${displayValue}` : 'Sem frete'}
+          title={displayValue ? `Frete: ${displayValue}` : "Sem frete"}
         >
-          <Truck className={`h-4 w-4 ${displayValue ? 'text-emerald-600' : ''}`} />
-          <span className={`text-[11px] font-medium ${displayValue ? 'text-emerald-700' : ''}`}>
-            {displayValue ?? 'Frete'}
+          <Truck
+            className={`h-4 w-4 ${displayValue ? "text-emerald-600" : ""}`}
+          />
+          <span
+            className={`text-[11px] font-medium ${
+              displayValue ? "text-emerald-700" : ""
+            }`}
+          >
+            {displayValue ?? "Frete"}
           </span>
         </button>
       </DialogTrigger>
@@ -1113,10 +1687,12 @@ function FreightEditButton({ batchId, freightAmount }: { batchId: string; freigh
               onChange={(e) => setValue(e.target.value)}
               autoFocus
             />
-            <p className="text-[11px] text-slate-400">Deixe em branco ou zero para remover o frete.</p>
+            <p className="text-[11px] text-slate-400">
+              Deixe em branco ou zero para remover o frete.
+            </p>
           </div>
           <Button type="submit" className="w-full" disabled={isSaving}>
-            {isSaving ? 'Salvando...' : 'Salvar'}
+            {isSaving ? "Salvando..." : "Salvar"}
           </Button>
         </fetcher.Form>
       </DialogContent>
@@ -1137,12 +1713,14 @@ function BatchMovementDateEditButton({
 }) {
   const fetcher = useFetcher<any>();
   const [open, setOpen] = useState(false);
-  const [selectedDateInputValue, setSelectedDateInputValue] = useState(() => dateInputValueFromDate(initialDate));
-  const isSaving = fetcher.state !== 'idle';
+  const [selectedDateInputValue, setSelectedDateInputValue] = useState(() =>
+    dateInputValueFromDate(initialDate)
+  );
+  const isSaving = fetcher.state !== "idle";
   const isDisabled = disabled || importedCount <= 0 || isSaving;
 
   useEffect(() => {
-    if (fetcher.state !== 'idle') return;
+    if (fetcher.state !== "idle") return;
     if (fetcher.data?.status !== 200) return;
     if (!fetcher.data?.payload?.updatedMovementDate) return;
     setOpen(false);
@@ -1159,7 +1737,11 @@ function BatchMovementDateEditButton({
           type="button"
           disabled={isDisabled}
           className="flex flex-col items-center justify-center gap-1 px-4 py-2.5 text-slate-600 hover:bg-slate-50 transition min-w-[64px] disabled:cursor-not-allowed disabled:opacity-40"
-          title={importedCount > 0 ? `Alterar data de ${importedCount} movimento(s)` : 'Nenhum movimento importado'}
+          title={
+            importedCount > 0
+              ? `Alterar data de ${importedCount} movimento(s)`
+              : "Nenhum movimento importado"
+          }
         >
           <CalendarIcon className="h-4 w-4" />
           <span className="text-[11px] font-medium">Data</span>
@@ -1169,7 +1751,8 @@ function BatchMovementDateEditButton({
         <DialogHeader>
           <DialogTitle>Alterar data dos movimentos</DialogTitle>
           <DialogDescription>
-            Atualiza a data dos movimentos já importados deste lote e mantém a data da linha de origem em sincronia.
+            Atualiza a data dos movimentos já importados deste lote e mantém a
+            data da linha de origem em sincronia.
           </DialogDescription>
         </DialogHeader>
         {fetcher.data?.message && fetcher.data?.status >= 400 ? (
@@ -1178,7 +1761,9 @@ function BatchMovementDateEditButton({
           </div>
         ) : null}
         <div className="space-y-2">
-          <Label htmlFor={`batch-imported-movement-date-${batchId}`}>Nova data</Label>
+          <Label htmlFor={`batch-imported-movement-date-${batchId}`}>
+            Nova data
+          </Label>
           <Input
             id={`batch-imported-movement-date-${batchId}`}
             type="date"
@@ -1191,11 +1776,19 @@ function BatchMovementDateEditButton({
           </p>
         </div>
         <fetcher.Form method="post" className="space-y-4">
-          <input type="hidden" name="_action" value="batch-update-imported-movement-date" />
+          <input
+            type="hidden"
+            name="_action"
+            value="batch-update-imported-movement-date"
+          />
           <input type="hidden" name="batchId" value={batchId} />
-          <input type="hidden" name="movementDate" value={selectedDateInputValue} />
+          <input
+            type="hidden"
+            name="movementDate"
+            value={selectedDateInputValue}
+          />
           <Button type="submit" className="w-full" disabled={isSaving}>
-            {isSaving ? 'Atualizando...' : 'Atualizar data'}
+            {isSaving ? "Atualizando..." : "Atualizar data"}
           </Button>
         </fetcher.Form>
       </DialogContent>
@@ -1205,43 +1798,51 @@ function BatchMovementDateEditButton({
 
 export async function loader({ params }: LoaderFunctionArgs) {
   try {
-    const batchId = String(params.batchId || '').trim();
-    if (!batchId) return badRequest('Lote inválido');
+    const batchId = String(params.batchId || "").trim();
+    if (!batchId) return badRequest("Lote inválido");
 
     const db = itemPrismaEntity.client as any;
-    const [selected, unitOptions, categories, suppliers, measurementConversionsRaw] = await Promise.all([
+    const [
+      selected,
+      unitOptions,
+      categories,
+      suppliers,
+      measurementConversionsRaw,
+    ] = await Promise.all([
       getStockMovementImportBatchView(batchId),
       getAvailableItemUnits(),
       db.category.findMany({
-        where: { type: 'item' },
+        where: { type: "item" },
         select: { id: true, name: true },
-        orderBy: [{ name: 'asc' }],
+        orderBy: [{ name: "asc" }],
       }),
-      typeof db.supplier?.findMany === 'function'
+      typeof db.supplier?.findMany === "function"
         ? db.supplier.findMany({
-          select: { id: true, name: true, cnpj: true },
-          orderBy: [{ name: 'asc' }],
-          take: 2000,
-        })
+            select: { id: true, name: true, cnpj: true },
+            orderBy: [{ name: "asc" }],
+            take: 2000,
+          })
         : Promise.resolve([]),
-      typeof db.measurementUnitConversion?.findMany === 'function'
+      typeof db.measurementUnitConversion?.findMany === "function"
         ? db.measurementUnitConversion.findMany({
-          where: { active: true },
-          select: {
-            factor: true,
-            FromUnit: { select: { code: true } },
-            ToUnit: { select: { code: true } },
-          },
-        })
+            where: { active: true },
+            select: {
+              factor: true,
+              FromUnit: { select: { code: true } },
+              ToUnit: { select: { code: true } },
+            },
+          })
         : Promise.resolve([]),
     ]);
-    if (!selected) return badRequest('Lote não encontrado');
+    if (!selected) return badRequest("Lote não encontrado");
 
-    const measurementConversions = (measurementConversionsRaw as Array<{
-      factor: number;
-      FromUnit?: { code?: string | null } | null;
-      ToUnit?: { code?: string | null } | null;
-    }>).flatMap((row) => {
+    const measurementConversions = (
+      measurementConversionsRaw as Array<{
+        factor: number;
+        FromUnit?: { code?: string | null } | null;
+        ToUnit?: { code?: string | null } | null;
+      }>
+    ).flatMap((row) => {
       const fromUnit = normalizeItemUnit(row?.FromUnit?.code);
       const toUnit = normalizeItemUnit(row?.ToUnit?.code);
       const factor = Number(row?.factor ?? NaN);
@@ -1252,12 +1853,12 @@ export async function loader({ params }: LoaderFunctionArgs) {
     const itemIds = Array.from(
       new Set(
         ((selected.items as any[]) || [])
-          .map((item) => String(item?.id || '').trim())
-          .filter(Boolean),
-      ),
+          .map((item) => String(item?.id || "").trim())
+          .filter(Boolean)
+      )
     );
     const itemUnitOptionsByItemId: Record<string, string[]> = {};
-    if (itemIds.length > 0 && typeof db.itemUnit?.findMany === 'function') {
+    if (itemIds.length > 0 && typeof db.itemUnit?.findMany === "function") {
       const linkedUnits = await db.itemUnit.findMany({
         where: {
           itemId: { in: itemIds },
@@ -1273,27 +1874,38 @@ export async function loader({ params }: LoaderFunctionArgs) {
         itemUnitOptionsByItemId[itemId] = [];
       }
 
-      for (const row of linkedUnits as Array<{ itemId: string; unitCode: string }>) {
-        const itemId = String(row.itemId || '').trim();
+      for (const row of linkedUnits as Array<{
+        itemId: string;
+        unitCode: string;
+      }>) {
+        const itemId = String(row.itemId || "").trim();
         const unitCode = normalizeItemUnit(row.unitCode);
         if (!itemId || !unitCode) continue;
-        if (!itemUnitOptionsByItemId[itemId]) itemUnitOptionsByItemId[itemId] = [];
+        if (!itemUnitOptionsByItemId[itemId])
+          itemUnitOptionsByItemId[itemId] = [];
         if (!itemUnitOptionsByItemId[itemId].includes(unitCode)) {
           itemUnitOptionsByItemId[itemId].push(unitCode);
         }
       }
 
       for (const itemId of Object.keys(itemUnitOptionsByItemId)) {
-        itemUnitOptionsByItemId[itemId].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+        itemUnitOptionsByItemId[itemId].sort((a, b) =>
+          a.localeCompare(b, "pt-BR")
+        );
       }
     }
 
     const mappedItemIds = [
       ...new Set(
-        (selected.lines as any[]).filter((l) => l.mappedItemId).map((l) => String(l.mappedItemId)),
+        (selected.lines as any[])
+          .filter((l) => l.mappedItemId)
+          .map((l) => String(l.mappedItemId))
       ),
     ];
-    const itemCostHints: Record<string, { lastCostPerUnit: number | null; avgCostPerUnit: number | null }> = {};
+    const itemCostHints: Record<
+      string,
+      { lastCostPerUnit: number | null; avgCostPerUnit: number | null }
+    > = {};
     if (mappedItemIds.length > 0) {
       const thirtyDaysAgo = new Date();
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
@@ -1316,14 +1928,24 @@ export async function loader({ params }: LoaderFunctionArgs) {
       };
       const [costRows, historyRows] = await Promise.all([
         db.itemCostVariation.findMany({
-          where: { ItemVariation: { itemId: { in: mappedItemIds }, deletedAt: null } },
-          select: { costAmount: true, unit: true, source: true, ItemVariation: { select: itemVariationSelect } },
-          orderBy: [{ validFrom: 'desc' }, { createdAt: 'desc' }],
+          where: {
+            ItemVariation: { itemId: { in: mappedItemIds }, deletedAt: null },
+          },
+          select: {
+            costAmount: true,
+            unit: true,
+            source: true,
+            ItemVariation: { select: itemVariationSelect },
+          },
+          orderBy: [{ validFrom: "desc" }, { createdAt: "desc" }],
         }),
         db.itemCostVariationHistory.findMany({
           where: {
             ItemVariation: { itemId: { in: mappedItemIds }, deletedAt: null },
-            OR: [{ validFrom: { gte: thirtyDaysAgo } }, { createdAt: { gte: thirtyDaysAgo } }],
+            OR: [
+              { validFrom: { gte: thirtyDaysAgo } },
+              { createdAt: { gte: thirtyDaysAgo } },
+            ],
           },
           select: {
             costAmount: true,
@@ -1334,7 +1956,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
             createdAt: true,
             ItemVariation: { select: itemVariationSelect },
           },
-          orderBy: [{ validFrom: 'desc' }, { createdAt: 'desc' }],
+          orderBy: [{ validFrom: "desc" }, { createdAt: "desc" }],
           take: 500,
         }),
       ]);
@@ -1342,7 +1964,8 @@ export async function loader({ params }: LoaderFunctionArgs) {
       for (const row of costRows as any[]) {
         const itemId = row.ItemVariation?.itemId;
         if (!itemId) continue;
-        if (!currentRowsByItemId.has(itemId)) currentRowsByItemId.set(itemId, []);
+        if (!currentRowsByItemId.has(itemId))
+          currentRowsByItemId.set(itemId, []);
         currentRowsByItemId.get(itemId)!.push(row);
       }
       const historyByItemId = new Map<string, any[]>();
@@ -1365,13 +1988,27 @@ export async function loader({ params }: LoaderFunctionArgs) {
         const item = (entries[0] as any)?.ItemVariation?.Item || {};
         const normalized = (entries as any[])
           .filter((e) => !isItemCostExcludedFromMetrics(e))
-          .map((e) => normalizeItemCostToConsumptionUnit({ costAmount: e.costAmount, unit: e.unit, source: e.source }, item))
-          .filter((v): v is number => Number.isFinite(v as number) && (v as number) > 0);
-        const avg = normalized.length > 0 ? normalized.reduce((a, b) => a + b, 0) / normalized.length : null;
+          .map((e) =>
+            normalizeItemCostToConsumptionUnit(
+              { costAmount: e.costAmount, unit: e.unit, source: e.source },
+              item
+            )
+          )
+          .filter(
+            (v): v is number =>
+              Number.isFinite(v as number) && (v as number) > 0
+          );
+        const avg =
+          normalized.length > 0
+            ? normalized.reduce((a, b) => a + b, 0) / normalized.length
+            : null;
         if (itemId in itemCostHints) {
           itemCostHints[itemId].avgCostPerUnit = avg;
         } else {
-          itemCostHints[itemId] = { lastCostPerUnit: null, avgCostPerUnit: avg };
+          itemCostHints[itemId] = {
+            lastCostPerUnit: null,
+            avgCostPerUnit: avg,
+          };
         }
       }
     }
@@ -1394,36 +2031,45 @@ export async function loader({ params }: LoaderFunctionArgs) {
 export async function action({ request, params }: ActionFunctionArgs) {
   try {
     const user = await authenticator.isAuthenticated(request);
-    const actor = (user as any)?.email || (user as any)?.displayName || (user as any)?.name || null;
+    const actor =
+      (user as any)?.email ||
+      (user as any)?.displayName ||
+      (user as any)?.name ||
+      null;
     const requestOrigin = new URL(request.url).origin;
 
-    const routeBatchId = String(params.batchId || '').trim();
-    if (!routeBatchId) return badRequest('Lote inválido');
+    const routeBatchId = String(params.batchId || "").trim();
+    if (!routeBatchId) return badRequest("Lote inválido");
 
     const formData = await request.formData();
-    const _action = str(formData.get('_action'));
-    const batchId = str(formData.get('batchId')) || routeBatchId;
+    const _action = str(formData.get("_action"));
+    const batchId = str(formData.get("batchId")) || routeBatchId;
 
-    if (batchId !== routeBatchId) return badRequest('Lote divergente');
+    if (batchId !== routeBatchId) return badRequest("Lote divergente");
 
     const db = itemPrismaEntity.client as any;
     const currentBatch = await db.stockMovementImportBatch.findUnique({
       where: { id: batchId },
       select: { id: true, importStatus: true },
     });
-    if (!currentBatch) return badRequest('Lote não encontrado');
-    const isBatchImporting = String(currentBatch.importStatus || 'idle') === 'importing';
-    if (isBatchImporting && _action !== 'batch-import') {
-      return badRequest('Aguarde o término da importação em andamento antes de executar outra ação no lote.');
+    if (!currentBatch) return badRequest("Lote não encontrado");
+    const isBatchImporting =
+      String(currentBatch.importStatus || "idle") === "importing";
+    if (isBatchImporting && _action !== "batch-import") {
+      return badRequest(
+        "Aguarde o término da importação em andamento antes de executar outra ação no lote."
+      );
     }
 
-    if (_action === 'batch-map-item') {
-      const itemId = str(formData.get('itemId'));
-      const lineId = str(formData.get('lineId')) || null;
-      const ingredientNameNormalized = str(formData.get('ingredientNameNormalized')) || null;
-      const applyToAllSameIngredient = str(formData.get('applyToAllSameIngredient')) === 'on';
-      const saveAlias = str(formData.get('saveAlias')) === 'on';
-      if (!itemId) return badRequest('Selecione um item');
+    if (_action === "batch-map-item") {
+      const itemId = str(formData.get("itemId"));
+      const lineId = str(formData.get("lineId")) || null;
+      const ingredientNameNormalized =
+        str(formData.get("ingredientNameNormalized")) || null;
+      const applyToAllSameIngredient =
+        str(formData.get("applyToAllSameIngredient")) === "on";
+      const saveAlias = str(formData.get("saveAlias")) === "on";
+      if (!itemId) return badRequest("Selecione um item");
 
       await mapBatchLinesToItem({
         batchId,
@@ -1435,37 +2081,51 @@ export async function action({ request, params }: ActionFunctionArgs) {
         actor,
       });
 
-      return redirect(redirectToCurrentPath(request, `/admin/import-stock-movements/${batchId}`));
+      return redirect(
+        redirectToCurrentPath(
+          request,
+          `/admin/import-stock-movements/${batchId}`
+        )
+      );
     }
 
-    if (_action === 'batch-set-manual-conversion') {
-      const lineId = str(formData.get('lineId'));
-      const factor = num(formData.get('factor'));
-      if (!lineId) return badRequest('Linha inválida');
-      if (!(factor > 0)) return badRequest('Informe um fator maior que zero');
+    if (_action === "batch-set-manual-conversion") {
+      const lineId = str(formData.get("lineId"));
+      const factor = num(formData.get("factor"));
+      if (!lineId) return badRequest("Linha inválida");
+      if (!(factor > 0)) return badRequest("Informe um fator maior que zero");
       await setBatchLineManualConversion({ batchId, lineId, factor });
-      return redirect(redirectToCurrentPath(request, `/admin/import-stock-movements/${batchId}`));
+      return redirect(
+        redirectToCurrentPath(
+          request,
+          `/admin/import-stock-movements/${batchId}`
+        )
+      );
     }
 
-    if (_action === 'batch-edit-line') {
-      const lineId = str(formData.get('lineId'));
-      if (!lineId) return badRequest('Linha inválida');
-      const autoApproveCostReview = str(formData.get('autoApproveCostReview')) === 'on';
-      const importAfterSave = str(formData.get('importAfterSave')) === 'on';
-      const mappedItemId = str(formData.get('mappedItemId')) || null;
-      const movementUnit = str(formData.get('movementUnit')).toUpperCase() || null;
-      const qtyEntryRaw = num(formData.get('qtyEntry'));
-      const costTotalAmountRaw = num(formData.get('costTotalAmount'));
+    if (_action === "batch-edit-line") {
+      const lineId = str(formData.get("lineId"));
+      if (!lineId) return badRequest("Linha inválida");
+      const autoApproveCostReview =
+        str(formData.get("autoApproveCostReview")) === "on";
+      const importAfterSave = str(formData.get("importAfterSave")) === "on";
+      const mappedItemId = str(formData.get("mappedItemId")) || null;
+      const movementUnit =
+        str(formData.get("movementUnit")).toUpperCase() || null;
+      const qtyEntryRaw = num(formData.get("qtyEntry"));
+      const costTotalAmountRaw = num(formData.get("costTotalAmount"));
       const derivedCostAmount = deriveUnitCost(costTotalAmountRaw, qtyEntryRaw);
       if (movementUnit) {
-        const availableUnits = await getAvailableItemUnits(mappedItemId || undefined);
+        const availableUnits = await getAvailableItemUnits(
+          mappedItemId || undefined
+        );
         if (!availableUnits.includes(movementUnit)) {
-          return badRequest('UM do movimento inválida');
+          return badRequest("UM do movimento inválida");
         }
       }
-      const movementAtRaw = str(formData.get('movementAt'));
+      const movementAtRaw = str(formData.get("movementAt"));
       const movementAt = movementAtRaw ? new Date(movementAtRaw) : null;
-      const manualFactorRaw = num(formData.get('manualConversionFactor'));
+      const manualFactorRaw = num(formData.get("manualConversionFactor"));
       const previousLine = await db.stockMovementImportBatchLine.findUnique({
         where: { id: lineId },
         select: { appliedAt: true, rolledBackAt: true },
@@ -1474,13 +2134,14 @@ export async function action({ request, params }: ActionFunctionArgs) {
         batchId,
         lineId,
         actor,
-        movementAt: movementAt && !Number.isNaN(movementAt.getTime()) ? movementAt : null,
-        ingredientName: str(formData.get('ingredientName')),
-        motivo: str(formData.get('motivo')) || null,
-        invoiceNumber: str(formData.get('invoiceNumber')) || null,
-        supplierId: str(formData.get('supplierId')) || null,
-        supplierName: str(formData.get('supplierName')) || null,
-        supplierCnpj: str(formData.get('supplierCnpj')) || null,
+        movementAt:
+          movementAt && !Number.isNaN(movementAt.getTime()) ? movementAt : null,
+        ingredientName: str(formData.get("ingredientName")),
+        motivo: str(formData.get("motivo")) || null,
+        invoiceNumber: str(formData.get("invoiceNumber")) || null,
+        supplierId: str(formData.get("supplierId")) || null,
+        supplierName: str(formData.get("supplierName")) || null,
+        supplierCnpj: str(formData.get("supplierCnpj")) || null,
         qtyEntry: qtyEntryRaw || null,
         unitEntry: movementUnit,
         qtyConsumption: qtyEntryRaw || null,
@@ -1489,8 +2150,11 @@ export async function action({ request, params }: ActionFunctionArgs) {
         costAmount: derivedCostAmount,
         costTotalAmount: costTotalAmountRaw || null,
         mappedItemId,
-        manualConversionFactor: Number.isFinite(manualFactorRaw) && manualFactorRaw > 0 ? manualFactorRaw : null,
-        observation: str(formData.get('observation')) || null,
+        manualConversionFactor:
+          Number.isFinite(manualFactorRaw) && manualFactorRaw > 0
+            ? manualFactorRaw
+            : null,
+        observation: str(formData.get("observation")) || null,
       });
       let updatedLineStatus: string | null = null;
       const updatedLine = await db.stockMovementImportBatchLine.findUnique({
@@ -1500,18 +2164,28 @@ export async function action({ request, params }: ActionFunctionArgs) {
       updatedLineStatus = str(updatedLine?.status) || null;
       let autoApprovedCostReview = false;
       if (autoApproveCostReview) {
-        if (updatedLineStatus === 'pending_cost_review') {
-          await approveBatchLineCostReview({ batchId, lineId, actor, requestOrigin });
-          autoApprovedCostReview = true;
-          const approvedLine = await db.stockMovementImportBatchLine.findUnique({
-            where: { id: lineId },
-            select: { status: true },
+        if (updatedLineStatus === "pending_cost_review") {
+          await approveBatchLineCostReview({
+            batchId,
+            lineId,
+            actor,
+            requestOrigin,
           });
+          autoApprovedCostReview = true;
+          const approvedLine = await db.stockMovementImportBatchLine.findUnique(
+            {
+              where: { id: lineId },
+              select: { status: true },
+            }
+          );
           updatedLineStatus = str(approvedLine?.status) || updatedLineStatus;
         }
       }
       let importedLine = false;
-      if (importAfterSave && (previousLine?.rolledBackAt || !previousLine?.appliedAt)) {
+      if (
+        importAfterSave &&
+        (previousLine?.rolledBackAt || !previousLine?.appliedAt)
+      ) {
         const importResult = await importStockMovementImportBatchLine({
           batchId,
           lineId,
@@ -1519,69 +2193,106 @@ export async function action({ request, params }: ActionFunctionArgs) {
         });
         importedLine = importResult.imported > 0;
       }
-      return ok({ updatedLineId: lineId, updatedLineStatus, autoApprovedCostReview, importedLine });
+      return ok({
+        updatedLineId: lineId,
+        updatedLineStatus,
+        autoApprovedCostReview,
+        importedLine,
+      });
     }
 
-    if (_action === 'batch-approve-cost-review') {
-      const lineId = str(formData.get('lineId'));
-      if (!lineId) return badRequest('Linha inválida');
-      await approveBatchLineCostReview({ batchId, lineId, actor, requestOrigin });
+    if (_action === "batch-approve-cost-review") {
+      const lineId = str(formData.get("lineId"));
+      if (!lineId) return badRequest("Linha inválida");
+      await approveBatchLineCostReview({
+        batchId,
+        lineId,
+        actor,
+        requestOrigin,
+      });
       return ok({ approvedLineId: lineId });
     }
 
-    if (_action === 'batch-ignore-line' || _action === 'batch-unignore-line') {
-      const lineId = str(formData.get('lineId'));
-      if (!lineId) return badRequest('Linha inválida');
+    if (_action === "batch-ignore-line" || _action === "batch-unignore-line") {
+      const lineId = str(formData.get("lineId"));
+      if (!lineId) return badRequest("Linha inválida");
       await setBatchLineIgnored({
         batchId,
         lineId,
-        ignored: _action === 'batch-ignore-line',
+        ignored: _action === "batch-ignore-line",
       });
-      return redirect(redirectToCurrentPath(request, `/admin/import-stock-movements/${batchId}`));
+      return redirect(
+        redirectToCurrentPath(
+          request,
+          `/admin/import-stock-movements/${batchId}`
+        )
+      );
     }
 
-    if (_action === 'batch-retry-line-error') {
-      const lineId = str(formData.get('lineId'));
-      if (!lineId) return badRequest('Linha inválida');
+    if (_action === "batch-retry-line-error") {
+      const lineId = str(formData.get("lineId"));
+      if (!lineId) return badRequest("Linha inválida");
       await retryStockMovementImportBatchErrors({ batchId, lineId });
-      return redirect(redirectToCurrentPath(request, `/admin/import-stock-movements/${batchId}`));
+      return redirect(
+        redirectToCurrentPath(
+          request,
+          `/admin/import-stock-movements/${batchId}`
+        )
+      );
     }
 
-    if (_action === 'batch-retry-errors') {
+    if (_action === "batch-retry-errors") {
       await retryStockMovementImportBatchErrors({ batchId });
-      return redirect(redirectToCurrentPath(request, `/admin/import-stock-movements/${batchId}`));
+      return redirect(
+        redirectToCurrentPath(
+          request,
+          `/admin/import-stock-movements/${batchId}`
+        )
+      );
     }
 
-    if (_action === 'reapply-aliases-all-batches') {
+    if (_action === "reapply-aliases-all-batches") {
       const count = await reapplyAliasesToAllPendingBatches();
-      return redirect(redirectToCurrentPath(request, `/admin/import-stock-movements/${batchId}`));
+      return redirect(
+        redirectToCurrentPath(
+          request,
+          `/admin/import-stock-movements/${batchId}`
+        )
+      );
     }
 
-    if (_action === 'batch-create-and-map-item') {
-      const lineId = str(formData.get('lineId'));
-      const ingredientNameNormalized = str(formData.get('ingredientNameNormalized')) || null;
-      const itemName = str(formData.get('itemName'));
-      const classificationRaw = str(formData.get('classification')).toLowerCase();
-      const categoryIdRaw = str(formData.get('categoryId'));
+    if (_action === "batch-create-and-map-item") {
+      const lineId = str(formData.get("lineId"));
+      const ingredientNameNormalized =
+        str(formData.get("ingredientNameNormalized")) || null;
+      const itemName = str(formData.get("itemName"));
+      const classificationRaw = str(
+        formData.get("classification")
+      ).toLowerCase();
+      const categoryIdRaw = str(formData.get("categoryId"));
       const categoryId = categoryIdRaw || null;
-      const consumptionUm = normalizeItemUnit(formData.get('consumptionUm'));
+      const consumptionUm = normalizeItemUnit(formData.get("consumptionUm"));
 
-      if (!lineId) return badRequest('Linha inválida');
-      if (!itemName) return badRequest('Informe o nome do novo item');
-      if (!ITEM_CLASSIFICATIONS.includes(classificationRaw as (typeof ITEM_CLASSIFICATIONS)[number])) {
-        return badRequest('Classificação inválida');
+      if (!lineId) return badRequest("Linha inválida");
+      if (!itemName) return badRequest("Informe o nome do novo item");
+      if (
+        !ITEM_CLASSIFICATIONS.includes(
+          classificationRaw as (typeof ITEM_CLASSIFICATIONS)[number]
+        )
+      ) {
+        return badRequest("Classificação inválida");
       }
       const availableUnits = await getAvailableItemUnits();
       if (consumptionUm && !availableUnits.includes(consumptionUm)) {
-        return badRequest('Unidade de consumo inválida');
+        return badRequest("Unidade de consumo inválida");
       }
       if (categoryId) {
         const categoryExists = await db.category.findUnique({
           where: { id: categoryId },
           select: { id: true, type: true },
         });
-        if (!categoryExists || categoryExists.type !== 'item') {
-          return badRequest('Categoria inválida');
+        if (!categoryExists || categoryExists.type !== "item") {
+          return badRequest("Categoria inválida");
         }
       }
 
@@ -1608,59 +2319,89 @@ export async function action({ request, params }: ActionFunctionArgs) {
       return ok({ createdItemId: created.id });
     }
 
-    if (_action === 'batch-create-um-and-conversion') {
-      const itemId = str(formData.get('itemId'));
-      const code = str(formData.get('code')).toUpperCase();
-      const name = str(formData.get('name'));
-      const kind = str(formData.get('kind')) || 'custom';
-      const factorRaw = str(formData.get('factor'));
+    if (_action === "batch-create-um-and-conversion") {
+      const itemId = str(formData.get("itemId"));
+      const code = str(formData.get("code")).toUpperCase();
+      const name = str(formData.get("name"));
+      const kind = str(formData.get("kind")) || "custom";
+      const factorRaw = str(formData.get("factor"));
       const factor = factorRaw ? Number(factorRaw) : null;
 
-      if (!itemId) return badRequest('Item inválido');
-      if (!code) return badRequest('Informe o código da UM');
-      if (!/^[A-Z0-9_]+$/.test(code)) return badRequest('Código inválido. Use letras maiúsculas, números e _');
-      if (!name) return badRequest('Informe o nome da UM');
-      if (!(['weight', 'volume', 'count', 'custom'] as string[]).includes(kind)) return badRequest('Tipo inválido');
-      if (!(Number.isFinite(factor) && (factor as number) > 0)) return badRequest('Informe um fator maior que zero');
+      if (!itemId) return badRequest("Item inválido");
+      if (!code) return badRequest("Informe o código da UM");
+      if (!/^[A-Z0-9_]+$/.test(code))
+        return badRequest(
+          "Código inválido. Use letras maiúsculas, números e _"
+        );
+      if (!name) return badRequest("Informe o nome da UM");
+      if (!(["weight", "volume", "count", "custom"] as string[]).includes(kind))
+        return badRequest("Tipo inválido");
+      if (!(Number.isFinite(factor) && (factor as number) > 0))
+        return badRequest("Informe um fator maior que zero");
 
       const targetItem = await db.item.findUnique({
         where: { id: itemId },
         select: { id: true, consumptionUm: true },
       });
-      if (!targetItem) return badRequest('Item não encontrado');
-      if (!targetItem.consumptionUm) return badRequest('Defina primeiro a unidade de consumo do item (aba Principal)');
+      if (!targetItem) return badRequest("Item não encontrado");
+      if (!targetItem.consumptionUm)
+        return badRequest(
+          "Defina primeiro a unidade de consumo do item (aba Principal)"
+        );
 
-      const existingUnit = await db.measurementUnit.findFirst({ where: { code } });
-      const unit = existingUnit ?? await db.measurementUnit.create({
-        data: { code, name, kind, scope: 'restricted', active: true },
+      const existingUnit = await db.measurementUnit.findFirst({
+        where: { code },
       });
+      const unit =
+        existingUnit ??
+        (await db.measurementUnit.create({
+          data: { code, name, kind, scope: "restricted", active: true },
+        }));
 
       await db.itemUnit.upsert({
         where: { itemId_unitCode: { itemId, unitCode: unit.code } },
-        create: { id: crypto.randomUUID(), itemId, unitCode: unit.code },
+        create: { id: randomUUID(), itemId, unitCode: unit.code },
         update: {},
       });
 
       await db.itemPurchaseConversion.upsert({
         where: { itemId_purchaseUm: { itemId, purchaseUm: unit.code } },
-        create: { id: crypto.randomUUID(), itemId, purchaseUm: unit.code, factor },
+        create: { id: randomUUID(), itemId, purchaseUm: unit.code, factor },
         update: { factor },
       });
 
       return ok({ message: `Conversão ${unit.code} configurada com sucesso.` });
     }
 
-    if (_action === 'batch-import') {
-      const movementDate = parseDateInputAsLocalNoon(str(formData.get('movementDate')));
-      if (!movementDate) return badRequest('Informe a data do documento');
-      await startStockMovementImportBatch({ batchId, actor, movementAt: movementDate });
-      return redirect(redirectToCurrentPath(request, `/admin/import-stock-movements/${batchId}`));
+    if (_action === "batch-import") {
+      const movementDate = parseDateInputAsLocalNoon(
+        str(formData.get("movementDate"))
+      );
+      if (!movementDate) return badRequest("Informe a data do documento");
+      await startStockMovementImportBatch({
+        batchId,
+        actor,
+        movementAt: movementDate,
+      });
+      return redirect(
+        redirectToCurrentPath(
+          request,
+          `/admin/import-stock-movements/${batchId}`
+        )
+      );
     }
 
-    if (_action === 'batch-update-imported-movement-date') {
-      const movementDate = parseDateInputAsLocalNoon(str(formData.get('movementDate')));
-      if (!movementDate) return badRequest('Informe a nova data da movimentação');
-      const result = await updateImportedStockMovementBatchDate({ batchId, actor, movementAt: movementDate });
+    if (_action === "batch-update-imported-movement-date") {
+      const movementDate = parseDateInputAsLocalNoon(
+        str(formData.get("movementDate"))
+      );
+      if (!movementDate)
+        return badRequest("Informe a nova data da movimentação");
+      const result = await updateImportedStockMovementBatchDate({
+        batchId,
+        actor,
+        movementAt: movementDate,
+      });
       return ok({
         updatedMovementDate: true,
         ...result,
@@ -1668,39 +2409,49 @@ export async function action({ request, params }: ActionFunctionArgs) {
       });
     }
 
-    if (_action === 'batch-attach-supplier-json') {
-      const supplierNotesFile = formData.get('supplierNotesFile');
+    if (_action === "batch-attach-supplier-json") {
+      const supplierNotesFile = formData.get("supplierNotesFile");
       if (!(supplierNotesFile instanceof File) || supplierNotesFile.size <= 0) {
-        return badRequest('Selecione um arquivo JSON');
+        return badRequest("Selecione um arquivo JSON");
       }
-      if (!supplierNotesFile.name.toLowerCase().endsWith('.json')) {
-        return badRequest('Arquivo inválido. Envie um .json');
+      if (!supplierNotesFile.name.toLowerCase().endsWith(".json")) {
+        return badRequest("Arquivo inválido. Envie um .json");
       }
       await reconcileStockMovementImportBatchSuppliersFromFile({
         batchId,
         fileName: supplierNotesFile.name,
         fileBuffer: Buffer.from(await supplierNotesFile.arrayBuffer()),
       });
-      return redirect(redirectToCurrentPath(request, `/admin/import-stock-movements/${batchId}`));
+      return redirect(
+        redirectToCurrentPath(
+          request,
+          `/admin/import-stock-movements/${batchId}`
+        )
+      );
     }
 
-    if (_action === 'batch-rollback') {
+    if (_action === "batch-rollback") {
       await rollbackStockMovementImportBatch({ batchId, actor });
-      return redirect(redirectToCurrentPath(request, `/admin/import-stock-movements/${batchId}`));
+      return redirect(
+        redirectToCurrentPath(
+          request,
+          `/admin/import-stock-movements/${batchId}`
+        )
+      );
     }
 
-    if (_action === 'batch-archive') {
+    if (_action === "batch-archive") {
       await archiveStockMovementImportBatch(batchId);
-      return redirect('/admin/import-stock-movements');
+      return redirect("/admin/import-stock-movements");
     }
 
-    if (_action === 'batch-delete') {
+    if (_action === "batch-delete") {
       await deleteStockMovementImportBatch(batchId);
-      return redirect('/admin/import-stock-movements');
+      return redirect("/admin/import-stock-movements");
     }
 
-    if (_action === 'batch-update-freight') {
-      const raw = str(formData.get('freightAmount')).replace(',', '.');
+    if (_action === "batch-update-freight") {
+      const raw = str(formData.get("freightAmount")).replace(",", ".");
       const value = parseFloat(raw);
       const freightAmount = Number.isFinite(value) && value >= 0 ? value : null;
       await db.stockMovementImportBatch.update({
@@ -1710,7 +2461,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
       return ok({ updatedFreight: true });
     }
 
-    return badRequest('Ação inválida');
+    return badRequest("Ação inválida");
   } catch (error) {
     return serverError(error);
   }
@@ -1724,10 +2475,17 @@ export type AdminImportStockMovementsBatchOutletContext = {
   appliedChanges: any[];
   unitOptions: string[];
   itemUnitOptionsByItemId: Record<string, string[]>;
-  measurementConversions: Array<{ fromUnit: string; toUnit: string; factor: number }>;
+  measurementConversions: Array<{
+    fromUnit: string;
+    toUnit: string;
+    factor: number;
+  }>;
   suppliers: any[];
   categories: Array<{ id: string; name: string }>;
-  itemCostHints: Record<string, { lastCostPerUnit: number | null; avgCostPerUnit: number | null }>;
+  itemCostHints: Record<
+    string,
+    { lastCostPerUnit: number | null; avgCostPerUnit: number | null }
+  >;
   summary: ReturnType<typeof summaryFromAny>;
   isImportingBatch: boolean;
 };
@@ -1744,97 +2502,153 @@ export default function AdminImportStockMovementsBatchDetailRoute() {
   const lines = (selected?.lines || []) as any[];
   const items = (selected?.items || []) as any[];
   const appliedChanges = (selected?.appliedChanges || []) as any[];
-  const unitOptions = (((loaderData as any)?.payload?.unitOptions || []) as string[]);
-  const itemUnitOptionsByItemId = (((loaderData as any)?.payload?.itemUnitOptionsByItemId || {}) as Record<string, string[]>);
-  const measurementConversions = (((loaderData as any)?.payload?.measurementConversions || []) as Array<{
+  const unitOptions = ((loaderData as any)?.payload?.unitOptions ||
+    []) as string[];
+  const itemUnitOptionsByItemId = ((loaderData as any)?.payload
+    ?.itemUnitOptionsByItemId || {}) as Record<string, string[]>;
+  const measurementConversions = ((loaderData as any)?.payload
+    ?.measurementConversions || []) as Array<{
     fromUnit: string;
     toUnit: string;
     factor: number;
-  }>);
-  const suppliers = (((loaderData as any)?.payload?.suppliers || []) as any[]);
-  const itemCostHints = (((loaderData as any)?.payload?.itemCostHints || {}) as Record<
+  }>;
+  const suppliers = ((loaderData as any)?.payload?.suppliers || []) as any[];
+  const itemCostHints = ((loaderData as any)?.payload?.itemCostHints ||
+    {}) as Record<
     string,
     { lastCostPerUnit: number | null; avgCostPerUnit: number | null }
-  >);
+  >;
   const summary = summaryFromAny(selected?.summary || selectedBatch?.summary);
-  const batchImportStatus = String(selectedBatch?.importStatus || 'idle');
-  const batchImportProcessedCount = Number(selectedBatch?.importProcessedCount || 0);
+  const batchImportStatus = String(selectedBatch?.importStatus || "idle");
+  const batchImportProcessedCount = Number(
+    selectedBatch?.importProcessedCount || 0
+  );
   const batchImportErrorCount = Number(selectedBatch?.importErrorCount || 0);
   const batchImportTotalCount = Number(selectedBatch?.importTotalCount || 0);
-  const batchImportMessage = String(selectedBatch?.importMessage || '').trim();
+  const batchImportMessage = String(selectedBatch?.importMessage || "").trim();
   const isImportingBatch =
-    batchImportStatus === 'importing' ||
-    (navigation.state === 'submitting' &&
-      String(navigation.formData?.get('_action') || '') === 'batch-import' &&
-      String(navigation.formData?.get('batchId') || '') === String(selectedBatch?.id || ''));
-  const importStepInFlight = importStepFetcher.state !== 'idle';
-  const displayedProcessedCount = Number(importStepFetcher.data?.payload?.progress?.processedCount ?? batchImportProcessedCount);
-  const displayedErrorCount = Number(importStepFetcher.data?.payload?.progress?.errorCount ?? batchImportErrorCount);
-  const displayedTotalCount = Number(importStepFetcher.data?.payload?.progress?.totalCount ?? batchImportTotalCount);
-  const displayedImportMessage = String(importStepFetcher.data?.payload?.progress?.message || batchImportMessage || '').trim();
-  const statusCounts = lines.reduce(
-    (acc, line) => {
-      const status = String(line?.status || '').trim();
-      if (!status) return acc;
-      acc[status] = Number(acc[status] || 0) + 1;
-      return acc;
-    },
-    {} as Record<string, number>,
+    batchImportStatus === "importing" ||
+    (navigation.state === "submitting" &&
+      String(navigation.formData?.get("_action") || "") === "batch-import" &&
+      String(navigation.formData?.get("batchId") || "") ===
+        String(selectedBatch?.id || ""));
+  const importStepInFlight = importStepFetcher.state !== "idle";
+  const displayedProcessedCount = Number(
+    importStepFetcher.data?.payload?.progress?.processedCount ??
+      batchImportProcessedCount
   );
-  const importedLines = lines.filter((line) => String(line?.status || '') === 'imported');
+  const displayedErrorCount = Number(
+    importStepFetcher.data?.payload?.progress?.errorCount ??
+      batchImportErrorCount
+  );
+  const displayedTotalCount = Number(
+    importStepFetcher.data?.payload?.progress?.totalCount ??
+      batchImportTotalCount
+  );
+  const displayedImportMessage = String(
+    importStepFetcher.data?.payload?.progress?.message ||
+      batchImportMessage ||
+      ""
+  ).trim();
+  const statusCounts = lines.reduce((acc, line) => {
+    const status = String(line?.status || "").trim();
+    if (!status) return acc;
+    acc[status] = Number(acc[status] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>);
+  const importedLines = lines.filter(
+    (line) => String(line?.status || "") === "imported"
+  );
   const importedMovementDate = firstValidDate(
     importedLines.find((line) => line?.movementAt)?.movementAt,
     selectedBatch?.periodStart,
-    lines.find((line) => line?.movementAt)?.movementAt,
+    lines.find((line) => line?.movementAt)?.movementAt
   );
-  const pendingCount = (statusCounts['pending_mapping'] || 0) + (statusCounts['pending_conversion'] || 0);
-  const availableStatusTabs = LINE_STATUS_NAV
-    .filter((item) => item.status !== 'pending_mapping' && item.status !== 'pending_conversion')
+  const pendingCount =
+    (statusCounts["pending_mapping"] || 0) +
+    (statusCounts["pending_conversion"] || 0);
+  const availableStatusTabs = LINE_STATUS_NAV.filter(
+    (item) =>
+      item.status !== "pending_mapping" && item.status !== "pending_conversion"
+  )
     .filter((item) => Number(statusCounts[item.status] || 0) > 0)
-    .reduce<Array<{ status: string; label: string; count: number }>>((acc, item) => {
-      acc.push({ status: item.status, label: item.label, count: statusCounts[item.status] || 0 });
-      return acc;
-    }, []);
+    .reduce<Array<{ status: string; label: string; count: number }>>(
+      (acc, item) => {
+        acc.push({
+          status: item.status,
+          label: item.label,
+          count: statusCounts[item.status] || 0,
+        });
+        return acc;
+      },
+      []
+    );
   if (pendingCount > 0) {
-    const insertIdx = availableStatusTabs.findIndex((t) => t.status === 'pending_supplier');
-    availableStatusTabs.splice(insertIdx >= 0 ? insertIdx : 0, 0, { status: 'pending', label: 'Pendente', count: pendingCount });
+    const insertIdx = availableStatusTabs.findIndex(
+      (t) => t.status === "pending_supplier"
+    );
+    availableStatusTabs.splice(insertIdx >= 0 ? insertIdx : 0, 0, {
+      status: "pending",
+      label: "Pendente",
+      count: pendingCount,
+    });
   }
   const tabClass = ({ isActive }: { isActive: boolean }) =>
-    `border-b-2 pb-3 font-medium transition ${isActive
-      ? 'border-slate-950 text-slate-950'
-      : 'border-transparent text-slate-400 hover:text-slate-700'
+    `border-b-2 pb-3 font-medium transition ${
+      isActive
+        ? "border-slate-950 text-slate-950"
+        : "border-transparent text-slate-400 hover:text-slate-700"
     }`;
 
   useEffect(() => {
     if (!selectedBatch?.id) return;
-    if (batchImportStatus !== 'importing') return;
+    if (batchImportStatus !== "importing") return;
     if (importStepInFlight) return;
 
     const timeoutId = window.setTimeout(() => {
       importStepFetcher.submit(
         { batchId: String(selectedBatch.id) },
-        { method: 'post', action: '/api/admin-stock-import-batch-import-step' },
+        { method: "post", action: "/api/admin-stock-import-batch-import-step" }
       );
     }, 500);
 
     return () => window.clearTimeout(timeoutId);
-  }, [selectedBatch?.id, batchImportStatus, importStepInFlight, importStepFetcher]);
+  }, [
+    selectedBatch?.id,
+    batchImportStatus,
+    importStepInFlight,
+    importStepFetcher,
+  ]);
 
   useEffect(() => {
-    if (importStepFetcher.state !== 'idle') return;
+    if (importStepFetcher.state !== "idle") return;
     if (!importStepFetcher.data) return;
     revalidator.revalidate();
   }, [importStepFetcher.state, importStepFetcher.data, revalidator]);
 
   const prevBatchImportStatusRef = useRef(batchImportStatus);
   useEffect(() => {
-    if (prevBatchImportStatusRef.current === 'importing' && batchImportStatus !== 'importing') {
-      if (batchImportStatus === 'imported') {
-        toast({ title: 'Importação concluída', description: 'Todas as linhas foram importadas com sucesso.' });
-      } else if (batchImportStatus === 'partial') {
-        toast({ title: 'Importação parcial', description: 'Algumas linhas foram importadas, outras tiveram erros.', variant: 'destructive' });
-      } else if (batchImportStatus === 'error') {
-        toast({ title: 'Erro na importação', description: 'Ocorreu um erro durante a importação.', variant: 'destructive' });
+    if (
+      prevBatchImportStatusRef.current === "importing" &&
+      batchImportStatus !== "importing"
+    ) {
+      if (batchImportStatus === "imported") {
+        toast({
+          title: "Importação concluída",
+          description: "Todas as linhas foram importadas com sucesso.",
+        });
+      } else if (batchImportStatus === "partial") {
+        toast({
+          title: "Importação parcial",
+          description: "Algumas linhas foram importadas, outras tiveram erros.",
+          variant: "destructive",
+        });
+      } else if (batchImportStatus === "error") {
+        toast({
+          title: "Erro na importação",
+          description: "Ocorreu um erro durante a importação.",
+          variant: "destructive",
+        });
       }
     }
     prevBatchImportStatusRef.current = batchImportStatus;
@@ -1843,12 +2657,17 @@ export default function AdminImportStockMovementsBatchDetailRoute() {
   if (!selectedBatch) {
     return (
       <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-4 text-sm text-red-700">
-        {String((loaderData as any)?.message || 'Não foi possível carregar o lote.')}
+        {String(
+          (loaderData as any)?.message || "Não foi possível carregar o lote."
+        )}
       </div>
     );
   }
 
-  const categories = (((loaderData as any)?.payload?.categories || []) as Array<{ id: string; name: string }>);
+  const categories = ((loaderData as any)?.payload?.categories || []) as Array<{
+    id: string;
+    name: string;
+  }>;
   const outletContext: AdminImportStockMovementsBatchOutletContext = {
     selected,
     selectedBatch,
@@ -1881,24 +2700,38 @@ export default function AdminImportStockMovementsBatchDetailRoute() {
             <div className="flex items-center gap-3 rounded-xl bg-slate-50 px-4 py-4">
               <Loader2 className="h-5 w-5 animate-spin text-emerald-600" />
               <div className="space-y-1 text-sm text-slate-700">
-                <div>Processando a importação deste lote linha por linha. Aguarde o término.</div>
+                <div>
+                  Processando a importação deste lote linha por linha. Aguarde o
+                  término.
+                </div>
                 {displayedTotalCount > 0 ? (
                   <div className="text-slate-500">
-                    {displayedProcessedCount} de {displayedTotalCount} linha(s) processadas • {displayedErrorCount} erro(s)
+                    {displayedProcessedCount} de {displayedTotalCount} linha(s)
+                    processadas • {displayedErrorCount} erro(s)
                   </div>
                 ) : null}
               </div>
             </div>
-            {displayedImportMessage ? <p className="text-sm text-slate-600">{displayedImportMessage}</p> : null}
+            {displayedImportMessage ? (
+              <p className="text-sm text-slate-600">{displayedImportMessage}</p>
+            ) : null}
             <p className="text-sm leading-6 text-slate-500">
-              Não feche, atualize ou saia desta página enquanto a aplicação estiver em execução. Isso evita interromper a percepção do processo antes da conclusão.
+              Não feche, atualize ou saia desta página enquanto a aplicação
+              estiver em execução. Isso evita interromper a percepção do
+              processo antes da conclusão.
             </p>
           </div>
         </DialogContent>
       </Dialog>
 
       {actionData?.message ? (
-        <div className={`rounded-lg border px-3 py-2 text-sm ${actionData.status >= 400 ? 'border-red-200 bg-red-50 text-red-700' : 'border-green-200 bg-green-50 text-green-700'}`}>
+        <div
+          className={`rounded-lg border px-3 py-2 text-sm ${
+            actionData.status >= 400
+              ? "border-red-200 bg-red-50 text-red-700"
+              : "border-green-200 bg-green-50 text-green-700"
+          }`}
+        >
           {actionData.message}
         </div>
       ) : null}
@@ -1908,24 +2741,33 @@ export default function AdminImportStockMovementsBatchDetailRoute() {
         <div className="flex items-start justify-between gap-6">
           <div>
             <div className="flex flex-wrap items-center gap-2">
-              <h2 className="text-[28px] font-semibold tracking-tight text-slate-950">{selectedBatch.name}</h2>
-              <Badge variant="outline" className={cn('rounded-full px-2.5 py-1 text-[11px] font-semibold', statusBadgeClass(String(selectedBatch.status)))}>
+              <h2 className="text-[28px] font-semibold tracking-tight text-slate-950">
+                {selectedBatch.name}
+              </h2>
+              <Badge
+                variant="outline"
+                className={cn(
+                  "rounded-full px-2.5 py-1 text-[11px] font-semibold",
+                  statusBadgeClass(String(selectedBatch.status))
+                )}
+              >
                 {{
-                  validated: 'Aguardando importação',
-                  ready: 'Pronta',
-                  imported: 'Importado',
-                  partial: 'Parcial',
-                  archived: 'Arquivado',
+                  validated: "Aguardando importação",
+                  ready: "Pronta",
+                  imported: "Importado",
+                  partial: "Parcial",
+                  archived: "Arquivado",
                 }[String(selectedBatch.status)] ?? String(selectedBatch.status)}
               </Badge>
             </div>
             {selectedBatch.createdAt ? (
-              <div className="mt-1 text-sm text-slate-400">Criado em {formatDate(selectedBatch.createdAt)}</div>
+              <div className="mt-1 text-sm text-slate-400">
+                Criado em {formatDate(selectedBatch.createdAt)}
+              </div>
             ) : null}
           </div>
 
           <div className="flex shrink-0 items-stretch gap-2">
-
             {/* Grupo 1: Importar, Desfazer, Arquivar, Eliminar */}
             <div className="flex items-stretch overflow-hidden rounded-lg border border-slate-200">
               <ImportBatchSubmitDialog
@@ -1937,23 +2779,39 @@ export default function AdminImportStockMovementsBatchDetailRoute() {
 
               {summary.error > 0 ? (
                 <>
-                  <Separator orientation="vertical" className="h-auto self-stretch" />
+                  <Separator
+                    orientation="vertical"
+                    className="h-auto self-stretch"
+                  />
                   <Form method="post">
-                    <input type="hidden" name="_action" value="batch-retry-errors" />
-                    <input type="hidden" name="batchId" value={selectedBatch.id} />
+                    <input
+                      type="hidden"
+                      name="_action"
+                      value="batch-retry-errors"
+                    />
+                    <input
+                      type="hidden"
+                      name="batchId"
+                      value={selectedBatch.id}
+                    />
                     <button
                       type="submit"
                       disabled={isImportingBatch}
                       className="flex flex-col items-center justify-center gap-1 px-4 py-2.5 text-orange-700 hover:bg-orange-50 transition min-w-[64px] disabled:opacity-40 disabled:cursor-not-allowed"
                     >
                       <RotateCcw className="h-4 w-4" />
-                      <span className="text-[11px] font-medium">Retentar ({summary.error})</span>
+                      <span className="text-[11px] font-medium">
+                        Retentar ({summary.error})
+                      </span>
                     </button>
                   </Form>
                 </>
               ) : null}
 
-              <Separator orientation="vertical" className="h-auto self-stretch" />
+              <Separator
+                orientation="vertical"
+                className="h-auto self-stretch"
+              />
 
               <Form method="post">
                 <input type="hidden" name="_action" value="batch-rollback" />
@@ -1968,7 +2826,10 @@ export default function AdminImportStockMovementsBatchDetailRoute() {
                 </button>
               </Form>
 
-              <Separator orientation="vertical" className="h-auto self-stretch" />
+              <Separator
+                orientation="vertical"
+                className="h-auto self-stretch"
+              />
 
               <Form method="post">
                 <input type="hidden" name="_action" value="batch-archive" />
@@ -1983,12 +2844,15 @@ export default function AdminImportStockMovementsBatchDetailRoute() {
                 </button>
               </Form>
 
-              <Separator orientation="vertical" className="h-auto self-stretch" />
+              <Separator
+                orientation="vertical"
+                className="h-auto self-stretch"
+              />
 
               <DeleteBatchButton
                 batchId={String(selectedBatch.id)}
-                batchName={String(selectedBatch.name || 'sem nome')}
-                status={String(selectedBatch.status || '')}
+                batchName={String(selectedBatch.name || "sem nome")}
+                status={String(selectedBatch.status || "")}
               />
             </div>
 
@@ -2007,46 +2871,82 @@ export default function AdminImportStockMovementsBatchDetailRoute() {
                   </DialogHeader>
                   <div className="grid gap-4 text-sm">
                     <div>
-                      <div className="text-[11px] uppercase tracking-wide text-slate-400 mb-1">ID</div>
-                      <div className="font-mono text-slate-700">{selectedBatch.id}</div>
+                      <div className="text-[11px] uppercase tracking-wide text-slate-400 mb-1">
+                        ID
+                      </div>
+                      <div className="font-mono text-slate-700">
+                        {selectedBatch.id}
+                      </div>
                     </div>
                     <div>
-                      <div className="text-[11px] uppercase tracking-wide text-slate-400 mb-1">Aba</div>
-                      <div className="text-slate-700">{selectedBatch.worksheetName || 'sem aba'}</div>
+                      <div className="text-[11px] uppercase tracking-wide text-slate-400 mb-1">
+                        Aba
+                      </div>
+                      <div className="text-slate-700">
+                        {selectedBatch.worksheetName || "sem aba"}
+                      </div>
                     </div>
                     <div>
-                      <div className="text-[11px] uppercase tracking-wide text-slate-400 mb-1">Arquivo</div>
-                      <div className="text-slate-700">{selectedBatch.originalFileName || '-'}</div>
+                      <div className="text-[11px] uppercase tracking-wide text-slate-400 mb-1">
+                        Arquivo
+                      </div>
+                      <div className="text-slate-700">
+                        {selectedBatch.originalFileName || "-"}
+                      </div>
                     </div>
                     <div>
-                      <div className="text-[11px] uppercase tracking-wide text-slate-400 mb-1">JSON fornecedor</div>
-                      <div className="text-slate-700">{selectedBatch.supplierNotesFileName || 'não anexado'}</div>
+                      <div className="text-[11px] uppercase tracking-wide text-slate-400 mb-1">
+                        JSON fornecedor
+                      </div>
+                      <div className="text-slate-700">
+                        {selectedBatch.supplierNotesFileName || "não anexado"}
+                      </div>
                     </div>
                     <div>
-                      <div className="text-[11px] uppercase tracking-wide text-slate-400 mb-1">Período</div>
-                      <div className="text-slate-700">{formatDate(selectedBatch.periodStart)} até {formatDate(selectedBatch.periodEnd)}</div>
+                      <div className="text-[11px] uppercase tracking-wide text-slate-400 mb-1">
+                        Período
+                      </div>
+                      <div className="text-slate-700">
+                        {formatDate(selectedBatch.periodStart)} até{" "}
+                        {formatDate(selectedBatch.periodEnd)}
+                      </div>
                     </div>
                     <div>
-                      <div className="text-[11px] uppercase tracking-wide text-slate-400 mb-1">Fornecedor</div>
-                      <div className="text-slate-700">{summary.pendingSupplier > 0 ? `${summary.pendingSupplier} pend. fornecedor` : 'fornecedor conciliado'}</div>
+                      <div className="text-[11px] uppercase tracking-wide text-slate-400 mb-1">
+                        Fornecedor
+                      </div>
+                      <div className="text-slate-700">
+                        {summary.pendingSupplier > 0
+                          ? `${summary.pendingSupplier} pend. fornecedor`
+                          : "fornecedor conciliado"}
+                      </div>
                     </div>
                     {selectedBatch.notes ? (
                       <div>
-                        <div className="text-[11px] uppercase tracking-wide text-slate-400 mb-1">Notas</div>
-                        <div className="text-slate-700">{selectedBatch.notes}</div>
+                        <div className="text-[11px] uppercase tracking-wide text-slate-400 mb-1">
+                          Notas
+                        </div>
+                        <div className="text-slate-700">
+                          {selectedBatch.notes}
+                        </div>
                       </div>
                     ) : null}
                   </div>
                 </DialogContent>
               </Dialog>
 
-              <Separator orientation="vertical" className="h-auto self-stretch" />
+              <Separator
+                orientation="vertical"
+                className="h-auto self-stretch"
+              />
 
               <Dialog>
                 <DialogTrigger asChild>
                   <button className="flex flex-col items-center justify-center gap-1 px-4 py-2.5 text-slate-600 hover:bg-slate-50 transition min-w-[64px]">
                     <BarChart2 className="h-4 w-4" />
-                    <span className="text-[11px] font-medium">Estatísticas</span>
+                    <span className="text-[11px] font-medium">
+                      Estatísticas
+                    </span>
                   </button>
                 </DialogTrigger>
                 <DialogContent className="max-w-lg">
@@ -2055,33 +2955,49 @@ export default function AdminImportStockMovementsBatchDetailRoute() {
                   </DialogHeader>
                   <div className="grid gap-2 sm:grid-cols-3">
                     {[
-                      ['Total', summary.total],
-                      ['Prontas', summary.ready],
-                      ['Prontas p/ importar', summary.readyToImport],
-                      ['Importadas', summary.imported],
-                      ['Pend. vínculo', summary.pendingMapping],
-                      ['Pend. fornecedor', summary.pendingSupplier],
-                      ['Rev. custo', summary.pendingCostReview],
-                      ['Pend. conversão', summary.pendingConversion],
-                      ['Ignoradas', summary.ignored],
-                      ['Duplicadas', summary.skippedDuplicate],
-                      ['Inválidas', summary.invalid],
-                      ['Erros', summary.error],
+                      ["Total", summary.total],
+                      ["Prontas", summary.ready],
+                      ["Prontas p/ importar", summary.readyToImport],
+                      ["Importadas", summary.imported],
+                      ["Pend. vínculo", summary.pendingMapping],
+                      ["Pend. fornecedor", summary.pendingSupplier],
+                      ["Rev. custo", summary.pendingCostReview],
+                      ["Pend. conversão", summary.pendingConversion],
+                      ["Ignoradas", summary.ignored],
+                      ["Duplicadas", summary.skippedDuplicate],
+                      ["Inválidas", summary.invalid],
+                      ["Erros", summary.error],
                     ].map(([label, value]) => (
-                      <div key={String(label)} className="rounded-xl bg-slate-50 px-3 py-2.5">
-                        <div className="truncate text-[10px] uppercase tracking-[0.08em] text-slate-500">{label}</div>
-                        <div className="mt-0.5 text-[18px] font-semibold leading-none tracking-tight text-slate-950">{value as any}</div>
+                      <div
+                        key={String(label)}
+                        className="rounded-xl bg-slate-50 px-3 py-2.5"
+                      >
+                        <div className="truncate text-[10px] uppercase tracking-[0.08em] text-slate-500">
+                          {label}
+                        </div>
+                        <div className="mt-0.5 text-[18px] font-semibold leading-none tracking-tight text-slate-950">
+                          {value as any}
+                        </div>
                       </div>
                     ))}
                   </div>
                 </DialogContent>
               </Dialog>
 
-              <Separator orientation="vertical" className="h-auto self-stretch" />
+              <Separator
+                orientation="vertical"
+                className="h-auto self-stretch"
+              />
 
-              <FreightEditButton batchId={String(selectedBatch.id)} freightAmount={selectedBatch.freightAmount ?? null} />
+              <FreightEditButton
+                batchId={String(selectedBatch.id)}
+                freightAmount={selectedBatch.freightAmount ?? null}
+              />
 
-              <Separator orientation="vertical" className="h-auto self-stretch" />
+              <Separator
+                orientation="vertical"
+                className="h-auto self-stretch"
+              />
 
               <BatchMovementDateEditButton
                 batchId={String(selectedBatch.id)}
@@ -2090,10 +3006,17 @@ export default function AdminImportStockMovementsBatchDetailRoute() {
                 disabled={isImportingBatch}
               />
 
-              <Separator orientation="vertical" className="h-auto self-stretch" />
+              <Separator
+                orientation="vertical"
+                className="h-auto self-stretch"
+              />
 
               <Form method="post">
-                <input type="hidden" name="_action" value="reapply-aliases-all-batches" />
+                <input
+                  type="hidden"
+                  name="_action"
+                  value="reapply-aliases-all-batches"
+                />
                 <input type="hidden" name="batchId" value={selectedBatch.id} />
                 <button
                   type="submit"
@@ -2119,13 +3042,13 @@ export default function AdminImportStockMovementsBatchDetailRoute() {
                 <span className="text-[11px] font-medium">Mobile</span>
               </Link>
             </div>
-
           </div>
         </div>
 
         {summary.pendingSupplier > 0 ? (
           <div className="rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-900">
-            Este lote ainda tem {summary.pendingSupplier} registro(s) sem conciliação de fornecedor.
+            Este lote ainda tem {summary.pendingSupplier} registro(s) sem
+            conciliação de fornecedor.
           </div>
         ) : null}
       </section>
@@ -2138,7 +3061,11 @@ export default function AdminImportStockMovementsBatchDetailRoute() {
             </NavLink>
 
             {availableStatusTabs.map((item) => (
-              <NavLink key={item.status} to={`status/${item.status}`} className={tabClass}>
+              <NavLink
+                key={item.status}
+                to={`status/${item.status}`}
+                className={tabClass}
+              >
                 {item.label} ({item.count})
               </NavLink>
             ))}

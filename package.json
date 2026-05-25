@@ -9,6 +9,7 @@
     "start": "remix-serve ./build/server/index.js",
     "migrate:dev": "npx prisma migrate dev --name",
     "migrate:deploy": "npx prisma migrate deploy",
+    "graphify:refresh": "/home/lanzo/.local/share/pipx/venvs/graphifyy/bin/python scripts/rebuild-graphify-wiki.py",
     "postinstall": "prisma generate",
     "test": "vitest"
   },

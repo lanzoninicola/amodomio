@@ -1,76 +1,129 @@
-import { Link, useFetcher, useNavigate, useRevalidator } from '@remix-run/react';
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { Check, ChevronsUpDown } from 'lucide-react';
-import { DecimalInput } from '~/components/inputs/inputs';
-import { MoneyInput } from '~/components/money-input/MoneyInput';
-import { Button } from '~/components/ui/button';
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandSeparator } from '~/components/ui/command';
-import { Input } from '~/components/ui/input';
-import { Label } from '~/components/ui/label';
-import { Popover, PopoverContent, PopoverTrigger } from '~/components/ui/popover';
-import { Separator } from '~/components/ui/separator';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '~/components/ui/select';
-import { Textarea } from '~/components/ui/textarea';
-import { cn } from '~/lib/utils';
+import {
+  Link,
+  useFetcher,
+  useNavigate,
+  useRevalidator,
+} from "@remix-run/react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Check, ChevronsUpDown, Trash2 } from "lucide-react";
+import { DecimalInput } from "~/components/inputs/inputs";
+import { MoneyInput } from "~/components/money-input/MoneyInput";
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "~/components/ui/alert-dialog";
+import { Button } from "~/components/ui/button";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+  CommandSeparator,
+} from "~/components/ui/command";
+import { Input } from "~/components/ui/input";
+import { Label } from "~/components/ui/label";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "~/components/ui/popover";
+import { Separator } from "~/components/ui/separator";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "~/components/ui/select";
+import { Textarea } from "~/components/ui/textarea";
+import { cn } from "~/lib/utils";
 
-const ITEM_CLASSIFICATION_ORDER = ['insumo', 'semi_acabado', 'produto_final', 'embalagem', 'servico', 'outro'] as const;
+const ITEM_CLASSIFICATION_ORDER = [
+  "insumo",
+  "semi_acabado",
+  "produto_final",
+  "embalagem",
+  "servico",
+  "outro",
+] as const;
 const ITEM_CLASSIFICATION_LABELS: Record<string, string> = {
-  insumo: 'insumo',
-  semi_acabado: 'semi-acabado',
-  produto_final: 'produto final',
-  embalagem: 'embalagem',
-  servico: 'serviço',
-  outro: 'outro',
+  insumo: "insumo",
+  semi_acabado: "semi-acabado",
+  produto_final: "produto final",
+  embalagem: "embalagem",
+  servico: "serviço",
+  outro: "outro",
 };
 
 function formatDateTimeLocalValue(value: unknown) {
-  if (!value) return '';
+  if (!value) return "";
   const d = new Date(String(value));
-  if (Number.isNaN(d.getTime())) return '';
+  if (Number.isNaN(d.getTime())) return "";
   const local = new Date(d.getTime() - d.getTimezoneOffset() * 60000);
   return local.toISOString().slice(0, 16);
 }
 
 function formatMoney(value: unknown) {
   const n = Number(value);
-  if (!Number.isFinite(n)) return '-';
-  return n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  if (!Number.isFinite(n)) return "-";
+  return n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
 function formatNumber(value: unknown) {
   const n = Number(value);
-  if (!Number.isFinite(n)) return '-';
-  return n.toLocaleString('pt-BR', { maximumFractionDigits: 6 });
+  if (!Number.isFinite(n)) return "-";
+  return n.toLocaleString("pt-BR", { maximumFractionDigits: 6 });
 }
 
 function formatDecimal(value: unknown, fractionDigits = 4) {
   const n = Number(value);
-  if (!Number.isFinite(n)) return '-';
-  return n.toLocaleString('pt-BR', {
+  if (!Number.isFinite(n)) return "-";
+  return n.toLocaleString("pt-BR", {
     minimumFractionDigits: fractionDigits,
     maximumFractionDigits: fractionDigits,
   });
 }
 
-export function getItemBaseUnit(item: { purchaseUm?: string | null; consumptionUm?: string | null } | null | undefined) {
-  return item?.consumptionUm || item?.purchaseUm || '-';
+export function getItemBaseUnit(
+  item:
+    | { purchaseUm?: string | null; consumptionUm?: string | null }
+    | null
+    | undefined
+) {
+  return item?.consumptionUm || item?.purchaseUm || "-";
 }
 
 function normalizeUnit(value: unknown) {
-  const normalized = String(value || '').trim().toUpperCase();
+  const normalized = String(value || "")
+    .trim()
+    .toUpperCase();
   return normalized || null;
 }
 
 function parseDecimal(value: unknown) {
-  const normalized = String(value || '').trim().replace(',', '.');
+  const normalized = String(value || "")
+    .trim()
+    .replace(",", ".");
   const amount = Number(normalized);
   return Number.isFinite(amount) ? amount : NaN;
 }
 
 function findMeasurementConversion(
-  measurementConversions: Array<{ fromUnit: string; toUnit: string; factor: number }>,
+  measurementConversions: Array<{
+    fromUnit: string;
+    toUnit: string;
+    factor: number;
+  }>,
   fromUnit: string | null,
-  toUnit: string | null,
+  toUnit: string | null
 ) {
   if (!fromUnit || !toUnit || fromUnit === toUnit) return null;
 
@@ -79,8 +132,10 @@ function findMeasurementConversion(
     const rowTo = normalizeUnit(row?.toUnit);
     const factor = Number(row?.factor ?? NaN);
     if (!rowFrom || !rowTo || !(factor > 0)) continue;
-    if (rowFrom === fromUnit && rowTo === toUnit) return { factor, mode: 'direct' as const };
-    if (rowFrom === toUnit && rowTo === fromUnit) return { factor, mode: 'reverse' as const };
+    if (rowFrom === fromUnit && rowTo === toUnit)
+      return { factor, mode: "direct" as const };
+    if (rowFrom === toUnit && rowTo === fromUnit)
+      return { factor, mode: "reverse" as const };
   }
 
   return null;
@@ -96,54 +151,153 @@ function resolveConvertedCostPreview(params: {
   targetUnit: string | null;
   selectedItem: any;
   manualConversionFactor: unknown;
-  measurementConversions: Array<{ fromUnit: string; toUnit: string; factor: number }>;
+  measurementConversions: Array<{
+    fromUnit: string;
+    toUnit: string;
+    factor: number;
+  }>;
 }) {
   const costAmount = Number(params.costAmount);
   const movementUnit = normalizeUnit(params.movementUnit);
   const targetUnit = normalizeUnit(params.targetUnit);
-  if (!Number.isFinite(costAmount) || costAmount <= 0 || !movementUnit || !targetUnit) return null;
+  if (
+    !Number.isFinite(costAmount) ||
+    costAmount <= 0 ||
+    !movementUnit ||
+    !targetUnit
+  )
+    return null;
 
   if (movementUnit === targetUnit) {
-    return { convertedCostAmount: costAmount, conversionSource: 'same-unit', conversionFactorUsed: 1 };
+    return {
+      convertedCostAmount: costAmount,
+      conversionSource: "same-unit",
+      conversionFactorUsed: 1,
+    };
   }
 
   const manualFactor = parseDecimal(params.manualConversionFactor);
   if (manualFactor > 0) {
-    return { convertedCostAmount: costAmount / manualFactor, conversionSource: 'manual', conversionFactorUsed: manualFactor };
+    return {
+      convertedCostAmount: costAmount / manualFactor,
+      conversionSource: "manual",
+      conversionFactorUsed: manualFactor,
+    };
   }
 
   const itemConsumptionUm = normalizeUnit(params.selectedItem?.consumptionUm);
   const itemPurchaseUm = normalizeUnit(params.selectedItem?.purchaseUm);
-  const itemConversions: Array<{ purchaseUm?: string | null; factor?: number | null }> = Array.isArray(params.selectedItem?.ItemPurchaseConversion)
+  const itemConversions: Array<{
+    purchaseUm?: string | null;
+    factor?: number | null;
+  }> = Array.isArray(params.selectedItem?.ItemPurchaseConversion)
     ? params.selectedItem.ItemPurchaseConversion
     : [];
-  const matchedConversion = itemConversions.find((conversion) => normalizeUnit(conversion?.purchaseUm) === movementUnit);
+  const matchedConversion = itemConversions.find(
+    (conversion) => normalizeUnit(conversion?.purchaseUm) === movementUnit
+  );
   const matchedFactor = Number(matchedConversion?.factor ?? NaN);
 
-  if (matchedConversion && itemConsumptionUm && targetUnit === itemConsumptionUm && matchedFactor > 0) {
-    return { convertedCostAmount: costAmount / matchedFactor, conversionSource: 'item_purchase_factor', conversionFactorUsed: matchedFactor };
+  if (
+    matchedConversion &&
+    itemConsumptionUm &&
+    targetUnit === itemConsumptionUm &&
+    matchedFactor > 0
+  ) {
+    return {
+      convertedCostAmount: costAmount / matchedFactor,
+      conversionSource: "item_purchase_factor",
+      conversionFactorUsed: matchedFactor,
+    };
   }
 
-  const itemFactor = Number(params.selectedItem?.purchaseToConsumptionFactor ?? NaN);
+  const itemFactor = Number(
+    params.selectedItem?.purchaseToConsumptionFactor ?? NaN
+  );
   if (itemPurchaseUm && itemConsumptionUm && itemFactor > 0) {
     if (movementUnit === itemPurchaseUm && targetUnit === itemConsumptionUm) {
-      return { convertedCostAmount: costAmount / itemFactor, conversionSource: 'item_purchase_factor', conversionFactorUsed: itemFactor };
+      return {
+        convertedCostAmount: costAmount / itemFactor,
+        conversionSource: "item_purchase_factor",
+        conversionFactorUsed: itemFactor,
+      };
     }
     if (movementUnit === itemConsumptionUm && targetUnit === itemPurchaseUm) {
-      return { convertedCostAmount: costAmount * itemFactor, conversionSource: 'item_purchase_factor_reverse', conversionFactorUsed: itemFactor };
+      return {
+        convertedCostAmount: costAmount * itemFactor,
+        conversionSource: "item_purchase_factor_reverse",
+        conversionFactorUsed: itemFactor,
+      };
     }
   }
 
-  const measured = findMeasurementConversion(params.measurementConversions, movementUnit, targetUnit);
+  const measured = findMeasurementConversion(
+    params.measurementConversions,
+    movementUnit,
+    targetUnit
+  );
   if (measured) {
     return {
-      convertedCostAmount: measured.mode === 'direct' ? costAmount / measured.factor : costAmount * measured.factor,
-      conversionSource: measured.mode === 'direct' ? 'measurement_conversion_direct' : 'measurement_conversion_reverse',
+      convertedCostAmount:
+        measured.mode === "direct"
+          ? costAmount / measured.factor
+          : costAmount * measured.factor,
+      conversionSource:
+        measured.mode === "direct"
+          ? "measurement_conversion_direct"
+          : "measurement_conversion_reverse",
       conversionFactorUsed: measured.factor,
     };
   }
 
   return null;
+}
+
+function buildEditableMovementLine(row: any) {
+  if (row?.Line) return row.Line;
+  if (!row) return null;
+
+  const metadata =
+    typeof row.metadata === "object" &&
+    row.metadata &&
+    !Array.isArray(row.metadata)
+      ? row.metadata
+      : {};
+  const quantityAmount = row.quantityAmount ?? null;
+  const movementUnit =
+    row.quantityUnit || row.movementUnit || row.newCostUnitAtImport || "";
+  const movementUnitCostAmount =
+    metadata.movementUnitCostAmount ??
+    (Number(quantityAmount) > 0 && Number(metadata.costTotalAmount) > 0
+      ? Number(metadata.costTotalAmount) / Number(quantityAmount)
+      : row.newCostAtImport);
+
+  return {
+    id: null,
+    movementAt: row.movementAt,
+    invoiceNumber: row.invoiceNumber,
+    supplierId: row.supplierId,
+    supplierName: row.supplierName,
+    supplierCnpj: row.supplierCnpj,
+    ingredientName: row.Item?.name || "",
+    motivo: metadata.motivo || "",
+    identification: metadata.identification || "",
+    qtyEntry: quantityAmount,
+    unitEntry: movementUnit,
+    qtyConsumption: quantityAmount,
+    unitConsumption: movementUnit,
+    movementUnit,
+    costAmount: movementUnitCostAmount,
+    costTotalAmount: metadata.costTotalAmount,
+    observation: metadata.notes || metadata.observation || "",
+    mappedItemId: row.itemId,
+    mappedItemName: row.Item?.name || "",
+    manualConversionFactor: metadata.manualConversionFactor ?? "",
+    targetUnit: metadata.targetUnit || row.newCostUnitAtImport,
+    convertedCostAmount: row.newCostAtImport,
+    conversionSource: row.conversionSource,
+    conversionFactorUsed: row.conversionFactorUsed,
+  };
 }
 
 export function StockMovementEditor({
@@ -153,13 +307,17 @@ export function StockMovementEditor({
   unitOptions,
   measurementConversions = [],
   returnTo,
-  actionPath = '/admin/stock-movements',
+  actionPath = "/admin/stock-movements?index",
 }: {
   row: any;
   items: any[];
   suppliers: any[];
   unitOptions: string[];
-  measurementConversions?: Array<{ fromUnit: string; toUnit: string; factor: number }>;
+  measurementConversions?: Array<{
+    fromUnit: string;
+    toUnit: string;
+    factor: number;
+  }>;
   returnTo: string;
   actionPath?: string;
 }) {
@@ -168,78 +326,137 @@ export function StockMovementEditor({
   const navigate = useNavigate();
   const revalidator = useRevalidator();
   const handledRollbackMovementIdRef = useRef<string | null>(null);
-  const isSaving = fetcher.state !== 'idle';
-  const isRollingBack = rollbackFetcher.state !== 'idle';
-  const rollbackAction = String(rollbackFetcher.formData?.get('_action') || '');
+  const isSaving = fetcher.state !== "idle";
+  const isRollingBack = rollbackFetcher.state !== "idle";
+  const rollbackAction = String(rollbackFetcher.formData?.get("_action") || "");
+  const isDeleting = isRollingBack && rollbackAction === "movement-delete";
   const isSubmitting = isSaving || isRollingBack;
-  const line = row?.Line || null;
+  const line = buildEditableMovementLine(row);
+  const isImportLinked = Boolean(row?.batchId && row?.lineId);
   const updatedLineId = fetcher.data?.payload?.updatedLineId;
   const [hasRolledBackForEditing, setHasRolledBackForEditing] = useState(false);
   const rollbackSucceededForRow =
     hasRolledBackForEditing ||
-    (
-      rollbackFetcher.state === 'idle' &&
+    (rollbackFetcher.state === "idle" &&
       rollbackFetcher.data?.status === 200 &&
-      rollbackFetcher.data?.payload?.rolledBackMovementId === row?.id
-    );
-  const isActiveMovement = !isActiveMovementDeleted(row) && !rollbackSucceededForRow;
+      rollbackFetcher.data?.payload?.rolledBackMovementId === row?.id);
+  const isActiveMovement =
+    !isActiveMovementDeleted(row) && !rollbackSucceededForRow;
   const canRemapItem = !isActiveMovement;
   const supplierOptions = useMemo(() => suppliers || [], [suppliers]);
   const itemOptions = useMemo(() => items || [], [items]);
-  const movementUnitInitial = String(line?.movementUnit || line?.unitEntry || line?.unitConsumption || row?.movementUnit || '').trim().toUpperCase();
+  const movementUnitInitial = String(
+    line?.movementUnit ||
+      line?.unitEntry ||
+      line?.unitConsumption ||
+      row?.movementUnit ||
+      ""
+  )
+    .trim()
+    .toUpperCase();
   const resolvedUnitOptions = useMemo(() => {
     const merged = new Set<string>((unitOptions || []).filter(Boolean));
     if (movementUnitInitial) merged.add(movementUnitInitial);
-    return Array.from(merged).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+    return Array.from(merged).sort((a, b) => a.localeCompare(b, "pt-BR"));
   }, [movementUnitInitial, unitOptions]);
-  const [qtyEntryDraft, setQtyEntryDraft] = useState<number>(Number(line?.qtyEntry ?? 0));
-  const [movementUnitDraft, setMovementUnitDraft] = useState(movementUnitInitial || '');
+  const [qtyEntryDraft, setQtyEntryDraft] = useState<number>(
+    Number(line?.qtyEntry ?? 0)
+  );
+  const [movementUnitDraft, setMovementUnitDraft] = useState(
+    movementUnitInitial || ""
+  );
   const [costTotalAmountDraft, setCostTotalAmountDraft] = useState<number>(
     Number(
       line?.costTotalAmount ??
-      (Number(line?.qtyEntry ?? 0) > 0 && Number(line?.costAmount ?? 0) > 0
-        ? Number(line?.qtyEntry ?? 0) * Number(line?.costAmount ?? 0)
-        : 0),
-    ),
+        (Number(line?.qtyEntry ?? 0) > 0 && Number(line?.costAmount ?? 0) > 0
+          ? Number(line?.qtyEntry ?? 0) * Number(line?.costAmount ?? 0)
+          : 0)
+    )
   );
-  const [supplierIdDraft, setSupplierIdDraft] = useState(String(line?.supplierId || row?.supplierId || ''));
-  const [mappedItemIdDraft, setMappedItemIdDraft] = useState(String(line?.mappedItemId || row?.itemId || ''));
-  const [manualConversionFactorDraft, setManualConversionFactorDraft] = useState(String(line?.manualConversionFactor ?? ''));
+  const [supplierIdDraft, setSupplierIdDraft] = useState(
+    String(line?.supplierId || row?.supplierId || "")
+  );
+  const [mappedItemIdDraft, setMappedItemIdDraft] = useState(
+    String(line?.mappedItemId || row?.itemId || "")
+  );
+  const [manualConversionFactorDraft, setManualConversionFactorDraft] =
+    useState(String(line?.manualConversionFactor ?? ""));
   const [itemPickerOpen, setItemPickerOpen] = useState(false);
 
   useEffect(() => {
     setQtyEntryDraft(Number(line?.qtyEntry ?? 0));
-    setMovementUnitDraft(movementUnitInitial || '');
+    setMovementUnitDraft(movementUnitInitial || "");
     setCostTotalAmountDraft(
       Number(
         line?.costTotalAmount ??
-        (Number(line?.qtyEntry ?? 0) > 0 && Number(line?.costAmount ?? 0) > 0
-          ? Number(line?.qtyEntry ?? 0) * Number(line?.costAmount ?? 0)
-          : 0),
-      ),
+          (Number(line?.qtyEntry ?? 0) > 0 && Number(line?.costAmount ?? 0) > 0
+            ? Number(line?.qtyEntry ?? 0) * Number(line?.costAmount ?? 0)
+            : 0)
+      )
     );
-    setSupplierIdDraft(String(line?.supplierId || row?.supplierId || ''));
-    setMappedItemIdDraft(String(line?.mappedItemId || row?.itemId || ''));
-    setManualConversionFactorDraft(String(line?.manualConversionFactor ?? ''));
-  }, [line?.costAmount, line?.costTotalAmount, line?.manualConversionFactor, line?.mappedItemId, line?.movementUnit, line?.qtyEntry, line?.supplierId, line?.unitConsumption, line?.unitEntry, movementUnitInitial, row?.itemId, row?.supplierId]);
+    setSupplierIdDraft(String(line?.supplierId || row?.supplierId || ""));
+    setMappedItemIdDraft(String(line?.mappedItemId || row?.itemId || ""));
+    setManualConversionFactorDraft(String(line?.manualConversionFactor ?? ""));
+  }, [
+    line?.costAmount,
+    line?.costTotalAmount,
+    line?.manualConversionFactor,
+    line?.mappedItemId,
+    line?.movementUnit,
+    line?.qtyEntry,
+    line?.supplierId,
+    line?.unitConsumption,
+    line?.unitEntry,
+    movementUnitInitial,
+    row?.itemId,
+    row?.supplierId,
+  ]);
 
   useEffect(() => {
-    if (fetcher.state !== 'idle') return;
+    if (fetcher.state !== "idle") return;
     if (fetcher.data?.status !== 200) return;
+    if (fetcher.data?.payload?.updatedMovementId === row?.id) {
+      navigate(returnTo);
+      return;
+    }
     if (updatedLineId !== row?.lineId) return;
     navigate(returnTo);
-  }, [fetcher.data, fetcher.state, navigate, returnTo, row?.lineId, updatedLineId]);
+  }, [
+    fetcher.data,
+    fetcher.state,
+    navigate,
+    returnTo,
+    row?.id,
+    row?.lineId,
+    updatedLineId,
+  ]);
 
   useEffect(() => {
-    if (rollbackFetcher.state !== 'idle') return;
+    if (rollbackFetcher.state !== "idle") return;
     if (rollbackFetcher.data?.status !== 200) return;
-    const rolledBackMovementId = String(rollbackFetcher.data?.payload?.rolledBackMovementId || '');
-    if (rolledBackMovementId !== String(row?.id || '')) return;
+    const deletedMovementId = String(
+      rollbackFetcher.data?.payload?.deletedMovementId || ""
+    );
+    if (deletedMovementId === String(row?.id || "")) {
+      navigate(returnTo);
+      return;
+    }
+    const rolledBackMovementId = String(
+      rollbackFetcher.data?.payload?.rolledBackMovementId || ""
+    );
+    if (rolledBackMovementId !== String(row?.id || "")) return;
     if (handledRollbackMovementIdRef.current === rolledBackMovementId) return;
     handledRollbackMovementIdRef.current = rolledBackMovementId;
     setHasRolledBackForEditing(true);
     revalidator.revalidate();
-  }, [revalidator, rollbackFetcher.data, rollbackFetcher.state, row?.id]);
+  }, [
+    navigate,
+    revalidator,
+    returnTo,
+    rollbackFetcher.data,
+    rollbackFetcher.state,
+    row?.id,
+  ]);
 
   useEffect(() => {
     handledRollbackMovementIdRef.current = null;
@@ -248,20 +465,32 @@ export function StockMovementEditor({
 
   if (!row || !line) return null;
 
-  const selectedSupplier = supplierOptions.find((supplier) => supplier.id === supplierIdDraft) || null;
-  const selectedMappedItem = itemOptions.find((item) => item.id === mappedItemIdDraft) || null;
+  const selectedSupplier =
+    supplierOptions.find((supplier) => supplier.id === supplierIdDraft) || null;
+  const selectedMappedItem =
+    itemOptions.find((item) => item.id === mappedItemIdDraft) || null;
   const selectedTargetUnit = getItemTargetUnit(selectedMappedItem);
-  const importedIngredientName = String(line.ingredientName || '').trim();
-  const supplierNameHiddenValue = selectedSupplier?.name || row.supplierName || line.supplierName || '';
-  const supplierCnpjHiddenValue = selectedSupplier?.cnpj || row.supplierCnpj || line.supplierCnpj || '';
+  const importedIngredientName = String(line.ingredientName || "").trim();
+  const supplierNameHiddenValue =
+    selectedSupplier?.name || row.supplierName || line.supplierName || "";
+  const supplierCnpjHiddenValue =
+    selectedSupplier?.cnpj || row.supplierCnpj || line.supplierCnpj || "";
   const itemButtonLabel = selectedMappedItem
-    ? `${selectedMappedItem.name} [${selectedMappedItem.classification || '-'}] (${getItemBaseUnit(selectedMappedItem)})`
-    : 'Buscar item do sistema';
+    ? `${selectedMappedItem.name} [${
+        selectedMappedItem.classification || "-"
+      }] (${getItemBaseUnit(selectedMappedItem)})`
+    : "Buscar item do sistema";
   const computedUnitCost =
-    Number.isFinite(qtyEntryDraft) && qtyEntryDraft > 0 && Number.isFinite(costTotalAmountDraft)
+    Number.isFinite(qtyEntryDraft) &&
+    qtyEntryDraft > 0 &&
+    Number.isFinite(costTotalAmountDraft)
       ? costTotalAmountDraft / qtyEntryDraft
       : NaN;
-  const hasValidPricing = Number.isFinite(costTotalAmountDraft) && costTotalAmountDraft > 0 && Number.isFinite(computedUnitCost) && computedUnitCost > 0;
+  const hasValidPricing =
+    Number.isFinite(costTotalAmountDraft) &&
+    costTotalAmountDraft > 0 &&
+    Number.isFinite(computedUnitCost) &&
+    computedUnitCost > 0;
   const convertedCostPreview = resolveConvertedCostPreview({
     costAmount: computedUnitCost,
     movementUnit: movementUnitDraft,
@@ -283,57 +512,115 @@ export function StockMovementEditor({
     targetUnit: line.targetUnit,
   };
 
+  function submitDeleteMovement() {
+    const formData = new FormData();
+    formData.set("_action", "movement-delete");
+    formData.set("movementId", String(row.id || ""));
+    formData.set("batchId", String(row.batchId || ""));
+    formData.set("lineId", String(row.lineId || ""));
+    rollbackFetcher.submit(formData, { method: "post", action: actionPath });
+  }
+
   return (
     <div className="space-y-5">
       {isActiveMovement ? (
         <div className="rounded-xl bg-sky-50/80 px-4 py-3 text-sm text-sky-900">
-          Esta movimentação já foi lançada no estoque e ainda não foi revertida. Você pode corrigir dados como data, documento, quantidade, custo e fornecedor, e tudo fica registrado na auditoria.
+          Esta movimentação já foi lançada no estoque. Você pode corrigir dados
+          como data, documento, quantidade, custo e fornecedor; ao salvar, a
+          regra aplicada depende da origem do movimento.
         </div>
       ) : (
         <div className="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-700">
-          Esta movimentação já foi revertida. Agora você pode remapear o item e ajustar a linha de origem mantendo a rastreabilidade da importação.
+          Esta movimentação já foi revertida. Agora você pode remapear o item e
+          ajustar a linha de origem mantendo a rastreabilidade da importação.
         </div>
       )}
 
       {fetcher.data?.message || rollbackFetcher.data?.message ? (
-        <div className={`rounded-xl px-3 py-2 text-sm ${(rollbackFetcher.data?.status ?? fetcher.data?.status) >= 400 ? 'bg-red-50 text-red-700' : 'bg-emerald-50 text-emerald-700'
-          }`}>
+        <div
+          className={`rounded-xl px-3 py-2 text-sm ${
+            (rollbackFetcher.data?.status ?? fetcher.data?.status) >= 400
+              ? "bg-red-50 text-red-700"
+              : "bg-emerald-50 text-emerald-700"
+          }`}
+        >
           {rollbackFetcher.data?.message || fetcher.data.message}
         </div>
       ) : null}
 
       <fetcher.Form method="post" action={actionPath} className="space-y-5">
         <input type="hidden" name="movementId" value={row.id} />
-        <input type="hidden" name="batchId" value={row.batchId} />
-        <input type="hidden" name="lineId" value={row.lineId} />
+        <input type="hidden" name="batchId" value={row.batchId || ""} />
+        <input type="hidden" name="lineId" value={row.lineId || ""} />
         <input type="hidden" name="supplierId" value={supplierIdDraft} />
-        <input type="hidden" name="supplierName" value={supplierNameHiddenValue} />
-        <input type="hidden" name="supplierCnpj" value={supplierCnpjHiddenValue} />
-        <input type="hidden" name="ingredientName" value={importedIngredientName} />
+        <input
+          type="hidden"
+          name="supplierName"
+          value={supplierNameHiddenValue}
+        />
+        <input
+          type="hidden"
+          name="supplierCnpj"
+          value={supplierCnpjHiddenValue}
+        />
+        <input
+          type="hidden"
+          name="ingredientName"
+          value={importedIngredientName}
+        />
         <input type="hidden" name="mappedItemId" value={mappedItemIdDraft} />
         <input type="hidden" name="unitEntry" value={movementUnitDraft} />
-        <input type="hidden" name="qtyConsumption" value={qtyEntryDraft.toFixed(4)} />
+        <input
+          type="hidden"
+          name="qtyConsumption"
+          value={qtyEntryDraft.toFixed(4)}
+        />
         <input type="hidden" name="unitConsumption" value={movementUnitDraft} />
-        <input type="hidden" name="costAmount" value={hasValidPricing ? computedUnitCost.toFixed(6) : ''} />
+        <input
+          type="hidden"
+          name="costAmount"
+          value={hasValidPricing ? computedUnitCost.toFixed(6) : ""}
+        />
 
         <div className="grid gap-6 2xl:grid-cols-[minmax(0,1fr)_360px] xl:grid-cols-[minmax(0,1fr)_340px]">
           <div className="space-y-8">
             <section className="space-y-4">
               <div className="mb-4">
-                <h2 className="text-base font-semibold text-slate-950 border p-2  bg-slate-200 rounded-sm">Dados do lançamento</h2>
+                <h2 className="text-base font-semibold text-slate-950 border p-2  bg-slate-200 rounded-sm">
+                  Dados do lançamento
+                </h2>
               </div>
               <div className="grid gap-4 md:grid-cols-4">
                 <div className="space-y-1.5">
                   <Label htmlFor="movementAt">Data da movimentação</Label>
-                  <Input id="movementAt" name="movementAt" type="datetime-local" defaultValue={formatDateTimeLocalValue(line.movementAt || row.movementAt)} disabled={isSubmitting} />
+                  <Input
+                    id="movementAt"
+                    name="movementAt"
+                    type="datetime-local"
+                    defaultValue={formatDateTimeLocalValue(
+                      line.movementAt || row.movementAt
+                    )}
+                    disabled={isSubmitting}
+                  />
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="invoiceNumber">Documento</Label>
-                  <Input id="invoiceNumber" name="invoiceNumber" defaultValue={line.invoiceNumber || row.invoiceNumber || ''} disabled={isSubmitting} />
+                  <Input
+                    id="invoiceNumber"
+                    name="invoiceNumber"
+                    defaultValue={line.invoiceNumber || row.invoiceNumber || ""}
+                    disabled={isSubmitting}
+                  />
                 </div>
                 <div className="space-y-1.5 md:col-span-2">
                   <Label>Fornecedor informado</Label>
-                  <Select value={supplierIdDraft || '__EMPTY__'} onValueChange={(value) => setSupplierIdDraft(value === '__EMPTY__' ? '' : value)} disabled={isSubmitting}>
+                  <Select
+                    value={supplierIdDraft || "__EMPTY__"}
+                    onValueChange={(value) =>
+                      setSupplierIdDraft(value === "__EMPTY__" ? "" : value)
+                    }
+                    disabled={isSubmitting}
+                  >
                     <SelectTrigger>
                       <SelectValue placeholder="Sem vínculo" />
                     </SelectTrigger>
@@ -341,7 +628,8 @@ export function StockMovementEditor({
                       <SelectItem value="__EMPTY__">Sem vínculo</SelectItem>
                       {supplierOptions.map((supplier) => (
                         <SelectItem key={supplier.id} value={supplier.id}>
-                          {supplier.name} {supplier.cnpj ? `• ${supplier.cnpj}` : ''}
+                          {supplier.name}{" "}
+                          {supplier.cnpj ? `• ${supplier.cnpj}` : ""}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -352,7 +640,10 @@ export function StockMovementEditor({
                     <div>
                       <Label>Ingrediente / item do sistema</Label>
                       {canRemapItem ? (
-                        <Popover open={itemPickerOpen} onOpenChange={setItemPickerOpen}>
+                        <Popover
+                          open={itemPickerOpen}
+                          onOpenChange={setItemPickerOpen}
+                        >
                           <PopoverTrigger asChild>
                             <Button
                               type="button"
@@ -362,7 +653,9 @@ export function StockMovementEditor({
                               disabled={isSubmitting}
                               className="h-10 w-full justify-between bg-white font-normal"
                             >
-                              <span className="truncate text-left">{itemButtonLabel}</span>
+                              <span className="truncate text-left">
+                                {itemButtonLabel}
+                              </span>
                               <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                             </Button>
                           </PopoverTrigger>
@@ -375,55 +668,91 @@ export function StockMovementEditor({
                             <Command>
                               <CommandInput placeholder="Buscar item do sistema..." />
                               <CommandList className="max-h-[min(45vh,320px)]">
-                                <CommandEmpty>Nenhum item encontrado.</CommandEmpty>
+                                <CommandEmpty>
+                                  Nenhum item encontrado.
+                                </CommandEmpty>
                                 <CommandItem
                                   value="sem item mapeado"
                                   onSelect={() => {
-                                    setMappedItemIdDraft('');
+                                    setMappedItemIdDraft("");
                                     setItemPickerOpen(false);
                                   }}
                                 >
-                                  <Check className={cn('mr-2 h-4 w-4', mappedItemIdDraft ? 'opacity-0' : 'opacity-100')} />
-                                  <span className="truncate">Sem item mapeado</span>
+                                  <Check
+                                    className={cn(
+                                      "mr-2 h-4 w-4",
+                                      mappedItemIdDraft
+                                        ? "opacity-0"
+                                        : "opacity-100"
+                                    )}
+                                  />
+                                  <span className="truncate">
+                                    Sem item mapeado
+                                  </span>
                                 </CommandItem>
-                                {ITEM_CLASSIFICATION_ORDER.map((classification) => {
-                                  const groupItems = itemOptions.filter((item) => (item.classification || 'outro') === classification);
-                                  if (groupItems.length === 0) return null;
-                                  return (
-                                    <CommandGroup key={classification} heading={ITEM_CLASSIFICATION_LABELS[classification] ?? classification}>
-                                      {groupItems.map((item) => (
-                                        <CommandItem
-                                          key={item.id}
-                                          value={`${item.name} ${item.classification || ''} ${item.purchaseUm || ''} ${item.consumptionUm || ''} ${item.id}`}
-                                          onSelect={() => {
-                                            setMappedItemIdDraft(item.id);
-                                            setItemPickerOpen(false);
-                                          }}
-                                        >
-                                          <Check className={cn('mr-2 h-4 w-4', mappedItemIdDraft === item.id ? 'opacity-100' : 'opacity-0')} />
-                                          <div className="flex min-w-0 flex-1 items-center justify-between gap-2">
-                                            <span className="truncate">
-                                              {item.name} ({getItemBaseUnit(item)})
-                                            </span>
-                                            <Link
-                                              to={`/admin/items/${item.id}/main`}
-                                              className="shrink-0 rounded border border-slate-300 px-2 py-0.5 text-[11px] font-medium text-slate-700 hover:bg-slate-100"
-                                              onMouseDown={(event) => {
-                                                event.preventDefault();
-                                                event.stopPropagation();
-                                              }}
-                                              onClick={(event) => {
-                                                event.stopPropagation();
-                                              }}
-                                            >
-                                              Abrir
-                                            </Link>
-                                          </div>
-                                        </CommandItem>
-                                      ))}
-                                    </CommandGroup>
-                                  );
-                                })}
+                                {ITEM_CLASSIFICATION_ORDER.map(
+                                  (classification) => {
+                                    const groupItems = itemOptions.filter(
+                                      (item) =>
+                                        (item.classification || "outro") ===
+                                        classification
+                                    );
+                                    if (groupItems.length === 0) return null;
+                                    return (
+                                      <CommandGroup
+                                        key={classification}
+                                        heading={
+                                          ITEM_CLASSIFICATION_LABELS[
+                                            classification
+                                          ] ?? classification
+                                        }
+                                      >
+                                        {groupItems.map((item) => (
+                                          <CommandItem
+                                            key={item.id}
+                                            value={`${item.name} ${
+                                              item.classification || ""
+                                            } ${item.purchaseUm || ""} ${
+                                              item.consumptionUm || ""
+                                            } ${item.id}`}
+                                            onSelect={() => {
+                                              setMappedItemIdDraft(item.id);
+                                              setItemPickerOpen(false);
+                                            }}
+                                          >
+                                            <Check
+                                              className={cn(
+                                                "mr-2 h-4 w-4",
+                                                mappedItemIdDraft === item.id
+                                                  ? "opacity-100"
+                                                  : "opacity-0"
+                                              )}
+                                            />
+                                            <div className="flex min-w-0 flex-1 items-center justify-between gap-2">
+                                              <span className="truncate">
+                                                {item.name} (
+                                                {getItemBaseUnit(item)})
+                                              </span>
+                                              <Link
+                                                to={`/admin/items/${item.id}/main`}
+                                                className="shrink-0 rounded border border-slate-300 px-2 py-0.5 text-[11px] font-medium text-slate-700 hover:bg-slate-100"
+                                                onMouseDown={(event) => {
+                                                  event.preventDefault();
+                                                  event.stopPropagation();
+                                                }}
+                                                onClick={(event) => {
+                                                  event.stopPropagation();
+                                                }}
+                                              >
+                                                Abrir
+                                              </Link>
+                                            </div>
+                                          </CommandItem>
+                                        ))}
+                                      </CommandGroup>
+                                    );
+                                  }
+                                )}
                               </CommandList>
                             </Command>
                           </PopoverContent>
@@ -434,16 +763,24 @@ export function StockMovementEditor({
                         </div>
                       )}
                     </div>
-                    <div className='p-4 border rounded-lg'>
+                    <div className="p-4 border rounded-lg">
                       <div className="space-y-1 text-xs text-slate-500">
-                        <p>Origem importada: <span className="font-medium text-slate-700">{importedIngredientName || '-'}</span></p>
+                        <p>
+                          Origem importada:{" "}
+                          <span className="font-medium text-slate-700">
+                            {importedIngredientName || "-"}
+                          </span>
+                        </p>
                         <Separator className="my-2" />
                         {!canRemapItem ? (
-                          <div className='flex flex-col gap-4' >
+                          <div className="flex flex-col gap-4">
                             <p className="text-amber-700">
-                              Item em somente leitura neste estado. Se você precisa remapear esta linha para outro item, reverta a movimentação agora.
+                              Item em somente leitura neste estado.
+                              {isImportLinked
+                                ? " Se você precisa remapear esta linha para outro item, reverta a movimentação agora."
+                                : " Para trocar o item de uma movimentação já aplicada, elimine este movimento e lance um novo."}
                             </p>
-                            {isActiveMovement ? (
+                            {isActiveMovement && isImportLinked ? (
                               <section className="flex flex-row gap-4 items-center">
                                 <Button
                                   type="button"
@@ -452,14 +789,32 @@ export function StockMovementEditor({
                                   className="w-full border-amber-300 bg-white text-amber-900 hover:bg-amber-100"
                                   onClick={() => {
                                     const formData = new FormData();
-                                    formData.set('_action', 'movement-rollback-line');
-                                    formData.set('movementId', String(row.id || ''));
-                                    formData.set('batchId', String(row.batchId || ''));
-                                    formData.set('lineId', String(row.lineId || ''));
-                                    rollbackFetcher.submit(formData, { method: 'post', action: actionPath });
+                                    formData.set(
+                                      "_action",
+                                      "movement-rollback-line"
+                                    );
+                                    formData.set(
+                                      "movementId",
+                                      String(row.id || "")
+                                    );
+                                    formData.set(
+                                      "batchId",
+                                      String(row.batchId || "")
+                                    );
+                                    formData.set(
+                                      "lineId",
+                                      String(row.lineId || "")
+                                    );
+                                    rollbackFetcher.submit(formData, {
+                                      method: "post",
+                                      action: actionPath,
+                                    });
                                   }}
                                 >
-                                  {isRollingBack && rollbackAction === 'movement-rollback-line' ? 'Revertendo...' : 'Trocar o item'}
+                                  {isRollingBack &&
+                                  rollbackAction === "movement-rollback-line"
+                                    ? "Revertendo..."
+                                    : "Trocar o item"}
                                 </Button>
                                 <Button
                                   type="button"
@@ -468,49 +823,76 @@ export function StockMovementEditor({
                                   className="w-full border-rose-300 bg-white text-rose-900 hover:bg-rose-100"
                                   onClick={() => {
                                     const formData = new FormData();
-                                    formData.set('_action', 'movement-rollback-and-ignore-line');
-                                    formData.set('movementId', String(row.id || ''));
-                                    formData.set('batchId', String(row.batchId || ''));
-                                    formData.set('lineId', String(row.lineId || ''));
-                                    rollbackFetcher.submit(formData, { method: 'post', action: actionPath });
+                                    formData.set(
+                                      "_action",
+                                      "movement-rollback-and-ignore-line"
+                                    );
+                                    formData.set(
+                                      "movementId",
+                                      String(row.id || "")
+                                    );
+                                    formData.set(
+                                      "batchId",
+                                      String(row.batchId || "")
+                                    );
+                                    formData.set(
+                                      "lineId",
+                                      String(row.lineId || "")
+                                    );
+                                    rollbackFetcher.submit(formData, {
+                                      method: "post",
+                                      action: actionPath,
+                                    });
                                   }}
                                 >
-                                  {isRollingBack && rollbackAction === 'movement-rollback-and-ignore-line'
-                                    ? 'Revertendo e ignorando...'
-                                    : 'Reverter e ignorar esta linha'}
+                                  {isRollingBack &&
+                                  rollbackAction ===
+                                    "movement-rollback-and-ignore-line"
+                                    ? "Revertendo e ignorando..."
+                                    : "Reverter e ignorar esta linha"}
                                 </Button>
                               </section>
                             ) : null}
                           </div>
-
-
                         ) : null}
                       </div>
                     </div>
                   </div>
-
-
                 </div>
-
-
-
               </div>
               <Separator />
             </section>
 
             <section className="space-y-4">
               <div className="mb-4">
-                <h2 className="text-base font-semibold text-slate-950 border p-2  bg-slate-200 rounded-sm">Quantidade e custo</h2>
+                <h2 className="text-base font-semibold text-slate-950 border p-2  bg-slate-200 rounded-sm">
+                  Quantidade e custo
+                </h2>
               </div>
 
               <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-5 xl:grid-cols-4">
                 <div className="space-y-1.5">
                   <Label htmlFor="qtyEntry">Quantidade</Label>
-                  <DecimalInput id="qtyEntry" name="qtyEntry" defaultValue={qtyEntryDraft} fractionDigits={4} className="w-full" onValueChange={setQtyEntryDraft} disabled={isSubmitting} />
+                  <DecimalInput
+                    id="qtyEntry"
+                    name="qtyEntry"
+                    defaultValue={qtyEntryDraft}
+                    fractionDigits={4}
+                    className="w-full"
+                    onValueChange={setQtyEntryDraft}
+                    disabled={isSubmitting}
+                  />
                 </div>
                 <div className="space-y-1.5">
                   <Label>UM do movimento</Label>
-                  <Select name="movementUnit" value={movementUnitDraft || '__EMPTY__'} onValueChange={(value) => setMovementUnitDraft(value === '__EMPTY__' ? '' : value)} disabled={isSubmitting}>
+                  <Select
+                    name="movementUnit"
+                    value={movementUnitDraft || "__EMPTY__"}
+                    onValueChange={(value) =>
+                      setMovementUnitDraft(value === "__EMPTY__" ? "" : value)
+                    }
+                    disabled={isSubmitting}
+                  >
                     <SelectTrigger>
                       <SelectValue placeholder="Selecionar unidade" />
                     </SelectTrigger>
@@ -526,27 +908,48 @@ export function StockMovementEditor({
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="costTotalAmount">Custo total</Label>
-                  <MoneyInput id="costTotalAmount" name="costTotalAmount" defaultValue={costTotalAmountDraft} className="h-10 w-full" onValueChange={setCostTotalAmountDraft} disabled={isSubmitting} />
+                  <MoneyInput
+                    id="costTotalAmount"
+                    name="costTotalAmount"
+                    defaultValue={costTotalAmountDraft}
+                    className="h-10 w-full"
+                    onValueChange={setCostTotalAmountDraft}
+                    disabled={isSubmitting}
+                  />
                 </div>
                 <div className="rounded-xl bg-slate-50/80 px-4 py-3 2xl:col-span-2">
-                  <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Custo unitário da movimentação</div>
+                  <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                    Custo unitário da movimentação
+                  </div>
                   <div className="mt-2 text-lg font-semibold text-slate-950">
-                    {hasValidPricing ? formatMoney(computedUnitCost) : '-'}
+                    {hasValidPricing ? formatMoney(computedUnitCost) : "-"}
                   </div>
                   <div className="mt-1 text-xs text-slate-500">
-                    {hasValidPricing ? `por ${movementUnitDraft || 'unidade'}` : 'Preencha quantidade e custo total'}
+                    {hasValidPricing
+                      ? `por ${movementUnitDraft || "unidade"}`
+                      : "Preencha quantidade e custo total"}
                   </div>
                   <div className="mt-3 border-t border-slate-200 pt-3">
-                    <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Custo unitário convertido calculado</div>
+                    <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                      Custo unitário convertido calculado
+                    </div>
                     <div className="mt-1 text-sm font-semibold text-slate-950">
-                      {convertedCostPreview ? formatMoney(convertedCostPreview.convertedCostAmount) : '-'}
+                      {convertedCostPreview
+                        ? formatMoney(convertedCostPreview.convertedCostAmount)
+                        : "-"}
                     </div>
                     <div className="mt-0.5 text-xs text-slate-500">
                       {convertedCostPreview
-                        ? `por ${selectedTargetUnit || '-'}${convertedCostPreview.conversionFactorUsed ? ` • fator ${Number(convertedCostPreview.conversionFactorUsed).toFixed(2)}` : ''}`
+                        ? `por ${selectedTargetUnit || "-"}${
+                            convertedCostPreview.conversionFactorUsed
+                              ? ` • fator ${Number(
+                                  convertedCostPreview.conversionFactorUsed
+                                ).toFixed(2)}`
+                              : ""
+                          }`
                         : selectedMappedItem
-                          ? `Sem conversão para ${selectedTargetUnit || '-'}`
-                          : 'Selecione um item para calcular a conversão'}
+                        ? `Sem conversão para ${selectedTargetUnit || "-"}`
+                        : "Selecione um item para calcular a conversão"}
                     </div>
                   </div>
                 </div>
@@ -554,25 +957,37 @@ export function StockMovementEditor({
 
               <div className="mt-6 grid gap-4 md:grid-cols-2 2xl:grid-cols-4 xl:grid-cols-3">
                 <div className="space-y-1">
-                  <div className="text-[11px] uppercase tracking-wide text-slate-500">Quantidade digitada</div>
+                  <div className="text-[11px] uppercase tracking-wide text-slate-500">
+                    Quantidade digitada
+                  </div>
                   <div className="text-sm font-medium text-slate-900">
-                    {formatDecimal(qtyEntryDraft)} {movementUnitDraft || '-'}
+                    {formatDecimal(qtyEntryDraft)} {movementUnitDraft || "-"}
                   </div>
                 </div>
                 <div className="space-y-1">
-                  <div className="text-[11px] uppercase tracking-wide text-slate-500">Custo total informado</div>
-                  <div className="text-sm font-medium text-slate-900">{formatMoney(costTotalAmountDraft)}</div>
-                </div>
-                <div className="space-y-1">
-                  <div className="text-[11px] uppercase tracking-wide text-slate-500">Quantidade importada</div>
+                  <div className="text-[11px] uppercase tracking-wide text-slate-500">
+                    Custo total informado
+                  </div>
                   <div className="text-sm font-medium text-slate-900">
-                    {formatNumber(importSnapshot.qtyEntry)} {importSnapshot.movementUnit || '-'}
+                    {formatMoney(costTotalAmountDraft)}
                   </div>
                 </div>
                 <div className="space-y-1">
-                  <div className="text-[11px] uppercase tracking-wide text-slate-500">Custo importado</div>
+                  <div className="text-[11px] uppercase tracking-wide text-slate-500">
+                    Quantidade importada
+                  </div>
                   <div className="text-sm font-medium text-slate-900">
-                    {formatMoney(importSnapshot.costAmount)} / {importSnapshot.movementUnit || '-'}
+                    {formatNumber(importSnapshot.qtyEntry)}{" "}
+                    {importSnapshot.movementUnit || "-"}
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <div className="text-[11px] uppercase tracking-wide text-slate-500">
+                    Custo importado
+                  </div>
+                  <div className="text-sm font-medium text-slate-900">
+                    {formatMoney(importSnapshot.costAmount)} /{" "}
+                    {importSnapshot.movementUnit || "-"}
                   </div>
                 </div>
               </div>
@@ -581,17 +996,29 @@ export function StockMovementEditor({
 
             <section className="space-y-4">
               <div className="mb-4">
-                <h2 className="text-base font-semibold text-slate-950 border p-2  bg-slate-200 rounded-sm">Vínculos e observações</h2>
+                <h2 className="text-base font-semibold text-slate-950 border p-2  bg-slate-200 rounded-sm">
+                  Vínculos e observações
+                </h2>
               </div>
 
               <div className="grid gap-4 md:grid-cols-6">
                 <div className="space-y-1.5 md:col-span-2">
                   <Label htmlFor="motivo">Motivo</Label>
-                  <Input id="motivo" name="motivo" defaultValue={line.motivo || ''} disabled={isSubmitting} />
+                  <Input
+                    id="motivo"
+                    name="motivo"
+                    defaultValue={line.motivo || ""}
+                    disabled={isSubmitting}
+                  />
                 </div>
                 <div className="space-y-1.5 md:col-span-2">
                   <Label htmlFor="identification">Identificação</Label>
-                  <Input id="identification" name="identification" defaultValue={line.identification || ''} disabled={isSubmitting} />
+                  <Input
+                    id="identification"
+                    name="identification"
+                    defaultValue={line.identification || ""}
+                    disabled={isSubmitting}
+                  />
                 </div>
                 <div className="space-y-1.5 md:col-span-2">
                   <Label htmlFor="manualConversionFactor">Fator manual</Label>
@@ -599,13 +1026,21 @@ export function StockMovementEditor({
                     id="manualConversionFactor"
                     name="manualConversionFactor"
                     value={manualConversionFactorDraft}
-                    onChange={(event) => setManualConversionFactorDraft(event.target.value)}
+                    onChange={(event) =>
+                      setManualConversionFactorDraft(event.target.value)
+                    }
                     disabled={isSubmitting}
                   />
                 </div>
                 <div className="space-y-1.5 md:col-span-4">
                   <Label htmlFor="observation">Observação</Label>
-                  <Textarea id="observation" name="observation" defaultValue={line.observation || ''} disabled={isSubmitting} className="min-h-[120px]" />
+                  <Textarea
+                    id="observation"
+                    name="observation"
+                    defaultValue={line.observation || ""}
+                    disabled={isSubmitting}
+                    className="min-h-[120px]"
+                  />
                 </div>
               </div>
             </section>
@@ -613,22 +1048,37 @@ export function StockMovementEditor({
 
           <aside className="space-y-4 xl:sticky xl:top-6">
             <section className="space-y-3">
-              <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Resumo atual</div>
+              <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Resumo atual
+              </div>
               <div className="mt-4 space-y-3 text-sm text-slate-700">
                 <div>
-                  <span className="font-medium text-slate-900">Status:</span> {isActiveMovement ? 'Lançada no estoque' : 'Revertida'}{line.status ? ` • ${line.status}` : ''}
+                  <span className="font-medium text-slate-900">Status:</span>{" "}
+                  {isActiveMovement ? "Lançada no estoque" : "Revertida"}
+                  {line.status ? ` • ${line.status}` : ""}
                 </div>
                 <div>
-                  <span className="font-medium text-slate-900">Conversão:</span> {line.conversionSource || '-'}
-                  {line.conversionFactorUsed ? ` • fator ${Number(line.conversionFactorUsed).toFixed(6)}` : ''}
+                  <span className="font-medium text-slate-900">Conversão:</span>{" "}
+                  {line.conversionSource || "-"}
+                  {line.conversionFactorUsed
+                    ? ` • fator ${Number(line.conversionFactorUsed).toFixed(6)}`
+                    : ""}
                 </div>
                 <div>
-                  <span className="font-medium text-slate-900">Custo convertido:</span>{' '}
-                  {convertedCostPreview ? formatMoney(convertedCostPreview.convertedCostAmount) : formatMoney(line.convertedCostAmount)} / {selectedTargetUnit || line.targetUnit || '-'}
+                  <span className="font-medium text-slate-900">
+                    Custo convertido:
+                  </span>{" "}
+                  {convertedCostPreview
+                    ? formatMoney(convertedCostPreview.convertedCostAmount)
+                    : formatMoney(line.convertedCostAmount)}{" "}
+                  / {selectedTargetUnit || line.targetUnit || "-"}
                 </div>
                 <div>
-                  <span className="font-medium text-slate-900">Lote:</span>{' '}
-                  <Link to={`/admin/import-stock-movements/${row.batchId}`} className="underline underline-offset-2">
+                  <span className="font-medium text-slate-900">Lote:</span>{" "}
+                  <Link
+                    to={`/admin/import-stock-movements/${row.batchId}`}
+                    className="underline underline-offset-2"
+                  >
                     {row.Batch?.name || row.batchId}
                   </Link>
                 </div>
@@ -641,37 +1091,49 @@ export function StockMovementEditor({
               <Separator />
             </section>
 
-
-
             <section className="space-y-3">
-              <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Origem importada</div>
+              <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Origem importada
+              </div>
               <div className="mt-4 divide-y divide-slate-200/80">
                 <div>
-                  <div className="text-[11px] uppercase tracking-wide text-slate-500">Quantidade</div>
+                  <div className="text-[11px] uppercase tracking-wide text-slate-500">
+                    Quantidade
+                  </div>
                   <div className="mt-1 pb-3 text-sm font-medium text-slate-900">
-                    {formatNumber(importSnapshot.qtyEntry)} {importSnapshot.movementUnit || '-'}
+                    {formatNumber(importSnapshot.qtyEntry)}{" "}
+                    {importSnapshot.movementUnit || "-"}
                   </div>
                 </div>
                 <div className="pt-3">
-                  <div className="text-[11px] uppercase tracking-wide text-slate-500">Custo unitário</div>
+                  <div className="text-[11px] uppercase tracking-wide text-slate-500">
+                    Custo unitário
+                  </div>
                   <div className="mt-1 text-sm font-medium text-slate-900">
-                    {formatMoney(importSnapshot.costAmount)} / {importSnapshot.movementUnit || '-'}
+                    {formatMoney(importSnapshot.costAmount)} /{" "}
+                    {importSnapshot.movementUnit || "-"}
                   </div>
                 </div>
                 <div className="pt-3">
-                  <div className="text-[11px] uppercase tracking-wide text-slate-500">Custo total</div>
+                  <div className="text-[11px] uppercase tracking-wide text-slate-500">
+                    Custo total
+                  </div>
                   <div className="mt-1 text-sm font-medium text-slate-900">
                     {formatMoney(
                       Number.isFinite(Number(importSnapshot.costTotalAmount))
                         ? importSnapshot.costTotalAmount
-                        : Number(importSnapshot.qtyEntry ?? 0) * Number(importSnapshot.costAmount ?? 0),
+                        : Number(importSnapshot.qtyEntry ?? 0) *
+                            Number(importSnapshot.costAmount ?? 0)
                     )}
                   </div>
                 </div>
                 <div className="pt-3">
-                  <div className="text-[11px] uppercase tracking-wide text-slate-500">Custo convertido</div>
+                  <div className="text-[11px] uppercase tracking-wide text-slate-500">
+                    Custo convertido
+                  </div>
                   <div className="mt-1 text-sm font-medium text-slate-900">
-                    {formatMoney(importSnapshot.convertedCostAmount)} / {importSnapshot.targetUnit || '-'}
+                    {formatMoney(importSnapshot.convertedCostAmount)} /{" "}
+                    {importSnapshot.targetUnit || "-"}
                   </div>
                 </div>
               </div>
@@ -679,12 +1141,60 @@ export function StockMovementEditor({
             </section>
 
             <div className="flex flex-col gap-2">
-              <Link to={returnTo} className="inline-flex h-10 items-center justify-center rounded-md bg-slate-100 px-4 text-sm font-medium text-slate-700 hover:bg-slate-200">
+              <Link
+                to={returnTo}
+                className="inline-flex h-10 items-center justify-center rounded-md bg-slate-100 px-4 text-sm font-medium text-slate-700 hover:bg-slate-200"
+              >
                 Voltar
               </Link>
-              <Button type="submit" name="_action" value="movement-edit-line" disabled={isSubmitting || !hasValidPricing}>
-                {isSubmitting ? 'Salvando...' : 'Salvar alterações'}
+              <Button
+                type="submit"
+                name="_action"
+                value="movement-edit-line"
+                disabled={isSubmitting || !hasValidPricing}
+              >
+                {isSubmitting ? "Salvando..." : "Salvar alterações"}
               </Button>
+              {isActiveMovement ? (
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={isSubmitting}
+                      className="border-rose-200 text-rose-700 hover:bg-rose-50"
+                    >
+                      <Trash2 size={16} className="mr-2" />
+                      Eliminar movimentação
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>
+                        Eliminar movimentação de estoque?
+                      </AlertDialogTitle>
+                      <AlertDialogDescription>
+                        Esta movimentação está vinculada a um lote de
+                        importação. Ao eliminar, a linha do lote será atualizada
+                        e ficará pronta para importar novamente.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel type="button">
+                        Cancelar
+                      </AlertDialogCancel>
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        disabled={isDeleting}
+                        onClick={submitDeleteMovement}
+                      >
+                        {isDeleting ? "Eliminando..." : "Eliminar"}
+                      </Button>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              ) : null}
             </div>
           </aside>
         </div>

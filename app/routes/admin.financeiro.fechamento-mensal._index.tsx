@@ -2,7 +2,7 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
 import { json } from "@remix-run/node";
 import { Form, Link, useActionData, useLoaderData, useNavigation, useSubmit } from "@remix-run/react";
-import { Loader2, TrendingUp, TrendingDown, Minus, Edit, ChevronDown } from "lucide-react";
+import { Loader2, TrendingUp, TrendingDown, Minus, Edit, ChevronDown, ExternalLink, Info } from "lucide-react";
 import * as React from "react";
 
 import { Button } from "@/components/ui/button";
@@ -333,6 +333,70 @@ function Label({ children }: { children: React.ReactNode }) {
   return <div className="text-[11px] font-medium uppercase tracking-[0.08em] text-slate-500">{children}</div>;
 }
 
+const CARD_PAYMENT_SALES_REPORT_URL = "https://conta.saipos.com/#/app/report/sales-by-payment-type";
+
+const CARD_PAYMENT_METHODS_TO_SUM = [
+  "Crédito Mastercard",
+  "Crédito Visa",
+  "Débito Visa",
+  "Débito Mastercard",
+  "Pagamento online - Zoop",
+  "Débito Elo",
+  "Crédito Elo",
+  "Crédito American Express",
+  "Crédito",
+];
+
+function CardPaymentSalesGuideLabel() {
+  return (
+    <Dialog>
+      <DialogTrigger asChild>
+        <button
+          type="button"
+          className="inline-flex items-center gap-1 text-left text-[11px] font-medium uppercase tracking-[0.08em] text-slate-600 underline-offset-2 transition-colors hover:text-slate-900 hover:underline"
+          aria-label="Ver instruções para recuperar venda no cartão"
+        >
+          <span>Venda no cartão (R$)</span>
+          <Info className="h-3.5 w-3.5" aria-hidden="true" />
+        </button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-xl">
+        <DialogHeader>
+          <DialogTitle>Como preencher venda no cartão</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-5 text-sm leading-6 text-slate-700">
+          <p>
+            Abra o Saipos no relatório{" "}
+            <a
+              href={CARD_PAYMENT_SALES_REPORT_URL}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1 font-medium text-slate-950 underline underline-offset-2"
+            >
+              Vendas por forma de pagamento
+              <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
+            </a>
+            {" "}e selecione o período do fechamento.
+          </p>
+          <div className="space-y-2">
+            <p className="font-medium text-slate-900">
+              Some os valores destas formas de pagamento:
+            </p>
+            <ul className="grid grid-cols-1 gap-1 rounded-lg border border-slate-200 bg-slate-50 p-3 font-mono text-xs text-slate-800 sm:grid-cols-2">
+              {CARD_PAYMENT_METHODS_TO_SUM.map((method) => (
+                <li key={method}>{method}</li>
+              ))}
+            </ul>
+          </div>
+          <p className="text-xs text-slate-500">
+            O total somado deve ser lançado neste campo como venda no cartão.
+          </p>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function FieldNote({ children }: { children?: React.ReactNode }) {
   return <p className="min-h-[16px] text-xs leading-5 text-slate-500">{children ?? "\u00A0"}</p>;
 }
@@ -344,7 +408,7 @@ function FieldContainer({
   className = "flex flex-col gap-2",
   reserveNoteSpace = true,
 }: {
-  label: string;
+  label: React.ReactNode;
   note?: React.ReactNode;
   children: React.ReactNode;
   className?: string;
@@ -371,7 +435,7 @@ function EditableField({
   className = EDITABLE_INPUT_CLASS,
   keyValue,
 }: {
-  label: string;
+  label: React.ReactNode;
   name: string;
   value: number;
   onValueChange?: (value: number) => void;
@@ -406,7 +470,7 @@ function ReadonlyField({
   note,
   reserveNoteSpace = true,
 }: {
-  label: string;
+  label: React.ReactNode;
   value: number;
   fractionDigits?: number;
   muted?: boolean;
@@ -434,7 +498,7 @@ function DeltaField({
   note,
   reserveNoteSpace = true,
 }: {
-  label: string;
+  label: React.ReactNode;
   value: number;
   fractionDigits?: number;
   percent?: boolean;
@@ -1374,7 +1438,7 @@ export default function AdminFinanceiroFechamentoMensal() {
                       </div>
                       <Separator className="my-1" />
                       <div className="grid grid-cols-1 items-center gap-x-4 gap-y-3">
-                        <ReadonlyField label="Venda no cartão (R$)" value={lastVendaCartaoAmount} muted={false} />
+                        <ReadonlyField label={<CardPaymentSalesGuideLabel />} value={lastVendaCartaoAmount} muted={false} />
                         <ReadonlyField label="Taxa Cartão (R$)" value={lastTaxaCartaoAmountPreview} />
                       </div>
                       <div className="grid grid-cols-1 items-center gap-x-4 gap-y-3">
@@ -1799,7 +1863,7 @@ export default function AdminFinanceiroFechamentoMensal() {
 
                       <div className="grid grid-cols-1 items-center gap-x-4 gap-y-3">
                         <EditableField
-                          label="Venda no cartão (R$)"
+                          label={<CardPaymentSalesGuideLabel />}
                           name="vendaCartaoAmount"
                           value={vendaCartaoAmount}
                           onValueChange={setVendaCartaoAmount}
@@ -2432,7 +2496,7 @@ export default function AdminFinanceiroFechamentoMensal() {
                       </div>
                       <Separator className="my-1" />
                       <div className="grid grid-cols-1 items-center gap-x-4 gap-y-3">
-                        <DeltaField label="Venda no cartão (R$)" value={delta(vendaCartaoAmount, lastVendaCartaoAmount)} />
+                        <DeltaField label={<CardPaymentSalesGuideLabel />} value={delta(vendaCartaoAmount, lastVendaCartaoAmount)} />
                         <DeltaField label="Taxa Cartão (R$)" value={delta(taxaCartaoAmountPreview, lastTaxaCartaoAmountPreview)} />
                       </div>
                       <div className="grid grid-cols-1 items-center gap-x-4 gap-y-3">

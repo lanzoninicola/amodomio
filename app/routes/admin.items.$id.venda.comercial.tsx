@@ -1,5 +1,6 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
-import { Form, useActionData, useLoaderData } from "@remix-run/react";
+import { Form, useActionData, useLoaderData, useOutletContext } from "@remix-run/react";
+import { Copy, MessageCircle } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button } from "~/components/ui/button";
 import { Label } from "~/components/ui/label";
@@ -7,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~
 import { Separator } from "~/components/ui/separator";
 import { Input } from "~/components/ui/input";
 import { Textarea } from "~/components/ui/textarea";
+import type { AdminItemVendaOutletContext } from "./admin.items.$id.venda";
 import { toast } from "~/components/ui/use-toast";
 import { buildAdminItemsMeta } from "~/domain/item/admin-items-meta";
 import prismaClient from "~/lib/prisma/client.server";
@@ -17,6 +19,29 @@ export const meta = buildAdminItemsMeta("Venda comercial");
 
 function toBool(value: FormDataEntryValue | null) {
   return value === "on" || value === "true";
+}
+
+function formatCurrency(value: number | null | undefined) {
+  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(Number(value || 0));
+}
+
+function buildCardapioWhatsappMessage(params: {
+  itemName: string;
+  ingredients: string | null;
+  priceLines: string[];
+}) {
+  const ingredientsText = params.ingredients?.trim() || "ingredientes ainda nao preenchidos";
+  const priceText = params.priceLines.length > 0 ? params.priceLines.join("\n") : "- sem precos cadastrados no cardapio";
+
+  return [
+    "Oi! Por favor, adicionar o novo sabor no cardapio:",
+    "",
+    `*Nome*: ${params.itemName}`,
+    `*Ingredientes*: ${ingredientsText}`,
+    "",
+    "Precos de venda por tamanho:",
+    priceText,
+  ].join("\n");
 }
 
 export async function loader({ params }: LoaderFunctionArgs) {
@@ -124,12 +149,12 @@ export async function action({ request, params }: ActionFunctionArgs) {
       }),
       itemGroupIdRaw
         ? prismaClient.itemGroup.findFirst({
-            where: {
-              id: itemGroupIdRaw,
-              deletedAt: null,
-            },
-            select: { id: true },
-          })
+          where: {
+            id: itemGroupIdRaw,
+            deletedAt: null,
+          },
+          select: { id: true },
+        })
         : Promise.resolve(null),
     ]);
 
@@ -173,6 +198,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
 export default function AdminItemVendaComercialRoute() {
   const loaderData = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
+  const { sellingMatrix } = useOutletContext<AdminItemVendaOutletContext>();
   const payload = (loaderData?.payload || {}) as {
     item?: {
       id: string;
@@ -206,6 +232,8 @@ export default function AdminItemVendaComercialRoute() {
   const [categoryIdValue, setCategoryIdValue] = useState(sellingInfo?.categoryId || "");
   const [groupIdValue, setGroupIdValue] = useState(sellingInfo?.itemGroupId || "__EMPTY__");
   const [upcomingValue, setUpcomingValue] = useState(sellingInfo?.upcoming === true);
+  const [ingredientsValue, setIngredientsValue] = useState(sellingInfo?.ingredients || "");
+  const [whatsappMessage, setWhatsappMessage] = useState("");
 
   useEffect(() => {
     if (actionData?.status === 200) {
@@ -221,7 +249,8 @@ export default function AdminItemVendaComercialRoute() {
     setCategoryIdValue(sellingInfo?.categoryId || "");
     setGroupIdValue(sellingInfo?.itemGroupId || "__EMPTY__");
     setUpcomingValue(sellingInfo?.upcoming === true);
-  }, [sellingInfo?.categoryId, sellingInfo?.itemGroupId, sellingInfo?.upcoming]);
+    setIngredientsValue(sellingInfo?.ingredients || "");
+  }, [sellingInfo?.categoryId, sellingInfo?.ingredients, sellingInfo?.itemGroupId, sellingInfo?.upcoming]);
 
   if (!item) {
     return (
@@ -229,6 +258,38 @@ export default function AdminItemVendaComercialRoute() {
         <p className="font-semibold">Item não encontrado</p>
       </section>
     );
+  }
+
+  const cardapioPriceLines = (sellingMatrix?.[0]?.variations || [])
+    .map((variation) => {
+      const cardapioPrice = variation.channels.cardapio?.[0];
+      const priceAmount = Number(cardapioPrice?.priceAmount || 0);
+
+      if (!cardapioPrice || priceAmount <= 0) return null;
+
+      return `- *${variation.name}*: ${formatCurrency(priceAmount)}`;
+    })
+    .filter(Boolean) as string[];
+
+  function generateWhatsappMessage() {
+    setWhatsappMessage(
+      buildCardapioWhatsappMessage({
+        itemName: item.name,
+        ingredients: ingredientsValue,
+        priceLines: cardapioPriceLines,
+      })
+    );
+  }
+
+  function copyWhatsappMessage() {
+    if (!navigator?.clipboard) {
+      toast({ title: "Erro", description: "Não foi possível copiar a mensagem.", variant: "destructive" });
+      return;
+    }
+
+    void navigator.clipboard.writeText(whatsappMessage).then(() => {
+      toast({ title: "Mensagem copiada", description: "Cole a mensagem no WhatsApp." });
+    });
   }
 
   return (
@@ -252,7 +313,8 @@ export default function AdminItemVendaComercialRoute() {
               <Textarea
                 id="ingredients"
                 name="ingredients"
-                defaultValue={sellingInfo?.ingredients || ""}
+                value={ingredientsValue}
+                onChange={(event) => setIngredientsValue(event.target.value)}
                 placeholder="Ex.: molho de tomate, muçarela, manjericão..."
                 className="min-h-32"
               />
@@ -348,15 +410,13 @@ export default function AdminItemVendaComercialRoute() {
                   id="upcomingSwitch"
                   type="button"
                   onClick={() => setUpcomingValue((current) => !current)}
-                  className={`inline-flex h-6 w-11 items-center rounded-full transition ${
-                    upcomingValue ? "bg-slate-900" : "bg-slate-300"
-                  }`}
+                  className={`inline-flex h-6 w-11 items-center rounded-full transition ${upcomingValue ? "bg-slate-900" : "bg-slate-300"
+                    }`}
                   aria-pressed={upcomingValue}
                 >
                   <span
-                    className={`inline-block h-5 w-5 rounded-full bg-white transition ${
-                      upcomingValue ? "translate-x-5" : "translate-x-0.5"
-                    }`}
+                    className={`inline-block h-5 w-5 rounded-full bg-white transition ${upcomingValue ? "translate-x-5" : "translate-x-0.5"
+                      }`}
                   />
                 </button>
               </div>
@@ -381,6 +441,42 @@ export default function AdminItemVendaComercialRoute() {
               className="min-h-28"
             />
           </div>
+        </section>
+
+        <section className="space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h3 className="text-sm font-semibold text-slate-900">Mensagem para cardápio</h3>
+              <p className="text-xs text-slate-500">
+                Gera um texto para pedir a inclusão do sabor no cardápio pelo WhatsApp.
+              </p>
+            </div>
+            <Button type="button" variant="outline" className="gap-2" onClick={generateWhatsappMessage}>
+              <MessageCircle size={16} />
+              Gerar mensagem WhatsApp
+            </Button>
+          </div>
+
+          <Separator />
+
+          {whatsappMessage ? (
+            <div className="space-y-3">
+              <Textarea
+                value={whatsappMessage}
+                onChange={(event) => setWhatsappMessage(event.target.value)}
+                className="min-h-48 font-mono text-sm"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                className="gap-2"
+                onClick={copyWhatsappMessage}
+              >
+                <Copy size={16} />
+                Copiar mensagem
+              </Button>
+            </div>
+          ) : null}
         </section>
 
         <section className="flex flex-wrap items-center justify-between gap-4 border-t border-slate-100 pt-8">

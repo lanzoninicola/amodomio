@@ -27,6 +27,14 @@ import toFixedNumber from "~/utils/to-fixed-number";
 import prismaClient from "~/lib/prisma/client.server";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "~/components/ui/tooltip";
 import { findAllCardapioItems } from "~/domain/cardapio/cardapio-items-source.server";
+import {
+  computeNativeItemSellingPriceBreakdown,
+  listSizeMapByKey,
+  pickLatestActiveSheet,
+  resolveVariationSizeKey,
+} from "~/domain/item/item-selling-price-calculation.server";
+import { calculateSellingPriceProfit } from "~/domain/item/item-selling-price-review";
+import { menuItemSellingPriceUtilityEntity } from "~/domain/cardapio/menu-item-selling-price-utility.entity";
 
 export const meta: MetaFunction = () => [
   { title: "Lista de sabores | Admin" },
@@ -35,11 +43,107 @@ export const meta: MetaFunction = () => [
 
 
 export const loader = async () => {
-  const cardapioItems = findAllCardapioItems()
+  const cardapioItems = enrichCardapioItemsWithQuickPriceCosts(findAllCardapioItems())
 
   return defer({
     cardapioItems,
   })
+}
+
+type QuickSellPriceCostSummary = {
+  baseCostAmount: number;
+  dnaPerc: number;
+  operationalCostAmount: number;
+};
+
+type QuickSellPriceVariation = MenuItemWithAssociations["MenuItemSellingPriceVariation"][number] & {
+  quickCostSummary?: QuickSellPriceCostSummary | null;
+};
+
+type QuickSellPriceItem = MenuItemWithAssociations & {
+  MenuItemSellingPriceVariation: QuickSellPriceVariation[];
+};
+
+async function enrichCardapioItemsWithQuickPriceCosts(
+  itemsPromise: Promise<MenuItemWithAssociations[]>
+): Promise<QuickSellPriceItem[]> {
+  const items = await itemsPromise;
+  const itemIds = items.map((item) => String(item.id || "")).filter(Boolean);
+
+  if (itemIds.length === 0) {
+    return items as QuickSellPriceItem[];
+  }
+
+  const db = prismaClient as any;
+  const [channel, activeSheets, sellingPriceConfig, sizeMap] = await Promise.all([
+    db.itemSellingChannel.findFirst({
+      where: { key: "cardapio" },
+    }),
+    db.itemCostSheet.findMany({
+      where: {
+        itemId: { in: itemIds },
+        isActive: true,
+      },
+      select: {
+        id: true,
+        name: true,
+        itemId: true,
+        itemVariationId: true,
+        costAmount: true,
+        updatedAt: true,
+        activatedAt: true,
+      },
+      orderBy: [{ activatedAt: "desc" }, { updatedAt: "desc" }],
+    }),
+    menuItemSellingPriceUtilityEntity.getSellingPriceConfig(),
+    listSizeMapByKey(),
+  ]);
+
+  if (!channel?.id) {
+    return items as QuickSellPriceItem[];
+  }
+
+  const sheetsByItemAndVariation = new Map<string, typeof activeSheets>();
+  for (const sheet of activeSheets || []) {
+    const key = `${String(sheet.itemId || "")}:${String(sheet.itemVariationId || "")}`;
+    const current = sheetsByItemAndVariation.get(key) || [];
+    current.push(sheet);
+    sheetsByItemAndVariation.set(key, current);
+  }
+
+  return items.map((item) => ({
+    ...item,
+    MenuItemSellingPriceVariation: (item.MenuItemSellingPriceVariation || []).map((variation: any) => {
+      const itemVariationId = String(variation.menuItemSizeId || variation.ItemVariation?.id || "");
+      const activeSheet = pickLatestActiveSheet(
+        sheetsByItemAndVariation.get(`${String(item.id || "")}:${itemVariationId}`) || []
+      );
+      const sizeKey = resolveVariationSizeKey({
+        variationCode: variation.MenuItemSize?.key,
+        variationName: variation.MenuItemSize?.name,
+      });
+      const size = sizeKey ? sizeMap.get(sizeKey) || null : null;
+      const breakdown = computeNativeItemSellingPriceBreakdown({
+        channel,
+        itemCostAmount: Number(activeSheet?.costAmount || 0),
+        sellingPriceConfig,
+        size,
+      });
+      const profit = calculateSellingPriceProfit({
+        priceAmount: Number(variation.priceAmount || 0),
+        breakdown,
+      });
+
+      return {
+        ...variation,
+        quickCostSummary: {
+          baseCostAmount: profit.baseCostAmount,
+          dnaPerc: profit.dnaPerc,
+          operationalCostAmount: profit.operationalCostAmount,
+        },
+      };
+    }),
+  })) as QuickSellPriceItem[];
 }
 
 export async function action({ request }: LoaderFunctionArgs) {
@@ -833,14 +937,32 @@ function QuickSellPriceDialog({
   open,
   onOpenChange,
 }: {
-  item: MenuItemWithAssociations;
+  item: QuickSellPriceItem;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
+  const initialPricesByAbbreviation = item.MenuItemSellingPriceVariation.reduce<Record<string, number>>((acc, variation) => {
+    const abbreviation = getVariationAbbreviation(variation);
+    if (!abbreviation) return acc;
+    acc[abbreviation] = Number(variation.priceAmount ?? 0);
+    return acc;
+  }, {});
+  const [draftPricesByAbbreviation, setDraftPricesByAbbreviation] = useState(initialPricesByAbbreviation);
+
+  useEffect(() => {
+    setDraftPricesByAbbreviation(initialPricesByAbbreviation);
+  }, [item.id, open]);
+
   const pricesByAbbreviation = item.MenuItemSellingPriceVariation.reduce<Record<string, number>>((acc, variation) => {
     const abbreviation = getVariationAbbreviation(variation);
     if (!abbreviation) return acc;
     acc[abbreviation] = Number(variation.priceAmount ?? 0);
+    return acc;
+  }, {});
+  const costSummaryByAbbreviation = item.MenuItemSellingPriceVariation.reduce<Record<string, QuickSellPriceCostSummary>>((acc, variation) => {
+    const abbreviation = getVariationAbbreviation(variation);
+    if (!abbreviation || !variation.quickCostSummary) return acc;
+    acc[abbreviation] = variation.quickCostSummary;
     return acc;
   }, {});
 
@@ -877,8 +999,28 @@ function QuickSellPriceDialog({
                 <MoneyInput
                   name={size.inputName}
                   defaultValue={pricesByAbbreviation[size.abbreviation] ?? 0}
+                  onValueChange={(value) =>
+                    setDraftPricesByAbbreviation((current) => ({
+                      ...current,
+                      [size.abbreviation]: value,
+                    }))
+                  }
                   className="w-full text-black font-medium mt-2 font-mono text-lg"
                 />
+                {costSummaryByAbbreviation[size.abbreviation] ? (
+                  <span className="mt-1 rounded-md bg-slate-50 px-2 py-1 text-[11px] font-medium leading-tight text-slate-600">
+                    Custo operacional{" "}
+                    <span className="block font-mono text-xs text-slate-950">
+                      R$ {formatMoneyString(getOperationalCostAmount({
+                        summary: costSummaryByAbbreviation[size.abbreviation],
+                        priceAmount: draftPricesByAbbreviation[size.abbreviation] ?? pricesByAbbreviation[size.abbreviation] ?? 0,
+                      }))}
+                    </span>
+                    <span className="block font-normal text-slate-500">
+                      base + DNA {formatDecimalPlaces(costSummaryByAbbreviation[size.abbreviation].dnaPerc)}%
+                    </span>
+                  </span>
+                ) : null}
               </label>
             ))}
           </div>
@@ -889,6 +1031,21 @@ function QuickSellPriceDialog({
         </Form>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function getOperationalCostAmount({
+  summary,
+  priceAmount,
+}: {
+  summary: QuickSellPriceCostSummary;
+  priceAmount: number;
+}) {
+  return Number(
+    (
+      Number(summary.baseCostAmount || 0) +
+      (Number(priceAmount || 0) * Number(summary.dnaPerc || 0)) / 100
+    ).toFixed(2)
   );
 }
 

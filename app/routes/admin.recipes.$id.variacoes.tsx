@@ -28,6 +28,11 @@ export default function AdminRecipeVariacoesTab() {
     const effectiveVariationColumns = orderedVariationColumns.length > 0
         ? orderedVariationColumns
         : (hasAnyLinkedVariation ? [] : [{ itemVariationId: "__base__", variationId: null, variationName: "Base/auto" }])
+    const compactMatrixWidthClass = effectiveVariationColumns.length <= 1
+        ? "max-w-[760px]"
+        : effectiveVariationColumns.length === 2
+            ? "max-w-[980px]"
+            : ""
 
     const groupedLines = recipeLines.reduce((acc, line) => {
         const key = String(line.recipeIngredientId || line.id)
@@ -100,7 +105,7 @@ export default function AdminRecipeVariacoesTab() {
 
     return (
         <div className="space-y-4">
-            <section className="">
+            <section className={cn("w-full", compactMatrixWidthClass)}>
                 <div className="flex flex-wrap items-start justify-between gap-4 border-b border-slate-100 py-4">
                     <div className="space-y-2">
                         <div className="flex items-center gap-2">
@@ -153,10 +158,10 @@ export default function AdminRecipeVariacoesTab() {
                 </div>
 
                 <div className="overflow-x-auto">
-                    <table className="min-w-full border-separate border-spacing-0 text-sm">
+                    <table className="w-max min-w-[720px] border-separate border-spacing-0 text-sm">
                         <thead>
                             <tr>
-                                <th className="sticky left-0 z-10 bg-white px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-400">Ingrediente</th>
+                                <th className="sticky left-0 z-10 w-[260px] min-w-[260px] bg-white px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-400">Ingrediente</th>
                                 <th className="w-24 bg-white px-3 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-400">UM</th>
                                 <th className="w-32 bg-white px-3 py-3 text-left">
                                     <TooltipProvider>
@@ -175,7 +180,7 @@ export default function AdminRecipeVariacoesTab() {
                                     const metric = variationMetrics[index]
                                     const missing = metric.filledQtyCells < requiredCellCount
                                     return (
-                                        <th key={variation.itemVariationId} className={`min-w-[200px] px-3 py-3 text-left ${variation.isReference ? "bg-slate-50" : "bg-white"}`}>
+                                        <th key={variation.itemVariationId} className={`w-[220px] min-w-[220px] px-3 py-3 text-left ${variation.isReference ? "bg-slate-50" : "bg-white"}`}>
                                             <div className="flex items-center gap-1.5">
                                                 <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-700">
                                                     {variation.variationName || "Base"}
