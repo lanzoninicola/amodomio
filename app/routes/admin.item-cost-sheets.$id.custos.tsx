@@ -229,10 +229,10 @@ export default function AdminItemCostSheetCustosTab() {
               Gerenciar presets
             </Link>
           </Button>
-          <Form method="post" action={detailPath} onSubmit={() => setRecalcLoading(true)}>
+          <Form method="post" action="/api/item-cost-sheets/recalculate" onSubmit={() => setRecalcLoading(true)}>
             <input type="hidden" name="itemCostSheetId" value={selectedSheet?.id} />
             <input type="hidden" name="redirectTo" value={`${detailPath}/custos`} />
-            <Button type="submit" variant="outline" name="_action" value="item-cost-sheet-line-recalc" className="rounded-full border-slate-200 bg-white text-slate-700 hover:bg-slate-50">
+            <Button type="submit" variant="outline" className="rounded-full border-slate-200 bg-white text-slate-700 hover:bg-slate-50">
               Recalcular ficha
             </Button>
           </Form>

@@ -101,8 +101,14 @@ Esta seção existe para orientar agentes de IA que precisem ler, editar, valida
   Responsável por loader, action e regras de atualização da ficha.
 - `app/routes/admin.item-cost-sheets.$id.custos.tsx`
   UI da aba de composição/custos.
+- `app/routes/api.item-cost-sheets.recalculate.tsx`
+  Resource route REST para acionar recálculo manual ou em lote.
+- `app/routes/admin.recalculate-item-cost-sheets._index.tsx`
+  Tela operacional de recálculo em lote; usa a API REST e mantém o resultado na própria tela via `useFetcher`.
 - `app/domain/costs/item-cost-sheet-recalc.server`
   Regras de recálculo, snapshots e arredondamento monetário.
+- `app/domain/costs/item-cost-sheet-bulk-recalculate.server`
+  Orquestra seleção, auditoria e resultado consolidado de recálculo em lote.
 
 ### Regras de edição por tipo de linha
 
@@ -166,12 +172,13 @@ Esta seção existe para orientar agentes de IA que precisem ler, editar, valida
 
 - O total da linha por variação é calculado com:
   - `totalCostAmount = calcItemCostSheetTotalCostAmount(unitCostAmount, quantity, wastePerc)`
-- Após alterar qualquer linha, a ficha deve ser recalculada:
+- Após alterar qualquer linha dentro da action de edição, a ficha deve ser recalculada internamente:
   - `recalcItemCostSheetTotals(db, rootSheetId)`
+- Para acionamento manual, tela ou automação externa, usar a API REST de recálculo descrita abaixo.
 
 ### Ações suportadas na route
 
-As ações abaixo vivem em `app/routes/admin.item-cost-sheets.$id.tsx`.
+As ações de edição abaixo vivem em `app/routes/admin.item-cost-sheets.$id.tsx`.
 
 - `item-cost-sheet-line-add-recipe`
   - Adiciona linha do tipo `recipe`
@@ -206,11 +213,62 @@ As ações abaixo vivem em `app/routes/admin.item-cost-sheets.$id.tsx`.
 - `item-cost-sheet-line-delete`
   - Remove a linha da composição
 
-- `item-cost-sheet-line-recalc`
-  - Força recálculo da ficha
-
 - `item-cost-sheet-delete`
   - Remove a ficha se não houver bloqueios
+
+### API REST de recálculo
+
+O recálculo manual de ficha vive em `app/routes/api.item-cost-sheets.recalculate.tsx`.
+Essa rota é o ponto de entrada para botão de tela, recálculo em lote e automações.
+Ela não é pública: exige a mesma sessão autenticada do painel `/admin`.
+
+Contrato:
+
+- Método: `POST`
+- URL: `/api/item-cost-sheets/recalculate`
+- Acesso: sessão autenticada do painel `/admin`
+- Payload por formulário ou JSON:
+  - `itemCostSheetId`: recalcula uma ficha específica; se for ficha derivada, a API resolve a ficha raiz via `baseItemCostSheetId`
+  - `rootSheetIds`: recalcula múltiplas fichas raiz; aceita array em JSON ou string separada por vírgula em formulário
+  - `redirectTo`: opcional; quando enviado, a rota recalcula e redireciona para um caminho interno da própria aplicação
+
+Exemplo JSON para uma ficha:
+
+```json
+{
+  "itemCostSheetId": "sheet-id"
+}
+```
+
+Exemplo JSON para lote:
+
+```json
+{
+  "rootSheetIds": ["root-sheet-id-1", "root-sheet-id-2"]
+}
+```
+
+Sem `redirectTo`, a resposta segue o padrão `ok()` do projeto:
+
+```json
+{
+  "status": 200,
+  "message": "1 ficha(s) processada(s)",
+  "payload": {
+    "bulk": {
+      "results": [],
+      "totals": {
+        "updated": 0,
+        "skipped": 0,
+        "errors": 0,
+        "publishedSnapshots": 0
+      }
+    }
+  }
+}
+```
+
+`redirectTo` só deve aceitar caminho interno. A rota valida a origem antes de redirecionar.
 
 ### Validações importantes
 
@@ -248,5 +306,5 @@ As ações abaixo vivem em `app/routes/admin.item-cost-sheets.$id.tsx`.
 2. Verificar se a linha é referenciada ou manual.
 3. Aplicar validações de `quantity`, `unit`, `unitCostAmount` e `wastePerc`.
 4. Atualizar `ItemCostSheetVariationComponent` por variação.
-5. Recalcular totais da ficha.
+5. Recalcular totais da ficha: internamente com `recalcItemCostSheetTotals(db, rootSheetId)` depois de editar linhas, ou externamente via `POST /api/item-cost-sheets/recalculate`.
 6. Preservar a regra de referência como source of truth para `recipe`, `recipeSheet` e `item`.

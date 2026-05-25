@@ -1,5 +1,5 @@
-import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
-import { Form, Link, useActionData, useLoaderData, useNavigation } from "@remix-run/react";
+import type { LoaderFunctionArgs } from "@remix-run/node";
+import { Form, Link, useFetcher, useLoaderData } from "@remix-run/react";
 import { useEffect, useMemo, useState } from "react";
 import { CheckCheck, Copy, ListFilter, RefreshCw, Search, XCircle } from "lucide-react";
 import {
@@ -20,13 +20,12 @@ import {
   TableRow,
 } from "~/components/ui/table";
 import {
-  recalculateItemCostSheetsInBulk,
   scanItemCostSheetsForBulkRecalculation,
   type ItemCostSheetBulkRecalculateResult,
   type ItemCostSheetBulkScanResult,
 } from "~/domain/costs/item-cost-sheet-bulk-recalculate.server";
 import prismaClient from "~/lib/prisma/client.server";
-import { ok, serverError } from "~/utils/http-response.server";
+import { ok } from "~/utils/http-response.server";
 import {
   buildFilterOptions,
   buildFiltersQuery,
@@ -43,8 +42,12 @@ type LoaderData = {
   rootSheetOptions: RootSheetOption[];
 };
 
-type ActionData = {
-  bulk: ItemCostSheetBulkRecalculateResult;
+type RecalculateActionResponse = {
+  status: number;
+  message?: string;
+  payload?: {
+    bulk: ItemCostSheetBulkRecalculateResult;
+  };
 };
 
 export async function loader({ request }: LoaderFunctionArgs) {
@@ -85,26 +88,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
   return ok<LoaderData>({ scan, filters, rootSheetOptions });
 }
 
-export async function action({ request }: ActionFunctionArgs) {
-  try {
-    const formData = await request.formData();
-    const rootSheetIds = String(formData.get("rootSheetIds") || "")
-      .split(",")
-      .map((v) => v.trim())
-      .filter(Boolean);
-
-    const bulk = await recalculateItemCostSheetsInBulk(rootSheetIds);
-    return ok<ActionData>({ bulk });
-  } catch (error) {
-    return serverError(error);
-  }
-}
-
 export default function AdminRecalculateItemCostSheetsIndex() {
   const loaderData = useLoaderData<typeof loader>();
-  const actionData = useActionData<typeof action>();
-  const navigation = useNavigation();
-  const submitting = navigation.state === "submitting";
+  const recalculateFetcher = useFetcher<RecalculateActionResponse>();
+  const submitting = recalculateFetcher.state !== "idle";
 
   const { scan, filters, rootSheetOptions } = loaderData.payload;
   const filterOptions = useMemo(() => buildFilterOptions(rootSheetOptions), [rootSheetOptions]);
@@ -151,7 +138,7 @@ export default function AdminRecalculateItemCostSheetsIndex() {
     sheets.length > 0 && sheets.every((s) => selected.has(s.rootSheetId));
   const selectedCount = selected.size;
   const selectedIds = Array.from(selected).join(",");
-  const bulk = (actionData as any)?.payload?.bulk ?? null;
+  const bulk = recalculateFetcher.data?.payload?.bulk ?? null;
 
   const filterSelectOptions: FilterOption[] = [
     { value: "", label: "Todas as fichas e itens", searchText: "todas", kind: "sheet" },
@@ -345,7 +332,7 @@ export default function AdminRecalculateItemCostSheetsIndex() {
         <span className="text-xs font-medium text-slate-500">
           {selectedCount} selecionada(s)
         </span>
-        <Form method="post" className="flex items-center gap-2">
+        <recalculateFetcher.Form method="post" action="/api/item-cost-sheets/recalculate" className="flex items-center gap-2">
           <input type="hidden" name="rootSheetIds" value={selectedIds} />
           <button
             type="submit"
@@ -355,7 +342,7 @@ export default function AdminRecalculateItemCostSheetsIndex() {
             <RefreshCw className="h-3 w-3" />
             {submitting ? "Recalculando..." : `Recalcular (${selectedCount})`}
           </button>
-        </Form>
+        </recalculateFetcher.Form>
         <button
           type="button"
           className="text-xs text-slate-400 underline hover:text-slate-600"
@@ -532,7 +519,7 @@ export default function AdminRecalculateItemCostSheetsIndex() {
                         className="flex items-center justify-end"
                         onClick={(e) => e.stopPropagation()}
                       >
-                        <Form method="post">
+                        <recalculateFetcher.Form method="post" action="/api/item-cost-sheets/recalculate">
                           <input
                             type="hidden"
                             name="rootSheetIds"
@@ -546,7 +533,7 @@ export default function AdminRecalculateItemCostSheetsIndex() {
                             <RefreshCw className="h-3 w-3" />
                             Recalcular
                           </button>
-                        </Form>
+                        </recalculateFetcher.Form>
                       </div>
                     </TableCell>
                   </TableRow>

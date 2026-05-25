@@ -14,7 +14,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
 
 export default function AdminMobilePedidoFornecedorProdutos() {
   const { payload } = useLoaderData<typeof loader>();
-  const { supplier, itemRows } = payload as any;
+  const { supplier, itemRows, supplierId } = payload as any;
   const navigation = useNavigation();
   const isLoading = navigation.state !== "idle";
   const [itemQuery, setItemQuery] = useState("");
@@ -79,7 +79,7 @@ export default function AdminMobilePedidoFornecedorProdutos() {
             <span className="font-semibold text-slate-900">{supplier.name}</span>
           </p>
 
-          <Form method="get" action="../quantidades" className="space-y-2">
+          <Form method="get" action={`/admin/mobile/pedido-fornecedor/${supplierId}/quantidades`} className="space-y-2">
             {Array.from(selectedIds).map((itemId) => (
               <input key={itemId} type="hidden" name="itemId" value={itemId} />
             ))}
@@ -158,4 +158,3 @@ export default function AdminMobilePedidoFornecedorProdutos() {
     </div>
   );
 }
-

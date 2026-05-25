@@ -1229,14 +1229,6 @@ export async function action({ request, params }: ActionFunctionArgs) {
       return redirect(postRedirectTo);
     }
 
-    if (_action === "item-cost-sheet-line-recalc") {
-      const itemCostSheetId = String(formData.get("itemCostSheetId") || "").trim();
-      if (!itemCostSheetId) return badRequest("Ficha de custo inválida");
-      if (itemCostSheetId !== currentSheet.id) return badRequest("Ficha de custo divergente");
-      await recalcItemCostSheetTotals(db, rootSheetId);
-      return redirect(postRedirectTo);
-    }
-
     if (_action === "item-cost-sheet-delete") {
       const itemCostSheetId = String(formData.get("itemCostSheetId") || "").trim();
       if (!itemCostSheetId) return badRequest("Ficha de custo inválida");

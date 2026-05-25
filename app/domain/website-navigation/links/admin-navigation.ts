@@ -80,10 +80,22 @@ const ADMIN_NAVIGATION_LINKS: WebsiteNavigationConfig = {
       ],
     },
     {
-      title: "Gerenciamento Cardápio",
+      title: "Vendas",
       items: [
         {
-          title: "Cardápios",
+          title: "Itens vendidos",
+          href: "/admin/vendas/itens-vendidos",
+          items: [],
+          disabled: false,
+        },
+        {
+          title: "Canais de venda",
+          href: "/admin/canais-venda",
+          items: [],
+          disabled: false,
+        },
+        {
+          title: "Cardápio",
           href: "",
           items: [
             {
@@ -98,13 +110,6 @@ const ADMIN_NAVIGATION_LINKS: WebsiteNavigationConfig = {
               items: [],
               disabled: false,
             },
-          ],
-          disabled: false,
-        },
-        {
-          title: "Estrutura",
-          href: "",
-          items: [
             {
               title: "Grupos",
               href: "/admin/gerenciamento/cardapio/groups",
@@ -114,6 +119,31 @@ const ADMIN_NAVIGATION_LINKS: WebsiteNavigationConfig = {
             {
               title: "Tamanhos",
               href: "/admin/gerenciamento/cardapio/sizes",
+              items: [],
+              disabled: false,
+            },
+          ],
+          disabled: false,
+        },
+        {
+          title: "Comercial",
+          href: "",
+          items: [
+            {
+              title: "Preços de venda",
+              href: "/admin/gerenciamento/cardapio/sell-price-management/cardapio/edit-items",
+              items: [],
+              disabled: false,
+            },
+            {
+              title: "Preços de venda (Novo)",
+              href: "/admin/vendas/sell-price-management",
+              items: [],
+              disabled: false,
+            },
+            {
+              title: "DNA",
+              href: "/admin/vendas/dna",
               items: [],
               disabled: false,
             },
@@ -145,60 +175,6 @@ const ADMIN_NAVIGATION_LINKS: WebsiteNavigationConfig = {
           ],
           disabled: false,
         },
-        {
-          title: "Promo 'Fotos Cardapio'",
-          href: "/admin/gerenciamento/pizza-promo",
-          items: [],
-          disabled: false,
-        },
-        {
-          title: "Vínculo assets (lote)",
-          href: "/admin/gerenciamento/cardapio/assets-batch",
-          items: [],
-          disabled: false,
-        },
-      ],
-    },
-    {
-      title: "Vendas",
-      items: [
-        {
-          title: "Itens vendidos",
-          href: "/admin/vendas/itens-vendidos",
-          items: [],
-          disabled: false,
-        },
-        {
-          title: "Canais de venda",
-          href: "/admin/canais-venda",
-          items: [],
-          disabled: false,
-        },
-        {
-          title: "Comercial",
-          href: "",
-          items: [
-            {
-              title: "Preços de venda",
-              href: "/admin/gerenciamento/cardapio/sell-price-management/cardapio/edit-items",
-              items: [],
-              disabled: false,
-            },
-            {
-              title: "Preços de venda (Novo)",
-              href: "/admin/vendas/sell-price-management",
-              items: [],
-              disabled: false,
-            },
-            {
-              title: "DNA",
-              href: "/admin/vendas/dna",
-              items: [],
-              disabled: false,
-            },
-          ],
-          disabled: false,
-        },
 
         {
           title: "Ferramentas",
@@ -213,6 +189,18 @@ const ADMIN_NAVIGATION_LINKS: WebsiteNavigationConfig = {
             {
               title: "Combos",
               href: "/admin/vendas/combos",
+              items: [],
+              disabled: false,
+            },
+            {
+              title: "Promo 'Fotos Cardapio'",
+              href: "/admin/gerenciamento/pizza-promo",
+              items: [],
+              disabled: false,
+            },
+            {
+              title: "Vínculo assets (lote)",
+              href: "/admin/gerenciamento/cardapio/assets-batch",
               items: [],
               disabled: false,
             },

@@ -1,15 +1,26 @@
-import { redirect, type LoaderFunctionArgs, type MetaFunction } from "@remix-run/node";
+import {
+  redirect,
+  type LoaderFunctionArgs,
+  type MetaFunction,
+} from "@remix-run/node";
 import { authenticator } from "~/domain/auth/google.server";
 import prismaClient from "~/lib/prisma/client.server";
 
 const ITEM_STATUS_FILTERS = ["active", "inactive", "all"] as const;
 const EXPORT_VISIBILITY_FILTERS = ["all", "visible", "hidden"] as const;
+const LIST_SORT_OPTIONS = [
+  "channelOrder",
+  "cardapio",
+  "updatedAt",
+  "name",
+] as const;
 
 export const meta: MetaFunction = () => [
   { title: "Vendas | Exportar itens vendidos" },
 ];
 
 type ExportVisibilityFilter = (typeof EXPORT_VISIBILITY_FILTERS)[number];
+type ListSortOption = (typeof LIST_SORT_OPTIONS)[number];
 
 function toSafeFilenameSegment(value: string | null | undefined) {
   const normalized = String(value || "canal")
@@ -21,11 +32,26 @@ function toSafeFilenameSegment(value: string | null | undefined) {
   return normalized || "canal";
 }
 
-function parseExportVisibilityFilter(raw: string | null): ExportVisibilityFilter {
-  const normalized = String(raw || "").trim().toLowerCase();
-  return EXPORT_VISIBILITY_FILTERS.includes(normalized as ExportVisibilityFilter)
+function parseExportVisibilityFilter(
+  raw: string | null
+): ExportVisibilityFilter {
+  const normalized = String(raw || "")
+    .trim()
+    .toLowerCase();
+  return EXPORT_VISIBILITY_FILTERS.includes(
+    normalized as ExportVisibilityFilter
+  )
     ? (normalized as ExportVisibilityFilter)
     : "all";
+}
+
+function parseListSort(raw: string | null): ListSortOption {
+  const normalized = String(raw || "")
+    .trim()
+    .toLowerCase();
+  return LIST_SORT_OPTIONS.includes(normalized as ListSortOption)
+    ? (normalized as ListSortOption)
+    : "channelOrder";
 }
 
 function formatExportVisibilityLabel(value: ExportVisibilityFilter) {
@@ -46,7 +72,11 @@ function splitIngredientText(value: string | null | undefined) {
     .filter(Boolean);
 }
 
-function buildBaseItemWhere(params: { q: string; status: string; tagId: string }) {
+function buildBaseItemWhere(params: {
+  q: string;
+  status: string;
+  tagId: string;
+}) {
   const where: any = { AND: [] as any[] };
 
   if (params.status === "active") where.active = true;
@@ -57,7 +87,42 @@ function buildBaseItemWhere(params: { q: string; status: string; tagId: string }
       OR: [
         { name: { contains: params.q, mode: "insensitive" } },
         { description: { contains: params.q, mode: "insensitive" } },
-        { ItemSellingInfo: { is: { slug: { contains: params.q, mode: "insensitive" } } } },
+        {
+          ItemSellingInfo: {
+            is: { slug: { contains: params.q, mode: "insensitive" } },
+          },
+        },
+        {
+          ItemVariation: {
+            some: {
+              deletedAt: null,
+              Recipe: {
+                is: {
+                  RecipeIngredient: {
+                    some: {
+                      IngredientItem: {
+                        name: { contains: params.q, mode: "insensitive" },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        {
+          Recipe: {
+            some: {
+              RecipeIngredient: {
+                some: {
+                  IngredientItem: {
+                    name: { contains: params.q, mode: "insensitive" },
+                  },
+                },
+              },
+            },
+          },
+        },
       ],
     });
   }
@@ -77,31 +142,21 @@ function buildBaseItemWhere(params: { q: string; status: string; tagId: string }
   return where;
 }
 
-function buildSoldItemWhere(cardapioChannelId: string) {
-  return {
-    canSell: true,
-    active: true,
-    ItemSellingInfo: {
-      is: {
-        upcoming: false,
-      },
-    },
-    ItemSellingChannelItem: {
-      some: {
-        itemSellingChannelId: cardapioChannelId,
-        visible: true,
-      },
-    },
-    ItemSellingPriceVariation: {
-      some: {
-        itemSellingChannelId: cardapioChannelId,
-      },
-    },
-  };
-}
-
-function mapSellingRow(item: any) {
-  const channelLink = item.ItemSellingChannelItem?.[0] || null;
+function mapSellingRow(
+  item: any,
+  selectedChannelId: string,
+  cardapioChannelId: string | null
+) {
+  const channelLinks = item.ItemSellingChannelItem || [];
+  const channelLink =
+    channelLinks.find(
+      (row: any) => String(row.itemSellingChannelId) === selectedChannelId
+    ) || null;
+  const cardapioChannelLink = cardapioChannelId
+    ? channelLinks.find(
+        (row: any) => String(row.itemSellingChannelId) === cardapioChannelId
+      ) || null
+    : null;
   const prices = item.ItemSellingPriceVariation || [];
   const referencePrice =
     prices.find((row: any) => row.ItemVariation?.isReference) ||
@@ -109,7 +164,14 @@ function mapSellingRow(item: any) {
     null;
   const upcoming = Boolean(item.ItemSellingInfo?.upcoming);
   const channelVisible = channelLink?.visible === true;
-  const commerciallyReady = Boolean(item.canSell) && Boolean(item.active) && channelVisible && !upcoming && prices.length > 0;
+  const sortOrderIndex = Number(channelLink?.sortOrderIndex || 0);
+  const cardapioVisible = cardapioChannelLink?.visible === true;
+  const commerciallyReady =
+    Boolean(item.canSell) &&
+    Boolean(item.active) &&
+    channelVisible &&
+    !upcoming &&
+    prices.length > 0;
 
   return {
     id: String(item.id),
@@ -124,36 +186,70 @@ function mapSellingRow(item: any) {
     slug: item.ItemSellingInfo?.slug || null,
     upcoming,
     channelVisible,
+    cardapioVisible,
     totalVariations: (item.ItemVariation || []).length,
     totalPriceEntries: prices.length,
     channelPriceEntries: prices.length,
-    referenceVariationName: referencePrice?.ItemVariation?.Variation?.name || null,
-    referencePriceAmount: referencePrice ? Number(referencePrice.priceAmount || 0) : null,
+    referenceVariationName:
+      referencePrice?.ItemVariation?.Variation?.name || null,
+    referencePriceAmount: referencePrice
+      ? Number(referencePrice.priceAmount || 0)
+      : null,
     updatedBy: referencePrice?.updatedBy || null,
     commerciallyReady,
+    sortOrderIndex,
   };
 }
 
-function mapExportItem(item: any) {
-  const row = mapSellingRow(item);
+function compareByChannelOrder(a: any, b: any) {
+  return (
+    Number(a.sortOrderIndex || 0) - Number(b.sortOrderIndex || 0) ||
+    compareByName(a, b)
+  );
+}
+
+function compareByCardapioVisibility(a: any, b: any) {
+  return (
+    Number(b.cardapioVisible) - Number(a.cardapioVisible) || compareByName(a, b)
+  );
+}
+
+function compareByName(a: { name: string }, b: { name: string }) {
+  return a.name.localeCompare(b.name, "pt-BR", { sensitivity: "base" });
+}
+
+function mapExportItem(
+  item: any,
+  selectedChannelId: string,
+  cardapioChannelId: string | null
+) {
+  const row = mapSellingRow(item, selectedChannelId, cardapioChannelId);
   const publicIngredientsText = item.ItemSellingInfo?.ingredients || null;
   const publicIngredients = splitIngredientText(publicIngredientsText);
-  const priceEntries = (item.ItemSellingPriceVariation || []).map((price: any) => ({
-    id: String(price.id),
-    priceAmount: price.priceAmount == null ? null : Number(price.priceAmount),
-    updatedAt: price.updatedAt ? new Date(price.updatedAt).toISOString() : null,
-    updatedBy: price.updatedBy || null,
-    variationName: price.ItemVariation?.Variation?.name || null,
-    isReferenceVariation: Boolean(price.ItemVariation?.isReference),
-  }));
+  const priceEntries = (item.ItemSellingPriceVariation || []).map(
+    (price: any) => ({
+      id: String(price.id),
+      priceAmount: price.priceAmount == null ? null : Number(price.priceAmount),
+      updatedAt: price.updatedAt
+        ? new Date(price.updatedAt).toISOString()
+        : null,
+      updatedBy: price.updatedBy || null,
+      variationName: price.ItemVariation?.Variation?.name || null,
+      isReferenceVariation: Boolean(price.ItemVariation?.isReference),
+    })
+  );
   const variations = (item.ItemVariation || []).map((variation: any) => {
-    const recipeIngredients = (variation.Recipe?.RecipeIngredient || []).map((ingredient: any) => ({
-      id: String(ingredient.id),
-      itemId: String(ingredient.IngredientItem?.id || ingredient.ingredientItemId || ""),
-      name: ingredient.IngredientItem?.name || "Ingrediente sem nome",
-      classification: ingredient.IngredientItem?.classification || null,
-      notes: ingredient.notes || null,
-    }));
+    const recipeIngredients = (variation.Recipe?.RecipeIngredient || []).map(
+      (ingredient: any) => ({
+        id: String(ingredient.id),
+        itemId: String(
+          ingredient.IngredientItem?.id || ingredient.ingredientItemId || ""
+        ),
+        name: ingredient.IngredientItem?.name || "Ingrediente sem nome",
+        classification: ingredient.IngredientItem?.classification || null,
+        notes: ingredient.notes || null,
+      })
+    );
 
     return {
       id: String(variation.id),
@@ -172,7 +268,11 @@ function mapExportItem(item: any) {
   });
   const recipeIngredients = variations
     .flatMap((variation) => variation.recipe?.ingredients || [])
-    .filter((ingredient, index, all) => all.findIndex((candidate) => candidate.itemId === ingredient.itemId) === index);
+    .filter(
+      (ingredient, index, all) =>
+        all.findIndex((candidate) => candidate.itemId === ingredient.itemId) ===
+        index
+    );
 
   return {
     ...row,
@@ -202,9 +302,16 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const url = new URL(request.url);
   const q = String(url.searchParams.get("q") || "").trim();
   const tagId = String(url.searchParams.get("tagId") || "").trim();
-  const exportVisibility = parseExportVisibilityFilter(url.searchParams.get("exportVisibility"));
-  const statusParam = String(url.searchParams.get("status") || "").trim().toLowerCase();
-  const status = ITEM_STATUS_FILTERS.includes(statusParam as (typeof ITEM_STATUS_FILTERS)[number])
+  const exportVisibility = parseExportVisibilityFilter(
+    url.searchParams.get("exportVisibility")
+  );
+  const sort = parseListSort(url.searchParams.get("sort"));
+  const statusParam = String(url.searchParams.get("status") || "")
+    .trim()
+    .toLowerCase();
+  const status = ITEM_STATUS_FILTERS.includes(
+    statusParam as (typeof ITEM_STATUS_FILTERS)[number]
+  )
     ? statusParam
     : "active";
 
@@ -227,12 +334,20 @@ export async function loader({ request }: LoaderFunctionArgs) {
   });
   const selectedTag = tags.find((tag: any) => String(tag.id) === tagId) || null;
 
-  const selectedChannelKeyParam = String(url.searchParams.get("channel") || "").trim().toLowerCase();
+  const selectedChannelKeyParam = String(url.searchParams.get("channel") || "")
+    .trim()
+    .toLowerCase();
   const selectedChannel =
-    channels.find((channel: any) => String(channel.key || "").toLowerCase() === selectedChannelKeyParam) ||
+    channels.find(
+      (channel: any) =>
+        String(channel.key || "").toLowerCase() === selectedChannelKeyParam
+    ) ||
     channels[0] ||
     null;
-  const cardapioChannel = channels.find((channel: any) => String(channel.key || "").toLowerCase() === "cardapio") || null;
+  const cardapioChannel =
+    channels.find(
+      (channel: any) => String(channel.key || "").toLowerCase() === "cardapio"
+    ) || null;
 
   if (!selectedChannel) {
     return buildExportResponse("itens-vendidos-vazio.json", {
@@ -245,11 +360,13 @@ export async function loader({ request }: LoaderFunctionArgs) {
     });
   }
 
-  const baseWhere = buildBaseItemWhere({ q, status, tagId: selectedTag ? String(selectedTag.id) : "" });
-  const soldWhere = cardapioChannel ? buildSoldItemWhere(String(cardapioChannel.id)) : null;
+  const baseWhere = buildBaseItemWhere({
+    q,
+    status,
+    tagId: selectedTag ? String(selectedTag.id) : "",
+  });
   const where = {
     ...baseWhere,
-    ...(soldWhere || {}),
     ItemSellingChannelItem: {
       some: {
         itemSellingChannelId: selectedChannel.id,
@@ -329,12 +446,18 @@ export async function loader({ request }: LoaderFunctionArgs) {
       },
       ItemSellingChannelItem: {
         where: {
-          itemSellingChannelId: selectedChannel.id,
+          itemSellingChannelId: {
+            in: [
+              selectedChannel.id,
+              ...(cardapioChannel?.id ? [cardapioChannel.id] : []),
+            ],
+          },
         },
         select: {
+          itemSellingChannelId: true,
           visible: true,
+          sortOrderIndex: true,
         },
-        take: 1,
       },
       ItemSellingPriceVariation: {
         where: {
@@ -361,8 +484,24 @@ export async function loader({ request }: LoaderFunctionArgs) {
     },
     orderBy: [{ updatedAt: "desc" }, { name: "asc" }],
   });
+  const sortedExportItems = (exportItems || [])
+    .map((item: any) =>
+      mapExportItem(
+        item,
+        String(selectedChannel.id),
+        cardapioChannel?.id ? String(cardapioChannel.id) : null
+      )
+    )
+    .sort((a: any, b: any) => {
+      if (sort === "updatedAt") return 0;
+      if (sort === "name") return compareByName(a, b);
+      if (sort === "channelOrder") return compareByChannelOrder(a, b);
+      return compareByCardapioVisibility(a, b);
+    });
   const generatedAt = new Date().toISOString();
-  const filename = `itens-vendidos-${toSafeFilenameSegment(selectedChannel.key || selectedChannel.name)}-${exportVisibility}-${generatedAt.slice(0, 10)}.json`;
+  const filename = `itens-vendidos-${toSafeFilenameSegment(
+    selectedChannel.key || selectedChannel.name
+  )}-${exportVisibility}-${generatedAt.slice(0, 10)}.json`;
 
   return buildExportResponse(filename, {
     meta: {
@@ -375,19 +514,27 @@ export async function loader({ request }: LoaderFunctionArgs) {
         tagId: selectedTag ? String(selectedTag.id) : null,
         tagName: selectedTag?.name || null,
         channelKey: String(selectedChannel.key || "").toLowerCase(),
-        channelName: selectedChannel.name || String(selectedChannel.key || "").toUpperCase(),
+        channelName:
+          selectedChannel.name ||
+          String(selectedChannel.key || "").toUpperCase(),
+        sort,
         visibility: exportVisibility,
         visibilityLabel: formatExportVisibilityLabel(exportVisibility),
       },
       totals: {
-        items: exportItems.length,
+        items: sortedExportItems.length,
       },
       fieldNotes: {
-        commerciallyReady: "true quando canSell, active, visivel no canal, nao upcoming e com preco no canal",
-        referencePriceAmount: "preco da variacao marcada como referencia quando existir; fallback para o primeiro preco do canal",
-        publicIngredientsText: "texto publico de ingredientes cadastrado na area comercial do item",
-        publicIngredients: "lista derivada do texto publico de ingredientes, separada por virgula, ponto e virgula ou quebra de linha",
-        recipeIngredients: "lista tecnica deduplicada de ingredientes vindos das receitas vinculadas as variacoes do item",
+        commerciallyReady:
+          "true quando canSell, active, visivel no canal, nao upcoming e com preco no canal",
+        referencePriceAmount:
+          "preco da variacao marcada como referencia quando existir; fallback para o primeiro preco do canal",
+        publicIngredientsText:
+          "texto publico de ingredientes cadastrado na area comercial do item",
+        publicIngredients:
+          "lista derivada do texto publico de ingredientes, separada por virgula, ponto e virgula ou quebra de linha",
+        recipeIngredients:
+          "lista tecnica deduplicada de ingredientes vindos das receitas vinculadas as variacoes do item",
       },
     },
     aiContext: {
@@ -432,16 +579,22 @@ export async function loader({ request }: LoaderFunctionArgs) {
         canSell: "Indica se o item esta liberado para venda.",
         upcoming: "Indica item marcado como lancamento/proximamente.",
         channelVisible: "Visibilidade do item no canal exportado.",
-        commerciallyReady: "Indicador derivado de prontidao comercial no canal.",
-        referenceVariationName: "Nome da variacao usada como referencia de preco.",
+        commerciallyReady:
+          "Indicador derivado de prontidao comercial no canal.",
+        referenceVariationName:
+          "Nome da variacao usada como referencia de preco.",
         referencePriceAmount: "Preco principal usado para analise comparativa.",
-        publicIngredientsText: "Texto livre de ingredientes visivel/comercial quando cadastrado.",
-        publicIngredients: "Lista simples extraida do texto livre de ingredientes.",
-        recipeIngredients: "Ingredientes tecnicos agregados das receitas das variacoes.",
+        publicIngredientsText:
+          "Texto livre de ingredientes visivel/comercial quando cadastrado.",
+        publicIngredients:
+          "Lista simples extraida do texto livre de ingredientes.",
+        recipeIngredients:
+          "Ingredientes tecnicos agregados das receitas das variacoes.",
         priceEntries: "Lista de precos cadastrados para o canal exportado.",
-        variations: "Lista de variacoes ativas do item, incluindo receita e ingredientes quando vinculados.",
+        variations:
+          "Lista de variacoes ativas do item, incluindo receita e ingredientes quando vinculados.",
       },
     },
-    items: exportItems.map(mapExportItem),
+    items: sortedExportItems,
   });
 }

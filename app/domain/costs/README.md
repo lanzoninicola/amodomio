@@ -118,6 +118,27 @@ Apos montar o grafo, o pipeline recalcula na ordem correta:
 1. `recalcItemCostSheetTotals` — recalcula componentes e totais das fichas de custo afetadas. Componentes do tipo `recipe` usam a composicao atual da receita como fonte estrutural e resolvem o custo dos insumos em tempo de recálculo; componentes do tipo `recipeSheet` usam o total da ficha dependente; componentes do tipo `item` usam o snapshot de custo atual do item comprado.
 2. `syncMenuItemCostsForItems` — sincroniza uma projeção legada em `MenuItemCostVariation` para cada tamanho do `MenuItem`. Usa a ficha ativa do item como base. Se nao houver ficha por tamanho exato, deriva proporcoes a partir do custo da variacao de referencia (`pizza-medium`).
 
+### API de recálculo de ficha técnica
+
+O acionamento manual ou em lote de recálculo de ficha técnica deve usar a resource route:
+
+- `POST /api/item-cost-sheets/recalculate`
+- implementação: `app/routes/api.item-cost-sheets.recalculate.tsx`
+- orquestração em lote: `app/domain/costs/item-cost-sheet-bulk-recalculate.server.ts`
+- primitivo interno: `recalcItemCostSheetTotals(db, rootSheetId)`
+- acesso: sessão autenticada do painel `/admin`
+
+A API aceita formulário ou JSON. Para uma ficha específica, envie `itemCostSheetId`.
+Para lote, envie `rootSheetIds` como array JSON ou string separada por vírgula.
+Quando uma tela precisa voltar para a própria página depois do recálculo, envie
+`redirectTo` com um caminho interno da aplicação; quando não há `redirectTo`, a
+resposta é JSON no formato `ok()` com `payload.bulk`.
+
+As actions de edição de ficha ainda podem chamar `recalcItemCostSheetTotals`
+diretamente depois de alterar linhas, porque nesse caso o recálculo faz parte da
+mesma transação operacional da edição. Botões, telas de auditoria e automações
+devem depender da API REST.
+
 ### Papel da Recipe
 
 `Recipe` nao persiste valores monetarios de custo e nao e fonte financeira.
@@ -167,6 +188,8 @@ As tabelas `CostImpactRun` e `CostImpactMenuItem` permanecem no banco como histo
   — resolve `ultimo custo` e `custo medio` do insumo a partir do historico de `ItemCostVariationHistory`.
 - `item-cost-sheet-recalc.server.ts`
   — recalcula componentes e totais de ficha tecnica, inclusive linhas `recipe` a partir da composicao atual da receita.
+- `item-cost-sheet-bulk-recalculate.server.ts`
+  — seleciona fichas elegiveis, registra resultado consolidado e chama o recálculo por ficha raiz.
 - `cost-impact-graph.server.ts`
   — descobre dependencias impactadas por um insumo alterado.
 - `menu-item-cost-sync.server.ts`
@@ -197,6 +220,7 @@ Novas referencias devem usar `~/domain/costs/` diretamente.
 
 - snapshot unico de custo do insumo;
 - recalc de ficha tecnica;
+- API REST para recalc manual/em lote de ficha tecnica;
 - grafo de impacto em cascata;
 - pipeline de propagacao (disponivel para uso sob demanda);
 - dashboard de impacto em tempo real (`admin.cost-impact`);

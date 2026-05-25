@@ -39,7 +39,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
 export default function AdminMobilePedidoFornecedorResumo() {
   const { payload } = useLoaderData<typeof loader>();
-  const { supplier, items, orderMessage, testPhone } = payload as any;
+  const { supplier, items, orderMessage, testPhone, supplierId } = payload as any;
   const location = useLocation();
   const fetcher = useFetcher<{ ok: boolean; error?: string }>();
   const [copied, setCopied] = useState(false);
@@ -69,7 +69,7 @@ export default function AdminMobilePedidoFornecedorResumo() {
           <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Riepilogo</p>
           <p className="text-base font-semibold text-slate-900">{supplier?.name}</p>
         </div>
-        <Link to={`../quantidades${location.search}`} className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700">
+        <Link to={`/admin/mobile/pedido-fornecedor/${supplierId}/quantidades${location.search}`} className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700">
           <ArrowLeft className="h-3.5 w-3.5" />
           Alterar
         </Link>

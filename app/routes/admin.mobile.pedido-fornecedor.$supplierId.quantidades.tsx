@@ -25,7 +25,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
 export default function AdminMobilePedidoFornecedorQuantidades() {
   const { payload } = useLoaderData<typeof loader>();
-  const { supplier, items, unitOptions } = payload as any;
+  const { supplier, items, unitOptions, supplierId } = payload as any;
 
   return (
     <div className="space-y-4 pb-8">
@@ -34,13 +34,13 @@ export default function AdminMobilePedidoFornecedorQuantidades() {
           <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Quantidades</p>
           <p className="text-base font-semibold text-slate-900">{supplier?.name}</p>
         </div>
-        <Link to="../produtos" className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700">
+        <Link to={`/admin/mobile/pedido-fornecedor/${supplierId}/produtos`} className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700">
           <ArrowLeft className="h-3.5 w-3.5" />
           Produtos
         </Link>
       </div>
 
-      <Form method="get" action="../resumo" className="space-y-3">
+      <Form method="get" action={`/admin/mobile/pedido-fornecedor/${supplierId}/resumo`} className="space-y-3">
         {items.map((item: any, index: number) => (
           <article key={item.itemId} className="rounded-xl border border-slate-200 bg-white px-4 py-4">
             <input type="hidden" name="itemId" value={item.itemId} />
