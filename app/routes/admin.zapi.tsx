@@ -24,7 +24,9 @@ export default function AdminZapiLayout() {
                 prefetch="intent"
                 className={cn(
                   "border-b-2 pb-2 text-sm font-medium",
-                  isActive ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"
+                  isActive
+                    ? "border-primary text-primary"
+                    : "border-transparent text-muted-foreground hover:text-foreground"
                 )}
               >
                 {tab.label}
@@ -33,8 +35,6 @@ export default function AdminZapiLayout() {
           })}
         </div>
       </header>
-
-
 
       <Outlet />
     </div>

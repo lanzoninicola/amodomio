@@ -25,12 +25,10 @@ describe("parseMediaUploadApiPayload", () => {
     });
   });
 
-  it("keeps compatibility with legacy payload keys", () => {
+  it("uses request defaults when the v2 payload omits folder or asset keys", () => {
     const result = parseMediaUploadApiPayload({
       payload: {
         url: "https://media.amodomio.com.br/images/menu-items/item-1/gallery-1.jpg",
-        menuItemId: "menu-items/item-1",
-        slot: "gallery-1",
       },
       fallbackKind: "image",
       fallbackFolderPath: "menu-items/item-1",
@@ -41,7 +39,7 @@ describe("parseMediaUploadApiPayload", () => {
       ok: true,
       kind: "image",
       folderPath: "menu-items/item-1",
-      assetKey: "gallery-1",
+      assetKey: "fallback-key",
       url: "https://media.amodomio.com.br/images/menu-items/item-1/gallery-1.jpg",
     });
   });

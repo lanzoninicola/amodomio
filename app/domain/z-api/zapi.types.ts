@@ -11,6 +11,20 @@ export type SendVideoRequest = {
   viewOnce?: boolean;
 };
 
+export type SendVideoStatusRequest = {
+  video: string;
+  caption?: string;
+};
+
+export type SendImageStatusRequest = {
+  image: string;
+  caption?: string;
+};
+
+export type SendTextStatusRequest = {
+  message: string;
+};
+
 export type ButtonAction = {
   id: string;
   text: string;

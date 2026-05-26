@@ -77,7 +77,6 @@ function pickDetailMessage(details: unknown): string | null {
 
   return (
     pickDetailMessage(raw.details) ||
-    pickDetailMessage(raw.v2Details) ||
     pickDetailMessage(raw.health) ||
     null
   );
@@ -85,19 +84,12 @@ function pickDetailMessage(details: unknown): string | null {
 
 function getUploadFailureMessage(input: {
   status: number;
-  endpoint: "v2" | "legacy";
+  endpoint: "v2";
   details: unknown;
-  v2Status?: number;
-  v2Details?: unknown;
 }) {
   const specific =
     pickDetailMessage(input.details) ||
-    pickDetailMessage(input.v2Details) ||
     `falha no upload (${input.endpoint}, status ${input.status})`;
-
-  if (input.endpoint === "legacy" && input.v2Status === 404) {
-    return `Fallback legado acionado após 404 no /v2/upload, mas também falhou: ${specific}`;
-  }
 
   return `Upload de mídia falhou: ${specific}`;
 }
@@ -184,15 +176,10 @@ export async function action({ request, params }: ActionFunctionArgs) {
             status: uploadResult.status,
             endpoint: uploadResult.endpoint,
             details: uploadResult.details,
-            v2Status: uploadResult.v2Status,
-            v2Details: uploadResult.v2Details,
           }),
           status: uploadResult.status,
           endpoint: uploadResult.endpoint,
           details: uploadResult.details,
-          fallback: uploadResult.endpoint === "legacy",
-          v2Status: uploadResult.v2Status,
-          v2Details: uploadResult.v2Details,
         },
         { status: 502 }
       );

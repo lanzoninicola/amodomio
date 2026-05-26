@@ -1,6 +1,6 @@
-# Menu Item Assets Domain Spec
+# Item Assets Domain Spec
 
-Especificação funcional e técnica do domínio de vínculo de assets (imagem/vídeo) com item de cardápio.
+Especificação funcional e técnica do domínio de vínculo de assets (imagem/vídeo) com item nativo de cardápio.
 
 ## Objetivo
 
@@ -17,14 +17,14 @@ Permitir gerir assets de um item de cardápio com operações de:
 
 - Shared/domain: `app/domain/menu-item-assets/menu-item-assets.shared.ts`
 - Componente principal: `app/domain/menu-item-assets/components/menu-item-assets-form.tsx`
-- Serviço de item: `app/domain/cardapio/menu-item-assets.server.ts`
-- Rotas item (API): `app/routes/admin.menu-items.$menuItemId.assets*.tsx`
-- Tela item (admin): `app/routes/admin.gerenciamento.cardapio.$id.assets.tsx`
+- Serviço de item: `app/domain/item/item-assets.server.ts`
+- Rotas item (API): `app/routes/admin.items.$id.assets*.tsx`
+- Tela item (admin): `app/routes/admin.items.$id.venda.galeria.tsx`
 - Tela batch (admin): `app/routes/admin.gerenciamento.cardapio.assets-batch.tsx`
 
 ## Contrato de Rotas
 
-Base: `/admin/menu-items/:menuItemId/assets`
+Base: `/admin/items/:itemId/assets`
 
 - `GET /assets`:
   - Retorna `{ primary, gallery, assets }`
@@ -48,9 +48,9 @@ Rota: `/admin/gerenciamento/cardapio/assets-batch`
 
 ### Loader (batch)
 
-- Busca `menuItem` ativos (`deletedAt = null`, `active = true`)
+- Busca `Item` ativos
 - Ordena por `sortOrderIndex`, `name`
-- Carrega `MenuItemGalleryImage` por item
+- Carrega `ItemGalleryImage` por item
 - Normaliza payload para:
   - `items[]` com `id`, `name`, `active`, `visible`, `assets[]`
   - cada asset com `id`, `url`, `kind`, `slot`, `isPrimary`, `visible`, `sortOrder`, `createdAt`
@@ -59,10 +59,10 @@ Rota: `/admin/gerenciamento/cardapio/assets-batch`
 
 A rota batch usa chamadas `fetch` para a API base por item:
 
-- `GET /admin/menu-items/:menuItemId/assets` para refresh do item selecionado
-- `POST /admin/menu-items/:menuItemId/assets` para upload de cada arquivo pendente
-- `PATCH /admin/menu-items/:menuItemId/assets/:assetId/primary` para definir capa
-- `DELETE /admin/menu-items/:menuItemId/assets/:assetId` para remover asset
+- `GET /admin/items/:itemId/assets` para refresh do item selecionado
+- `POST /admin/items/:itemId/assets` para upload de cada arquivo pendente
+- `PATCH /admin/items/:itemId/assets/:assetId/primary` para definir capa
+- `DELETE /admin/items/:itemId/assets/:assetId` para remover asset
 
 ### Regras funcionais no batch
 
@@ -74,11 +74,11 @@ A rota batch usa chamadas `fetch` para a API base por item:
 
 ## Modelo de Dados Utilizado
 
-### `menu_item_gallery_images`
+### `item_gallery_images`
 
 Tabela de vínculo do item com o asset exibido no cardápio:
 
-- `menu_item_id`
+- `item_id`
 - `media_asset_id`
 - `kind` (`image` | `video`)
 - `secure_url`
@@ -91,9 +91,9 @@ Tabela de vínculo do item com o asset exibido no cardápio:
 
 Durante criação de asset do item:
 
-- pasta é garantida em `media_folders` (`menu-items/<menuItemId>`)
+- pasta é garantida em `media_folders` (`items/<itemId>`)
 - asset é criado/atualizado em `media_assets`
-- vínculo em `menu_item_gallery_images.media_asset_id`
+- vínculo em `item_gallery_images.media_asset_id`
 
 Isso mantém os assets do cardápio visíveis em `/admin/assets`.
 
@@ -110,9 +110,9 @@ Isso mantém os assets do cardápio visíveis em `/admin/assets`.
 `menu-item-assets.shared.ts` concentra:
 
 - tipo `MenuItemAssetDto`
-- builder de endpoints (`getMenuItemAssetsApiEndpoints`)
+- builder de endpoints (`getItemAssetsApiEndpoints`)
 - parser de resposta da API (`parseMenuItemAssetsApiResponse`)
-- helper de pasta de mídia (`getMenuItemMediaFolderPath`)
+- helper de pasta de mídia (`getItemMediaFolderPath`)
 
 ## Dependências de Ambiente
 
@@ -126,11 +126,8 @@ Sem `MEDIA_UPLOAD_API_KEY`, uploads por arquivo falham no backend.
 Upload de arquivo na API de assets do item delega para media API com contrato v2:
 
 - endpoint principal: `POST /v2/upload`
-- query: `kind=image|video`, `folderPath=menu-items/<menuItemId>`, `assetKey=<chave-do-arquivo>`
+- query: `kind=image|video`, `folderPath=items/<itemId>`, `assetKey=<chave-do-arquivo>`
 - multipart: `file`
 - resposta base: `{ ok, kind, folderPath, assetKey, url }`
 
-Compatibilidade:
-
-- fallback automático para `POST /upload` só quando `/v2/upload` responder `404`
-- o fluxo principal não depende de `menuItemId`/`slot` na resposta da media API
+O contrato antigo `POST /upload` não é usado nesse fluxo.

@@ -2,6 +2,7 @@ import { json, type ActionFunctionArgs, type LoaderFunctionArgs, type MetaFuncti
 import { useLoaderData } from "@remix-run/react";
 import { useEffect, useMemo, useState } from "react";
 import {
+  ChevronDown,
   ChevronRight,
   Copy,
   FileImage,
@@ -19,7 +20,6 @@ import {
 } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
-import { Label } from "~/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "~/components/ui/tooltip";
 import { authenticator } from "~/domain/auth/google.server";
@@ -62,15 +62,15 @@ type LoaderData = {
 
 type ActionData =
   | {
-      ok: true;
-      message: string;
-      payload: LibraryPayload;
-    }
+    ok: true;
+    message: string;
+    payload: LibraryPayload;
+  }
   | {
-      ok: false;
-      message: string;
-      debug?: string;
-    };
+    ok: false;
+    message: string;
+    debug?: string;
+  };
 
 type UploadProgressItem = {
   id: string;
@@ -179,14 +179,14 @@ export async function action({ request }: ActionFunctionArgs) {
 
     const body = (await request.json().catch(() => null)) as
       | {
-          intent?: string;
-          currentPath?: string;
-          folderName?: string;
-          oldPath?: string;
-          newPath?: string;
-          assetId?: string;
-          destinationPath?: string;
-        }
+        intent?: string;
+        currentPath?: string;
+        folderName?: string;
+        oldPath?: string;
+        newPath?: string;
+        assetId?: string;
+        destinationPath?: string;
+      }
       | null;
 
     const intent = String(body?.intent || "");
@@ -313,11 +313,27 @@ export default function AdminAssetsPage() {
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [uploadQueue, setUploadQueue] = useState<UploadProgressItem[]>([]);
   const [isUploadingBatch, setIsUploadingBatch] = useState(false);
+  const [collapsedFolders, setCollapsedFolders] = useState<Set<string>>(() => new Set());
 
   useEffect(() => {
     setFolders(library.folders || []);
     setAssets(library.assets || []);
   }, [library]);
+
+  useEffect(() => {
+    if (!currentFolder) return;
+
+    setCollapsedFolders((current) => {
+      const lineage = getFolderLineage(currentFolder);
+      if (lineage.every((folder) => !current.has(folder))) return current;
+
+      const next = new Set(current);
+      for (const folder of lineage) {
+        next.delete(folder);
+      }
+      return next;
+    });
+  }, [currentFolder]);
 
   const allFolders = useMemo(() => folders.map((folder) => folder.path).sort((a, b) => a.localeCompare(b)), [folders]);
 
@@ -366,9 +382,27 @@ export default function AdminAssetsPage() {
 
   const sidebarFolders = useMemo(() => {
     const normalizedSearch = search.trim().toLowerCase();
-    if (!normalizedSearch) return allFolders;
+    if (!normalizedSearch) {
+      return allFolders.filter((folder) => {
+        const parent = getParentPath(folder);
+        if (!parent) return true;
+
+        return getFolderLineage(parent).every((ancestor) => !collapsedFolders.has(ancestor));
+      });
+    }
+
     return allFolders.filter((folder) => folder.toLowerCase().includes(normalizedSearch));
-  }, [allFolders, search]);
+  }, [allFolders, collapsedFolders, search]);
+
+  const foldersWithChildren = useMemo(() => {
+    const parentPaths = new Set<string>();
+    for (const folder of allFolders) {
+      const parent = getParentPath(folder);
+      if (parent) parentPaths.add(parent);
+    }
+
+    return parentPaths;
+  }, [allFolders]);
 
   const storageUsage = useMemo(() => {
     const totalBytes = assets.reduce((sum, asset) => sum + (asset.sizeBytes || 0), 0);
@@ -597,8 +631,27 @@ export default function AdminAssetsPage() {
     if (!result) return;
 
     const createdPath = normalizePath(currentFolder ? `${currentFolder}/${segment}` : segment);
+    if (currentFolder) {
+      setCollapsedFolders((current) => {
+        const next = new Set(current);
+        next.delete(currentFolder);
+        return next;
+      });
+    }
     setCurrentFolder(createdPath);
     setNewFolderName("");
+  }
+
+  function toggleFolderCollapse(folderPath: string) {
+    setCollapsedFolders((current) => {
+      const next = new Set(current);
+      if (next.has(folderPath)) {
+        next.delete(folderPath);
+      } else {
+        next.add(folderPath);
+      }
+      return next;
+    });
   }
 
   async function renameFolderFromList(folderPath: string) {
@@ -732,7 +785,7 @@ export default function AdminAssetsPage() {
       </header>
 
       <section className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-        <aside className="lg:col-span-3 rounded-2xl border p-3 space-y-3">
+        <aside className="lg:col-span-3 space-y-3">
           <div className="space-y-2 rounded-xl border p-3">
             <div className="space-y-1">
               <p className="text-sm font-semibold">Criar pasta</p>
@@ -758,99 +811,113 @@ export default function AdminAssetsPage() {
 
           <TooltipProvider delayDuration={120}>
             <div className="space-y-1 max-h-[520px] overflow-auto pr-1">
-            <button
-              type="button"
-              className={`w-full flex items-center gap-2 rounded-lg px-3 py-2 text-left text-sm ${!currentFolder ? "bg-primary/10 text-primary font-medium" : "hover:bg-muted"}`}
-              onClick={() => setCurrentFolder("")}
-            >
-              <Home className="h-4 w-4" />
-              Meu Drive
-            </button>
+              <button
+                type="button"
+                className={`w-full flex items-center gap-2 rounded-lg px-3 py-2 text-left text-sm ${!currentFolder ? "bg-primary/10 text-primary font-medium" : "hover:bg-muted"}`}
+                onClick={() => setCurrentFolder("")}
+              >
+                <Home className="h-4 w-4" />
+                Meu Drive
+              </button>
 
-            {sidebarFolders.length === 0 && (
-              <p className="text-xs text-muted-foreground px-3 py-2">Nenhuma pasta criada.</p>
-            )}
+              {sidebarFolders.length === 0 && (
+                <p className="text-xs text-muted-foreground px-3 py-2">Nenhuma pasta criada.</p>
+              )}
 
-            {sidebarFolders.map((folder) => {
-              const depth = folder.split("/").length - 1;
-              const isSelected = currentFolder === folder || currentFolder.startsWith(`${folder}/`);
+              {sidebarFolders.map((folder) => {
+                const depth = folder.split("/").length - 1;
+                const isSelected = currentFolder === folder || currentFolder.startsWith(`${folder}/`);
+                const hasChildren = foldersWithChildren.has(folder);
+                const isCollapsed = collapsedFolders.has(folder);
 
-              return (
-                <div
-                  key={folder}
-                  className={`w-full flex items-center gap-2 rounded-lg px-3 py-2 text-left text-sm ${isSelected ? "bg-primary/10 text-primary font-medium" : "hover:bg-muted"}`}
-                  style={{ paddingLeft: `${12 + depth * 14}px` }}
-                >
-                  <button
-                    type="button"
-                    className="inline-flex items-center gap-2 min-w-0 flex-1 text-left"
-                    onClick={() => setCurrentFolder(folder)}
+                return (
+                  <div
+                    key={folder}
+                    className={`w-full flex items-center gap-2 rounded-lg px-3 py-2 text-left text-sm ${isSelected ? "bg-primary/10 text-primary font-medium" : "hover:bg-muted"}`}
+                    style={{ paddingLeft: `${12 + depth * 14}px` }}
                   >
-                    <Folder className="h-4 w-4 shrink-0" />
-                    <span className="truncate">{getFolderLabel(folder)}</span>
-                  </button>
-                  <div className="inline-flex items-center gap-1 shrink-0">
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="ghost"
-                          className="h-7 w-7 p-0"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            const kind = uploadKind === "video" ? "video" : "all";
-                            void copy(buildFolderAssetsLink(folder, kind));
-                          }}
-                        >
-                          <Link2 className="h-3.5 w-3.5" />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>Copiar link da pasta</TooltipContent>
-                    </Tooltip>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="ghost"
-                          className="h-7 w-7 p-0"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            void renameFolderFromList(folder);
-                          }}
-                        >
-                          <Pencil className="h-3.5 w-3.5" />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>Renomear pasta</TooltipContent>
-                    </Tooltip>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="ghost"
-                          className="h-7 w-7 p-0 text-red-600 hover:text-red-600"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            void deleteFolderFromList(folder);
-                          }}
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>Excluir pasta</TooltipContent>
-                    </Tooltip>
+                    <button
+                      type="button"
+                      className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded hover:bg-background/80 disabled:opacity-0"
+                      aria-label={isCollapsed ? "Expandir pasta" : "Recolher pasta"}
+                      disabled={!hasChildren}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        toggleFolderCollapse(folder);
+                      }}
+                    >
+                      {isCollapsed ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                    </button>
+                    <button
+                      type="button"
+                      className="inline-flex items-center gap-2 min-w-0 flex-1 text-left"
+                      onClick={() => setCurrentFolder(folder)}
+                    >
+                      <Folder className="h-4 w-4 shrink-0" />
+                      <span className="truncate">{getFolderLabel(folder)}</span>
+                    </button>
+                    <div className="inline-flex items-center gap-1 shrink-0">
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            className="h-7 w-7 p-0"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              const kind = uploadKind === "video" ? "video" : "all";
+                              void copy(buildFolderAssetsLink(folder, kind));
+                            }}
+                          >
+                            <Link2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>Copiar link da pasta</TooltipContent>
+                      </Tooltip>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            className="h-7 w-7 p-0"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              void renameFolderFromList(folder);
+                            }}
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>Renomear pasta</TooltipContent>
+                      </Tooltip>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            className="h-7 w-7 p-0 text-red-600 hover:text-red-600"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              void deleteFolderFromList(folder);
+                            }}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>Excluir pasta</TooltipContent>
+                      </Tooltip>
+                    </div>
                   </div>
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
           </TooltipProvider>
         </aside>
 
-        <div className="lg:col-span-9 rounded-2xl border p-3 md:p-4 space-y-4">
+        <div className="lg:col-span-9 md:p-4 space-y-4">
           {lastErrorDebug && (
             <div className="rounded-md border border-red-300 bg-red-50 p-3 space-y-2">
               <div className="flex items-center justify-between gap-2">
@@ -972,9 +1039,8 @@ export default function AdminAssetsPage() {
                     </div>
                     <div className="h-2 rounded-full bg-muted overflow-hidden">
                       <div
-                        className={`h-full ${
-                          item.status === "error" ? "bg-red-500" : item.status === "success" ? "bg-green-500" : "bg-primary"
-                        }`}
+                        className={`h-full ${item.status === "error" ? "bg-red-500" : item.status === "success" ? "bg-green-500" : "bg-primary"
+                          }`}
                         style={{ width: `${item.progress}%` }}
                       />
                     </div>

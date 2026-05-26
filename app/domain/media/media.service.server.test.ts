@@ -43,7 +43,7 @@ describe("uploadFileToMediaApi", () => {
     expect(String(fetchMock.mock.calls[0][0])).toContain("/v2/upload");
   });
 
-  it("uploads video using /v2/upload response without menuItemId/slot", async () => {
+  it("uploads video using /v2/upload response fields", async () => {
     const fetchMock = vi.fn().mockResolvedValueOnce(
       new Response(
         JSON.stringify({
@@ -72,25 +72,13 @@ describe("uploadFileToMediaApi", () => {
     expect(result.data.folderPath).toBe("menu-items/item-2");
   });
 
-  it("falls back to legacy /upload when /v2/upload returns 404", async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(
-        new Response(JSON.stringify({ ok: false, error: "not_found" }), {
-          status: 404,
-          headers: { "Content-Type": "application/json" },
-        })
-      )
-      .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            url: "https://media.example.com/images/menu-items/item-3/gallery-1.jpg",
-            menuItemId: "menu-items/item-3",
-            slot: "gallery-1",
-          }),
-          { status: 200, headers: { "Content-Type": "application/json" } }
-        )
-      );
+  it("returns the v2 failure when /v2/upload returns 404", async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      new Response(JSON.stringify({ ok: false, error: "not_found" }), {
+        status: 404,
+        headers: { "Content-Type": "application/json" },
+      })
+    );
     vi.stubGlobal("fetch", fetchMock);
 
     const result = await uploadFileToMediaApi({
@@ -100,14 +88,12 @@ describe("uploadFileToMediaApi", () => {
       assetKey: "gallery-1",
     });
 
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    expect(result.endpoint).toBe("legacy");
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.endpoint).toBe("v2");
+    expect(result.status).toBe(404);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(String(fetchMock.mock.calls[0][0])).toContain("/v2/upload");
-    expect(String(fetchMock.mock.calls[1][0])).toContain("/upload");
-    expect(String(fetchMock.mock.calls[1][0])).toContain("folderPath=menu-items%2Fitem-3");
-    expect(String(fetchMock.mock.calls[1][0])).toContain("assetKey=gallery-1");
   });
 });
 

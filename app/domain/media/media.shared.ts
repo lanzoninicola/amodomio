@@ -123,16 +123,10 @@ export function parseMediaUploadApiPayload(input: {
       ? raw.folderPath
       : typeof raw.path === "string"
         ? raw.path
-        : typeof raw.menuItemId === "string"
-          ? raw.menuItemId
-          : input.fallbackFolderPath;
+        : input.fallbackFolderPath;
   const folderPath = normalizePath(folderPathRaw) || normalizePath(input.fallbackFolderPath);
   const assetKeyRaw =
-    typeof raw.assetKey === "string"
-      ? raw.assetKey
-      : typeof raw.slot === "string"
-        ? raw.slot
-        : input.fallbackAssetKey;
+    typeof raw.assetKey === "string" ? raw.assetKey : input.fallbackAssetKey;
   const assetKey = normalizeStorageKey(assetKeyRaw) || input.fallbackAssetKey;
   const ok = typeof raw.ok === "boolean" ? raw.ok : true;
 

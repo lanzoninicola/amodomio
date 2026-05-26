@@ -50,7 +50,6 @@ async function readErrorMessage(response: Response, fallback: string) {
       message?: unknown;
       error?: unknown;
       details?: unknown;
-      v2Details?: unknown;
       endpoint?: unknown;
       status?: unknown;
     };
@@ -63,13 +62,12 @@ async function readErrorMessage(response: Response, fallback: string) {
         (item) => typeof item === "string" && item.trim()
       ) as string | undefined;
       if (direct) return direct.trim();
-      return pickDetailMessage(record.details) || pickDetailMessage(record.v2Details) || null;
+      return pickDetailMessage(record.details);
     };
 
     const detailed =
       pickDetailMessage(parsed.message) ||
       pickDetailMessage(parsed.details) ||
-      pickDetailMessage(parsed.v2Details) ||
       pickDetailMessage(parsed.error);
     if (detailed) return detailed;
 
@@ -97,11 +95,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
       id: true,
       name: true,
       active: true,
-      ItemSellingInfo: {
-        select: {
-          visible: true,
-        },
-      },
       ItemSellingChannelItem: {
         where: {
           ItemSellingChannel: {

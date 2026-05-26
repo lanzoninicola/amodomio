@@ -117,7 +117,7 @@ export default function AdminMobileCustosPage() {
     <div className="space-y-4 pb-4">
       <Form method="get" className="" ref={formRef}>
         <div className="block">
-          <span className="text-base font-semibold text-slate-900">
+          <span className="text-lg font-semibold text-slate-900">
             Buscar produto ou insumo
           </span>
           <input
@@ -149,11 +149,11 @@ export default function AdminMobileCustosPage() {
               }
               searchPlaceholder="Buscar item..."
               emptyText="Nenhum item encontrado."
-              triggerClassName="min-h-14 w-full max-w-none justify-between rounded-xl border-slate-300 px-4 py-3 text-left text-base font-medium leading-snug text-slate-900 shadow-sm"
+              triggerClassName="min-h-16 w-full max-w-none justify-between rounded-xl border-slate-300 px-5 py-4 text-left text-lg font-semibold leading-snug text-slate-900 shadow-sm"
               contentClassName="w-[var(--radix-popover-trigger-width)] p-0"
-              inputClassName="h-12 text-base"
+              inputClassName="h-14 text-lg"
               listClassName="max-h-[320px]"
-              itemClassName="min-h-12 px-3 py-3 text-base"
+              itemClassName="min-h-14 px-4 py-3 text-lg"
             />
           </div>
         </div>

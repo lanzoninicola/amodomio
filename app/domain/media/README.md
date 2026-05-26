@@ -96,10 +96,7 @@ Resposta esperada:
 
 - `{ ok, kind, folderPath, assetKey, url }`
 
-Compatibilidade:
-
-- fallback para `POST /upload` só quando `/v2/upload` responder `404`
-- campos legados (`menuItemId`/`slot`) não são dependência do fluxo principal
+O contrato antigo `POST /upload` não é mais usado pelo backend.
 
 Healthcheck de infraestrutura:
 
@@ -109,12 +106,12 @@ Healthcheck de infraestrutura:
 
 ## Integração com Cardápio (vínculo item)
 
-Quando uma imagem/vídeo é vinculada a um item de cardápio:
+Quando uma imagem/vídeo é vinculada a um item nativo de cardápio:
 
-- o registro continua sendo salvo em `menu_item_gallery_images`
+- o registro é salvo em `item_gallery_images`
 - o asset também é registrado em `media_assets`
-- a pasta do asset é garantida em `media_folders` (ex.: `menu-items/<menuItemId>`)
-- `menu_item_gallery_images.asset_id` passa a receber o `id` do `media_assets`
+- a pasta do asset é garantida em `media_folders` (ex.: `items/<itemId>`)
+- `item_gallery_images.media_asset_id` recebe o `id` do `media_assets`
 
 Com isso, o vínculo por item e o Media Drive compartilham o mesmo inventário de assets.
 
@@ -170,4 +167,4 @@ Usar componentes shadcn sempre que aplicável:
   - criar/renomear/excluir pasta
   - upload em lote (sucesso parcial e total)
   - mover/excluir arquivo
-- Monitorar ambientes legados e remover fallback para `/upload` após padronização total em `/v2/upload`
+- Adicionar telemetria de falhas de upload por status retornado pelo `/v2/upload`
