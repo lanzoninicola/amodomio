@@ -54,10 +54,10 @@ Fornecer um gerenciador de assets genérico (imagens e vídeos), desacoplado de 
 
 Quando uma imagem/vídeo é vinculada a um item de cardápio:
 
-- o registro continua sendo salvo em `menu_item_gallery_images`
+- o registro é salvo em `item_gallery_images`
 - o asset também é registrado em `media_assets`
-- a pasta do asset é garantida em `media_folders` (ex.: `menu-items/<menuItemId>`)
-- `menu_item_gallery_images.media_asset_id` recebe o `id` do `media_assets`
+- a pasta do asset é garantida em `media_folders` (ex.: `items/<itemId>`)
+- `item_gallery_images.media_asset_id` recebe o `id` do `media_assets`
 
 Com isso, o vínculo por item e a biblioteca de assets compartilham o mesmo inventário de arquivos.
 
@@ -94,16 +94,8 @@ Exemplo de resposta v2:
 }
 ```
 
-Compatibilidade temporária:
-
-- fallback para `POST /upload` apenas quando `/v2/upload` responder `404`
-- esse fallback é interno ao backend, sem dependência de `menuItemId`/`slot` no fluxo principal
-
-Legado (`deprecated`):
-
-- endpoint: `POST /upload`
-- parâmetros legados aceitos: `menuItemId`, `slot`
-- regra do domínio: não usar contrato legado como caminho primário em novas integrações admin
+O contrato antigo `POST /upload` foi removido do backend. Falhas no `/v2/upload`
+devem ser tratadas como erro de upload e exibidas ao operador.
 
 ## Healthcheck do Serviço
 

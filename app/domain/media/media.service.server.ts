@@ -26,23 +26,6 @@ function buildUploadV2Url(input: {
   return url.toString();
 }
 
-function buildLegacyUploadUrl(input: {
-  mediaApiBaseUrl: string;
-  kind: UploadKind;
-  folderPath: string;
-  assetKey: string;
-}) {
-  const url = new URL(`${input.mediaApiBaseUrl}/upload`);
-  url.searchParams.set("kind", input.kind);
-  // Some legacy environments validate both generic and legacy query names.
-  url.searchParams.set("folderPath", input.folderPath);
-  url.searchParams.set("path", input.folderPath);
-  url.searchParams.set("assetKey", input.assetKey);
-  url.searchParams.set("menuItemId", input.folderPath);
-  url.searchParams.set("slot", input.assetKey);
-  return url.toString();
-}
-
 export function getMediaApiBaseUrl() {
   return (process.env.MEDIA_API_BASE_URL || "https://media-api.amodomio.com.br").replace(/\/+$/, "");
 }
@@ -135,16 +118,14 @@ export async function checkMediaApiHealth() {
 export type MediaApiUploadFailure = {
   ok: false;
   status: number;
-  endpoint: "v2" | "legacy";
+  endpoint: "v2";
   details: unknown;
-  v2Status?: number;
-  v2Details?: unknown;
 };
 
 export type MediaApiUploadResult = {
   ok: true;
   status: number;
-  endpoint: "v2" | "legacy";
+  endpoint: "v2";
   data: {
     url: string;
     kind: UploadKind;
@@ -155,7 +136,7 @@ export type MediaApiUploadResult = {
 } | MediaApiUploadFailure;
 
 async function postToMediaUploadEndpoint(input: {
-  endpoint: "v2" | "legacy";
+  endpoint: "v2";
   url: string;
   file: File;
   uploadFileName?: string;
@@ -216,7 +197,7 @@ export async function uploadFileToMediaApi(input: {
   const normalizedFolderPath = normalizePath(input.folderPath);
   const requestedAssetKey = normalizeStorageKey(input.assetKey) || `asset-${Date.now()}`;
 
-  const v2Result = await postToMediaUploadEndpoint({
+  return postToMediaUploadEndpoint({
     endpoint: "v2",
     url: buildUploadV2Url({
       mediaApiBaseUrl,
@@ -231,40 +212,6 @@ export async function uploadFileToMediaApi(input: {
     folderPath: normalizedFolderPath,
     assetKey: requestedAssetKey,
   });
-
-  if (v2Result.ok) {
-    return v2Result;
-  }
-
-  if (v2Result.status !== 404) {
-    return v2Result;
-  }
-
-  const legacyResult = await postToMediaUploadEndpoint({
-    endpoint: "legacy",
-    url: buildLegacyUploadUrl({
-      mediaApiBaseUrl,
-      kind: input.kind,
-      folderPath: normalizedFolderPath,
-      assetKey: requestedAssetKey,
-    }),
-    file: input.file,
-    uploadFileName: input.uploadFileName,
-    mediaApiKey,
-    kind: input.kind,
-    folderPath: normalizedFolderPath,
-    assetKey: requestedAssetKey,
-  });
-
-  if (legacyResult.ok) {
-    return legacyResult;
-  }
-
-  return {
-    ...legacyResult,
-    v2Status: v2Result.status,
-    v2Details: v2Result.details,
-  } as MediaApiUploadResult;
 }
 
 export async function readLibraryFromDb(): Promise<LibraryPayload> {

@@ -6,15 +6,19 @@ import { toast } from "~/components/ui/use-toast";
 import { Check, FileImage, FileVideo, GripVertical, ImagePlus, Star, Trash2, UploadCloud } from "lucide-react";
 import { cn } from "~/lib/utils";
 import {
-  getMenuItemAssetsApiEndpoints,
   parseMenuItemAssetsApiResponse,
   type MenuItemAssetDto,
 } from "../menu-item-assets.shared";
 
 interface MenuItemAssetsFormProps {
-  menuItemId?: string;
   initialImages: MenuItemAssetDto[];
-  endpoints?: ReturnType<typeof getMenuItemAssetsApiEndpoints>;
+  endpoints: {
+    list: string;
+    order: string;
+    item: (assetId: string) => string;
+    primary: (assetId: string) => string;
+    visibility: (assetId: string) => string;
+  };
 }
 
 function sortImages(images: MenuItemAssetDto[]) {
@@ -34,7 +38,6 @@ async function readErrorMessage(response: Response, fallback: string) {
       message?: unknown;
       error?: unknown;
       details?: unknown;
-      v2Details?: unknown;
       endpoint?: unknown;
       status?: unknown;
     };
@@ -47,13 +50,12 @@ async function readErrorMessage(response: Response, fallback: string) {
         (item) => typeof item === "string" && item.trim()
       ) as string | undefined;
       if (direct) return direct.trim();
-      return pickDetailMessage(record.details) || pickDetailMessage(record.v2Details) || null;
+      return pickDetailMessage(record.details);
     };
 
     const detailed =
       pickDetailMessage(parsed.message) ||
       pickDetailMessage(parsed.details) ||
-      pickDetailMessage(parsed.v2Details) ||
       pickDetailMessage(parsed.error);
     if (detailed) return detailed;
 
@@ -69,7 +71,6 @@ async function readErrorMessage(response: Response, fallback: string) {
 }
 
 export default function MenuItemAssetsForm({
-  menuItemId,
   initialImages,
   endpoints: endpointsProp,
 }: MenuItemAssetsFormProps) {
@@ -83,11 +84,7 @@ export default function MenuItemAssetsForm({
   const [visibleFromUrl, setVisibleFromUrl] = useState(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const endpoints = useMemo(() => {
-    if (endpointsProp) return endpointsProp;
-    if (!menuItemId) throw new Error("MenuItemAssetsForm requer menuItemId ou endpoints.");
-    return getMenuItemAssetsApiEndpoints(menuItemId);
-  }, [endpointsProp, menuItemId]);
+  const endpoints = useMemo(() => endpointsProp, [endpointsProp]);
 
   const primaryImage = useMemo(
     () => images.find((img) => img.isPrimary) || null,

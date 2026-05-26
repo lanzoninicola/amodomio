@@ -684,6 +684,12 @@ const ADMIN_NAVIGATION_LINKS: WebsiteNavigationConfig = {
           items: [],
           disabled: false,
         },
+        {
+          title: "Whatsapp Status",
+          href: "/admin/marketing/whatsapp-status",
+          items: [],
+          disabled: false,
+        },
       ],
     },
   ],

@@ -3,9 +3,12 @@ import {
   ContactsResponse,
   ProfilePictureResponse,
   SendButtonActionsRequest,
+  SendImageStatusRequest,
   SendMessageResponse,
+  SendTextStatusRequest,
   SendTextRequest,
   SendVideoRequest,
+  SendVideoStatusRequest,
 } from "./zapi.types";
 import { ValidationError } from "./errors";
 import { normalizePhone } from "./zapi.service";
@@ -15,19 +18,25 @@ const DEFAULT_CONTACTS_PAGE_SIZE = 20;
 const AUTO_REPLY_MESSAGE = "Recebido ✅";
 
 function assertPhone(phone: unknown): string {
-  const normalized = normalizePhone(typeof phone === "string" ? phone : String(phone ?? ""));
-  if (!normalized) throw new ValidationError("Invalid phone. Use E.164 digits without '+'.");
+  const normalized = normalizePhone(
+    typeof phone === "string" ? phone : String(phone ?? "")
+  );
+  if (!normalized)
+    throw new ValidationError("Invalid phone. Use E.164 digits without '+'.");
   return normalized;
 }
 
 function assertMessage(message: unknown): string {
-  if (typeof message !== "string") throw new ValidationError("Message is required.");
+  if (typeof message !== "string")
+    throw new ValidationError("Message is required.");
   const trimmed = message.trim();
   if (!trimmed) throw new ValidationError("Message cannot be empty.");
   return trimmed;
 }
 
-function assertButtonActions(buttonActions: SendButtonActionsRequest["buttonActions"]) {
+function assertButtonActions(
+  buttonActions: SendButtonActionsRequest["buttonActions"]
+) {
   if (!Array.isArray(buttonActions) || buttonActions.length === 0) {
     throw new ValidationError("buttonActions must be a non-empty array.");
   }
@@ -51,7 +60,8 @@ function assertButtonActions(buttonActions: SendButtonActionsRequest["buttonActi
 }
 
 function assertVideoUrl(video: unknown): string {
-  if (typeof video !== "string") throw new ValidationError("Video URL is required.");
+  if (typeof video !== "string")
+    throw new ValidationError("Video URL is required.");
   const trimmed = video.trim();
   try {
     const url = new URL(trimmed);
@@ -61,6 +71,22 @@ function assertVideoUrl(video: unknown): string {
     return url.toString();
   } catch {
     throw new ValidationError("Video URL is invalid.");
+  }
+}
+
+function assertImageUrl(image: unknown): string {
+  if (typeof image !== "string") {
+    throw new ValidationError("Image URL is required.");
+  }
+  const trimmed = image.trim();
+  try {
+    const url = new URL(trimmed);
+    if (!["http:", "https:"].includes(url.protocol)) {
+      throw new ValidationError("Image URL must use http/https.");
+    }
+    return url.toString();
+  } catch {
+    throw new ValidationError("Image URL is invalid.");
   }
 }
 
@@ -123,6 +149,54 @@ export async function sendVideoMessage(
   );
 }
 
+export async function sendVideoStatus(
+  payload: SendVideoStatusRequest,
+  options?: { timeoutMs?: number }
+): Promise<SendMessageResponse> {
+  const video = assertVideoUrl(payload?.video);
+  const caption = payload?.caption?.trim();
+  const body: Record<string, any> = { video };
+  if (caption) body.caption = caption;
+
+  return zapiRequest<SendMessageResponse>(
+    "POST",
+    `${zapiInstancePath}/send-video-status`,
+    body,
+    options
+  );
+}
+
+export async function sendImageStatus(
+  payload: SendImageStatusRequest,
+  options?: { timeoutMs?: number }
+): Promise<SendMessageResponse> {
+  const image = assertImageUrl(payload?.image);
+  const caption = payload?.caption?.trim();
+  const body: Record<string, any> = { image };
+  if (caption) body.caption = caption;
+
+  return zapiRequest<SendMessageResponse>(
+    "POST",
+    `${zapiInstancePath}/send-image-status`,
+    body,
+    options
+  );
+}
+
+export async function sendTextStatus(
+  payload: SendTextStatusRequest,
+  options?: { timeoutMs?: number }
+): Promise<SendMessageResponse> {
+  const message = assertMessage(payload?.message);
+
+  return zapiRequest<SendMessageResponse>(
+    "POST",
+    `${zapiInstancePath}/send-text-status`,
+    { message },
+    options
+  );
+}
+
 export async function sendButtonActionsMessage(
   payload: SendButtonActionsRequest,
   options?: { timeoutMs?: number }
@@ -148,7 +222,10 @@ export async function listContacts(params: {
   pageSize?: number | string;
 }): Promise<ContactsResponse> {
   const page = parsePageNumber(params?.page, DEFAULT_CONTACTS_PAGE);
-  const pageSize = parsePageNumber(params?.pageSize, DEFAULT_CONTACTS_PAGE_SIZE);
+  const pageSize = parsePageNumber(
+    params?.pageSize,
+    DEFAULT_CONTACTS_PAGE_SIZE
+  );
 
   const searchParams = new URLSearchParams({
     page: String(page),
@@ -190,7 +267,10 @@ export async function sendAutoReplySafe(phone: string) {
       error instanceof ZApiError
         ? { status: error.status, message: error.message }
         : { message: (error as any)?.message };
-    console.warn("[z-api] auto-reply failed", { phone: normalized, ...details });
+    console.warn("[z-api] auto-reply failed", {
+      phone: normalized,
+      ...details,
+    });
   }
 }
 
