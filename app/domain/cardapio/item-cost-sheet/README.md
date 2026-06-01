@@ -113,6 +113,7 @@ Esta seção existe para orientar agentes de IA que precisem ler, editar, valida
 ### Regras de edição por tipo de linha
 
 - `recipe`
+
   - É uma linha referenciada por receita.
   - `name` e `unitCostAmount` são derivados do cálculo atual da composição da receita.
   - Na edição manual da linha, o usuário só deve alterar:
@@ -122,6 +123,7 @@ Esta seção existe para orientar agentes de IA que precisem ler, editar, valida
   - `unitCostAmount` não deve prevalecer sobre a referência.
 
 - `recipeSheet`
+
   - É uma linha referenciada por outra ficha técnica.
   - Deve armazenar `refId` e parâmetros de consumo da referência.
   - Não pode criar ciclo entre fichas.
@@ -132,6 +134,7 @@ Esta seção existe para orientar agentes de IA que precisem ler, editar, valida
     - `notes`
 
 - `item`
+
   - É uma linha referenciada por um `Item` comprado.
   - Na UI atual é usada para embalagem (`Item.classification = "embalagem"`).
   - Deve armazenar `refId` do item e parâmetros de consumo na ficha.
@@ -142,6 +145,7 @@ Esta seção existe para orientar agentes de IA que precisem ler, editar, valida
     - `notes`
 
 - `manual`
+
   - É uma linha totalmente editável.
   - Pode nascer de um preset (`ItemCostSheetComponentPreset`) para padronizar custos recorrentes em edição individual e futura edição em lote.
   - Deve ser usada para exceções sem item rastreável, não como primeira opção para embalagem comprada.
@@ -181,36 +185,44 @@ Esta seção existe para orientar agentes de IA que precisem ler, editar, valida
 As ações de edição abaixo vivem em `app/routes/admin.item-cost-sheets.$id.tsx`.
 
 - `item-cost-sheet-line-add-recipe`
+
   - Adiciona linha do tipo `recipe`
   - Usa cálculo da composição da receita por variação
 
 - `item-cost-sheet-line-add-sheet`
+
   - Adiciona linha do tipo `recipeSheet`
   - Usa snapshot da ficha referenciada por variação
   - Deve bloquear autorreferência e ciclos
 
 - `item-cost-sheet-line-add-item`
+
   - Adiciona linha do tipo `item`
   - Hoje aceita apenas itens ativos classificados como `embalagem`
   - Usa snapshot de custo atual do item referenciado
   - Salva o item em `refId` para permitir recálculo rastreável
 
 - `item-cost-sheet-line-add-manual`
+
   - Adiciona linha `manual`
   - Pode receber `presetId` de um preset ativo do tipo `manual`
 
 - `item-cost-sheet-line-add-labor`
+
   - Adiciona linha `labor`
   - Pode receber `presetId` de um preset ativo do tipo `labor`
 
 - `item-cost-sheet-line-update`
+
   - Atualiza uma linha existente e seus valores por variação
   - Para linhas referenciadas, `unitCostAmount` continua vindo da referência
 
 - `item-cost-sheet-line-move`
+
   - Move a linha para cima ou para baixo
 
 - `item-cost-sheet-line-delete`
+
   - Remove a linha da composição
 
 - `item-cost-sheet-delete`
@@ -230,6 +242,7 @@ Contrato:
 - Payload por formulário ou JSON:
   - `itemCostSheetId`: recalcula uma ficha específica; se for ficha derivada, a API resolve a ficha raiz via `baseItemCostSheetId`
   - `rootSheetIds`: recalcula múltiplas fichas raiz; aceita array em JSON ou string separada por vírgula em formulário
+  - `recalculateAll`: recalcula todas as fichas raiz quando enviado como `true`
   - `redirectTo`: opcional; quando enviado, a rota recalcula e redireciona para um caminho interno da própria aplicação
 
 Exemplo JSON para uma ficha:
@@ -245,6 +258,14 @@ Exemplo JSON para lote:
 ```json
 {
   "rootSheetIds": ["root-sheet-id-1", "root-sheet-id-2"]
+}
+```
+
+Exemplo JSON para todas:
+
+```json
+{
+  "recalculateAll": true
 }
 ```
 

@@ -159,7 +159,8 @@ export async function getRecipeCompositionCostSnapshot(
     lines = variationId
       ? allLines.filter(
           (line) =>
-            String(line.ItemVariation?.variationId || "") === String(variationId)
+            String(line.ItemVariation?.variationId || "") ===
+            String(variationId)
         )
       : allLines;
   }
@@ -185,10 +186,14 @@ export async function getRecipeCompositionCostSnapshot(
         : Number(line.quantity || 0);
 
     lastTotal += Number(
-      ((Number(costInfo.lastUnitCostAmount || 0) || 0) * grossQuantity).toFixed(6)
+      ((Number(costInfo.lastUnitCostAmount || 0) || 0) * grossQuantity).toFixed(
+        6
+      )
     );
     avgTotal += Number(
-      ((Number(costInfo.avgUnitCostAmount || 0) || 0) * grossQuantity).toFixed(6)
+      ((Number(costInfo.avgUnitCostAmount || 0) || 0) * grossQuantity).toFixed(
+        6
+      )
     );
   }
 
@@ -197,7 +202,9 @@ export async function getRecipeCompositionCostSnapshot(
     lastTotal,
     avgTotal,
     unitCostAmount: avgTotal,
-    note: `calculado pela composicao da receita: ultimo=${lastTotal.toFixed(4)} medio=${avgTotal.toFixed(4)}`,
+    note: `calculado pela composicao da receita: ultimo=${lastTotal.toFixed(
+      4
+    )} medio=${avgTotal.toFixed(4)}`,
   };
 }
 
@@ -205,7 +212,8 @@ export const getRecipeCostSheetSnapshot = getRecipeCompositionCostSnapshot;
 
 export async function getItemCostSheetItemSnapshot(
   db: any,
-  itemId: string
+  itemId: string,
+  options: { variationId?: string | null; itemVariationId?: string | null } = {}
 ) {
   const item = await db.item.findUnique({
     where: { id: itemId },
@@ -222,15 +230,21 @@ export async function getItemCostSheetItemSnapshot(
   const costInfo = await resolveItemCostSnapshot({
     db,
     itemId,
+    variationId: options.variationId || null,
+    itemVariationId: options.itemVariationId || null,
   });
-  const unitCostAmount = Number(costInfo.avgUnitCostAmount || costInfo.lastUnitCostAmount || 0);
+  const unitCostAmount = Number(
+    costInfo.avgUnitCostAmount || costInfo.lastUnitCostAmount || 0
+  );
   const unit = item.consumptionUm || item.purchaseUm || null;
 
   return {
     item,
     unit,
     unitCostAmount,
-    note: `snapshot item: custo=${unitCostAmount.toFixed(4)} janela=${Number(costInfo.averageWindowDays || 0)}d amostras=${Number(costInfo.historyCount || 0)}`,
+    note: `snapshot item: custo=${unitCostAmount.toFixed(4)} janela=${Number(
+      costInfo.averageWindowDays || 0
+    )}d amostras=${Number(costInfo.historyCount || 0)}`,
   };
 }
 
@@ -278,7 +292,10 @@ export async function getItemCostSheetSnapshot(
   };
 }
 
-export async function recalcItemCostSheetTotals(db: any, itemCostSheetId: string) {
+export async function recalcItemCostSheetTotals(
+  db: any,
+  itemCostSheetId: string
+) {
   const sheet = await db.itemCostSheet.findUnique({
     where: { id: itemCostSheetId },
     select: { id: true, itemVariationId: true, baseItemCostSheetId: true },
@@ -306,6 +323,13 @@ export async function recalcItemCostSheetTotals(db: any, itemCostSheetId: string
         where: {
           itemVariationId: {
             in: targetItemVariationIds,
+          },
+        },
+        include: {
+          ItemVariation: {
+            select: {
+              variationId: true,
+            },
           },
         },
         orderBy: [{ createdAt: "asc" }],
@@ -372,7 +396,8 @@ export async function recalcItemCostSheetTotals(db: any, itemCostSheetId: string
         if (component.type === "item") {
           const snapshot = await getItemCostSheetItemSnapshot(
             db,
-            component.refId
+            component.refId,
+            { variationId: value.ItemVariation?.variationId || null }
           );
           await db.itemCostSheetVariationComponent.update({
             where: { id: value.id },
@@ -410,14 +435,17 @@ export async function recalcItemCostSheetTotals(db: any, itemCostSheetId: string
   });
 
   for (const groupSheet of groupSheets) {
-    const totalAmount = refreshedComponents.reduce((acc: number, component: any) => {
-      const value = Array.isArray(component.ItemCostSheetVariationComponent)
-        ? component.ItemCostSheetVariationComponent.find(
-            (row: any) => row.itemVariationId === groupSheet.itemVariationId
-          ) || null
-        : null;
-      return acc + Number(value?.totalCostAmount || 0);
-    }, 0);
+    const totalAmount = refreshedComponents.reduce(
+      (acc: number, component: any) => {
+        const value = Array.isArray(component.ItemCostSheetVariationComponent)
+          ? component.ItemCostSheetVariationComponent.find(
+              (row: any) => row.itemVariationId === groupSheet.itemVariationId
+            ) || null
+          : null;
+        return acc + Number(value?.totalCostAmount || 0);
+      },
+      0
+    );
 
     await db.itemCostSheet.update({
       where: { id: groupSheet.id },
@@ -425,12 +453,18 @@ export async function recalcItemCostSheetTotals(db: any, itemCostSheetId: string
     });
   }
 
-  const publishedSnapshots = await publishActiveItemCostSheetSnapshots(db, rootSheetId);
+  const publishedSnapshots = await publishActiveItemCostSheetSnapshots(
+    db,
+    rootSheetId
+  );
 
   return { rootSheetId, updatedSheets: groupSheets.length, publishedSnapshots };
 }
 
-async function publishActiveItemCostSheetSnapshots(db: any, rootSheetId: string) {
+async function publishActiveItemCostSheetSnapshots(
+  db: any,
+  rootSheetId: string
+) {
   if (!rootSheetId) return 0;
 
   const activeSheets = await db.itemCostSheet.findMany({
@@ -498,14 +532,25 @@ async function publishActiveItemCostSheetSnapshots(db: any, rootSheetId: string)
     if (!(nextCost > 0)) continue;
 
     const current = currentCostByVariationId.get(itemVariationId);
-    const currentMovement = current?.referenceId ? movementById.get(String(current.referenceId)) : null;
+    const currentMovement = current?.referenceId
+      ? movementById.get(String(current.referenceId))
+      : null;
     const currentMatchesSameSheet =
-      String(current?.source || "").trim().toLowerCase() === "item-cost-sheet" &&
-      String(current?.referenceType || "").trim().toLowerCase() === "stock-movement" &&
-      String(currentMovement?.originType || "").trim().toLowerCase() === "item-cost-sheet" &&
+      String(current?.source || "")
+        .trim()
+        .toLowerCase() === "item-cost-sheet" &&
+      String(current?.referenceType || "")
+        .trim()
+        .toLowerCase() === "stock-movement" &&
+      String(currentMovement?.originType || "")
+        .trim()
+        .toLowerCase() === "item-cost-sheet" &&
       String(currentMovement?.originRefId || "").trim() === String(sheet.id);
 
-    if (currentMatchesSameSheet && Math.abs(Number(current?.costAmount || 0) - nextCost) < 0.000001) {
+    if (
+      currentMatchesSameSheet &&
+      Math.abs(Number(current?.costAmount || 0) - nextCost) < 0.000001
+    ) {
       continue;
     }
 

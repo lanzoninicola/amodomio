@@ -1,5 +1,16 @@
-import { ActionFunctionArgs, LoaderFunctionArgs, redirect } from "@remix-run/node";
-import { Link, Outlet, useActionData, useLoaderData, useLocation, type ShouldRevalidateFunction } from "@remix-run/react";
+import {
+  ActionFunctionArgs,
+  LoaderFunctionArgs,
+  redirect,
+} from "@remix-run/node";
+import {
+  Link,
+  Outlet,
+  useActionData,
+  useLoaderData,
+  useLocation,
+  type ShouldRevalidateFunction,
+} from "@remix-run/react";
 
 export const shouldRevalidate: ShouldRevalidateFunction = ({ nextUrl }) => {
   return nextUrl.pathname.endsWith("/custos");
@@ -90,7 +101,9 @@ type RecipeCompositionBreakdown = {
 };
 
 function normalizeUnit(value: FormDataEntryValue | string | null | undefined) {
-  const normalized = String(value || "").trim().toUpperCase();
+  const normalized = String(value || "")
+    .trim()
+    .toUpperCase();
   return normalized || null;
 }
 
@@ -168,7 +181,10 @@ async function getAvailableItemUnits() {
   return Array.from(merged).sort((a, b) => a.localeCompare(b, "pt-BR"));
 }
 
-async function listActiveItemVariationIdsForItem(db: any, itemId?: string | null) {
+async function listActiveItemVariationIdsForItem(
+  db: any,
+  itemId?: string | null
+) {
   const normalizedItemId = String(itemId || "").trim();
   if (!normalizedItemId) return [] as string[];
 
@@ -202,7 +218,9 @@ async function listItemCostSheetCompositionRows(
   });
 
   return components.map((component: any) => {
-    const variationValues = Array.isArray(component.ItemCostSheetVariationComponent)
+    const variationValues = Array.isArray(
+      component.ItemCostSheetVariationComponent
+    )
       ? component.ItemCostSheetVariationComponent
       : [];
 
@@ -217,7 +235,10 @@ async function listItemCostSheetCompositionRows(
       sortOrderIndex: Number(component.sortOrderIndex || 0),
       notes: component.notes || null,
       variationValues: params.itemVariationIds.map((itemVariationId) => {
-        const value = variationValues.find((row: any) => row.itemVariationId === itemVariationId) || null;
+        const value =
+          variationValues.find(
+            (row: any) => row.itemVariationId === itemVariationId
+          ) || null;
         return {
           itemVariationId,
           variationComponentId: value?.id || null,
@@ -306,7 +327,9 @@ async function buildRecipeCompositionBreakdownMap(
       itemId,
       variationId: variationId || null,
     });
-    const result = { avgUnitCostAmount: Number(snapshot.avgUnitCostAmount || 0) };
+    const result = {
+      avgUnitCostAmount: Number(snapshot.avgUnitCostAmount || 0),
+    };
     costSnapshotCache.set(cacheKey, result);
     return result;
   }
@@ -349,11 +372,15 @@ async function buildRecipeCompositionBreakdownMap(
                 ingredientVariationId
               );
               const totalCostAmount = Number(
-                (Number(costInfo.avgUnitCostAmount || 0) * grossQuantity).toFixed(6)
+                (
+                  Number(costInfo.avgUnitCostAmount || 0) * grossQuantity
+                ).toFixed(6)
               );
 
               return {
-                ingredientId: String(recipeLine.recipeIngredientId || recipeLine.id),
+                ingredientId: String(
+                  recipeLine.recipeIngredientId || recipeLine.id
+                ),
                 itemId: recipeLine.itemId,
                 itemName: recipeLine.Item?.name || "Ingrediente",
                 ingredientVariationId,
@@ -370,7 +397,8 @@ async function buildRecipeCompositionBreakdownMap(
           );
 
           const unitCostAmount = breakdownLines.reduce(
-            (acc, breakdownLine) => acc + Number(breakdownLine.totalCostAmount || 0),
+            (acc, breakdownLine) =>
+              acc + Number(breakdownLine.totalCostAmount || 0),
             0
           );
 
@@ -440,18 +468,26 @@ async function createItemCostSheetRow(params: {
     notes,
   } = params;
 
-  const lineCount = await db.itemCostSheetComponent.count({ where: { itemCostSheetId } });
-  const normalizedVariationEntries = Array.isArray(variationEntries) && variationEntries.length > 0
-    ? variationEntries
-    : Array.from(
-      new Set((targetItemVariationIds && targetItemVariationIds.length > 0 ? targetItemVariationIds : [itemVariationId]).filter(Boolean))
-    ).map((targetItemVariationId) => ({
-      itemVariationId: targetItemVariationId,
-      unit: unit || null,
-      quantity,
-      unitCostAmount,
-      wastePerc,
-    }));
+  const lineCount = await db.itemCostSheetComponent.count({
+    where: { itemCostSheetId },
+  });
+  const normalizedVariationEntries =
+    Array.isArray(variationEntries) && variationEntries.length > 0
+      ? variationEntries
+      : Array.from(
+          new Set(
+            (targetItemVariationIds && targetItemVariationIds.length > 0
+              ? targetItemVariationIds
+              : [itemVariationId]
+            ).filter(Boolean)
+          )
+        ).map((targetItemVariationId) => ({
+          itemVariationId: targetItemVariationId,
+          unit: unit || null,
+          quantity,
+          unitCostAmount,
+          wastePerc,
+        }));
   await db.itemCostSheetComponent.create({
     data: {
       itemCostSheetId,
@@ -468,7 +504,11 @@ async function createItemCostSheetRow(params: {
           quantity: entry.quantity,
           unitCostAmount: entry.unitCostAmount,
           wastePerc: entry.wastePerc,
-          totalCostAmount: calcItemCostSheetTotalCostAmount(entry.unitCostAmount, entry.quantity, entry.wastePerc),
+          totalCostAmount: calcItemCostSheetTotalCostAmount(
+            entry.unitCostAmount,
+            entry.quantity,
+            entry.wastePerc
+          ),
         })),
       },
     },
@@ -532,7 +572,8 @@ async function getItemCostSheetDeletionGuard(
   if (params.isActive) {
     return {
       canDelete: false,
-      reason: "Não é permitido eliminar uma ficha ativa. Desative ou substitua a ficha antes de remover.",
+      reason:
+        "Não é permitido eliminar uma ficha ativa. Desative ou substitua a ficha antes de remover.",
       referenceDependencyCount,
       baseDependencyCount,
     };
@@ -541,7 +582,8 @@ async function getItemCostSheetDeletionGuard(
   if (referenceDependencyCount > 0) {
     return {
       canDelete: false,
-      reason: "Não é permitido eliminar uma ficha usada por outras fichas de custo.",
+      reason:
+        "Não é permitido eliminar uma ficha usada por outras fichas de custo.",
       referenceDependencyCount,
       baseDependencyCount,
     };
@@ -574,9 +616,20 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     const rootSheetId = currentSheet.baseItemCostSheetId || currentSheet.id;
     const isCostsTabRequest = pathname.endsWith("/custos");
 
-    const [recipeSheets, recipes, referenceSheets, packagingItems, componentPresets, recipeSheetDependencyAgg, unitOptions, activeItemVariationIds] = await Promise.all([
+    const [
+      recipeSheets,
+      recipes,
+      referenceSheets,
+      packagingItems,
+      componentPresets,
+      recipeSheetDependencyAgg,
+      unitOptions,
+      activeItemVariationIds,
+    ] = await Promise.all([
       db.itemCostSheet.findMany({
-        where: { OR: [{ id: rootSheetId }, { baseItemCostSheetId: rootSheetId }] },
+        where: {
+          OR: [{ id: rootSheetId }, { baseItemCostSheetId: rootSheetId }],
+        },
         include: {
           ItemVariation: { include: { Variation: true } },
         },
@@ -584,59 +637,65 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       }),
       isCostsTabRequest
         ? db.recipe.findMany({
-          where: {},
-          select: {
-            id: true,
-            name: true,
-            type: true,
-            variationId: true,
-            Variation: { select: { id: true, name: true, kind: true } },
-          },
-          orderBy: [{ updatedAt: "desc" }],
-          take: 300,
-        })
+            where: {},
+            select: {
+              id: true,
+              name: true,
+              type: true,
+              variationId: true,
+              Variation: { select: { id: true, name: true, kind: true } },
+            },
+            orderBy: [{ updatedAt: "desc" }],
+            take: 300,
+          })
         : Promise.resolve([]),
       isCostsTabRequest
         ? db.itemCostSheet.findMany({
-          where: { isActive: true, baseItemCostSheetId: null },
-          select: { id: true, name: true, itemId: true, costAmount: true },
-          orderBy: [{ updatedAt: "desc" }],
-          take: 300,
-        })
+            where: { isActive: true, baseItemCostSheetId: null },
+            select: { id: true, name: true, itemId: true, costAmount: true },
+            orderBy: [{ updatedAt: "desc" }],
+            take: 300,
+          })
         : Promise.resolve([]),
       isCostsTabRequest
         ? db.item.findMany({
-          where: { active: true, classification: "embalagem" },
-          select: {
-            id: true,
-            name: true,
-            classification: true,
-            purchaseUm: true,
-            consumptionUm: true,
-          },
-          orderBy: [{ name: "asc" }],
-          take: 300,
-        })
+            where: { active: true, classification: "embalagem" },
+            select: {
+              id: true,
+              name: true,
+              classification: true,
+              purchaseUm: true,
+              consumptionUm: true,
+            },
+            orderBy: [{ name: "asc" }],
+            take: 300,
+          })
         : Promise.resolve([]),
       isCostsTabRequest
         ? db.itemCostSheetComponentPreset.findMany({
-          where: { active: true, type: { in: ["manual", "labor"] } },
-          select: {
-            id: true,
-            key: true,
-            type: true,
-            variationId: true,
-            name: true,
-            unit: true,
-            quantity: true,
-            unitCostAmount: true,
-            wastePerc: true,
-            notes: true,
-            sortOrderIndex: true,
-            Variation: { select: { id: true, name: true, code: true, kind: true } },
-          },
-          orderBy: [{ type: "asc" }, { sortOrderIndex: "asc" }, { name: "asc" }],
-        })
+            where: { active: true, type: { in: ["manual", "labor"] } },
+            select: {
+              id: true,
+              key: true,
+              type: true,
+              variationId: true,
+              name: true,
+              unit: true,
+              quantity: true,
+              unitCostAmount: true,
+              wastePerc: true,
+              notes: true,
+              sortOrderIndex: true,
+              Variation: {
+                select: { id: true, name: true, code: true, kind: true },
+              },
+            },
+            orderBy: [
+              { type: "asc" },
+              { sortOrderIndex: "asc" },
+              { name: "asc" },
+            ],
+          })
         : Promise.resolve([]),
       db.itemCostSheetComponent.groupBy({
         by: ["refId"],
@@ -648,17 +707,19 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     ]);
 
     const activeVariationIdSet = new Set(activeItemVariationIds);
-    const visibleRecipeSheets = recipeSheets.filter((sheet: any) =>
-      activeVariationIdSet.size === 0 || activeVariationIdSet.has(String(sheet.itemVariationId || ""))
+    const visibleRecipeSheets = recipeSheets.filter(
+      (sheet: any) =>
+        activeVariationIdSet.size === 0 ||
+        activeVariationIdSet.has(String(sheet.itemVariationId || ""))
     );
 
     const recipeOptions = isCostsTabRequest
       ? recipes.map((recipe: any) => ({
-        id: recipe.id,
-        name: recipe.name,
-        type: recipe.type,
-        variationLabel: recipe.Variation?.name || null,
-      }))
+          id: recipe.id,
+          name: recipe.name,
+          type: recipe.type,
+          variationLabel: recipe.Variation?.name || null,
+        }))
       : [];
 
     const recipeSheetDependencyCountById = Object.fromEntries(
@@ -668,33 +729,40 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     );
     const packagingItemOptions = isCostsTabRequest
       ? await Promise.all(
-        (packagingItems || []).map(async (item: any) => {
-          const snapshot = await getItemCostSheetItemSnapshot(db, String(item.id || ""));
-          return {
-            id: String(item.id || ""),
-            name: String(item.name || ""),
-            classification: item.classification || null,
-            purchaseUm: item.purchaseUm || null,
-            consumptionUm: item.consumptionUm || null,
-            unitCostAmount: Number(snapshot.unitCostAmount || 0),
-          };
-        })
-      )
+          (packagingItems || []).map(async (item: any) => {
+            const snapshot = await getItemCostSheetItemSnapshot(
+              db,
+              String(item.id || "")
+            );
+            return {
+              id: String(item.id || ""),
+              name: String(item.name || ""),
+              classification: item.classification || null,
+              purchaseUm: item.purchaseUm || null,
+              consumptionUm: item.consumptionUm || null,
+              unitCostAmount: Number(snapshot.unitCostAmount || 0),
+            };
+          })
+        )
       : [];
 
     const compositionRows = await listItemCostSheetCompositionRows(db, {
       itemCostSheetId: rootSheetId,
-      itemVariationIds: visibleRecipeSheets.map((sheet: any) => String(sheet.itemVariationId || "")).filter(Boolean),
+      itemVariationIds: visibleRecipeSheets
+        .map((sheet: any) => String(sheet.itemVariationId || ""))
+        .filter(Boolean),
     });
     const recipeCompositionBreakdownByLineId = isCostsTabRequest
       ? await buildRecipeCompositionBreakdownMap(db, {
-        compositionRows,
-        variationSheets: visibleRecipeSheets,
-      })
+          compositionRows,
+          variationSheets: visibleRecipeSheets,
+        })
       : {};
     const deletionGuard = await getItemCostSheetDeletionGuard(db, {
       itemCostSheetId: rootSheetId,
-      isActive: visibleRecipeSheets.some((sheet: any) => Boolean(sheet.isActive)),
+      isActive: visibleRecipeSheets.some((sheet: any) =>
+        Boolean(sheet.isActive)
+      ),
     });
 
     return ok({
@@ -744,14 +812,22 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
     const currentSheet = await db.itemCostSheet.findUnique({
       where: { id: routeSheetId },
-      select: { id: true, itemId: true, itemVariationId: true, isActive: true, baseItemCostSheetId: true },
+      select: {
+        id: true,
+        itemId: true,
+        itemVariationId: true,
+        isActive: true,
+        baseItemCostSheetId: true,
+      },
     });
     if (!currentSheet) return badRequest("Ficha de custo não encontrada");
     const postRedirectTo = getPostRedirectTarget(formData, currentSheet.id);
     const rootSheetId = currentSheet.baseItemCostSheetId || currentSheet.id;
     const [groupSheets, activeItemVariationIds] = await Promise.all([
       db.itemCostSheet.findMany({
-        where: { OR: [{ id: rootSheetId }, { baseItemCostSheetId: rootSheetId }] },
+        where: {
+          OR: [{ id: rootSheetId }, { baseItemCostSheetId: rootSheetId }],
+        },
         select: {
           id: true,
           itemVariationId: true,
@@ -759,7 +835,9 @@ export async function action({ request, params }: ActionFunctionArgs) {
           ItemVariation: {
             select: {
               variationId: true,
-              Variation: { select: { id: true, name: true, code: true, kind: true } },
+              Variation: {
+                select: { id: true, name: true, code: true, kind: true },
+              },
             },
           },
         },
@@ -769,20 +847,28 @@ export async function action({ request, params }: ActionFunctionArgs) {
     ]);
     const availableUnits = await getAvailableItemUnits();
     const activeVariationIdSet = new Set(activeItemVariationIds);
-    const visibleGroupSheets = groupSheets.filter((sheet: any) =>
-      activeVariationIdSet.size === 0 || activeVariationIdSet.has(String(sheet.itemVariationId || ""))
+    const visibleGroupSheets = groupSheets.filter(
+      (sheet: any) =>
+        activeVariationIdSet.size === 0 ||
+        activeVariationIdSet.has(String(sheet.itemVariationId || ""))
     );
     const targetVariationRows = visibleGroupSheets
       .map((sheet: any) => ({
         itemVariationId: String(sheet.itemVariationId || ""),
-        variationId: sheet.ItemVariation?.variationId ? String(sheet.ItemVariation.variationId) : null,
+        variationId: sheet.ItemVariation?.variationId
+          ? String(sheet.ItemVariation.variationId)
+          : null,
         variationName: sheet.ItemVariation?.Variation?.name || null,
       }))
       .filter((sheet) => sheet.itemVariationId);
-    const targetItemVariationIds = targetVariationRows.map((sheet) => sheet.itemVariationId);
+    const targetItemVariationIds = targetVariationRows.map(
+      (sheet) => sheet.itemVariationId
+    );
 
     if (_action === "item-cost-sheet-meta-update") {
-      const itemCostSheetId = String(formData.get("itemCostSheetId") || "").trim();
+      const itemCostSheetId = String(
+        formData.get("itemCostSheetId") || ""
+      ).trim();
       const name = String(formData.get("name") || "").trim();
       const description = String(formData.get("description") || "").trim();
       const notes = String(formData.get("notes") || "").trim();
@@ -790,10 +876,13 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
       if (!itemCostSheetId) return badRequest("Ficha de custo inválida");
       if (!name) return badRequest("Informe o nome da ficha");
-      if (itemCostSheetId !== currentSheet.id) return badRequest("Ficha de custo divergente");
+      if (itemCostSheetId !== currentSheet.id)
+        return badRequest("Ficha de custo divergente");
 
       await db.itemCostSheet.updateMany({
-        where: { OR: [{ id: rootSheetId }, { baseItemCostSheetId: rootSheetId }] },
+        where: {
+          OR: [{ id: rootSheetId }, { baseItemCostSheetId: rootSheetId }],
+        },
         data: {
           name,
           description: description || null,
@@ -808,14 +897,21 @@ export async function action({ request, params }: ActionFunctionArgs) {
     }
 
     if (_action === "item-cost-sheet-line-add-recipe") {
-      const itemCostSheetId = String(formData.get("itemCostSheetId") || "").trim();
+      const itemCostSheetId = String(
+        formData.get("itemCostSheetId") || ""
+      ).trim();
       const recipeId = String(formData.get("recipeId") || "").trim();
-      const quantity = Number(String(formData.get("quantity") || "1").replace(",", "."));
-      const wastePerc = Number(String(formData.get("wastePerc") || "0").replace(",", "."));
+      const quantity = Number(
+        String(formData.get("quantity") || "1").replace(",", ".")
+      );
+      const wastePerc = Number(
+        String(formData.get("wastePerc") || "0").replace(",", ".")
+      );
       if (!itemCostSheetId) return badRequest("Ficha de custo inválida");
       if (!recipeId) return badRequest("Selecione a receita");
       if (!(quantity > 0)) return badRequest("Informe uma quantidade válida");
-      if (itemCostSheetId !== currentSheet.id) return badRequest("Ficha de custo divergente");
+      if (itemCostSheetId !== currentSheet.id)
+        return badRequest("Ficha de custo divergente");
 
       const snapshot = await getRecipeCompositionCostSnapshot(db, recipeId);
       const variationEntries = await Promise.all(
@@ -829,7 +925,9 @@ export async function action({ request, params }: ActionFunctionArgs) {
             itemVariationId: targetItemVariationId,
             unit: "receita",
             quantity,
-            unitCostAmount: roundItemCostSheetMoney(perVariationSnapshot.unitCostAmount),
+            unitCostAmount: roundItemCostSheetMoney(
+              perVariationSnapshot.unitCostAmount
+            ),
             wastePerc,
           };
         })
@@ -855,14 +953,21 @@ export async function action({ request, params }: ActionFunctionArgs) {
     }
 
     if (_action === "item-cost-sheet-line-add-item") {
-      const itemCostSheetId = String(formData.get("itemCostSheetId") || "").trim();
+      const itemCostSheetId = String(
+        formData.get("itemCostSheetId") || ""
+      ).trim();
       const refItemId = String(formData.get("refItemId") || "").trim();
-      const quantity = Number(String(formData.get("quantity") || "1").replace(",", "."));
-      const wastePerc = Number(String(formData.get("wastePerc") || "0").replace(",", "."));
+      const quantity = Number(
+        String(formData.get("quantity") || "1").replace(",", ".")
+      );
+      const wastePerc = Number(
+        String(formData.get("wastePerc") || "0").replace(",", ".")
+      );
       if (!itemCostSheetId) return badRequest("Ficha de custo inválida");
       if (!refItemId) return badRequest("Selecione a embalagem");
       if (!(quantity > 0)) return badRequest("Informe uma quantidade válida");
-      if (itemCostSheetId !== currentSheet.id) return badRequest("Ficha de custo divergente");
+      if (itemCostSheetId !== currentSheet.id)
+        return badRequest("Ficha de custo divergente");
 
       const refItem = await db.item.findFirst({
         where: { id: refItemId, active: true, classification: "embalagem" },
@@ -870,15 +975,39 @@ export async function action({ request, params }: ActionFunctionArgs) {
       });
       if (!refItem) return badRequest("Embalagem inválida ou inativa");
 
-      const snapshot = await getItemCostSheetItemSnapshot(db, refItemId);
-      const unit = normalizeUnit(snapshot.unit) || "UN";
-      const variationEntries = targetItemVariationIds.map((targetItemVariationId) => ({
-        itemVariationId: targetItemVariationId,
-        unit,
-        quantity,
-        unitCostAmount: roundItemCostSheetMoney(snapshot.unitCostAmount),
-        wastePerc,
-      }));
+      const targetVariations = await db.itemVariation.findMany({
+        where: { id: { in: targetItemVariationIds } },
+        select: { id: true, variationId: true },
+      });
+      const snapshotByTargetVariationId = new Map<
+        string,
+        Awaited<ReturnType<typeof getItemCostSheetItemSnapshot>>
+      >();
+      for (const targetVariation of targetVariations) {
+        const snapshot = await getItemCostSheetItemSnapshot(db, refItemId, {
+          variationId: targetVariation.variationId,
+        });
+        snapshotByTargetVariationId.set(String(targetVariation.id), snapshot);
+      }
+      const fallbackSnapshot = await getItemCostSheetItemSnapshot(
+        db,
+        refItemId
+      );
+      const unit = normalizeUnit(fallbackSnapshot.unit) || "UN";
+      const variationEntries = targetItemVariationIds.map(
+        (targetItemVariationId) => {
+          const snapshot =
+            snapshotByTargetVariationId.get(String(targetItemVariationId)) ||
+            fallbackSnapshot;
+          return {
+            itemVariationId: targetItemVariationId,
+            unit: normalizeUnit(snapshot.unit) || unit,
+            quantity,
+            unitCostAmount: roundItemCostSheetMoney(snapshot.unitCostAmount),
+            wastePerc,
+          };
+        }
+      );
 
       await createItemCostSheetRow({
         db,
@@ -888,12 +1017,14 @@ export async function action({ request, params }: ActionFunctionArgs) {
         variationEntries,
         type: "item",
         refId: refItemId,
-        name: snapshot.item.name,
+        name: fallbackSnapshot.item.name,
         unit,
         quantity,
-        unitCostAmount: roundItemCostSheetMoney(snapshot.unitCostAmount),
+        unitCostAmount: roundItemCostSheetMoney(
+          fallbackSnapshot.unitCostAmount
+        ),
         wastePerc,
-        notes: snapshot.note,
+        notes: fallbackSnapshot.note,
       });
 
       await recalcItemCostSheetTotals(db, rootSheetId);
@@ -901,45 +1032,61 @@ export async function action({ request, params }: ActionFunctionArgs) {
     }
 
     if (_action === "item-cost-sheet-line-add-manual") {
-      const itemCostSheetId = String(formData.get("itemCostSheetId") || "").trim();
+      const itemCostSheetId = String(
+        formData.get("itemCostSheetId") || ""
+      ).trim();
       const presetId = String(formData.get("presetId") || "").trim();
       const name = String(formData.get("name") || "").trim();
       const unit = normalizeUnit(formData.get("unit"));
-      const quantity = Number(String(formData.get("quantity") || "1").replace(",", "."));
-      const unitCostAmount = Number(String(formData.get("unitCostAmount") || "0").replace(",", "."));
-      const wastePerc = Number(String(formData.get("wastePerc") || "0").replace(",", "."));
+      const quantity = Number(
+        String(formData.get("quantity") || "1").replace(",", ".")
+      );
+      const unitCostAmount = Number(
+        String(formData.get("unitCostAmount") || "0").replace(",", ".")
+      );
+      const wastePerc = Number(
+        String(formData.get("wastePerc") || "0").replace(",", ".")
+      );
       const notes = String(formData.get("notes") || "").trim();
       const preset = presetId
         ? await db.itemCostSheetComponentPreset.findFirst({
-          where: { id: presetId, active: true, type: "manual" },
-          select: { id: true, variationId: true, name: true },
-        })
+            where: { id: presetId, active: true, type: "manual" },
+            select: { id: true, variationId: true, name: true },
+          })
         : null;
 
       if (!itemCostSheetId) return badRequest("Ficha de custo inválida");
-      if (presetId && !preset) return badRequest("Preset de custo manual inválido");
+      if (presetId && !preset)
+        return badRequest("Preset de custo manual inválido");
       if (!name) return badRequest("Informe o nome do custo");
-      if (!unit || !availableUnits.includes(unit)) return badRequest("Informe uma unidade válida");
+      if (!unit || !availableUnits.includes(unit))
+        return badRequest("Informe uma unidade válida");
       if (!(quantity > 0)) return badRequest("Informe uma quantidade válida");
-      if (!(unitCostAmount >= 0)) return badRequest("Informe um custo unitário válido");
-      if (itemCostSheetId !== currentSheet.id) return badRequest("Ficha de custo divergente");
+      if (!(unitCostAmount >= 0))
+        return badRequest("Informe um custo unitário válido");
+      if (itemCostSheetId !== currentSheet.id)
+        return badRequest("Ficha de custo divergente");
       const presetVariationEntries = preset
         ? buildPresetVariationEntries({
-          preset: {
-            variationId: preset.variationId ? String(preset.variationId) : null,
+            preset: {
+              variationId: preset.variationId
+                ? String(preset.variationId)
+                : null,
+              quantity,
+              unitCostAmount,
+              wastePerc,
+            },
+            targetVariationRows,
+            unit,
             quantity,
             unitCostAmount,
             wastePerc,
-          },
-          targetVariationRows,
-          unit,
-          quantity,
-          unitCostAmount,
-          wastePerc,
-        })
+          })
         : null;
       if (preset?.variationId && !presetVariationEntries) {
-        return badRequest(`O preset ${preset.name} está vinculado a uma variação ausente nesta ficha`);
+        return badRequest(
+          `O preset ${preset.name} está vinculado a uma variação ausente nesta ficha`
+        );
       }
 
       await createItemCostSheetRow({
@@ -963,44 +1110,60 @@ export async function action({ request, params }: ActionFunctionArgs) {
     }
 
     if (_action === "item-cost-sheet-line-add-labor") {
-      const itemCostSheetId = String(formData.get("itemCostSheetId") || "").trim();
+      const itemCostSheetId = String(
+        formData.get("itemCostSheetId") || ""
+      ).trim();
       const presetId = String(formData.get("presetId") || "").trim();
       const name = String(formData.get("name") || "").trim() || "Mão de obra";
       const unit = normalizeUnit(formData.get("unit"));
-      const quantity = Number(String(formData.get("quantity") || "1").replace(",", "."));
-      const unitCostAmount = Number(String(formData.get("unitCostAmount") || "0").replace(",", "."));
-      const wastePerc = Number(String(formData.get("wastePerc") || "0").replace(",", "."));
+      const quantity = Number(
+        String(formData.get("quantity") || "1").replace(",", ".")
+      );
+      const unitCostAmount = Number(
+        String(formData.get("unitCostAmount") || "0").replace(",", ".")
+      );
+      const wastePerc = Number(
+        String(formData.get("wastePerc") || "0").replace(",", ".")
+      );
       const notes = String(formData.get("notes") || "").trim();
       const preset = presetId
         ? await db.itemCostSheetComponentPreset.findFirst({
-          where: { id: presetId, active: true, type: "labor" },
-          select: { id: true, variationId: true, name: true },
-        })
+            where: { id: presetId, active: true, type: "labor" },
+            select: { id: true, variationId: true, name: true },
+          })
         : null;
 
       if (!itemCostSheetId) return badRequest("Ficha de custo inválida");
-      if (presetId && !preset) return badRequest("Preset de mão de obra inválido");
-      if (!unit || !availableUnits.includes(unit)) return badRequest("Informe uma unidade válida");
+      if (presetId && !preset)
+        return badRequest("Preset de mão de obra inválido");
+      if (!unit || !availableUnits.includes(unit))
+        return badRequest("Informe uma unidade válida");
       if (!(quantity > 0)) return badRequest("Informe uma quantidade válida");
-      if (!(unitCostAmount >= 0)) return badRequest("Informe um custo unitário válido");
-      if (itemCostSheetId !== currentSheet.id) return badRequest("Ficha de custo divergente");
+      if (!(unitCostAmount >= 0))
+        return badRequest("Informe um custo unitário válido");
+      if (itemCostSheetId !== currentSheet.id)
+        return badRequest("Ficha de custo divergente");
       const presetVariationEntries = preset
         ? buildPresetVariationEntries({
-          preset: {
-            variationId: preset.variationId ? String(preset.variationId) : null,
+            preset: {
+              variationId: preset.variationId
+                ? String(preset.variationId)
+                : null,
+              quantity,
+              unitCostAmount,
+              wastePerc,
+            },
+            targetVariationRows,
+            unit,
             quantity,
             unitCostAmount,
             wastePerc,
-          },
-          targetVariationRows,
-          unit,
-          quantity,
-          unitCostAmount,
-          wastePerc,
-        })
+          })
         : null;
       if (preset?.variationId && !presetVariationEntries) {
-        return badRequest(`O preset ${preset.name} está vinculado a uma variação ausente nesta ficha`);
+        return badRequest(
+          `O preset ${preset.name} está vinculado a uma variação ausente nesta ficha`
+        );
       }
 
       await createItemCostSheetRow({
@@ -1024,28 +1187,54 @@ export async function action({ request, params }: ActionFunctionArgs) {
     }
 
     if (_action === "item-cost-sheet-line-add-sheet") {
-      const itemCostSheetId = String(formData.get("itemCostSheetId") || "").trim();
+      const itemCostSheetId = String(
+        formData.get("itemCostSheetId") || ""
+      ).trim();
       const refSheetId = String(formData.get("refRecipeSheetId") || "").trim();
-      const quantity = Number(String(formData.get("quantity") || "1").replace(",", "."));
-      const wastePerc = Number(String(formData.get("wastePerc") || "0").replace(",", "."));
+      const quantity = Number(
+        String(formData.get("quantity") || "1").replace(",", ".")
+      );
+      const wastePerc = Number(
+        String(formData.get("wastePerc") || "0").replace(",", ".")
+      );
       if (!itemCostSheetId) return badRequest("Ficha de custo inválida");
-      if (!refSheetId) return badRequest("Selecione a ficha de custo de referência");
-      if (itemCostSheetId === refSheetId) return badRequest("Não é permitido referenciar a própria ficha");
+      if (!refSheetId)
+        return badRequest("Selecione a ficha de custo de referência");
+      if (itemCostSheetId === refSheetId)
+        return badRequest("Não é permitido referenciar a própria ficha");
       if (!(quantity > 0)) return badRequest("Informe uma quantidade válida");
-      if (itemCostSheetId !== currentSheet.id) return badRequest("Ficha de custo divergente");
+      if (itemCostSheetId !== currentSheet.id)
+        return badRequest("Ficha de custo divergente");
 
-      const createsCycle = await wouldCreateRecipeSheetCycle(db, rootSheetId, refSheetId);
-      if (createsCycle) return badRequest("Esta referência criaria ciclo entre fichas de custo");
+      const createsCycle = await wouldCreateRecipeSheetCycle(
+        db,
+        rootSheetId,
+        refSheetId
+      );
+      if (createsCycle)
+        return badRequest(
+          "Esta referência criaria ciclo entre fichas de custo"
+        );
 
-      const refSnapshot = await getItemCostSheetSnapshot(db, refSheetId, currentSheet.itemVariationId);
+      const refSnapshot = await getItemCostSheetSnapshot(
+        db,
+        refSheetId,
+        currentSheet.itemVariationId
+      );
       const variationEntries = await Promise.all(
         targetItemVariationIds.map(async (targetItemVariationId) => {
-          const perVariationSnapshot = await getItemCostSheetSnapshot(db, refSheetId, targetItemVariationId);
+          const perVariationSnapshot = await getItemCostSheetSnapshot(
+            db,
+            refSheetId,
+            targetItemVariationId
+          );
           return {
             itemVariationId: targetItemVariationId,
             unit: "ficha",
             quantity,
-            unitCostAmount: roundItemCostSheetMoney(perVariationSnapshot.unitCostAmount),
+            unitCostAmount: roundItemCostSheetMoney(
+              perVariationSnapshot.unitCostAmount
+            ),
             wastePerc,
           };
         })
@@ -1072,12 +1261,16 @@ export async function action({ request, params }: ActionFunctionArgs) {
     }
 
     if (_action === "item-cost-sheet-line-move") {
-      const itemCostSheetId = String(formData.get("itemCostSheetId") || "").trim();
+      const itemCostSheetId = String(
+        formData.get("itemCostSheetId") || ""
+      ).trim();
       const lineId = String(formData.get("lineId") || "").trim();
       const direction = String(formData.get("direction") || "").trim();
       if (!itemCostSheetId || !lineId) return badRequest("Linha inválida");
-      if (!["up", "down"].includes(direction)) return badRequest("Direção inválida");
-      if (itemCostSheetId !== currentSheet.id) return badRequest("Ficha de custo divergente");
+      if (!["up", "down"].includes(direction))
+        return badRequest("Direção inválida");
+      if (itemCostSheetId !== currentSheet.id)
+        return badRequest("Ficha de custo divergente");
 
       const rows = await db.itemCostSheetComponent.findMany({
         where: { itemCostSheetId: rootSheetId },
@@ -1088,7 +1281,8 @@ export async function action({ request, params }: ActionFunctionArgs) {
       const currentIndex = rows.findIndex((row: any) => row.id === lineId);
       if (currentIndex < 0) return badRequest("Linha não encontrada");
 
-      const targetIndex = direction === "up" ? currentIndex - 1 : currentIndex + 1;
+      const targetIndex =
+        direction === "up" ? currentIndex - 1 : currentIndex + 1;
       if (targetIndex < 0 || targetIndex >= rows.length) {
         return redirect(postRedirectTo);
       }
@@ -1110,12 +1304,15 @@ export async function action({ request, params }: ActionFunctionArgs) {
     }
 
     if (_action === "item-cost-sheet-line-update") {
-      const itemCostSheetId = String(formData.get("itemCostSheetId") || "").trim();
+      const itemCostSheetId = String(
+        formData.get("itemCostSheetId") || ""
+      ).trim();
       const lineId = String(formData.get("lineId") || "").trim();
       const name = String(formData.get("name") || "").trim();
       const notes = String(formData.get("notes") || "").trim();
       if (!itemCostSheetId || !lineId) return badRequest("Linha inválida");
-      if (itemCostSheetId !== currentSheet.id) return badRequest("Ficha de custo divergente");
+      if (itemCostSheetId !== currentSheet.id)
+        return badRequest("Ficha de custo divergente");
 
       const component = await db.itemCostSheetComponent.findFirst({
         where: { id: lineId, itemCostSheetId: rootSheetId },
@@ -1128,15 +1325,38 @@ export async function action({ request, params }: ActionFunctionArgs) {
       });
       if (!component) return badRequest("Linha não encontrada");
 
-      const isRefLine = (component.type === "recipe" || component.type === "recipeSheet" || component.type === "item") && !!component.refId;
-      const variationValues = Array.isArray(component.ItemCostSheetVariationComponent)
+      const isRefLine =
+        (component.type === "recipe" ||
+          component.type === "recipeSheet" ||
+          component.type === "item") &&
+        !!component.refId;
+      const variationValues = Array.isArray(
+        component.ItemCostSheetVariationComponent
+      )
         ? component.ItemCostSheetVariationComponent
         : [];
       const updates = targetItemVariationIds.map((itemVariationId) => {
-        const existingValue = variationValues.find((value: any) => value.itemVariationId === itemVariationId) || null;
-        const quantity = Number(String(formData.get(`quantity__${itemVariationId}`) || "0").replace(",", "."));
-        const unitCostAmount = Number(String(formData.get(`unitCostAmount__${itemVariationId}`) || "0").replace(",", "."));
-        const wastePerc = Number(String(formData.get(`wastePerc__${itemVariationId}`) || "0").replace(",", "."));
+        const existingValue =
+          variationValues.find(
+            (value: any) => value.itemVariationId === itemVariationId
+          ) || null;
+        const quantity = Number(
+          String(formData.get(`quantity__${itemVariationId}`) || "0").replace(
+            ",",
+            "."
+          )
+        );
+        const unitCostAmount = Number(
+          String(
+            formData.get(`unitCostAmount__${itemVariationId}`) || "0"
+          ).replace(",", ".")
+        );
+        const wastePerc = Number(
+          String(formData.get(`wastePerc__${itemVariationId}`) || "0").replace(
+            ",",
+            "."
+          )
+        );
         const unitRaw = normalizeUnit(formData.get(`unit__${itemVariationId}`));
 
         return {
@@ -1149,24 +1369,39 @@ export async function action({ request, params }: ActionFunctionArgs) {
         };
       });
       if (updates.some((update) => !(update.quantity > 0))) {
-        return badRequest("Informe uma quantidade válida para todas as variações");
+        return badRequest(
+          "Informe uma quantidade válida para todas as variações"
+        );
       }
-      if (!isRefLine && (component.type === "manual" || component.type === "labor")) {
-        if (updates.some((update) => {
-          const existingUnit = normalizeUnit(update.existingValue?.unit);
-          return !update.unitRaw || (!availableUnits.includes(update.unitRaw) && update.unitRaw !== existingUnit);
-        })) {
-          return badRequest("Informe uma unidade válida para todas as variações");
+      if (
+        !isRefLine &&
+        (component.type === "manual" || component.type === "labor")
+      ) {
+        if (
+          updates.some((update) => {
+            const existingUnit = normalizeUnit(update.existingValue?.unit);
+            return (
+              !update.unitRaw ||
+              (!availableUnits.includes(update.unitRaw) &&
+                update.unitRaw !== existingUnit)
+            );
+          })
+        ) {
+          return badRequest(
+            "Informe uma unidade válida para todas as variações"
+          );
         }
       }
       if (updates.some((update) => !(update.unitCostAmount >= 0))) {
-        return badRequest("Informe um custo unitário válido para todas as variações");
+        return badRequest(
+          "Informe um custo unitário válido para todas as variações"
+        );
       }
 
       await db.itemCostSheetComponent.update({
         where: { id: component.id },
         data: {
-          name: isRefLine ? component.name : (name || "Custo"),
+          name: isRefLine ? component.name : name || "Custo",
           notes: notes || null,
         },
       });
@@ -1179,7 +1414,9 @@ export async function action({ request, params }: ActionFunctionArgs) {
           await db.itemCostSheetVariationComponent.update({
             where: { id: update.existingValue.id },
             data: {
-              unit: isRefLine ? update.existingValue.unit : (update.unitRaw || null),
+              unit: isRefLine
+                ? update.existingValue.unit
+                : update.unitRaw || null,
               quantity: update.quantity,
               unitCostAmount: baseUnitCostAmount,
               wastePerc: update.wastePerc,
@@ -1213,10 +1450,13 @@ export async function action({ request, params }: ActionFunctionArgs) {
     }
 
     if (_action === "item-cost-sheet-line-delete") {
-      const itemCostSheetId = String(formData.get("itemCostSheetId") || "").trim();
+      const itemCostSheetId = String(
+        formData.get("itemCostSheetId") || ""
+      ).trim();
       const lineId = String(formData.get("lineId") || "").trim();
       if (!itemCostSheetId || !lineId) return badRequest("Linha inválida");
-      if (itemCostSheetId !== currentSheet.id) return badRequest("Ficha de custo divergente");
+      if (itemCostSheetId !== currentSheet.id)
+        return badRequest("Ficha de custo divergente");
 
       const component = await db.itemCostSheetComponent.findFirst({
         where: { id: lineId, itemCostSheetId: rootSheetId },
@@ -1230,18 +1470,26 @@ export async function action({ request, params }: ActionFunctionArgs) {
     }
 
     if (_action === "item-cost-sheet-delete") {
-      const itemCostSheetId = String(formData.get("itemCostSheetId") || "").trim();
+      const itemCostSheetId = String(
+        formData.get("itemCostSheetId") || ""
+      ).trim();
       if (!itemCostSheetId) return badRequest("Ficha de custo inválida");
-      if (itemCostSheetId !== currentSheet.id) return badRequest("Ficha de custo divergente");
+      if (itemCostSheetId !== currentSheet.id)
+        return badRequest("Ficha de custo divergente");
 
       const deletionGuard = await getItemCostSheetDeletionGuard(db, {
         itemCostSheetId: rootSheetId,
         isActive: groupSheets.some((sheet: any) => Boolean(sheet.isActive)),
       });
-      if (!deletionGuard.canDelete) return badRequest(deletionGuard.reason || "Não foi possível eliminar a ficha");
+      if (!deletionGuard.canDelete)
+        return badRequest(
+          deletionGuard.reason || "Não foi possível eliminar a ficha"
+        );
 
       await db.$transaction([
-        db.itemCostSheet.deleteMany({ where: { baseItemCostSheetId: rootSheetId } }),
+        db.itemCostSheet.deleteMany({
+          where: { baseItemCostSheetId: rootSheetId },
+        }),
         db.itemCostSheet.delete({ where: { id: rootSheetId } }),
       ]);
       return redirect("/admin/item-cost-sheets");
@@ -1258,25 +1506,27 @@ export function SheetTypeLabel({ type }: { type: string }) {
     type === "recipe"
       ? "border-emerald-200 bg-emerald-50 text-emerald-700"
       : type === "recipeSheet"
-        ? "border-blue-200 bg-blue-50 text-blue-700"
-        : type === "item"
-          ? "border-violet-200 bg-violet-50 text-violet-700"
-          : type === "labor"
-            ? "border-amber-200 bg-amber-50 text-amber-700"
-            : "border-slate-200 bg-slate-100 text-slate-700";
+      ? "border-blue-200 bg-blue-50 text-blue-700"
+      : type === "item"
+      ? "border-violet-200 bg-violet-50 text-violet-700"
+      : type === "labor"
+      ? "border-amber-200 bg-amber-50 text-amber-700"
+      : "border-slate-200 bg-slate-100 text-slate-700";
   const label =
     type === "recipe"
       ? "receita"
       : type === "recipeSheet"
-        ? "ficha"
-        : type === "item"
-          ? "item"
-          : type === "labor"
-            ? "mão de obra"
-            : type;
+      ? "ficha"
+      : type === "item"
+      ? "item"
+      : type === "labor"
+      ? "mão de obra"
+      : type;
 
   return (
-    <span className={`inline-flex rounded-full border px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${className}`}>
+    <span
+      className={`inline-flex rounded-full border px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${className}`}
+    >
       {label}
     </span>
   );
@@ -1356,11 +1606,13 @@ export default function AdminItemCostSheetDetail() {
   const variationSheets = (payload.variationSheets || []) as any[];
   const rootSheetId = String(payload.rootSheetId || "");
   const selectedSheet = payload.selectedSheet as any | null;
-  const compositionRows = (payload.compositionRows || []) as SheetCompositionRow[];
-  const recipeCompositionBreakdownByLineId = (payload.recipeCompositionBreakdownByLineId || {}) as Record<
-    string,
-    Record<string, RecipeCompositionBreakdown>
-  >;
+  const compositionRows = (payload.compositionRows ||
+    []) as SheetCompositionRow[];
+  const recipeCompositionBreakdownByLineId =
+    (payload.recipeCompositionBreakdownByLineId || {}) as Record<
+      string,
+      Record<string, RecipeCompositionBreakdown>
+    >;
   const recipeOptions = (payload.recipeOptions || []) as Array<{
     id: string;
     name: string;
@@ -1373,10 +1625,13 @@ export default function AdminItemCostSheetDetail() {
     itemId: string;
     costAmount: number;
   }>;
-  const packagingItemOptions = (payload.packagingItemOptions || []) as PackagingItemOption[];
-  const componentPresets = (payload.componentPresets || []) as ComponentPresetRecord[];
+  const packagingItemOptions = (payload.packagingItemOptions ||
+    []) as PackagingItemOption[];
+  const componentPresets = (payload.componentPresets ||
+    []) as ComponentPresetRecord[];
   const unitOptions = (payload.unitOptions || ITEM_UNIT_OPTIONS) as string[];
-  const recipeSheetDependencyCountById = (payload.recipeSheetDependencyCountById || {}) as Record<string, number>;
+  const recipeSheetDependencyCountById =
+    (payload.recipeSheetDependencyCountById || {}) as Record<string, number>;
   const deletionGuard = (payload.deletionGuard || {}) as {
     canDelete?: boolean;
     reason?: string | null;
@@ -1386,19 +1641,30 @@ export default function AdminItemCostSheetDetail() {
   const totalsByVariationId = Object.fromEntries(
     variationSheets.map((sheet) => {
       const total = compositionRows.reduce((acc, line) => {
-        const value = line.variationValues.find((row) => row.itemVariationId === sheet.itemVariationId);
+        const value = line.variationValues.find(
+          (row) => row.itemVariationId === sheet.itemVariationId
+        );
         return acc + Number(value?.totalCostAmount || 0);
       }, 0);
       return [String(sheet.itemVariationId), total];
     })
   ) as Record<string, number>;
-  const selectedSheetDependencyCount = Number(recipeSheetDependencyCountById[rootSheetId || selectedSheet?.id || ""] || 0);
-  const recipeReferenceCount = compositionRows.filter((line) => line.type === "recipe").length;
-  const sheetReferenceCount = compositionRows.filter((line) => line.type === "recipeSheet").length;
-  const operationalCostCount = compositionRows.filter((line) => line.type === "manual" || line.type === "labor").length;
+  const selectedSheetDependencyCount = Number(
+    recipeSheetDependencyCountById[rootSheetId || selectedSheet?.id || ""] || 0
+  );
+  const recipeReferenceCount = compositionRows.filter(
+    (line) => line.type === "recipe"
+  ).length;
+  const sheetReferenceCount = compositionRows.filter(
+    (line) => line.type === "recipeSheet"
+  ).length;
+  const operationalCostCount = compositionRows.filter(
+    (line) => line.type === "manual" || line.type === "labor"
+  ).length;
   const totalComponents = compositionRows.length;
   const totalSheetCost = variationSheets.reduce(
-    (acc, sheet) => acc + Number(totalsByVariationId[String(sheet.itemVariationId)] || 0),
+    (acc, sheet) =>
+      acc + Number(totalsByVariationId[String(sheet.itemVariationId)] || 0),
     0
   );
   const detailPath = sheetDetailHref(selectedSheet?.id || rootSheetId);
@@ -1435,14 +1701,16 @@ export default function AdminItemCostSheetDetail() {
 
   return (
     <div className="min-h-[calc(100vh-8rem)] space-y-6 bg-white pb-20  md:pb-24">
-
       <div className="space-y-3">
         <div>
           <h2 className="text-[30px] font-semibold tracking-[-0.03em] text-slate-950">
             {selectedSheet?.name || item?.name || "Ficha de custo"}
           </h2>
           {item ? (
-            <Link to={`/admin/items/${item.id}/main`} className="mt-1 inline-flex text-sm text-slate-500 transition hover:text-slate-900 hover:underline">
+            <Link
+              to={`/admin/items/${item.id}/main`}
+              className="mt-1 inline-flex text-sm text-slate-500 transition hover:text-slate-900 hover:underline"
+            >
               {item.name}
             </Link>
           ) : (
@@ -1467,8 +1735,11 @@ export default function AdminItemCostSheetDetail() {
                   <Link
                     key={tab.href}
                     to={tab.href}
-                    className={`border-b-2 pb-3 font-medium transition ${isActive ? "border-slate-950 text-slate-950" : "border-transparent text-slate-400 hover:text-slate-700"
-                      }`}
+                    className={`border-b-2 pb-3 font-medium transition ${
+                      isActive
+                        ? "border-slate-950 text-slate-950"
+                        : "border-transparent text-slate-400 hover:text-slate-700"
+                    }`}
                   >
                     {tab.label}
                   </Link>

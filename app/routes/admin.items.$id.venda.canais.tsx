@@ -1,5 +1,16 @@
 import type { ActionFunctionArgs } from "@remix-run/node";
 import { Form, useActionData, useOutletContext } from "@remix-run/react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "~/components/ui/alert-dialog";
 import { Switch } from "~/components/ui/switch";
 import { invalidateCardapioIndexCache } from "~/domain/cardapio/cardapio-cache.server";
 import { buildAdminItemsMeta } from "~/domain/item/admin-items-meta";
@@ -140,21 +151,41 @@ export async function action({ request, params }: ActionFunctionArgs) {
             },
           })
         : 0;
+    const confirmedPriceRemoval = String(formData.get("confirmPriceRemoval") || "").trim() === "true";
 
-    if (connectedPriceCount > 0) {
+    if (connectedPriceCount > 0 && !confirmedPriceRemoval) {
       return badRequest(
-        `Nao foi possivel remover do canal ${channel.name}: existem ${connectedPriceCount} preco(s) conectado(s). Use a visibilidade do canal.`
+        `Confirme a remocao do canal ${channel.name}. Existem ${connectedPriceCount} preco(s) conectado(s) que serao apagados.`
       );
     }
 
-    await db.itemSellingChannelItem.deleteMany({
-      where: {
-        itemId,
-        itemSellingChannelId,
-      },
+    await db.$transaction(async (tx: any) => {
+      if (connectedPriceCount > 0) {
+        await tx.itemSellingPriceVariation.deleteMany({
+          where: {
+            itemId,
+            itemSellingChannelId,
+          },
+        });
+      }
+
+      await tx.itemSellingChannelItem.deleteMany({
+        where: {
+          itemId,
+          itemSellingChannelId,
+        },
+      });
     });
 
-    return ok(`Item desvinculado do canal ${channel.name}.`);
+    if (String(channel.key || "").toLowerCase() === "cardapio") {
+      await invalidateCardapioIndexCache();
+    }
+
+    return ok(
+      connectedPriceCount > 0
+        ? `Item removido do canal ${channel.name}. ${connectedPriceCount} preco(s) conectado(s) foram apagados.`
+        : `Item desvinculado do canal ${channel.name}.`
+    );
   } catch (error) {
     return serverError(error);
   }
@@ -162,7 +193,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
 export default function AdminItemVendaCanaisRoute() {
   const actionData = useActionData<typeof action>();
-  const { channels } = useOutletContext<AdminItemVendaOutletContext>();
+  const { channels, nativePublication } = useOutletContext<AdminItemVendaOutletContext>();
   const enabledChannels = channels.filter((channel) => channel.enabledForItem);
   const cardapioVisible = channels.some((channel) => channel.key === "cardapio" && channel.visibleForItem);
 
@@ -187,6 +218,12 @@ export default function AdminItemVendaCanaisRoute() {
             </span>
           ) : null}
         </div>
+        {nativePublication?.upcoming ? (
+          <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+            <span className="font-semibold">Lançamento futuro ativo.</span>{" "}
+            Mesmo vinculado aos canais, este item ainda não fica visível publicamente enquanto estiver marcado como lançamento futuro.
+          </div>
+        ) : null}
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -315,25 +352,64 @@ export default function AdminItemVendaCanaisRoute() {
                     </Form>
                   ) : null}
 
-                  <Form
-                    id={channel.enabledForItem ? undefined : `channel-link-form-${channel.key}`}
-                    method="post"
-                    className="w-full"
-                  >
-                    <input type="hidden" name="_action" value="toggle-item-channel" />
-                    <input type="hidden" name="itemSellingChannelId" value={channel.id} />
-                    <input type="hidden" name="enabled" value={channel.enabledForItem ? "false" : "true"} />
-                    <button
-                      type="submit"
-                      className={`inline-flex h-9 w-full items-center justify-center rounded-md px-3 text-xs font-semibold transition ${
-                        channel.enabledForItem
-                          ? "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-                          : "bg-slate-900 text-white hover:bg-slate-700"
-                      }`}
+                  {channel.enabledForItem && channel.totalPriceEntries > 0 ? (
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <button
+                          type="button"
+                          className="inline-flex h-9 w-full items-center justify-center rounded-md border border-red-200 bg-white px-3 text-xs font-semibold text-red-700 transition hover:bg-red-50"
+                        >
+                          Remover do canal
+                        </button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Remover item do canal?</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            Este item tem {channel.totalPriceEntries} preco(s) conectado(s) ao canal {channel.name}. Ao confirmar, o vinculo com o canal e esses precos serao apagados.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <Form method="post" id={`channel-remove-form-${channel.key}`}>
+                          <input type="hidden" name="_action" value="toggle-item-channel" />
+                          <input type="hidden" name="itemSellingChannelId" value={channel.id} />
+                          <input type="hidden" name="enabled" value="false" />
+                          <input type="hidden" name="confirmPriceRemoval" value="true" />
+                        </Form>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                          <AlertDialogAction asChild>
+                            <button
+                              type="submit"
+                              form={`channel-remove-form-${channel.key}`}
+                              className="bg-red-600 text-white hover:bg-red-700"
+                            >
+                              Remover e apagar precos
+                            </button>
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  ) : (
+                    <Form
+                      id={channel.enabledForItem ? undefined : `channel-link-form-${channel.key}`}
+                      method="post"
+                      className="w-full"
                     >
-                      {channel.enabledForItem ? "Remover do canal" : "Vincular ao canal"}
-                    </button>
-                  </Form>
+                      <input type="hidden" name="_action" value="toggle-item-channel" />
+                      <input type="hidden" name="itemSellingChannelId" value={channel.id} />
+                      <input type="hidden" name="enabled" value={channel.enabledForItem ? "false" : "true"} />
+                      <button
+                        type="submit"
+                        className={`inline-flex h-9 w-full items-center justify-center rounded-md px-3 text-xs font-semibold transition ${
+                          channel.enabledForItem
+                            ? "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                            : "bg-slate-900 text-white hover:bg-slate-700"
+                        }`}
+                      >
+                        {channel.enabledForItem ? "Remover do canal" : "Vincular ao canal"}
+                      </button>
+                    </Form>
+                  )}
                 </div>
               ) : (
                 <div className="rounded-lg border border-dashed border-slate-200 px-3 py-3 text-xs text-slate-400">

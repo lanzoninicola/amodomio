@@ -130,6 +130,7 @@ O acionamento manual ou em lote de recálculo de ficha técnica deve usar a reso
 
 A API aceita formulário ou JSON. Para uma ficha específica, envie `itemCostSheetId`.
 Para lote, envie `rootSheetIds` como array JSON ou string separada por vírgula.
+Para recalcular todas as fichas raiz, envie `recalculateAll: true`.
 Quando uma tela precisa voltar para a própria página depois do recálculo, envie
 `redirectTo` com um caminho interno da aplicação; quando não há `redirectTo`, a
 resposta é JSON no formato `ok()` com `payload.bulk`.
@@ -167,12 +168,12 @@ So entram no resultado linhas com variacao de custo significativa (diferenca a p
 
 `resolvePriority` classifica a urgencia da revisao de preco:
 
-| Prioridade | Condicao |
-|------------|----------|
+| Prioridade | Condicao                                        |
+| ---------- | ----------------------------------------------- |
 | `critical` | `marginGapPerc >= 10` ou `priceGapAmount >= 15` |
-| `high`     | `marginGapPerc >= 5` ou `priceGapAmount >= 7`  |
-| `medium`   | `marginGapPerc >= 2` ou `priceGapAmount >= 3`  |
-| `low`      | abaixo disso |
+| `high`     | `marginGapPerc >= 5` ou `priceGapAmount >= 7`   |
+| `medium`   | `marginGapPerc >= 2` ou `priceGapAmount >= 3`   |
+| `low`      | abaixo disso                                    |
 
 ### Persistencia
 

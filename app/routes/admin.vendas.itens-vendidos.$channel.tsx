@@ -1,9 +1,10 @@
 import {
   redirect,
+  type ActionFunctionArgs,
   type LoaderFunctionArgs,
   type MetaFunction,
 } from "@remix-run/node";
-import { Form, Link, useLoaderData } from "@remix-run/react";
+import { Form, Link, useFetcher, useLoaderData } from "@remix-run/react";
 import {
   AlertTriangle,
   ArrowUpDown,
@@ -14,11 +15,13 @@ import {
   Download,
   ListFilter,
   ListOrdered,
+  Pizza,
+  RefreshCw,
   Search,
   SlidersHorizontal,
   XCircle,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import {
@@ -54,7 +57,7 @@ import { menuItemSellingPriceUtilityEntity } from "~/domain/cardapio/menu-item-s
 import { pickLatestActiveSheet } from "~/domain/item/item-selling-price-calculation.server";
 import { toast } from "~/components/ui/use-toast";
 import prismaClient from "~/lib/prisma/client.server";
-import { ok, serverError } from "~/utils/http-response.server";
+import { badRequest, ok, serverError } from "~/utils/http-response.server";
 
 const PAGE_SIZE = 20;
 const ITEM_STATUS_FILTERS = ["active", "inactive", "all"] as const;
@@ -107,15 +110,38 @@ type SellingRow = {
   channelPriceEntries: number;
   activeCostSheetCount: number;
   hasActiveCostSheet: boolean;
+  activeCostSheetId: string | null;
   referenceVariationName: string | null;
   referencePriceAmount: number | null;
   referenceBaseDnaCostAmount: number | null;
   referenceBaseCostAmount: number | null;
+  referenceCostPercentage: number | null;
   referenceDnaAmount: number | null;
   referenceDnaPercentage: number;
   updatedBy: string | null;
   commerciallyReady: boolean;
   sortOrderIndex: number;
+};
+
+type FlavorLookupMatch = {
+  id: string;
+  name: string;
+  href: string;
+  meta: string;
+  status?: string | null;
+};
+
+type FlavorLookupPayload = {
+  query: string;
+  items: FlavorLookupMatch[];
+  recipes: FlavorLookupMatch[];
+  costSheets: FlavorLookupMatch[];
+};
+
+type FlavorLookupActionResponse = {
+  status: number;
+  message?: string;
+  payload?: FlavorLookupPayload;
 };
 
 function parseExportVisibilityFilter(
@@ -149,6 +175,11 @@ function parseListSort(raw: string | null): ListSortOption {
 function formatMoney(value: number | null) {
   if (value == null) return "-";
   return BRL_FORMATTER.format(value);
+}
+
+function formatPercent(value: number | null) {
+  if (value == null) return "-";
+  return `${value.toFixed(1)}%`;
 }
 
 function formatClassificationLabel(value?: string | null) {
@@ -210,6 +241,13 @@ function getChannelTabColor(index: number) {
   ];
 
   return palette[index % palette.length];
+}
+
+function getCostPercentageClass(value: number | null) {
+  if (value == null) return "text-slate-400";
+  if (value >= 35) return "text-red-600";
+  if (value >= 30) return "text-amber-600";
+  return "text-emerald-700";
 }
 
 function buildBaseItemWhere(params: {
@@ -300,9 +338,8 @@ function buildPageHref(params: {
     searchParams.set("page", String(params.page));
   const queryString = searchParams.toString();
   const channel = params.channel || "cardapio";
-  return `/admin/vendas/itens-vendidos/${channel}${
-    queryString ? `?${queryString}` : ""
-  }`;
+  return `/admin/vendas/itens-vendidos/${channel}${queryString ? `?${queryString}` : ""
+    }`;
 }
 
 function buildExportHref(params: {
@@ -339,8 +376,8 @@ function mapSellingRow(
     ) || null;
   const cardapioChannelLink = cardapioChannelId
     ? channelLinks.find(
-        (row: any) => String(row.itemSellingChannelId) === cardapioChannelId
-      ) || null
+      (row: any) => String(row.itemSellingChannelId) === cardapioChannelId
+    ) || null
     : null;
   const prices = item.ItemSellingPriceVariation || [];
   const referencePrice =
@@ -352,18 +389,28 @@ function mapSellingRow(
   );
   const activeReferenceSheet = referenceVariationId
     ? pickLatestActiveSheet(
-        (item.ItemCostSheet || []).filter(
-          (sheet: any) =>
-            String(sheet.itemVariationId || "") === referenceVariationId
-        )
+      (item.ItemCostSheet || []).filter(
+        (sheet: any) =>
+          String(sheet.itemVariationId || "") === referenceVariationId
       )
+    )
     : null;
+  const fallbackActiveSheet = item.ItemCostSheet?.[0] || null;
+  const displayActiveSheet = activeReferenceSheet || fallbackActiveSheet;
   const referencePriceAmount = referencePrice
     ? Number(referencePrice.priceAmount || 0)
     : null;
-  const referenceBaseCostAmount = activeReferenceSheet
-    ? Number(activeReferenceSheet.costAmount || 0)
+  const referenceBaseCostAmount = displayActiveSheet
+    ? Number(displayActiveSheet.costAmount || 0)
     : null;
+  const referenceCostPercentage =
+    referenceBaseCostAmount != null &&
+      referencePriceAmount != null &&
+      referencePriceAmount > 0
+      ? Number(
+        ((referenceBaseCostAmount / referencePriceAmount) * 100).toFixed(1)
+      )
+      : null;
   const referenceDnaAmount =
     referencePriceAmount != null
       ? Number(((referencePriceAmount * dnaPercentage) / 100).toFixed(2))
@@ -372,6 +419,7 @@ function mapSellingRow(
     referenceBaseCostAmount != null && referenceDnaAmount != null
       ? Number((referenceBaseCostAmount + referenceDnaAmount).toFixed(2))
       : null;
+  const activeCostSheetId = displayActiveSheet?.id || null;
   const upcoming = Boolean(item.ItemSellingInfo?.upcoming);
   const channelVisible = channelLink?.visible === true;
   const sortOrderIndex = Number(channelLink?.sortOrderIndex || 0);
@@ -402,11 +450,13 @@ function mapSellingRow(
     channelPriceEntries: prices.length,
     activeCostSheetCount: (item.ItemCostSheet || []).length,
     hasActiveCostSheet: (item.ItemCostSheet || []).length > 0,
+    activeCostSheetId: activeCostSheetId ? String(activeCostSheetId) : null,
     referenceVariationName:
       referencePrice?.ItemVariation?.Variation?.name || null,
     referencePriceAmount,
     referenceBaseDnaCostAmount,
     referenceBaseCostAmount,
+    referenceCostPercentage,
     referenceDnaAmount,
     referenceDnaPercentage: dnaPercentage,
     updatedBy: referencePrice?.updatedBy || null,
@@ -478,6 +528,390 @@ async function downloadJsonFromHref(href: string) {
   anchor.click();
   anchor.remove();
   URL.revokeObjectURL(objectUrl);
+}
+
+type RecalculateActionResponse = {
+  status: number;
+  message?: string;
+};
+
+function RecalculateCostSheetButton({
+  itemCostSheetId,
+  itemName,
+}: {
+  itemCostSheetId: string | null;
+  itemName: string;
+}) {
+  const fetcher = useFetcher<RecalculateActionResponse>();
+  const submitting = fetcher.state !== "idle";
+
+  useEffect(() => {
+    if (fetcher.state !== "idle" || !fetcher.data) return;
+
+    if (fetcher.data.status >= 400) {
+      toast({
+        title: "Erro",
+        description:
+          fetcher.data.message || "Nao foi possivel recalcular a ficha.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    toast({
+      title: "Ficha recalculada",
+      description: itemName,
+    });
+  }, [fetcher.data, fetcher.state, itemName]);
+
+  if (!itemCostSheetId) return null;
+
+  return (
+    <fetcher.Form method="post" action="/api/item-cost-sheets/recalculate">
+      <input type="hidden" name="itemCostSheetId" value={itemCostSheetId} />
+      <Button
+        type="submit"
+        variant="outline"
+        size="sm"
+        disabled={submitting}
+        className="h-7 gap-1.5 border-slate-200 px-2 text-xs text-slate-700 hover:bg-slate-50"
+        title="Recalcular ficha técnica deste item"
+      >
+        <RefreshCw
+          className={`h-3.5 w-3.5 ${submitting ? "animate-spin" : ""}`}
+        />
+        {submitting ? "Recalculando" : "Recalcular"}
+      </Button>
+    </fetcher.Form>
+  );
+}
+
+function FlavorLookupDialog({
+  open,
+  onOpenChange,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const fetcher = useFetcher<FlavorLookupActionResponse>();
+  const [flavorName, setFlavorName] = useState("");
+  const submitting = fetcher.state !== "idle";
+  const result = fetcher.data?.payload;
+  const hasResult = Boolean(
+    fetcher.data?.status === 200 &&
+    result &&
+    result.query.toLowerCase() === flavorName.trim().toLowerCase()
+  );
+  const totalMatches = result
+    ? result.items.length + result.recipes.length + result.costSheets.length
+    : 0;
+
+  useEffect(() => {
+    if (!open) setFlavorName("");
+  }, [open]);
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>Verificar sabor de pizza</DialogTitle>
+          <DialogDescription>
+            Digite o nome do sabor para procurar registros de item, receita e
+            ficha técnica.
+          </DialogDescription>
+        </DialogHeader>
+
+        <fetcher.Form method="post" className="space-y-4">
+          <input type="hidden" name="_action" value="pizza-flavor-lookup" />
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <div className="relative flex-1">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <input
+                name="flavorName"
+                type="search"
+                value={flavorName}
+                onChange={(event) => setFlavorName(event.currentTarget.value)}
+                placeholder="Ex.: Margherita, Calabresa, Quatro queijos"
+                className="h-10 w-full rounded-md border border-slate-300 bg-white py-2 pl-9 pr-3 text-sm focus:border-slate-400 focus:outline-none"
+                autoFocus
+              />
+            </div>
+            <Button
+              type="submit"
+              className="h-10 gap-2"
+              disabled={submitting || flavorName.trim().length < 2}
+            >
+              <Search className="h-4 w-4" />
+              {submitting ? "Verificando..." : "Verificar"}
+            </Button>
+          </div>
+        </fetcher.Form>
+
+        {fetcher.data?.status && fetcher.data.status >= 400 ? (
+          <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+            {fetcher.data.message || "Nao foi possivel verificar o sabor."}
+          </div>
+        ) : null}
+
+        {hasResult ? (
+          <div className="space-y-4">
+            <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+              {totalMatches > 0
+                ? `${totalMatches} registro(s) encontrado(s) para "${result?.query}".`
+                : `Nenhum registro encontrado para "${result?.query}".`}
+            </div>
+
+            <FlavorLookupSection
+              title="Itens"
+              emptyText="Nenhum item encontrado."
+              matches={result?.items || []}
+            />
+            <FlavorLookupSection
+              title="Receitas"
+              emptyText="Nenhuma receita encontrada."
+              matches={result?.recipes || []}
+            />
+            <FlavorLookupSection
+              title="Fichas técnicas"
+              emptyText="Nenhuma ficha técnica encontrada."
+              matches={result?.costSheets || []}
+            />
+          </div>
+        ) : null}
+
+        <DialogFooter>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+          >
+            Fechar
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function FlavorLookupSection({
+  title,
+  emptyText,
+  matches,
+}: {
+  title: string;
+  emptyText: string;
+  matches: FlavorLookupMatch[];
+}) {
+  return (
+    <section className="space-y-2">
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-semibold text-slate-900">{title}</h3>
+        <Badge variant="outline" className="border-slate-200 text-slate-600">
+          {matches.length}
+        </Badge>
+      </div>
+      {matches.length === 0 ? (
+        <p className="rounded-md border border-dashed border-slate-200 px-3 py-2 text-sm text-slate-500">
+          {emptyText}
+        </p>
+      ) : (
+        <div className="divide-y divide-slate-100 rounded-lg border border-slate-200">
+          {matches.map((match) => (
+            <Link
+              key={`${title}-${match.id}`}
+              to={match.href}
+              className="block px-3 py-2 transition hover:bg-slate-50"
+            >
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-sm font-semibold text-slate-900">
+                  {match.name}
+                </span>
+                {match.status ? (
+                  <Badge
+                    variant="outline"
+                    className="border-slate-200 bg-slate-50 text-slate-600"
+                  >
+                    {match.status}
+                  </Badge>
+                ) : null}
+              </div>
+              <div className="mt-1 text-xs text-slate-500">{match.meta}</div>
+            </Link>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+export async function action({ request }: ActionFunctionArgs) {
+  try {
+    const formData = await request.formData();
+    const actionName = String(formData.get("_action") || "").trim();
+
+    if (actionName !== "pizza-flavor-lookup")
+      return badRequest("Ação inválida");
+
+    const flavorName = String(formData.get("flavorName") || "").trim();
+    if (flavorName.length < 2) {
+      return badRequest("Digite pelo menos 2 caracteres do sabor.");
+    }
+
+    const db = prismaClient as any;
+    const whereName = { contains: flavorName, mode: "insensitive" };
+    const [items, recipes, costSheets] = await Promise.all([
+      db.item.findMany({
+        where: {
+          OR: [
+            { name: whereName },
+            { ItemSellingInfo: { is: { slug: whereName } } },
+          ],
+        },
+        select: {
+          id: true,
+          name: true,
+          active: true,
+          canSell: true,
+          classification: true,
+          Category: { select: { name: true } },
+          ItemSellingInfo: {
+            select: {
+              slug: true,
+              Category: { select: { name: true } },
+              ItemGroup: { select: { name: true } },
+            },
+          },
+        },
+        orderBy: [{ active: "desc" }, { name: "asc" }],
+        take: 12,
+      }),
+      db.recipe.findMany({
+        where: {
+          OR: [
+            { name: whereName },
+            { Item: { is: { name: whereName } } },
+            {
+              ItemVariations: {
+                some: {
+                  deletedAt: null,
+                  Item: { is: { name: whereName } },
+                },
+              },
+            },
+          ],
+        },
+        select: {
+          id: true,
+          name: true,
+          type: true,
+          itemId: true,
+          Item: { select: { id: true, name: true } },
+          ItemVariations: {
+            where: { deletedAt: null },
+            select: {
+              id: true,
+              Item: { select: { id: true, name: true } },
+              Variation: { select: { name: true } },
+            },
+            take: 3,
+          },
+        },
+        orderBy: [{ name: "asc" }],
+        take: 12,
+      }),
+      db.itemCostSheet.findMany({
+        where: {
+          OR: [
+            { name: whereName },
+            { Item: { is: { name: whereName } } },
+            { ItemVariation: { is: { Item: { is: { name: whereName } } } } },
+          ],
+        },
+        select: {
+          id: true,
+          name: true,
+          version: true,
+          status: true,
+          isActive: true,
+          costAmount: true,
+          itemId: true,
+          Item: { select: { id: true, name: true } },
+          ItemVariation: {
+            select: {
+              Variation: { select: { name: true } },
+            },
+          },
+        },
+        orderBy: [{ isActive: "desc" }, { updatedAt: "desc" }],
+        take: 12,
+      }),
+    ]);
+
+    return ok({
+      query: flavorName,
+      items: items.map((item: any) => ({
+        id: String(item.id),
+        name: item.name || "Item sem nome",
+        href: `/admin/items/${item.id}/venda`,
+        meta:
+          [
+            formatClassificationLabel(item.classification),
+            item.ItemSellingInfo?.ItemGroup?.name ||
+            item.ItemSellingInfo?.Category?.name ||
+            item.Category?.name,
+            item.ItemSellingInfo?.slug ? `/${item.ItemSellingInfo.slug}` : null,
+          ]
+            .filter(Boolean)
+            .join(" · ") || "Sem metadados comerciais",
+        status: item.active
+          ? item.canSell
+            ? "ativo para venda"
+            : "ativo sem venda"
+          : "inativo",
+      })),
+      recipes: recipes.map((recipe: any) => ({
+        id: String(recipe.id),
+        name: recipe.name || "Receita sem nome",
+        href: `/admin/recipes/${recipe.id}`,
+        meta:
+          recipe.Item?.name ||
+          recipe.ItemVariations?.map((itemVariation: any) =>
+            [
+              itemVariation.Item?.name,
+              itemVariation.Variation?.name
+                ? `variação ${itemVariation.Variation.name}`
+                : null,
+            ]
+              .filter(Boolean)
+              .join(" · ")
+          )
+            .filter(Boolean)
+            .join(", ") ||
+          "Receita sem item vinculado",
+        status:
+          recipe.type === "pizzaTopping" ? "sabor de pizza" : "semi-acabado",
+      })),
+      costSheets: costSheets.map((sheet: any) => ({
+        id: String(sheet.id),
+        name: sheet.name || "Ficha sem nome",
+        href: `/admin/item-cost-sheets/${sheet.id}`,
+        meta:
+          [
+            sheet.Item?.name,
+            sheet.ItemVariation?.Variation?.name
+              ? `variação ${sheet.ItemVariation.Variation.name}`
+              : null,
+            `v${sheet.version}`,
+            formatMoney(Number(sheet.costAmount || 0)),
+          ]
+            .filter(Boolean)
+            .join(" · ") || "Sem metadados de ficha",
+        status: sheet.isActive ? "ativa" : String(sheet.status || "rascunho"),
+      })),
+    });
+  } catch (error) {
+    return serverError(error);
+  }
 }
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
@@ -602,8 +1036,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         : "cardapio";
       const queryString = url.searchParams.toString();
       return redirect(
-        `/admin/vendas/itens-vendidos/${fallbackChannel}${
-          queryString ? `?${queryString}` : ""
+        `/admin/vendas/itens-vendidos/${fallbackChannel}${queryString ? `?${queryString}` : ""
         }`
       );
     }
@@ -884,6 +1317,7 @@ export default function AdminVendasItensVendidosPage() {
   const summary = payload.summary;
   const [search, setSearch] = useState(filters.q || "");
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
+  const [flavorLookupOpen, setFlavorLookupOpen] = useState(false);
 
   const currentChannel = filters.channel || "";
   const currentStatus = filters.status || "active";
@@ -902,13 +1336,13 @@ export default function AdminVendasItensVendidosPage() {
     tabs.find((tab) => tab.key === exportChannel) || tabs[0] || null;
   const exportHref = selectedExportTab
     ? buildExportHref({
-        q: filters.q || "",
-        status: currentStatus,
-        channel: selectedExportTab.key,
-        tagId: currentTagId,
-        sort: currentSort,
-        exportVisibility,
-      })
+      q: filters.q || "",
+      status: currentStatus,
+      channel: selectedExportTab.key,
+      tagId: currentTagId,
+      sort: currentSort,
+      exportVisibility,
+    })
     : "";
   const handleExportJson = async () => {
     if (!exportHref || isExporting) return;
@@ -966,10 +1400,18 @@ export default function AdminVendasItensVendidosPage() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              className="h-9 w-fit gap-2 border-slate-200 text-slate-700 hover:bg-slate-50"
+              onClick={() => setFlavorLookupOpen(true)}
+            >
+              <Pizza className="h-4 w-4" />
+              Procurar sabor
+            </Button>
             <Link
-              to={`/admin/vendas/itens-vendidos/${
-                currentChannel || tabs[0]?.key || "cardapio"
-              }/ordenar`}
+              to={`/admin/vendas/itens-vendidos/${currentChannel || tabs[0]?.key || "cardapio"
+                }/ordenar`}
             >
               <Button
                 type="button"
@@ -998,6 +1440,11 @@ export default function AdminVendasItensVendidosPage() {
           </div>
         </div>
       </section>
+
+      <FlavorLookupDialog
+        open={flavorLookupOpen}
+        onOpenChange={setFlavorLookupOpen}
+      />
 
       <Dialog open={exportDialogOpen} onOpenChange={setExportDialogOpen}>
         <DialogContent className="sm:max-w-md">
@@ -1120,10 +1567,10 @@ export default function AdminVendasItensVendidosPage() {
                   {currentSort === "updatedAt"
                     ? "última atualização"
                     : currentSort === "name"
-                    ? "nome"
-                    : currentSort === "channelOrder"
-                    ? "ordem do canal"
-                    : "visibilidade no cardápio"}
+                      ? "nome"
+                      : currentSort === "channelOrder"
+                        ? "ordem do canal"
+                        : "visibilidade no cardápio"}
                 </SelectValue>
               </SelectTrigger>
               <SelectContent>
@@ -1143,8 +1590,8 @@ export default function AdminVendasItensVendidosPage() {
                 {currentStatus === "active"
                   ? "produtos ativos"
                   : currentStatus === "inactive"
-                  ? "produtos inativos"
-                  : "todos os produtos"}
+                    ? "produtos inativos"
+                    : "todos os produtos"}
               </SelectValue>
             </SelectTrigger>
             <SelectContent>
@@ -1200,21 +1647,18 @@ export default function AdminVendasItensVendidosPage() {
                     tagId: currentTagId,
                     sort: currentSort,
                   })}
-                  className={`relative flex flex-col items-start px-4 py-3 text-sm transition-colors ${
-                    isActive
+                  className={`relative flex flex-col items-start px-4 py-3 text-sm transition-colors ${isActive
                       ? `border-b-2 ${color.activeBorder} ${color.activeText}`
                       : "text-slate-400 hover:text-slate-600"
-                  }`}
+                    }`}
                 >
                   <span
-                    className={`inline-flex items-center gap-1.5 ${
-                      isActive ? "font-semibold" : "font-medium"
-                    }`}
+                    className={`inline-flex items-center gap-1.5 ${isActive ? "font-semibold" : "font-medium"
+                      }`}
                   >
                     <span
-                      className={`h-2 w-2 rounded-full ${color.dot} ${
-                        isActive ? "" : "opacity-50"
-                      }`}
+                      className={`h-2 w-2 rounded-full ${color.dot} ${isActive ? "" : "opacity-50"
+                        }`}
                     />
                     {tab.name} ({tab.count})
                   </span>
@@ -1239,6 +1683,7 @@ export default function AdminVendasItensVendidosPage() {
                 <TableHead>Canal</TableHead>
                 <TableHead>Preço referência</TableHead>
                 <TableHead>Ficha técnica</TableHead>
+                <TableHead>% ficha / venda</TableHead>
                 <TableHead>Publicação</TableHead>
                 <TableHead>Estrutura comercial</TableHead>
                 <TableHead>Atualização</TableHead>
@@ -1248,7 +1693,7 @@ export default function AdminVendasItensVendidosPage() {
               {rows.length === 0 ? (
                 <TableRow>
                   <TableCell
-                    colSpan={7}
+                    colSpan={8}
                     className="h-28 text-center text-sm text-slate-500"
                   >
                     Nenhum item encontrado para este canal com os filtros
@@ -1348,29 +1793,60 @@ export default function AdminVendasItensVendidosPage() {
                   </TableCell>
 
                   <TableCell>
-                    <Link
-                      to={`/admin/items/${row.id}/item-cost-sheets`}
-                      className={`inline-flex items-center gap-2 px-2.5 py-1.5 text-sm font-medium transition hover:bg-slate-50 ${
-                        row.hasActiveCostSheet
-                          ? "border-emerald-200 text-emerald-700"
-                          : "border-amber-200  text-red-500"
-                      }`}
-                      title={
-                        row.hasActiveCostSheet
-                          ? "Ficha técnica ativa encontrada"
-                          : "Sem ficha técnica ativa"
-                      }
-                    >
-                      {row.hasActiveCostSheet ? (
-                        <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
-                      ) : (
-                        <AlertTriangle className="h-4 w-4" aria-hidden="true" />
-                      )}
+                    <div className="space-y-2">
+                      <Link
+                        to={`/admin/items/${row.id}/item-cost-sheets`}
+                        className={`inline-flex items-center gap-2 px-2.5 py-1.5 text-sm font-medium transition hover:bg-slate-50 ${row.hasActiveCostSheet
+                            ? "border-emerald-200 text-emerald-700"
+                            : "border-amber-200  text-red-500"
+                          }`}
+                        title={
+                          row.hasActiveCostSheet
+                            ? "Ficha técnica ativa encontrada"
+                            : "Sem ficha técnica ativa"
+                        }
+                      >
+                        {row.hasActiveCostSheet ? (
+                          <CheckCircle2
+                            className="h-4 w-4"
+                            aria-hidden="true"
+                          />
+                        ) : (
+                          <AlertTriangle
+                            className="h-4 w-4"
+                            aria-hidden="true"
+                          />
+                        )}
 
-                      <span className="text-xs font-normal opacity-75">
-                        {row.activeCostSheetCount} ativa(s)
-                      </span>
-                    </Link>
+                        <span className="text-xs font-normal opacity-75">
+                          {row.activeCostSheetCount} ativa(s)
+                        </span>
+                      </Link>
+                      <RecalculateCostSheetButton
+                        itemCostSheetId={row.activeCostSheetId}
+                        itemName={row.name}
+                      />
+                    </div>
+                  </TableCell>
+
+                  <TableCell>
+                    <div className="space-y-1">
+                      <div
+                        className={`text-sm font-semibold ${getCostPercentageClass(
+                          row.referenceCostPercentage
+                        )}`}
+                      >
+                        {formatPercent(row.referenceCostPercentage)}
+                      </div>
+                      <div className="text-xs text-slate-500">
+                        {row.referenceBaseCostAmount != null &&
+                          row.referencePriceAmount != null
+                          ? `${formatMoney(
+                            row.referenceBaseCostAmount
+                          )} / ${formatMoney(row.referencePriceAmount)}`
+                          : "Sem custo/preço"}
+                      </div>
+                    </div>
                   </TableCell>
 
                   <TableCell>
@@ -1433,9 +1909,8 @@ export default function AdminVendasItensVendidosPage() {
                       sort: currentSort,
                       page: 1,
                     })}
-                    className={`h-8 w-8 rounded-md border border-slate-200 bg-white p-0 text-slate-600 hover:bg-slate-50 ${
-                      filters.page <= 1 ? "pointer-events-none opacity-40" : ""
-                    }`}
+                    className={`h-8 w-8 rounded-md border border-slate-200 bg-white p-0 text-slate-600 hover:bg-slate-50 ${filters.page <= 1 ? "pointer-events-none opacity-40" : ""
+                      }`}
                     aria-label="Primeira página"
                   >
                     <ChevronsLeft size={16} />
@@ -1452,9 +1927,8 @@ export default function AdminVendasItensVendidosPage() {
                       sort: currentSort,
                       page: Math.max(1, filters.page - 1),
                     })}
-                    className={`h-8 w-8 rounded-md border border-slate-200 bg-white p-0 text-slate-600 hover:bg-slate-50 ${
-                      filters.page <= 1 ? "pointer-events-none opacity-40" : ""
-                    }`}
+                    className={`h-8 w-8 rounded-md border border-slate-200 bg-white p-0 text-slate-600 hover:bg-slate-50 ${filters.page <= 1 ? "pointer-events-none opacity-40" : ""
+                      }`}
                     aria-label="Página anterior"
                   >
                     <ChevronLeft size={16} />
@@ -1495,11 +1969,10 @@ export default function AdminVendasItensVendidosPage() {
                       sort: currentSort,
                       page: Math.min(filters.totalPages, filters.page + 1),
                     })}
-                    className={`h-8 w-8 rounded-md border border-slate-200 bg-white p-0 text-slate-600 hover:bg-slate-50 ${
-                      filters.page >= filters.totalPages
+                    className={`h-8 w-8 rounded-md border border-slate-200 bg-white p-0 text-slate-600 hover:bg-slate-50 ${filters.page >= filters.totalPages
                         ? "pointer-events-none opacity-40"
                         : ""
-                    }`}
+                      }`}
                     aria-label="Próxima página"
                   >
                     <ChevronsRight size={16} />

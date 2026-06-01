@@ -17,6 +17,7 @@ import {
   Check,
   ChevronLeft,
   Copy,
+  ExternalLink,
   FileSpreadsheet,
   RefreshCw,
   Trash2,
@@ -34,6 +35,7 @@ import { toast } from "~/components/ui/use-toast";
 import { DecimalInput } from "~/components/inputs/inputs";
 import { recipeEntity } from "~/domain/recipe/recipe.entity.server";
 import { ensureItemCostSheetForRecipe } from "~/domain/recipe/recipe-item-cost-sheet.server";
+import { countRecipeCostSheetUsage } from "~/domain/recipe/recipe-cost-sheet-usage.server";
 import {
   DEFAULT_RECIPE_CHATGPT_PROJECT_URL,
   RECIPE_CHATGPT_PROJECT_URL_SETTING_NAME,
@@ -320,7 +322,12 @@ async function buildRecipeChatGptImportPreview(params: {
   };
 }
 
-export const RECIPE_SECTIONS = ["cadastro", "composicao", "variacoes"] as const;
+export const RECIPE_SECTIONS = [
+  "cadastro",
+  "composicao",
+  "variacoes",
+  "fichas",
+] as const;
 export type RecipeSection = (typeof RECIPE_SECTIONS)[number];
 export const ALPHABET_FILTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
 
@@ -427,25 +434,31 @@ export async function loader({ params }: LoaderFunctionArgs) {
       orderBy: [{ name: "asc" }],
       take: 500,
     });
-    const [recipeLines, linkedVariations, chatGptProjectUrlSetting] =
-      await Promise.all([
-        listRecipeCompositionLines(db, recipeId),
-        listRecipeLinkedVariations(db, recipeId),
-        db.setting.findFirst({
-          where: {
-            context: RECIPE_CHATGPT_SETTINGS_CONTEXT,
-            name: RECIPE_CHATGPT_PROJECT_URL_SETTING_NAME,
-          },
-          orderBy: [{ createdAt: "desc" }],
-          select: { value: true },
-        }),
-      ]);
+    const [
+      recipeLines,
+      linkedVariations,
+      chatGptProjectUrlSetting,
+      recipeCostSheetCount,
+    ] = await Promise.all([
+      listRecipeCompositionLines(db, recipeId),
+      listRecipeLinkedVariations(db, recipeId),
+      db.setting.findFirst({
+        where: {
+          context: RECIPE_CHATGPT_SETTINGS_CONTEXT,
+          name: RECIPE_CHATGPT_PROJECT_URL_SETTING_NAME,
+        },
+        orderBy: [{ createdAt: "desc" }],
+        select: { value: true },
+      }),
+      countRecipeCostSheetUsage(db, recipeId),
+    ]);
 
     return ok({
       recipe,
       items,
       recipeLines,
       linkedVariations,
+      recipeCostSheetCount,
       chatGptProjectUrl:
         String(chatGptProjectUrlSetting?.value || "").trim() ||
         DEFAULT_RECIPE_CHATGPT_PROJECT_URL,
@@ -1577,6 +1590,11 @@ const recipeNavigation: Array<{
       to: (recipeId) => buildRecipeSectionHref(recipeId, "variacoes"),
     },
     {
+      name: "Fichas técnicas",
+      key: "fichas",
+      to: (recipeId) => buildRecipeSectionHref(recipeId, "fichas"),
+    },
+    {
       name: "Assistente",
       key: "composition-builder",
       to: (recipeId) => `/admin/recipes/${recipeId}/composition-builder`,
@@ -1598,6 +1616,9 @@ export default function AdminRecipeDetailLayout() {
   );
   const linkedVariations = (loaderData?.payload?.linkedVariations ||
     []) as AdminRecipeOutletContext["linkedVariations"];
+  const recipeCostSheetCount = Number(
+    loaderData?.payload?.recipeCostSheetCount || 0
+  );
   const linkedItem = items.find((item) => item.id === recipe?.itemId);
   const referenceVariation =
     linkedVariations.find((variation) => variation.isReference) ||
@@ -1658,9 +1679,14 @@ export default function AdminRecipeDetailLayout() {
               to={`/admin/items/${linkedItem.id}`}
               target="_blank"
               rel="noreferrer"
-              className="inline-flex text-sm text-slate-500 transition hover:text-slate-900 hover:underline"
+              className="inline-flex items-center gap-1.5 text-sm text-slate-500 transition hover:text-slate-900 hover:underline"
+              aria-label={`Abrir item ${linkedItem.name} em nova aba`}
             >
               {linkedItem.name}
+              <ExternalLink
+                className="h-3.5 w-3.5 shrink-0"
+                aria-hidden="true"
+              />
             </Link>
           ) : (
             <p className="text-sm text-slate-500">Sem item vinculado</p>
@@ -1734,16 +1760,36 @@ export default function AdminRecipeDetailLayout() {
         <div className="flex min-w-max items-center gap-6 text-sm">
           {recipeNavigation.map((navItem) => {
             const isActive = activeTab === navItem.key;
+            const count =
+              navItem.key === "fichas" ? recipeCostSheetCount : null;
             return (
               <Link
                 key={navItem.key}
                 to={navItem.to(recipe.id)}
-                className={`border-b-2 pb-3 font-medium transition ${isActive
-                  ? "border-slate-950 text-slate-950"
-                  : "border-transparent text-slate-400 hover:text-slate-700"
-                  }`}
+                className={cn(
+                  "border-b-2 pb-3 font-medium transition",
+                  isActive
+                    ? "border-slate-950 text-slate-950"
+                    : "border-transparent text-slate-400 hover:text-slate-700"
+                )}
               >
-                {navItem.name.toLowerCase()}
+                <span className="inline-flex items-center gap-2">
+                  {navItem.name.toLowerCase()}
+                  {count !== null ? (
+                    <span
+                      className={cn(
+                        "rounded-full px-2 py-0.5 text-[11px] font-semibold",
+                        isActive
+                          ? "bg-slate-900 text-white"
+                          : count > 0
+                            ? "bg-slate-100 text-slate-600"
+                            : "bg-amber-50 text-amber-700"
+                      )}
+                    >
+                      {count}
+                    </span>
+                  ) : null}
+                </span>
               </Link>
             );
           })}

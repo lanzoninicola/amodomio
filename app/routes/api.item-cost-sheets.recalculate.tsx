@@ -2,17 +2,30 @@ import { redirect, type ActionFunctionArgs } from "@remix-run/node";
 import { authenticator } from "~/domain/auth/google.server";
 import { recalculateItemCostSheetsInBulk } from "~/domain/costs/item-cost-sheet-bulk-recalculate.server";
 import prismaClient from "~/lib/prisma/client.server";
-import { badRequest, ok, serverError, unauthorized } from "~/utils/http-response.server";
+import {
+  badRequest,
+  ok,
+  serverError,
+  unauthorized,
+} from "~/utils/http-response.server";
 
 type RecalculatePayload = {
   itemCostSheetId: string;
   rootSheetIds: string[];
+  recalculateAll: boolean;
   redirectTo: string;
 };
 
 function normalizeRootSheetIds(value: unknown) {
   const values = Array.isArray(value) ? value : String(value || "").split(",");
   return values.map((item) => String(item || "").trim()).filter(Boolean);
+}
+
+function normalizeBoolean(value: unknown) {
+  const normalized = String(value || "")
+    .trim()
+    .toLowerCase();
+  return ["1", "true", "yes", "sim", "all", "todas"].includes(normalized);
 }
 
 async function readPayload(request: Request): Promise<RecalculatePayload> {
@@ -22,6 +35,7 @@ async function readPayload(request: Request): Promise<RecalculatePayload> {
     return {
       itemCostSheetId: String(body?.itemCostSheetId || "").trim(),
       rootSheetIds: normalizeRootSheetIds(body?.rootSheetIds),
+      recalculateAll: normalizeBoolean(body?.recalculateAll),
       redirectTo: String(body?.redirectTo || "").trim(),
     };
   }
@@ -30,6 +44,7 @@ async function readPayload(request: Request): Promise<RecalculatePayload> {
   return {
     itemCostSheetId: String(formData.get("itemCostSheetId") || "").trim(),
     rootSheetIds: normalizeRootSheetIds(formData.get("rootSheetIds")),
+    recalculateAll: normalizeBoolean(formData.get("recalculateAll")),
     redirectTo: String(formData.get("redirectTo") || "").trim(),
   };
 }
@@ -52,6 +67,17 @@ async function resolveRootSheetIds(payload: RecalculatePayload) {
   const db = prismaClient as any;
   const explicitRootSheetIds = payload.rootSheetIds;
   if (explicitRootSheetIds.length > 0) return explicitRootSheetIds;
+
+  if (payload.recalculateAll) {
+    const rootSheets = await db.itemCostSheet.findMany({
+      where: { baseItemCostSheetId: null },
+      select: { id: true },
+      orderBy: [{ updatedAt: "desc" }],
+    });
+    return rootSheets
+      .map((sheet: any) => String(sheet.id || ""))
+      .filter(Boolean);
+  }
 
   const itemCostSheetId = payload.itemCostSheetId;
   if (!itemCostSheetId) return [];

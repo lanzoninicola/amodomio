@@ -21,6 +21,25 @@ Durante desenvolvimento:
 - execute apenas verificacoes localizadas
 - evite validacoes globais desnecessarias
 
+## Remix loaders
+
+Use `defer` + `Suspense`/`Await`, ou o padrao equivalente mais atual do Remix, como default para loaders de rotas que carregam dados de banco, listas, relatorios, dashboards ou payloads pesados.
+
+Preferencias:
+
+- mantenha dados essenciais de layout, parametros e estado imediato resolvidos diretamente no loader
+- retorne consultas caras como Promises dentro de `defer`
+- renderize as secoes dependentes com `Suspense` e `Await`, incluindo fallback e `errorElement` quando fizer sentido
+- preserve o contrato local de resposta da rota; neste repo, loaders que usam `ok()` normalmente expõem dados em `payload`
+- evite bloquear a primeira renderizacao com `await` desnecessario para colecoes grandes
+
+Excecoes aceitaveis:
+
+- loaders pequenos e baratos
+- redirects, guards de permissao e validacoes que precisam acontecer antes da renderizacao
+- rotas resource/API onde streaming nao melhora a experiencia
+- fluxos em que a tela inteira depende de um unico resultado antes de poder renderizar corretamente
+
 ## TypeScript
 
 Nao execute verificacao completa de TypeScript (`tsc`) a cada alteracao.
