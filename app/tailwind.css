@@ -125,6 +125,33 @@
   }
 }
 
+@keyframes ctaArrowExit {
+  0%,
+  58% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  72% {
+    opacity: 0;
+    transform: translateX(12px);
+  }
+  73% {
+    opacity: 0;
+    transform: translateX(-8px);
+  }
+  88%,
+  100% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-\[ctaArrowExit_1\.8s_ease-in-out_infinite\] {
+    animation: none;
+  }
+}
+
 @layer base {
   @font-face {
     font-family: "Lufga";

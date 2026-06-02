@@ -1,6 +1,6 @@
 import { InstagramLogoIcon } from "@radix-ui/react-icons";
 import { LinksFunction, LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
-import { Await, Link, Outlet, defer, useLoaderData, useRouteError } from "@remix-run/react";
+import { Await, Link, Outlet, defer, useLoaderData, useLocation, useNavigate, useRouteError } from "@remix-run/react";
 import { ArrowRight, Bell, Divide, Info, Instagram, LayoutTemplate, MapPin, Proportions, SearchIcon } from "lucide-react";
 import React, { ReactNode, Suspense, useEffect, useState } from "react";
 
@@ -458,10 +458,10 @@ function CardapioFooter() {
     const { fazerPedidoPublicURL } = useLoaderData<typeof loader>();
 
     return (
-        <footer className="fixed bottom-0 w-full h-[70px] bg-white px-4 flex gap-x-4 items-center justify-between border-t border-gray-200
-        z-10 md:max-w-6xl md:-translate-x-1/2 md:left-1/2
+        <footer className="fixed bottom-0 w-full h-12 bg-white px-2 flex gap-x-4 items-center justify-between border-t border-gray-200
+        z-10 md:h-[70px] md:px-4 md:max-w-6xl md:-translate-x-1/2 md:left-1/2
         ">
-            <div className="flex items-center gap-5">
+            <div className="flex w-[76px] shrink-0 items-center justify-between md:w-auto md:gap-5">
                 <TamanhosLinkButton />
                 <CardapioHighlightsFooterButton />
             </div>
@@ -470,11 +470,16 @@ function CardapioFooter() {
             <Suspense fallback={<span>Carregando...</span>}>
                 <Await resolve={fazerPedidoPublicURL}>
                     {(url) => (
-                        <FazerPedidoButton
-                            cnLabel="text-md tracking-wider font-semibold font-neue"
-                            externalLinkURL={url}
-                            onClick={() => trackCardapioFacebookPixelTrigger("fazer_pedido_click")}
-                        />
+                        <div className="flex-1">
+                            <FazerPedidoButton
+                                size="sm"
+                                className="group h-9 rounded-lg border border-black px-4 py-0 shadow-[0_2px_0_rgba(0,0,0,0.18)] md:h-auto"
+                                cnLabel="text-[12px] leading-none tracking-wide font-semibold font-neue md:text-md"
+                                externalLinkURL={url}
+                                iconRight={<ArrowRight className="h-5 w-5 animate-[ctaArrowExit_1.8s_ease-in-out_infinite]" aria-hidden="true" />}
+                                onClick={() => trackCardapioFacebookPixelTrigger("fazer_pedido_click")}
+                            />
+                        </div>
                     )}
                 </Await>
             </Suspense>
@@ -488,21 +493,34 @@ function TamanhosLinkButton() {
     return (
         <Link to={WEBSITE_LINKS.cardapioTamanhosPagina.href} className="flex col-span-2">
             <div className="flex flex-col items-center justify-center">
-                <Proportions className="col-span-1 md:col-span-2" />
-                <span className="font-neue text-[10px] uppercase tracking-widest">Tamanhos</span>
+                <Proportions className="h-4 w-4 md:col-span-2 md:h-6 md:w-6" />
+                <span className="font-neue text-[7px] uppercase tracking-widest md:text-[10px]">Tamanhos</span>
             </div>
         </Link>
     )
 }
 
 function CardapioHighlightsFooterButton() {
+    const location = useLocation();
+    const navigate = useNavigate();
+
+    const openHighlights = () => {
+        if (location.pathname === WEBSITE_LINKS.cardapioPublic.href) {
+            window.dispatchEvent(new Event("cardapio:open-highlights"));
+            return;
+        }
+
+        navigate(`${WEBSITE_LINKS.cardapioPublic.href}?dicas=1`);
+    };
+
     return (
-        <Link
-            to={`${WEBSITE_LINKS.cardapioPublic.href}?dicas=1`}
+        <button
+            type="button"
             className="flex flex-col items-center justify-center md:hidden"
+            onClick={openHighlights}
         >
-            <Info className="col-span-1 md:col-span-2" />
-            <span className="font-neue text-[10px] uppercase tracking-widest">Dicas</span>
-        </Link>
+            <Info className="h-4 w-4" />
+            <span className="font-neue text-[7px] uppercase tracking-widest">Dicas</span>
+        </button>
     )
 }

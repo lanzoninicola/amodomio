@@ -96,7 +96,7 @@ export default function FazerPedidoButton({
                 onClick?.(e);
             }}
         >
-            <div className="flex items-center justify-between gap-4">
+            <div className="flex h-full items-center justify-between gap-4">
                 <span
                     className={cn(
                         'uppercase tracking-wide font-semibold',

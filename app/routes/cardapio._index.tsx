@@ -131,6 +131,13 @@ export default function CardapioWebIndex() {
     }, [searchParams, setSearchParams]);
 
     useEffect(() => {
+        const handler = () => setShowHighlightsSheet(true);
+
+        window.addEventListener("cardapio:open-highlights", handler);
+        return () => window.removeEventListener("cardapio:open-highlights", handler);
+    }, []);
+
+    useEffect(() => {
         if (!forceLikeOverlay) return;
         setShowLikeCelebration(true);
         const intervalId = window.setInterval(() => {
