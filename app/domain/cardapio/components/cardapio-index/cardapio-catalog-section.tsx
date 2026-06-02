@@ -83,8 +83,8 @@ export function CardapioCatalogSection({
 
     return (
         <div className="flex flex-col m-4">
-            <div className="mb-4">
-                <h2 className="font-lora text-2xl font-bold tracking-tight leading-tight mb-3">
+            <div className="sticky top-[50px] z-30 -mx-4 mb-2 bg-white px-4 py-2 md:static md:mx-0 md:mb-4 md:bg-transparent md:px-0 md:py-0">
+                <h2 className="hidden font-lora text-2xl font-bold tracking-tight leading-tight mb-3 md:block">
                     Sabores da casa
                 </h2>
                 <div className="flex flex-wrap gap-x-4 gap-y-1">
@@ -112,10 +112,28 @@ export function CardapioCatalogSection({
                         </button>
                     ))}
                 </div>
+
             </div>
 
             {orderedGroups.length > 0 ? (
-                <div className="flex gap-2 overflow-x-auto pb-2 mt-1 no-scrollbar">
+                <div className="fixed left-[72px] right-0 top-0 z-40 flex h-[50px] items-center overflow-x-auto border-b border-gray-200 bg-white pr-3 md:hidden">
+                    <div className="flex w-max gap-2">
+                        {orderedGroups.map((group) => (
+                            <button
+                                key={group.groupId}
+                                type="button"
+                                onClick={() => scrollToGroup(group.groupId)}
+                                className="whitespace-nowrap rounded-full bg-zinc-950 px-3 py-1 font-neue text-xs uppercase tracking-wider text-white transition hover:bg-zinc-800"
+                            >
+                                {group.group}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+            ) : null}
+
+            {orderedGroups.length > 0 ? (
+                <div className="mt-1 hidden gap-2 overflow-x-auto pb-2 md:flex">
                     {orderedGroups.map((group) => (
                         <button
                             key={group.groupId}
@@ -178,11 +196,21 @@ function CardapioGroupHeader({
                 <div className="flex-1 min-w-0">
                     <h3 className="font-lora text-lg font-bold tracking-tight leading-tight">{title}</h3>
                 </div>
+                <div className="flex items-center gap-2 md:hidden">
+                    {profile.avatarImageUrl ? (
+                        <img
+                            src={profile.avatarImageUrl}
+                            alt={profile.username}
+                            className="h-7 w-7 rounded-full object-cover border border-zinc-200"
+                        />
+                    ) : null}
+                    <span className="font-neue text-sm font-semibold">{profile.username}</span>
+                </div>
             </div>
 
             {subtitle ? <p className="font-neue text-sm tracking-wide mt-2 text-zinc-700">{subtitle}</p> : null}
 
-            <div className="flex items-center gap-2 mt-3">
+            <div className="hidden items-center gap-2 mt-3 md:flex">
                 {profile.avatarImageUrl ? (
                     <img
                         src={profile.avatarImageUrl}

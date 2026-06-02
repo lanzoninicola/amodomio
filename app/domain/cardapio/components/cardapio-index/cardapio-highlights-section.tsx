@@ -29,11 +29,15 @@ export function CardapioHighlightsSection({
     likesEnabled,
     reelUrls,
     reelsEnabled,
+    includeNovelties = true,
+    showMobileHiddenContent = false,
 }: {
     items: CardapioIndexItem[] | GroupedItems[];
     likesEnabled: boolean;
     reelUrls: string[];
     reelsEnabled: boolean;
+    includeNovelties?: boolean;
+    showMobileHiddenContent?: boolean;
 }) {
     const noveltyItems = getNoveltyItems(items);
     const flatItems = isGrouped(items) ? items.flatMap((group) => getGroupedItemsList(group)) : items;
@@ -49,9 +53,14 @@ export function CardapioHighlightsSection({
 
     return (
         <>
-            {noveltyItems.length > 0 ? <NoveltiesHeroSection items={noveltyItems} /> : null}
+            {includeNovelties && noveltyItems.length > 0 ? <NoveltiesHeroSection items={noveltyItems} /> : null}
 
-            <div className="hidden gap-4 md:flex md:flex-row md:items-start">
+            <div
+                className={cn(
+                    showMobileHiddenContent ? "flex flex-col gap-4" : "hidden gap-4",
+                    "md:flex md:flex-row md:items-start"
+                )}
+            >
                 <section id="destaque" className="mx-2 flex min-w-0 flex-col gap-4 md:flex-1">
                     <ChefSuggestionsCarousel
                         title="O que vou sugerir para vocês hoje: "
@@ -76,8 +85,18 @@ export function CardapioHighlightsSection({
 
             {reelsEnabled && reelUrls.length > 0 ? (
                 <>
-                    <div className="mx-4 my-4 hidden h-[2px] bg-zinc-900 md:block" />
-                    <section className="mx-4 my-2 hidden md:mx-0 md:block">
+                    <div
+                        className={cn(
+                            "mx-4 my-4 h-[2px] bg-zinc-900 md:block",
+                            showMobileHiddenContent ? "block" : "hidden"
+                        )}
+                    />
+                    <section
+                        className={cn(
+                            "mx-4 my-2 md:mx-0 md:block",
+                            showMobileHiddenContent ? "block" : "hidden"
+                        )}
+                    >
                         <div className="mb-2">
                             <h2 className="font-neue font-semibold text-sm tracking-tight">Reels sugeridos</h2>
                             <p className="font-neue text-sm mt-1 text-zinc-700">conteúdos curtos da equipe para inspirar seu próximo pedido.</p>
@@ -87,13 +106,23 @@ export function CardapioHighlightsSection({
                 </>
             ) : null}
 
-            <div className="mx-4 my-4 hidden h-[2px] bg-zinc-900 md:block" />
+            <div
+                className={cn(
+                    "mx-4 my-4 h-[2px] bg-zinc-900 md:block",
+                    showMobileHiddenContent ? "block" : "hidden"
+                )}
+            />
 
-            <div className="hidden md:block">
+            <div className={cn("md:block", showMobileHiddenContent ? "block" : "hidden")}>
                 <ItalianIngredientsSection />
             </div>
 
-            <div className="mx-4 my-4 hidden h-[2px] bg-zinc-900 md:block" />
+            <div
+                className={cn(
+                    "mx-4 my-4 h-[2px] bg-zinc-900 md:block",
+                    showMobileHiddenContent ? "block" : "hidden"
+                )}
+            />
         </>
     );
 }
