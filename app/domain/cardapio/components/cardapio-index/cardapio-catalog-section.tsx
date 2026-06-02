@@ -87,7 +87,7 @@ export function CardapioCatalogSection({
                 <h2 className="hidden font-lora text-2xl font-bold tracking-tight leading-tight mb-3 md:block">
                     Sabores da casa
                 </h2>
-                <div className="flex flex-wrap gap-x-4 gap-y-1">
+                <div className="flex flex-wrap gap-x-4 gap-y-2 md:gap-y-1">
                     <button
                         type="button"
                         onClick={() => onCurrentTagSelected(null)}
