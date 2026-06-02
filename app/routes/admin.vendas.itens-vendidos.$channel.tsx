@@ -612,7 +612,7 @@ function FlavorLookupDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl">
+      <DialogContent className="flex max-h-[80vh] flex-col sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>Verificar sabor de pizza</DialogTitle>
           <DialogDescription>
@@ -647,37 +647,39 @@ function FlavorLookupDialog({
           </div>
         </fetcher.Form>
 
-        {fetcher.data?.status && fetcher.data.status >= 400 ? (
-          <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-            {fetcher.data.message || "Nao foi possivel verificar o sabor."}
-          </div>
-        ) : null}
-
-        {hasResult ? (
-          <div className="space-y-4">
-            <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
-              {totalMatches > 0
-                ? `${totalMatches} registro(s) encontrado(s) para "${result?.query}".`
-                : `Nenhum registro encontrado para "${result?.query}".`}
+        <div className="min-h-0 flex-1 overflow-y-auto space-y-4 pr-1">
+          {fetcher.data?.status && fetcher.data.status >= 400 ? (
+            <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+              {fetcher.data.message || "Nao foi possivel verificar o sabor."}
             </div>
+          ) : null}
 
-            <FlavorLookupSection
-              title="Itens"
-              emptyText="Nenhum item encontrado."
-              matches={result?.items || []}
-            />
-            <FlavorLookupSection
-              title="Receitas"
-              emptyText="Nenhuma receita encontrada."
-              matches={result?.recipes || []}
-            />
-            <FlavorLookupSection
-              title="Fichas técnicas"
-              emptyText="Nenhuma ficha técnica encontrada."
-              matches={result?.costSheets || []}
-            />
-          </div>
-        ) : null}
+          {hasResult ? (
+            <div className="space-y-4">
+              <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+                {totalMatches > 0
+                  ? `${totalMatches} registro(s) encontrado(s) para "${result?.query}".`
+                  : `Nenhum registro encontrado para "${result?.query}".`}
+              </div>
+
+              <FlavorLookupSection
+                title="Itens"
+                emptyText="Nenhum item encontrado."
+                matches={result?.items || []}
+              />
+              <FlavorLookupSection
+                title="Receitas"
+                emptyText="Nenhuma receita encontrada."
+                matches={result?.recipes || []}
+              />
+              <FlavorLookupSection
+                title="Fichas técnicas"
+                emptyText="Nenhuma ficha técnica encontrada."
+                matches={result?.costSheets || []}
+              />
+            </div>
+          ) : null}
+        </div>
 
         <DialogFooter>
           <Button

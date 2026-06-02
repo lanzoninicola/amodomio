@@ -1,17 +1,29 @@
 import type { LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
 import { Link, NavLink, Outlet, useLoaderData } from "@remix-run/react";
-import {
-  ExternalLink,
-  Plus,
-  Trash2,
-} from "lucide-react";
+import { ExternalLink, Plus, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
-import { SearchableSelect, type SearchableSelectOption } from "~/components/ui/searchable-select";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "~/components/ui/table";
+import {
+  SearchableSelect,
+  type SearchableSelectOption,
+} from "~/components/ui/searchable-select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "~/components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "~/components/ui/table";
 import { menuItemSellingPriceUtilityEntity } from "~/domain/cardapio/menu-item-selling-price-utility.entity";
 import { pickLatestActiveSheet } from "~/domain/item/item-selling-price-calculation.server";
 import {
@@ -22,7 +34,11 @@ import {
   type ComboPricingStatus,
   type ComboSalesComparison,
 } from "~/domain/sell-price/combo-pricing";
-import { formatMoney, formatPercent, formatStatus } from "~/domain/sell-price/components/combo-generator-shared";
+import {
+  formatMoney,
+  formatPercent,
+  formatStatus,
+} from "~/domain/sell-price/components/combo-generator-shared";
 import prismaClient from "~/lib/prisma/client.server";
 import { ok, serverError } from "~/utils/http-response.server";
 
@@ -87,6 +103,11 @@ export type AdminVendasGeradorCombosOutletContext = {
   selectedLines: ComboGeneratorSelectedLine[];
   totals: ComboPricingAnalysis;
   salesComparison: ComboSalesComparison;
+  pricingMode: ComboPricingMode;
+  discountPercentage: number;
+  discountAmount: number;
+  fixedPriceAmount: number;
+  copySimulationMessage: () => void;
   copySimulation: () => void;
   clearLines: () => void;
 };
@@ -117,7 +138,11 @@ function buildCopyText(params: {
 }) {
   const lineText = params.lines
     .map((line) => {
-      return `- ${line.quantity}x ${line.itemName} (${line.variationName}) - preco unit. ${formatMoney(line.priceAmount)} - custo ficha unit. ${formatMoney(line.costAmount)}`;
+      return `- ${line.quantity}x ${line.itemName} (${
+        line.variationName
+      }) - preco unit. ${formatMoney(
+        line.priceAmount
+      )} - custo ficha unit. ${formatMoney(line.costAmount)}`;
     })
     .join("\n");
 
@@ -130,8 +155,12 @@ function buildCopyText(params: {
     "",
     `Custo total da ficha tecnica: ${formatMoney(params.costTotal)}`,
     `Soma individual: ${formatMoney(params.individualPriceTotal)}`,
-    `Preco final do combo: ${formatMoney(params.individualPriceTotal - params.equivalentDiscountAmount)}`,
-    `Desconto equivalente: ${formatMoney(params.equivalentDiscountAmount)} (${formatPercent(params.discountPerc)})`,
+    `Preco final do combo: ${formatMoney(
+      params.individualPriceTotal - params.equivalentDiscountAmount
+    )}`,
+    `Desconto equivalente: ${formatMoney(
+      params.equivalentDiscountAmount
+    )} (${formatPercent(params.discountPerc)})`,
     `DNA aplicado: ${formatMoney(params.dnaAmount)}`,
     `Lucro estimado: ${formatMoney(params.profitAmount)}`,
     `Margem simulada: ${formatPercent(params.marginPerc)}`,
@@ -140,12 +169,65 @@ function buildCopyText(params: {
     `Status: ${formatStatus(params.status)}`,
     "",
     "Comparativo de venda",
-    `Venda avulsa - receita: ${formatMoney(params.salesComparison.individualSale.priceAmount)} - lucro: ${formatMoney(params.salesComparison.individualSale.profitAmount)} - margem: ${formatPercent(params.salesComparison.individualSale.profitPerc)}`,
-    `Venda combo - receita: ${formatMoney(params.salesComparison.comboSale.priceAmount)} - lucro: ${formatMoney(params.salesComparison.comboSale.profitAmount)} - margem: ${formatPercent(params.salesComparison.comboSale.profitPerc)}`,
-    `Diferenca de lucro: ${formatMoney(params.salesComparison.profitDeltaAmount)} (${formatPercent(params.salesComparison.profitDeltaPerc)})`,
-    `Diferenca de margem: ${formatPercent(params.salesComparison.marginDeltaPerc)}`,
+    `Venda avulsa - receita: ${formatMoney(
+      params.salesComparison.individualSale.priceAmount
+    )} - lucro: ${formatMoney(
+      params.salesComparison.individualSale.profitAmount
+    )} - margem: ${formatPercent(
+      params.salesComparison.individualSale.profitPerc
+    )}`,
+    `Venda combo - receita: ${formatMoney(
+      params.salesComparison.comboSale.priceAmount
+    )} - lucro: ${formatMoney(
+      params.salesComparison.comboSale.profitAmount
+    )} - margem: ${formatPercent(params.salesComparison.comboSale.profitPerc)}`,
+    `Diferenca de lucro: ${formatMoney(
+      params.salesComparison.profitDeltaAmount
+    )} (${formatPercent(params.salesComparison.profitDeltaPerc)})`,
+    `Diferenca de margem: ${formatPercent(
+      params.salesComparison.marginDeltaPerc
+    )}`,
     `Valido para venda: ${params.isValidForSale ? "sim" : "nao"}`,
-    ...(params.invalidReasons.length > 0 ? ["Motivos:", ...params.invalidReasons.map((reason) => `- ${reason}`)] : []),
+    ...(params.invalidReasons.length > 0
+      ? ["Motivos:", ...params.invalidReasons.map((reason) => `- ${reason}`)]
+      : []),
+  ].join("\n");
+}
+
+function buildComboShareMessage(params: {
+  selectedChannelName: string;
+  lines: Array<ComboItemOption & { quantity: number }>;
+  individualPriceTotal: number;
+  comboPrice: number;
+  equivalentDiscountAmount: number;
+  equivalentDiscountPercentage: number;
+  recommendedPrice: number;
+  status: ComboPricingStatus;
+}) {
+  const lineText = params.lines
+    .map((line) => {
+      const quantityText = Number(line.quantity || 0).toLocaleString("pt-BR", {
+        maximumFractionDigits: 2,
+      });
+      return `- ${quantityText}x ${line.itemName} (${line.variationName})`;
+    })
+    .join("\n");
+
+  return [
+    "*Simulacao de combo*",
+    `Canal: ${params.selectedChannelName}`,
+    "",
+    "*Itens*",
+    lineText || "- Nenhum item selecionado",
+    "",
+    "*Precos*",
+    `Preco pleno: ${formatMoney(params.individualPriceTotal)}`,
+    `Preco simulado: ${formatMoney(params.comboPrice)}`,
+    `Desconto: ${formatMoney(params.equivalentDiscountAmount)} (${formatPercent(
+      params.equivalentDiscountPercentage
+    )})`,
+    `Preco recomendado: ${formatMoney(params.recommendedPrice)}`,
+    `Status: ${formatStatus(params.status)}`,
   ].join("\n");
 }
 
@@ -171,39 +253,35 @@ export async function loader({ request }: LoaderFunctionArgs) {
       menuItemSellingPriceUtilityEntity.getSellingPriceConfig(),
     ]);
 
-    const channelOptions: ChannelOption[] = (channels || []).map((channel: any) => ({
-      id: String(channel.id),
-      key: String(channel.key || "").toLowerCase(),
-      name: channel.name || String(channel.key || "").toUpperCase(),
-      targetMarginPerc: Number(channel.targetMarginPerc || 0),
-    }));
+    const channelOptions: ChannelOption[] = (channels || []).map(
+      (channel: any) => ({
+        id: String(channel.id),
+        key: String(channel.key || "").toLowerCase(),
+        name: channel.name || String(channel.key || "").toUpperCase(),
+        targetMarginPerc: Number(channel.targetMarginPerc || 0),
+      })
+    );
 
     const selectedChannel =
-      channelOptions.find((channel) => channel.key === "cardapio") ||
-      null;
+      channelOptions.find((channel) => channel.key === "cardapio") || null;
 
     if (!selectedChannel) {
       return ok({
         channels: [],
         options: [],
-        summary: { totalOptions: 0, missingCost: 0, selectedChannelName: null, targetMarginPerc: 0, dnaPerc: 0 },
+        summary: {
+          totalOptions: 0,
+          missingCost: 0,
+          selectedChannelName: null,
+          targetMarginPerc: 0,
+          dnaPerc: 0,
+        },
       });
     }
 
     const itemWhere: any = {
       canSell: true,
       active: true,
-      ItemSellingInfo: {
-        is: {
-          upcoming: false,
-        },
-      },
-      ItemSellingChannelItem: {
-        some: {
-          itemSellingChannelId: selectedChannel.id,
-          visible: true,
-        },
-      },
     };
 
     const priceRows = await db.itemSellingPriceVariation.findMany({
@@ -265,31 +343,39 @@ export async function loader({ request }: LoaderFunctionArgs) {
       take: 500,
     });
 
-    const itemIds = Array.from(new Set((priceRows || []).map((row: any) => String(row.itemId)).filter(Boolean)));
+    const itemIds = Array.from(
+      new Set(
+        (priceRows || []).map((row: any) => String(row.itemId)).filter(Boolean)
+      )
+    );
     const itemVariationIds = Array.from(
-      new Set((priceRows || []).map((row: any) => String(row.itemVariationId)).filter(Boolean))
+      new Set(
+        (priceRows || [])
+          .map((row: any) => String(row.itemVariationId))
+          .filter(Boolean)
+      )
     );
 
     const activeSheets =
       itemIds.length === 0 || itemVariationIds.length === 0
         ? []
         : await db.itemCostSheet.findMany({
-          where: {
-            itemId: { in: itemIds },
-            itemVariationId: { in: itemVariationIds },
-            isActive: true,
-          },
-          select: {
-            id: true,
-            name: true,
-            itemId: true,
-            itemVariationId: true,
-            costAmount: true,
-            updatedAt: true,
-            activatedAt: true,
-          },
-          orderBy: [{ activatedAt: "desc" }, { updatedAt: "desc" }],
-        });
+            where: {
+              itemId: { in: itemIds },
+              itemVariationId: { in: itemVariationIds },
+              isActive: true,
+            },
+            select: {
+              id: true,
+              name: true,
+              itemId: true,
+              itemVariationId: true,
+              costAmount: true,
+              updatedAt: true,
+              activatedAt: true,
+            },
+            orderBy: [{ activatedAt: "desc" }, { updatedAt: "desc" }],
+          });
 
     const activeSheetsByVariation = new Map<string, any[]>();
     for (const sheet of activeSheets || []) {
@@ -302,9 +388,15 @@ export async function loader({ request }: LoaderFunctionArgs) {
     const options: ComboItemOption[] = (priceRows || []).map((row: any) => {
       const itemId = String(row.itemId || "");
       const itemVariationId = String(row.itemVariationId || "");
-      const activeSheet = pickLatestActiveSheet(activeSheetsByVariation.get(`${itemId}:${itemVariationId}`) || []);
-      const costAmount = activeSheet ? Number(activeSheet.costAmount || 0) : null;
-      const invalidReasons = activeSheet ? [] : ["Item sem ficha tecnica ativa."];
+      const activeSheet = pickLatestActiveSheet(
+        activeSheetsByVariation.get(`${itemId}:${itemVariationId}`) || []
+      );
+      const costAmount = activeSheet
+        ? Number(activeSheet.costAmount || 0)
+        : null;
+      const invalidReasons = activeSheet
+        ? []
+        : ["Item sem ficha tecnica ativa."];
 
       return {
         optionId: String(row.id),
@@ -315,7 +407,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
         variationName: row.ItemVariation?.Variation?.name || "Sem variacao",
         variationCode: row.ItemVariation?.Variation?.code || null,
         isReference: Boolean(row.ItemVariation?.isReference),
-        categoryName: row.Item?.ItemSellingInfo?.Category?.name || row.Item?.Category?.name || null,
+        categoryName:
+          row.Item?.ItemSellingInfo?.Category?.name ||
+          row.Item?.Category?.name ||
+          null,
         groupName: row.Item?.ItemSellingInfo?.ItemGroup?.name || null,
         priceAmount: Number(row.priceAmount || 0),
         costAmount,
@@ -338,7 +433,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
       options,
       summary: {
         totalOptions: options.length,
-        missingCost: options.filter((option) => option.costAmount == null).length,
+        missingCost: options.filter((option) => option.costAmount == null)
+          .length,
         selectedChannelName: selectedChannel.name,
         targetMarginPerc: selectedChannel.targetMarginPerc,
         dnaPerc: Number(sellingPriceConfig?.dnaPercentage || 0),
@@ -351,7 +447,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
 export default function AdminVendasGeradorCombosPage() {
   const loaderData = useLoaderData<typeof loader>();
-  const hasLoaderError = Boolean(loaderData?.status && loaderData.status >= 400);
+  const hasLoaderError = Boolean(
+    loaderData?.status && loaderData.status >= 400
+  );
   const payload = (loaderData?.payload || {}) as {
     channels: ChannelOption[];
     options: ComboItemOption[];
@@ -364,10 +462,14 @@ export default function AdminVendasGeradorCombosPage() {
     };
   };
 
-  const [selectedOptionId, setSelectedOptionId] = useState(payload.options?.[0]?.optionId || "");
+  const [selectedOptionId, setSelectedOptionId] = useState(
+    payload.options?.[0]?.optionId || ""
+  );
   const [variationFilter, setVariationFilter] = useState("__all__");
   const [lines, setLines] = useState<ComboLine[]>([]);
-  const [pricingMode, setPricingMode] = useState<ComboPricingMode>("PERCENTAGE_DISCOUNT");
+  const [pricingMode, setPricingMode] = useState<ComboPricingMode>(
+    "PERCENTAGE_DISCOUNT"
+  );
   const [discountPercentage, setDiscountPercentage] = useState("10");
   const [discountAmount, setDiscountAmount] = useState("");
   const [fixedPriceAmount, setFixedPriceAmount] = useState("");
@@ -384,20 +486,24 @@ export default function AdminVendasGeradorCombosPage() {
   const variationOptions = useMemo<VariationFilterOption[]>(() => {
     const byKey = new Map<string, VariationFilterOption>();
     for (const option of payload.options || []) {
-      const key = option.variationCode || option.variationName || option.itemVariationId;
+      const key =
+        option.variationCode || option.variationName || option.itemVariationId;
       if (!key || byKey.has(key)) continue;
       byKey.set(key, {
         key,
         label: option.variationName || option.variationCode || "Sem variacao",
       });
     }
-    return Array.from(byKey.values()).sort((a, b) => a.label.localeCompare(b.label, "pt-BR"));
+    return Array.from(byKey.values()).sort((a, b) =>
+      a.label.localeCompare(b.label, "pt-BR")
+    );
   }, [payload.options]);
 
   const filteredOptions = useMemo(() => {
     if (variationFilter === "__all__") return payload.options || [];
     return (payload.options || []).filter((option) => {
-      const key = option.variationCode || option.variationName || option.itemVariationId;
+      const key =
+        option.variationCode || option.variationName || option.itemVariationId;
       return key === variationFilter;
     });
   }, [payload.options, variationFilter]);
@@ -405,7 +511,9 @@ export default function AdminVendasGeradorCombosPage() {
   const itemSelectOptions = useMemo<SearchableSelectOption[]>(() => {
     return filteredOptions.map((option) => ({
       value: option.optionId,
-      label: `${option.itemName} - ${option.variationName} - ${formatMoney(option.priceAmount)}`,
+      label: `${option.itemName} - ${option.variationName} - ${formatMoney(
+        option.priceAmount
+      )}`,
       searchText: [
         option.itemName,
         option.variationName,
@@ -422,12 +530,16 @@ export default function AdminVendasGeradorCombosPage() {
 
   useEffect(() => {
     const nextOption = filteredOptions?.[0]?.optionId || "";
-    const stillAvailable = (filteredOptions || []).some((option) => option.optionId === selectedOptionId);
+    const stillAvailable = (filteredOptions || []).some(
+      (option) => option.optionId === selectedOptionId
+    );
     if (!stillAvailable) setSelectedOptionId(nextOption);
   }, [filteredOptions, selectedOptionId]);
 
   const optionById = useMemo(() => {
-    return new Map((payload.options || []).map((option) => [option.optionId, option]));
+    return new Map(
+      (payload.options || []).map((option) => [option.optionId, option])
+    );
   }, [payload.options]);
 
   const selectedLines = useMemo(() => {
@@ -456,7 +568,15 @@ export default function AdminVendasGeradorCombosPage() {
       dnaPerc: Number(payload.summary?.dnaPerc || 0),
       targetMarginPerc: Number(payload.summary?.targetMarginPerc || 0),
     });
-  }, [discountAmount, discountPercentage, fixedPriceAmount, payload.summary?.dnaPerc, payload.summary?.targetMarginPerc, pricingMode, selectedLines]);
+  }, [
+    discountAmount,
+    discountPercentage,
+    fixedPriceAmount,
+    payload.summary?.dnaPerc,
+    payload.summary?.targetMarginPerc,
+    pricingMode,
+    selectedLines,
+  ]);
 
   const salesComparison = useMemo<ComboSalesComparison>(() => {
     return buildComboSalesComparison({
@@ -465,15 +585,24 @@ export default function AdminVendasGeradorCombosPage() {
       comboTotalCost: totals.comboTotalCost,
       dnaPerc: totals.dnaPerc,
     });
-  }, [totals.comboPrice, totals.comboTotalCost, totals.dnaPerc, totals.individualTotalPrice]);
+  }, [
+    totals.comboPrice,
+    totals.comboTotalCost,
+    totals.dnaPerc,
+    totals.individualTotalPrice,
+  ]);
 
   function addSelectedLine() {
     if (!selectedOptionId) return;
     setLines((current) => {
-      const existing = current.find((line) => line.optionId === selectedOptionId);
+      const existing = current.find(
+        (line) => line.optionId === selectedOptionId
+      );
       if (existing) {
         return current.map((line) =>
-          line.optionId === selectedOptionId ? { ...line, quantity: line.quantity + 1 } : line
+          line.optionId === selectedOptionId
+            ? { ...line, quantity: line.quantity + 1 }
+            : line
         );
       }
       return [...current, { optionId: selectedOptionId, quantity: 1 }];
@@ -483,7 +612,9 @@ export default function AdminVendasGeradorCombosPage() {
   function updateLineQuantity(optionId: string, nextQuantity: number) {
     setLines((current) =>
       current.map((line) =>
-        line.optionId === optionId ? { ...line, quantity: Math.max(0.01, nextQuantity || 1) } : line
+        line.optionId === optionId
+          ? { ...line, quantity: Math.max(0.01, nextQuantity || 1) }
+          : line
       )
     );
   }
@@ -518,10 +649,29 @@ export default function AdminVendasGeradorCombosPage() {
     void navigator.clipboard?.writeText(text);
   }
 
+  function copySimulationMessage() {
+    const text = buildComboShareMessage({
+      selectedChannelName: payload.summary?.selectedChannelName || "-",
+      lines: selectedLines,
+      individualPriceTotal: totals.individualTotalPrice,
+      comboPrice: totals.comboPrice,
+      equivalentDiscountAmount: totals.equivalentDiscountAmount,
+      equivalentDiscountPercentage: totals.equivalentDiscountPercentage,
+      recommendedPrice: totals.recommendedPrice,
+      status: totals.status,
+    });
+    void navigator.clipboard?.writeText(text);
+  }
+
   const outletContext: AdminVendasGeradorCombosOutletContext = {
     selectedLines,
     totals,
     salesComparison,
+    pricingMode,
+    discountPercentage: parseDecimal(discountPercentage),
+    discountAmount: parseDecimal(discountAmount),
+    fixedPriceAmount: parseDecimal(fixedPriceAmount),
+    copySimulationMessage,
     copySimulation,
     clearLines,
   };
@@ -529,7 +679,8 @@ export default function AdminVendasGeradorCombosPage() {
   if (hasLoaderError) {
     return (
       <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-        {loaderData?.message || "Nao foi possivel carregar o simulador de combos."}
+        {loaderData?.message ||
+          "Nao foi possivel carregar o simulador de combos."}
       </div>
     );
   }
@@ -537,7 +688,10 @@ export default function AdminVendasGeradorCombosPage() {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center gap-2 text-sm text-slate-500">
-        <Badge variant="outline" className="border-sky-200 bg-sky-50 text-sky-700">
+        <Badge
+          variant="outline"
+          className="border-sky-200 bg-sky-50 text-sky-700"
+        >
           {payload.summary?.selectedChannelName || "sem canal"}
         </Badge>
         <span>{payload.summary?.totalOptions || 0} variacao(oes)</span>
@@ -545,14 +699,17 @@ export default function AdminVendasGeradorCombosPage() {
         <span>{payload.summary?.missingCost || 0} sem ficha ativa</span>
       </div>
 
-      <section className="grid gap-5 xl:grid-cols-[minmax(0,1.5fr)_minmax(320px,0.8fr)]">
+      <section className="grid gap-x-12 xl:grid-cols-[minmax(0,1.5fr)_minmax(320px,0.8fr)]">
         <div className="space-y-4 ">
           <div className="flex flex-col gap-3 xl:flex-row xl:items-end">
             <div className="w-full space-y-1 xl:w-52">
               <label className="text-xs font-semibold uppercase text-slate-500">
                 Variacao
               </label>
-              <Select value={variationFilter} onValueChange={setVariationFilter}>
+              <Select
+                value={variationFilter}
+                onValueChange={setVariationFilter}
+              >
                 <SelectTrigger className="h-10 w-full">
                   <SelectValue placeholder="Todas" />
                 </SelectTrigger>
@@ -575,7 +732,11 @@ export default function AdminVendasGeradorCombosPage() {
                 value={selectedOptionId}
                 onValueChange={setSelectedOptionId}
                 options={itemSelectOptions}
-                placeholder={filteredOptions.length === 0 ? "Nenhum item disponivel" : "Procure um item"}
+                placeholder={
+                  filteredOptions.length === 0
+                    ? "Nenhum item disponivel"
+                    : "Procure um item"
+                }
                 searchPlaceholder="Digite nome, tag, categoria ou variacao"
                 emptyText="Nenhum item encontrado."
                 triggerClassName="h-10 w-full max-w-none text-sm"
@@ -585,23 +746,41 @@ export default function AdminVendasGeradorCombosPage() {
                   return (
                     <div className="flex min-w-0 flex-1 items-center justify-between gap-3">
                       <div className="min-w-0 space-y-0.5">
-                        <div className={`truncate text-sm ${selected ? "font-semibold text-slate-950" : "font-medium text-slate-800"}`}>
+                        <div
+                          className={`truncate text-sm ${
+                            selected
+                              ? "font-semibold text-slate-950"
+                              : "font-medium text-slate-800"
+                          }`}
+                        >
                           {item?.itemName || option.label}
                         </div>
                         <div className="truncate text-xs text-slate-500">
-                          {item?.variationName || "-"} · {item?.categoryName || item?.groupName || "sem categoria"}
+                          {item?.variationName || "-"} ·{" "}
+                          {item?.categoryName ||
+                            item?.groupName ||
+                            "sem categoria"}
                         </div>
                       </div>
                       <div className="shrink-0 text-right text-xs">
-                        <div className="font-semibold text-slate-900">{formatMoney(item?.priceAmount)}</div>
-                        <div className="text-slate-500">ficha {formatMoney(item?.costAmount)}</div>
+                        <div className="font-semibold text-slate-900">
+                          {formatMoney(item?.priceAmount)}
+                        </div>
+                        <div className="text-slate-500">
+                          ficha {formatMoney(item?.costAmount)}
+                        </div>
                       </div>
                     </div>
                   );
                 }}
               />
             </div>
-            <Button type="button" onClick={addSelectedLine} className="gap-2" disabled={!selectedOptionId || filteredOptions.length === 0}>
+            <Button
+              type="button"
+              onClick={addSelectedLine}
+              className="gap-2"
+              disabled={!selectedOptionId || filteredOptions.length === 0}
+            >
               <Plus className="h-4 w-4" />
               adicionar
             </Button>
@@ -621,7 +800,10 @@ export default function AdminVendasGeradorCombosPage() {
               <TableBody>
                 {selectedLines.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="py-10 text-center text-sm text-slate-500">
+                    <TableCell
+                      colSpan={5}
+                      className="py-10 text-center text-sm text-slate-500"
+                    >
                       Adicione itens para calcular o combo.
                     </TableCell>
                   </TableRow>
@@ -631,18 +813,34 @@ export default function AdminVendasGeradorCombosPage() {
                       <TableCell>
                         <div className="space-y-1">
                           <div className="flex flex-wrap items-center gap-2">
-                            <span className="font-medium text-slate-900">{line.itemName}</span>
+                            <span className="font-medium text-slate-900">
+                              {line.itemName}
+                            </span>
                             {line.isReference ? (
-                              <Badge variant="outline" className="border-emerald-200 bg-emerald-50 text-emerald-700">referencia</Badge>
+                              <Badge
+                                variant="outline"
+                                className="border-emerald-200 bg-emerald-50 text-emerald-700"
+                              >
+                                referencia
+                              </Badge>
                             ) : null}
                             {line.costSource === "missing" ? (
-                              <Badge variant="outline" className="border-amber-200 bg-amber-50 text-amber-700">sem ficha ativa</Badge>
+                              <Badge
+                                variant="outline"
+                                className="border-amber-200 bg-amber-50 text-amber-700"
+                              >
+                                sem ficha ativa
+                              </Badge>
                             ) : null}
                           </div>
                           <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
                             <span>{line.variationName}</span>
-                            {line.categoryName ? <span>· {line.categoryName}</span> : null}
-                            {line.groupName ? <span>· {line.groupName}</span> : null}
+                            {line.categoryName ? (
+                              <span>· {line.categoryName}</span>
+                            ) : null}
+                            {line.groupName ? (
+                              <span>· {line.groupName}</span>
+                            ) : null}
                             <Link
                               to={`/admin/items/${line.itemId}/venda`}
                               target="_blank"
@@ -661,14 +859,29 @@ export default function AdminVendasGeradorCombosPage() {
                           min="0.01"
                           step="0.01"
                           value={line.quantity}
-                          onChange={(event) => updateLineQuantity(line.optionId, Number(event.currentTarget.value))}
+                          onChange={(event) =>
+                            updateLineQuantity(
+                              line.optionId,
+                              Number(event.currentTarget.value)
+                            )
+                          }
                           className="ml-auto h-8 w-20 text-right"
                         />
                       </TableCell>
-                      <TableCell className="text-right font-medium text-slate-800">{formatMoney(line.priceAmount)}</TableCell>
-                      <TableCell className="text-right font-medium text-slate-800">{formatMoney(line.costAmount)}</TableCell>
+                      <TableCell className="text-right font-medium text-slate-800">
+                        {formatMoney(line.priceAmount)}
+                      </TableCell>
+                      <TableCell className="text-right font-medium text-slate-800">
+                        {formatMoney(line.costAmount)}
+                      </TableCell>
                       <TableCell className="text-right">
-                        <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-red-600" onClick={() => removeLine(line.optionId)}>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-slate-400 hover:text-red-600"
+                          onClick={() => removeLine(line.optionId)}
+                        >
                           <Trash2 className="h-4 w-4" />
                         </Button>
                       </TableCell>
@@ -681,20 +894,33 @@ export default function AdminVendasGeradorCombosPage() {
         </div>
 
         <aside className="space-y-3">
-          <section className="space-y-3 rounded-md border border-slate-200 bg-white p-4">
+          <section className="space-y-3 ">
             <div>
-              <h2 className="text-base font-semibold text-slate-950">Preco do combo</h2>
-              <p className="text-xs text-slate-500">Controle comum para a precificacao e o simulador de venda.</p>
+              <h2 className="text-base font-semibold text-slate-950">
+                Preco do combo
+              </h2>
+              <p className="text-xs text-slate-500">
+                Controle comum para a precificacao e o simulador de venda.
+              </p>
             </div>
 
             <label className="space-y-1">
-              <span className="text-xs font-semibold uppercase text-slate-500">Modo de preco</span>
-              <Select value={pricingMode} onValueChange={(value) => setPricingMode(value as ComboPricingMode)}>
+              <span className="text-xs font-semibold uppercase text-slate-500">
+                Modo de preco
+              </span>
+              <Select
+                value={pricingMode}
+                onValueChange={(value) =>
+                  setPricingMode(value as ComboPricingMode)
+                }
+              >
                 <SelectTrigger className="h-9 w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="PERCENTAGE_DISCOUNT">Desconto percentual</SelectItem>
+                  <SelectItem value="PERCENTAGE_DISCOUNT">
+                    Desconto percentual
+                  </SelectItem>
                   <SelectItem value="FIXED_DISCOUNT">Desconto fixo</SelectItem>
                   <SelectItem value="FIXED_PRICE">Preco fixo</SelectItem>
                 </SelectContent>
@@ -703,22 +929,46 @@ export default function AdminVendasGeradorCombosPage() {
 
             {pricingMode === "PERCENTAGE_DISCOUNT" ? (
               <label className="space-y-1">
-                <span className="text-xs font-semibold uppercase text-slate-500">Desconto (%)</span>
-                <Input value={discountPercentage} onChange={(event) => setDiscountPercentage(event.currentTarget.value)} className="h-9" />
+                <span className="text-xs font-semibold uppercase text-slate-500">
+                  Desconto (%)
+                </span>
+                <Input
+                  value={discountPercentage}
+                  onChange={(event) =>
+                    setDiscountPercentage(event.currentTarget.value)
+                  }
+                  className="h-9"
+                />
               </label>
             ) : null}
 
             {pricingMode === "FIXED_DISCOUNT" ? (
               <label className="space-y-1">
-                <span className="text-xs font-semibold uppercase text-slate-500">Desconto fixo</span>
-                <Input value={discountAmount} onChange={(event) => setDiscountAmount(event.currentTarget.value)} className="h-9" />
+                <span className="text-xs font-semibold uppercase text-slate-500">
+                  Desconto fixo
+                </span>
+                <Input
+                  value={discountAmount}
+                  onChange={(event) =>
+                    setDiscountAmount(event.currentTarget.value)
+                  }
+                  className="h-9"
+                />
               </label>
             ) : null}
 
             {pricingMode === "FIXED_PRICE" ? (
               <label className="space-y-1">
-                <span className="text-xs font-semibold uppercase text-slate-500">Preco fixo</span>
-                <Input value={fixedPriceAmount} onChange={(event) => setFixedPriceAmount(event.currentTarget.value)} className="h-9" />
+                <span className="text-xs font-semibold uppercase text-slate-500">
+                  Preco fixo
+                </span>
+                <Input
+                  value={fixedPriceAmount}
+                  onChange={(event) =>
+                    setFixedPriceAmount(event.currentTarget.value)
+                  }
+                  className="h-9"
+                />
               </label>
             ) : null}
           </section>

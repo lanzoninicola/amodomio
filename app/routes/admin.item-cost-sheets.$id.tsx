@@ -12,7 +12,8 @@ import {
   type ShouldRevalidateFunction,
 } from "@remix-run/react";
 
-export const shouldRevalidate: ShouldRevalidateFunction = ({ nextUrl }) => {
+export const shouldRevalidate: ShouldRevalidateFunction = ({ nextUrl, formAction }) => {
+  if (formAction) return true;
   return nextUrl.pathname.endsWith("/custos");
 };
 import {
