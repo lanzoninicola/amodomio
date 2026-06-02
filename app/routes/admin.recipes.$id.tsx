@@ -12,6 +12,7 @@ import {
   useFetcher,
   useLoaderData,
   useLocation,
+  useSearchParams,
 } from "@remix-run/react";
 import {
   Check,
@@ -31,6 +32,14 @@ import {
   SelectValue,
 } from "~/components/ui/select";
 import { Button } from "~/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "~/components/ui/dialog";
 import { toast } from "~/components/ui/use-toast";
 import { DecimalInput } from "~/components/inputs/inputs";
 import { recipeEntity } from "~/domain/recipe/recipe.entity.server";
@@ -95,6 +104,8 @@ function extractJsonPayloadFromText(value: string) {
 type RecipeChatGptImportIngredient = {
   itemId?: unknown;
   itemName?: unknown;
+  action?: unknown;
+  operation?: unknown;
   unit?: unknown;
   defaultLossPct?: unknown;
   variationQuantities?: Record<string, unknown> | null;
@@ -114,6 +125,7 @@ function parseRecipeChatGptImportPayload(value: string): {
   recipeId: string | null;
   ingredients: Array<{
     itemId: string;
+    action: "upsert" | "delete";
     unit: string;
     defaultLossPct: number;
     variationQuantities: Record<string, number>;
@@ -149,6 +161,16 @@ function parseRecipeChatGptImportPayload(value: string): {
   const seenItemIds = new Set<string>();
   const ingredients = ingredientsRaw.map((ingredient, index) => {
     const itemId = String(ingredient?.itemId || "").trim();
+    const actionRaw = String(
+      ingredient?.action || ingredient?.operation || "upsert"
+    )
+      .trim()
+      .toLowerCase();
+    const action = ["delete", "remove", "remover", "eliminar"].includes(
+      actionRaw
+    )
+      ? "delete"
+      : "upsert";
     const unit = String(ingredient?.unit || "")
       .trim()
       .toUpperCase();
@@ -164,6 +186,18 @@ function parseRecipeChatGptImportPayload(value: string): {
       throw new Error(`Ingrediente ${index + 1}: itemId duplicado (${itemId})`);
     }
     seenItemIds.add(itemId);
+    if (action === "delete") {
+      return {
+        itemId,
+        action,
+        unit: unit || "UN",
+        defaultLossPct:
+          defaultLossPctParsed == null || Number.isNaN(defaultLossPctParsed)
+            ? 0
+            : defaultLossPctParsed,
+        variationQuantities: {},
+      };
+    }
     if (!unit) {
       throw new Error(`Ingrediente ${index + 1}: unit é obrigatório`);
     }
@@ -189,7 +223,8 @@ function parseRecipeChatGptImportPayload(value: string): {
         }
         if (quantity === null || Number.isNaN(quantity) || quantity < 0) {
           throw new Error(
-            `Ingrediente ${index + 1
+            `Ingrediente ${
+              index + 1
             }: quantidade inválida para a variação ${variationKey}`
           );
         }
@@ -201,6 +236,7 @@ function parseRecipeChatGptImportPayload(value: string): {
 
     return {
       itemId,
+      action,
       unit,
       defaultLossPct: defaultLossPctParsed,
       variationQuantities,
@@ -238,7 +274,7 @@ async function buildRecipeChatGptImportPreview(params: {
   payload: ReturnType<typeof parseRecipeChatGptImportPayload>;
 }) {
   const { db, recipeId, payload } = params;
-  const [linkedVariations, itemCatalog] = await Promise.all([
+  const [linkedVariations, itemCatalog, currentLines] = await Promise.all([
     listRecipeLinkedVariations(db, recipeId),
     db.item.findMany({
       where: {
@@ -246,6 +282,7 @@ async function buildRecipeChatGptImportPreview(params: {
       },
       select: { id: true, name: true, consumptionUm: true },
     }),
+    listRecipeCompositionLines(db, recipeId),
   ]);
 
   const itemById = new Map<
@@ -268,6 +305,14 @@ async function buildRecipeChatGptImportPreview(params: {
       variation.variationName || "Base",
     ])
   );
+  const currentLinesByItemId = currentLines.reduce((acc, line) => {
+    const itemId = String(line.itemId || "");
+    if (!itemId) return acc;
+    const lines = acc.get(itemId) || [];
+    lines.push(line);
+    acc.set(itemId, lines);
+    return acc;
+  }, new Map<string, any[]>());
 
   const importableIngredients = payload.ingredients.map((ingredient) => {
     const item = itemById.get(ingredient.itemId);
@@ -277,7 +322,20 @@ async function buildRecipeChatGptImportPreview(params: {
       );
     }
 
-    const variationKeys = Object.keys(ingredient.variationQuantities);
+    const currentItemLines = currentLinesByItemId.get(ingredient.itemId) || [];
+    if (ingredient.action === "delete" && currentItemLines.length === 0) {
+      throw new Error(
+        `Ingrediente marcado para eliminar não está na composição atual: ${item.name}`
+      );
+    }
+
+    const variationKeysRaw = Object.keys(ingredient.variationQuantities);
+    const variationKeys =
+      ingredient.action === "delete" && variationKeysRaw.length === 0
+        ? currentItemLines
+            .map((line) => String(line.ItemVariation?.id || ""))
+            .filter(Boolean)
+        : variationKeysRaw;
     const invalidVariationId = variationKeys.find(
       (variationId) => !linkedVariationIds.has(variationId)
     );
@@ -285,11 +343,35 @@ async function buildRecipeChatGptImportPreview(params: {
       throw new Error(`Variação inválida no JSON: ${invalidVariationId}`);
     }
 
+    const firstCurrentLine = currentItemLines[0];
+
     return {
       itemId: ingredient.itemId,
       itemName: item.name,
-      unit: ingredient.unit,
-      defaultLossPct: ingredient.defaultLossPct,
+      action: ingredient.action,
+      previewAction:
+        ingredient.action === "delete"
+          ? "delete"
+          : currentItemLines.length > 0
+          ? "update"
+          : "add",
+      unit:
+        ingredient.action === "delete"
+          ? String(
+              firstCurrentLine?.unit ||
+                ingredient.unit ||
+                item.consumptionUm ||
+                "UN"
+            )
+              .trim()
+              .toUpperCase()
+          : ingredient.unit,
+      defaultLossPct:
+        ingredient.action === "delete"
+          ? Number(
+              firstCurrentLine?.defaultLossPct || ingredient.defaultLossPct || 0
+            )
+          : ingredient.defaultLossPct,
       variationCount: variationKeys.length,
       zeroQtyVariationCount: variationKeys.filter(
         (variationId) =>
@@ -298,7 +380,14 @@ async function buildRecipeChatGptImportPreview(params: {
       variations: variationKeys.map((variationId) => ({
         itemVariationId: variationId,
         variationName: String(variationNameById.get(variationId) || "Variação"),
-        quantity: Number(ingredient.variationQuantities[variationId] || 0),
+        quantity:
+          ingredient.action === "delete" && variationKeysRaw.length === 0
+            ? Number(
+                currentItemLines.find(
+                  (line) => String(line.ItemVariation?.id || "") === variationId
+                )?.quantity || 0
+              )
+            : Number(ingredient.variationQuantities[variationId] || 0),
       })),
     };
   });
@@ -352,6 +441,22 @@ function buildRecipeSectionRedirect(recipeId: string, sectionRaw: unknown) {
   return redirect(
     buildRecipeSectionHref(recipeId, resolveRecipeSection(sectionRaw))
   );
+}
+
+function buildRecipeCostSheetCreatedHref(
+  recipeId: string,
+  sectionRaw: unknown,
+  itemCostSheetId: string
+) {
+  const href = buildRecipeSectionHref(
+    recipeId,
+    resolveRecipeSection(sectionRaw)
+  );
+  const params = new URLSearchParams({
+    createdCostSheetId: itemCostSheetId,
+  });
+
+  return `${href}?${params.toString()}`;
 }
 
 async function ensureRecipeLinkedItem(db: any, recipe: Recipe) {
@@ -525,7 +630,9 @@ export async function action({ request }: ActionFunctionArgs) {
           "Componente criado automaticamente a partir da receita aberta",
       });
 
-      return redirect(`/admin/item-cost-sheets/${rootSheetId}/custos`);
+      return redirect(
+        buildRecipeCostSheetCreatedHref(recipeId, currentSection, rootSheetId)
+      );
     } catch (error) {
       return badRequest(
         (error as Error)?.message || "Erro ao criar ficha técnica"
@@ -605,6 +712,12 @@ export async function action({ request }: ActionFunctionArgs) {
   if (_action === "recipe-chatgpt-import") {
     const recipeId = String(values.recipeId || "").trim();
     const chatGptResponse = String(values.chatGptResponse || "").trim();
+    const ignoredDeleteItemIdsRaw = String(
+      values.ignoredDeleteItemIds || ""
+    ).trim();
+    const manualDeleteItemIdsRaw = String(
+      values.manualDeleteItemIds || ""
+    ).trim();
 
     if (!recipeId) return badRequest("Receita inválida");
     if (!chatGptResponse)
@@ -620,6 +733,33 @@ export async function action({ request }: ActionFunctionArgs) {
           "A resposta só contém ingredientes faltantes. Cadastre os itens e tente novamente."
         );
       }
+      let ignoredDeleteItemIds: string[] = [];
+      if (ignoredDeleteItemIdsRaw) {
+        try {
+          const parsedIgnored = JSON.parse(ignoredDeleteItemIdsRaw);
+          ignoredDeleteItemIds = Array.isArray(parsedIgnored)
+            ? parsedIgnored
+                .map((itemId) => String(itemId || "").trim())
+                .filter(Boolean)
+            : [];
+        } catch (_error) {
+          ignoredDeleteItemIds = [];
+        }
+      }
+      const ignoredDeleteSet = new Set(ignoredDeleteItemIds);
+
+      let manualDeleteItemIds: string[] = [];
+      if (manualDeleteItemIdsRaw) {
+        try {
+          const parsedManual = JSON.parse(manualDeleteItemIdsRaw);
+          manualDeleteItemIds = Array.isArray(parsedManual)
+            ? parsedManual.map((id) => String(id || "").trim()).filter(Boolean)
+            : [];
+        } catch (_error) {
+          manualDeleteItemIds = [];
+        }
+      }
+      const manualDeleteSet = new Set(manualDeleteItemIds);
 
       const db = prismaClient as any;
       const { itemById } = await buildRecipeChatGptImportPreview({
@@ -627,8 +767,32 @@ export async function action({ request }: ActionFunctionArgs) {
         recipeId,
         payload,
       });
+      const aiDeleteItemIds = payload.ingredients
+        .filter(
+          (ingredient) =>
+            ingredient.action === "delete" &&
+            !ignoredDeleteSet.has(ingredient.itemId)
+        )
+        .map((ingredient) => ingredient.itemId);
+      const allDeleteItemIds = [
+        ...new Set([...aiDeleteItemIds, ...manualDeleteItemIds]),
+      ];
 
-      for (const ingredient of payload.ingredients) {
+      if (allDeleteItemIds.length > 0) {
+        const currentLines = await listRecipeCompositionLines(db, recipeId);
+        const linesToDelete = currentLines.filter((line) =>
+          allDeleteItemIds.includes(String(line.itemId || ""))
+        );
+        for (const line of linesToDelete) {
+          await deleteRecipeCompositionLine(db, String(line.id));
+        }
+      }
+
+      for (const ingredient of payload.ingredients.filter(
+        (ingredient) =>
+          ingredient.action !== "delete" &&
+          !manualDeleteSet.has(ingredient.itemId)
+      )) {
         const item = itemById.get(ingredient.itemId);
         const defaultUnit =
           String(ingredient.unit || item.consumptionUm || "UN")
@@ -663,7 +827,11 @@ export async function action({ request }: ActionFunctionArgs) {
         }
       }
 
-      for (const ingredient of payload.ingredients) {
+      for (const ingredient of payload.ingredients.filter(
+        (ingredient) =>
+          ingredient.action !== "delete" &&
+          !manualDeleteSet.has(ingredient.itemId)
+      )) {
         const recipeIngredientId = ingredientByItemId.get(ingredient.itemId);
         if (!recipeIngredientId) {
           return badRequest(
@@ -702,7 +870,7 @@ export async function action({ request }: ActionFunctionArgs) {
         }
       }
 
-      return buildRecipeSectionRedirect(recipeId, currentSection);
+      return buildRecipeSectionRedirect(recipeId, "variacoes");
     } catch (error) {
       return badRequest(
         (error as Error)?.message || "Erro ao importar composição do ChatGPT"
@@ -738,7 +906,7 @@ export async function action({ request }: ActionFunctionArgs) {
     } catch (error) {
       return badRequest(
         (error as Error)?.message ||
-        "Erro ao gerar pré-visualização da importação"
+          "Erro ao gerar pré-visualização da importação"
       );
     }
   }
@@ -796,7 +964,9 @@ export async function action({ request }: ActionFunctionArgs) {
     const recipeId = String(values.recipeId || "").trim();
     const recipeIngredientId = String(values.recipeIngredientId || "").trim();
     const recipeLineId = String(values.recipeLineId || "").trim();
-    const direction = String(values.direction || "").trim().toLowerCase();
+    const direction = String(values.direction || "")
+      .trim()
+      .toLowerCase();
 
     if (!recipeId) return badRequest("Ingrediente inválido");
     if (!["up", "down"].includes(direction))
@@ -814,7 +984,8 @@ export async function action({ request }: ActionFunctionArgs) {
       return buildRecipeSectionRedirect(recipeId, currentSection);
     } catch (error) {
       return badRequest(
-        (error as Error)?.message || "Erro ao reordenar ingrediente da composição"
+        (error as Error)?.message ||
+          "Erro ao reordenar ingrediente da composição"
       );
     }
   }
@@ -882,9 +1053,9 @@ export async function action({ request }: ActionFunctionArgs) {
       formVariationIds.length > 0
         ? formVariationIds
         : variationIdsRaw
-          .split(",")
-          .map((value) => value.trim())
-          .filter(Boolean);
+            .split(",")
+            .map((value) => value.trim())
+            .filter(Boolean);
 
     if (!recipeId || !recipeLineId) return badRequest("Linha inválida");
     if (variationIds.length === 0)
@@ -903,7 +1074,7 @@ export async function action({ request }: ActionFunctionArgs) {
     } catch (error) {
       return badRequest(
         (error as Error)?.message ||
-        "Erro ao aplicar para variações selecionadas"
+          "Erro ao aplicar para variações selecionadas"
       );
     }
   }
@@ -1130,9 +1301,9 @@ export async function action({ request }: ActionFunctionArgs) {
             }),
             typeof db?.recipeIngredient?.findMany === "function"
               ? db.recipeIngredient.findMany({
-                where: { recipeId: updatedRecipe.id },
-                select: { id: true },
-              })
+                  where: { recipeId: updatedRecipe.id },
+                  select: { id: true },
+                })
               : Promise.resolve([]),
           ]);
 
@@ -1191,9 +1362,11 @@ export async function action({ request }: ActionFunctionArgs) {
 
         if (
           ensuredItem &&
-          String(values.createItemCostSheet || "").trim().toLowerCase() === "yes"
+          String(values.createItemCostSheet || "")
+            .trim()
+            .toLowerCase() === "yes"
         ) {
-          await ensureItemCostSheetForRecipe({
+          const { rootSheetId } = await ensureItemCostSheetForRecipe({
             db,
             item: ensuredItem,
             recipe: {
@@ -1201,8 +1374,15 @@ export async function action({ request }: ActionFunctionArgs) {
               name: updatedRecipe.name,
             },
           });
-        }
 
+          return redirect(
+            buildRecipeCostSheetCreatedHref(
+              String(values.recipeId || "").trim(),
+              currentSection,
+              rootSheetId
+            )
+          );
+        }
       }
     } catch (_error) {
       // best effort: preserve legacy behavior when migrations are pending
@@ -1331,12 +1511,12 @@ export function InlineVariationCellEditor({
     saveStatus === "saving"
       ? "Salvando valor..."
       : saveStatus === "saved"
-        ? "Valor salvo."
-        : saveStatus === "error"
-          ? String((fetcher.data as any)?.message || "Erro ao salvar.")
-          : hasPending
-            ? "Alteração pendente."
-            : "Sem alterações pendentes.";
+      ? "Valor salvo."
+      : saveStatus === "error"
+      ? String((fetcher.data as any)?.message || "Erro ao salvar.")
+      : hasPending
+      ? "Alteração pendente."
+      : "Sem alterações pendentes.";
 
   return (
     <fetcher.Form
@@ -1395,8 +1575,9 @@ export function InlineVariationCellEditor({
             </div>
           ) : null}
           <span
-            className={`h-1.5 w-1.5 flex-shrink-0 rounded-full ${hasPending ? "bg-amber-400" : "bg-emerald-400"
-              }`}
+            className={`h-1.5 w-1.5 flex-shrink-0 rounded-full ${
+              hasPending ? "bg-amber-400" : "bg-emerald-400"
+            }`}
             title={hasPending ? "Alterações pendentes" : "Salvo"}
           />
         </div>
@@ -1407,10 +1588,10 @@ export function InlineVariationCellEditor({
               saveStatus === "error"
                 ? "text-red-500"
                 : saveStatus === "saving"
-                  ? "text-amber-600"
-                  : saveStatus === "saved"
-                    ? "text-emerald-600"
-                    : "text-slate-400"
+                ? "text-amber-600"
+                : saveStatus === "saved"
+                ? "text-emerald-600"
+                : "text-slate-400"
             )}
             aria-live="polite"
           >
@@ -1574,37 +1755,38 @@ const recipeNavigation: Array<{
   key: string;
   to: (recipeId: string) => string;
 }> = [
-    {
-      name: "Cadastro",
-      key: "cadastro",
-      to: (recipeId) => buildRecipeSectionHref(recipeId, "cadastro"),
-    },
-    {
-      name: "Composição",
-      key: "composicao",
-      to: (recipeId) => buildRecipeSectionHref(recipeId, "composicao"),
-    },
-    {
-      name: "Variações",
-      key: "variacoes",
-      to: (recipeId) => buildRecipeSectionHref(recipeId, "variacoes"),
-    },
-    {
-      name: "Fichas técnicas",
-      key: "fichas",
-      to: (recipeId) => buildRecipeSectionHref(recipeId, "fichas"),
-    },
-    {
-      name: "Assistente",
-      key: "composition-builder",
-      to: (recipeId) => `/admin/recipes/${recipeId}/composition-builder`,
-    },
-  ];
+  {
+    name: "Cadastro",
+    key: "cadastro",
+    to: (recipeId) => buildRecipeSectionHref(recipeId, "cadastro"),
+  },
+  {
+    name: "Composição",
+    key: "composicao",
+    to: (recipeId) => buildRecipeSectionHref(recipeId, "composicao"),
+  },
+  {
+    name: "Variações",
+    key: "variacoes",
+    to: (recipeId) => buildRecipeSectionHref(recipeId, "variacoes"),
+  },
+  {
+    name: "Fichas técnicas",
+    key: "fichas",
+    to: (recipeId) => buildRecipeSectionHref(recipeId, "fichas"),
+  },
+  {
+    name: "Assistente",
+    key: "composition-builder",
+    to: (recipeId) => `/admin/recipes/${recipeId}/composition-builder`,
+  },
+];
 
 export default function AdminRecipeDetailLayout() {
   const loaderData: HttpResponse | null = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const recipe = loaderData?.payload?.recipe as Recipe;
   const items = (loaderData?.payload?.items ||
@@ -1626,8 +1808,10 @@ export default function AdminRecipeDetailLayout() {
     null;
   const summaryLines = referenceVariation
     ? recipeLines.filter(
-      (line) => String(line.ItemVariation?.id || "") === referenceVariation.itemVariationId
-    )
+        (line) =>
+          String(line.ItemVariation?.id || "") ===
+          referenceVariation.itemVariationId
+      )
     : recipeLines;
   const recipeLineCount = summaryLines.length;
   const lastSegment = lastUrlSegment(location.pathname);
@@ -1635,6 +1819,21 @@ export default function AdminRecipeDetailLayout() {
     lastSegment === "composition-builder"
       ? "composition-builder"
       : resolveRecipeSection(lastSegment);
+  const createdCostSheetId = String(
+    searchParams.get("createdCostSheetId") || ""
+  ).trim();
+  const createdCostSheetHref = createdCostSheetId
+    ? `/admin/item-cost-sheets/${createdCostSheetId}/custos`
+    : "";
+  const handleCreatedCostSheetDialogOpenChange = (open: boolean) => {
+    if (open) return;
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.delete("createdCostSheetId");
+    setSearchParams(nextParams, {
+      preventScrollReset: true,
+      replace: true,
+    });
+  };
 
   useEffect(() => {
     if (actionData?.status === 200) {
@@ -1657,7 +1856,45 @@ export default function AdminRecipeDetailLayout() {
 
   return (
     <div className="min-h-[calc(100vh-8rem)] space-y-6 bg-white pb-20 md:pb-24">
-
+      <Dialog
+        open={Boolean(createdCostSheetId)}
+        onOpenChange={handleCreatedCostSheetDialogOpenChange}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Ficha técnica criada</DialogTitle>
+            <DialogDescription>
+              A ficha técnica foi criada e vinculada a esta receita.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+            ID da ficha:{" "}
+            <span className="font-mono text-xs font-semibold">
+              {createdCostSheetId}
+            </span>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => handleCreatedCostSheetDialogOpenChange(false)}
+            >
+              Continuar na receita
+            </Button>
+            <Button asChild>
+              <Link
+                to={createdCostSheetHref}
+                target="_blank"
+                rel="noreferrer"
+                className="gap-2"
+              >
+                Abrir ficha técnica
+                <ExternalLink size={14} />
+              </Link>
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0 space-y-2">
@@ -1666,10 +1903,11 @@ export default function AdminRecipeDetailLayout() {
               {recipe.name}
             </h1>
             <span
-              className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ring-1 ${recipe.type === "pizzaTopping"
-                ? "bg-orange-50 text-orange-700 ring-orange-200"
-                : "bg-blue-50 text-blue-700 ring-blue-200"
-                }`}
+              className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ring-1 ${
+                recipe.type === "pizzaTopping"
+                  ? "bg-orange-50 text-orange-700 ring-orange-200"
+                  : "bg-blue-50 text-blue-700 ring-blue-200"
+              }`}
             >
               {recipe.type === "pizzaTopping" ? "Sabor Pizza" : "Produzido"}
             </span>
@@ -1727,7 +1965,11 @@ export default function AdminRecipeDetailLayout() {
           <Form
             method="post"
             onSubmit={(e) => {
-              if (!window.confirm(`Eliminar a receita "${recipe.name}"? Esta ação não pode ser desfeita.`)) {
+              if (
+                !window.confirm(
+                  `Eliminar a receita "${recipe.name}"? Esta ação não pode ser desfeita.`
+                )
+              ) {
                 e.preventDefault();
               }
             }}
@@ -1782,8 +2024,8 @@ export default function AdminRecipeDetailLayout() {
                         isActive
                           ? "bg-slate-900 text-white"
                           : count > 0
-                            ? "bg-slate-100 text-slate-600"
-                            : "bg-amber-50 text-amber-700"
+                          ? "bg-slate-100 text-slate-600"
+                          : "bg-amber-50 text-amber-700"
                       )}
                     >
                       {count}

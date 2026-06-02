@@ -1,6 +1,13 @@
 import { redirect } from "@remix-run/node";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
-import { Link, Outlet, useActionData, useLoaderData, useLocation, useNavigate } from "@remix-run/react";
+import {
+  Link,
+  Outlet,
+  useActionData,
+  useLoaderData,
+  useLocation,
+  useNavigate,
+} from "@remix-run/react";
 import { useEffect, useState } from "react";
 import { ChevronLeft } from "lucide-react";
 import { randomUUID } from "node:crypto";
@@ -76,7 +83,9 @@ function toBool(value: FormDataEntryValue | null) {
 }
 
 function normalizeUnit(value: FormDataEntryValue | string | null | undefined) {
-  const normalized = String(value || "").trim().toUpperCase();
+  const normalized = String(value || "")
+    .trim()
+    .toUpperCase();
   return normalized || null;
 }
 
@@ -91,24 +100,50 @@ function parseDateTimeInput(value: FormDataEntryValue | null) {
 const RECIPE_VARIATION_POLICY_OPTIONS = ["auto", "hide", "show"] as const;
 
 function pickPrimaryItemVariation(item: any) {
-  const activeVariations = (item?.ItemVariation || []).filter((row: any) => !row?.deletedAt);
+  const activeVariations = (item?.ItemVariation || []).filter(
+    (row: any) => !row?.deletedAt
+  );
 
-  return activeVariations.find((row: any) => row.isReference) || activeVariations[0] || null;
+  return (
+    activeVariations.find((row: any) => row.isReference) ||
+    activeVariations[0] ||
+    null
+  );
+}
+
+function countItemCostSheetGroups(sheets: any[]) {
+  return new Set(
+    (sheets || [])
+      .map((sheet: any) =>
+        String(sheet?.baseItemCostSheetId || sheet?.id || "")
+      )
+      .filter(Boolean)
+  ).size;
 }
 
 function getSupplierNameFromMetadata(metadata: unknown): string | null {
-  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return null;
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata))
+    return null;
   const supplierName = (metadata as Record<string, unknown>).supplierName;
   const normalized = String(supplierName || "").trim();
   return normalized || null;
 }
 
-function shouldHideItemHistoryRow(row: any, movementLookup: Map<string, { itemId: string | null; deletedAt: Date | null }>, itemId: string) {
+function shouldHideItemHistoryRow(
+  row: any,
+  movementLookup: Map<
+    string,
+    { itemId: string | null; deletedAt: Date | null }
+  >,
+  itemId: string
+) {
   const referenceType = String(row?.referenceType || "").trim();
   if (referenceType === "stock-movement-delete") return true;
 
   const metadata =
-    row?.metadata && typeof row.metadata === "object" && !Array.isArray(row.metadata)
+    row?.metadata &&
+    typeof row.metadata === "object" &&
+    !Array.isArray(row.metadata)
       ? (row.metadata as Record<string, unknown>)
       : null;
   if (metadata?.hideFromItemHistory === true) return true;
@@ -124,7 +159,9 @@ function shouldHideItemHistoryRow(row: any, movementLookup: Map<string, { itemId
 
 function findLatestPurchaseSupplierName(history: any[]): string {
   for (const row of history || []) {
-    const source = String(row?.source || "").trim().toLowerCase();
+    const source = String(row?.source || "")
+      .trim()
+      .toLowerCase();
     if (source !== "purchase" && source !== "import") continue;
     const supplierName = getSupplierNameFromMetadata(row?.metadata);
     if (supplierName) return supplierName;
@@ -151,20 +188,29 @@ export async function loader({ params }: LoaderFunctionArgs) {
     const ingredientRecipeUsageLookup =
       typeof db.recipeIngredient?.findMany === "function"
         ? db.recipeIngredient.findMany({
-          where: { ingredientItemId: id },
-          select: {
-            id: true,
-            recipeId: true,
-            Recipe: {
-              select: { id: true, name: true, createdAt: true },
+            where: { ingredientItemId: id },
+            select: {
+              id: true,
+              recipeId: true,
+              Recipe: {
+                select: { id: true, name: true, createdAt: true },
+              },
             },
-          },
-          orderBy: [{ updatedAt: "desc" }],
-          take: 20,
-        })
+            orderBy: [{ updatedAt: "desc" }],
+            take: 20,
+          })
         : Promise.resolve([]);
 
-    const [loadedItem, averageWindowDays, unitOptions, categories, ingredientRecipeUsage, suppliers, recipeAssistantItems, chatGptProjectUrlSetting] = await Promise.all([
+    const [
+      loadedItem,
+      averageWindowDays,
+      unitOptions,
+      categories,
+      ingredientRecipeUsage,
+      suppliers,
+      recipeAssistantItems,
+      chatGptProjectUrlSetting,
+    ] = await Promise.all([
       db.item.findUnique({
         where: { id },
         include: {
@@ -357,37 +403,69 @@ export async function loader({ params }: LoaderFunctionArgs) {
     if (!item) return badRequest("Item não encontrado");
 
     // Load all units plus the restricted subset used by purchases UI
-    const measurementUnits = typeof db.measurementUnit?.findMany === "function"
-      ? await db.measurementUnit.findMany({
-          where: { active: true },
-          select: { id: true, code: true, name: true, kind: true, scope: true },
-          orderBy: [{ code: "asc" }],
-        })
-      : [];
-    const restrictedUnits = measurementUnits.filter((unit: any) => unit.scope === "restricted");
+    const measurementUnits =
+      typeof db.measurementUnit?.findMany === "function"
+        ? await db.measurementUnit.findMany({
+            where: { active: true },
+            select: {
+              id: true,
+              code: true,
+              name: true,
+              kind: true,
+              scope: true,
+            },
+            orderBy: [{ code: "asc" }],
+          })
+        : [];
+    const restrictedUnits = measurementUnits.filter(
+      (unit: any) => unit.scope === "restricted"
+    );
     const linkedUnitCodes = new Set<string>(
       (item.ItemUnit ?? []).map((u: any) => u.unitCode)
     );
 
     const primaryVariation = pickPrimaryItemVariation(item);
     const rawPrimaryHistory = primaryVariation?.ItemCostVariationHistory || [];
-    const stockMovementReferenceIds = Array.from(new Set(
-      rawPrimaryHistory
-        .filter((row: any) => String(row?.referenceType || "").trim() === "stock-movement" && row?.referenceId)
-        .map((row: any) => String(row.referenceId)),
-    ));
-    const referencedMovements = stockMovementReferenceIds.length > 0
-      ? await db.stockMovement.findMany({
-          where: { id: { in: stockMovementReferenceIds } },
-          select: { id: true, itemId: true, deletedAt: true },
-        })
-      : [];
-    const movementLookup = new Map<string, { itemId: string | null; deletedAt: Date | null }>(
-      referencedMovements.map((movement: any) => [String(movement.id), { itemId: movement.itemId || null, deletedAt: movement.deletedAt || null }]),
+    const stockMovementReferenceIds = Array.from(
+      new Set(
+        rawPrimaryHistory
+          .filter(
+            (row: any) =>
+              String(row?.referenceType || "").trim() === "stock-movement" &&
+              row?.referenceId
+          )
+          .map((row: any) => String(row.referenceId))
+      )
     );
-    const primaryHistory = rawPrimaryHistory.filter((row: any) => !shouldHideItemHistoryRow(row, movementLookup, item.id));
+    const referencedMovements =
+      stockMovementReferenceIds.length > 0
+        ? await db.stockMovement.findMany({
+            where: { id: { in: stockMovementReferenceIds } },
+            select: { id: true, itemId: true, deletedAt: true },
+          })
+        : [];
+    const movementLookup = new Map<
+      string,
+      { itemId: string | null; deletedAt: Date | null }
+    >(
+      referencedMovements.map((movement: any) => [
+        String(movement.id),
+        {
+          itemId: movement.itemId || null,
+          deletedAt: movement.deletedAt || null,
+        },
+      ])
+    );
+    const primaryHistory = rawPrimaryHistory.filter(
+      (row: any) => !shouldHideItemHistoryRow(row, movementLookup, item.id)
+    );
     const currentCost = primaryVariation?.ItemCostVariation || null;
-    const historyForMetrics = primaryHistory.length > 0 ? primaryHistory : currentCost ? [currentCost] : [];
+    const historyForMetrics =
+      primaryHistory.length > 0
+        ? primaryHistory
+        : currentCost
+        ? [currentCost]
+        : [];
     const costMetrics = calculateItemCostMetrics({
       item,
       history: historyForMetrics,
@@ -398,12 +476,24 @@ export async function loader({ params }: LoaderFunctionArgs) {
         item,
         history: historyForMetrics,
         averageWindowDays: windowDays,
-      }),
+      })
     );
-    const latestPurchaseSupplierName = findLatestPurchaseSupplierName(primaryHistory);
+    const latestPurchaseSupplierName =
+      findLatestPurchaseSupplierName(primaryHistory);
     const costAuditHistory = primaryVariation?.id
       ? await loadItemCostAuditForItem(primaryVariation.id, 30)
       : [];
+    const [linkedRecipeCount, itemCostSheetCountRows] = await Promise.all([
+      typeof db.recipe?.count === "function"
+        ? db.recipe.count({ where: { itemId: id } })
+        : Promise.resolve(item.Recipe?.length || 0),
+      typeof db.itemCostSheet?.findMany === "function"
+        ? db.itemCostSheet.findMany({
+            where: { itemId: id },
+            select: { id: true, baseItemCostSheetId: true },
+          })
+        : Promise.resolve(item.ItemCostSheet || []),
+    ]);
 
     return ok({
       item: {
@@ -414,6 +504,8 @@ export async function loader({ params }: LoaderFunctionArgs) {
         _ingredientRecipeUsage: ingredientRecipeUsage,
         _latestPurchaseSupplierName: latestPurchaseSupplierName,
         _costAuditHistory: costAuditHistory,
+        _linkedRecipeCount: linkedRecipeCount,
+        _itemCostSheetCount: countItemCostSheetGroups(itemCostSheetCountRows),
       },
       costMetrics,
       costAverageWindows,
@@ -446,12 +538,20 @@ export async function action({ request, params }: ActionFunctionArgs) {
     if (_action === "item-update") {
       const name = String(formData.get("name") || "").trim();
       const description = String(formData.get("description") || "").trim();
-      const classification = String(formData.get("classification") || "").trim();
+      const classification = String(
+        formData.get("classification") || ""
+      ).trim();
       const consumptionUm = normalizeUnit(formData.get("consumptionUm"));
       const categoryIdRaw = String(formData.get("categoryId") || "").trim();
       const categoryId = categoryIdRaw || null;
-      const recipeVariationPolicyRaw = String(formData.get("recipeVariationPolicy") || "auto").trim().toLowerCase();
-      const recipeVariationPolicy = RECIPE_VARIATION_POLICY_OPTIONS.includes(recipeVariationPolicyRaw as any)
+      const recipeVariationPolicyRaw = String(
+        formData.get("recipeVariationPolicy") || "auto"
+      )
+        .trim()
+        .toLowerCase();
+      const recipeVariationPolicy = RECIPE_VARIATION_POLICY_OPTIONS.includes(
+        recipeVariationPolicyRaw as any
+      )
         ? recipeVariationPolicyRaw
         : "auto";
 
@@ -515,51 +615,59 @@ export async function action({ request, params }: ActionFunctionArgs) {
       const stockMovementLookup =
         typeof db.stockMovement?.findFirst === "function"
           ? db.stockMovement.findFirst({
-            where: { itemId: id, deletedAt: null },
-            select: { id: true },
-          })
-          : typeof db.stockMovementImportBatchLine?.findFirst === "function"
-            ? db.stockMovementImportBatchLine.findFirst({
-              where: { mappedItemId: id, appliedAt: { not: null }, rolledBackAt: null },
+              where: { itemId: id, deletedAt: null },
               select: { id: true },
             })
-            : Promise.resolve(null);
+          : typeof db.stockMovementImportBatchLine?.findFirst === "function"
+          ? db.stockMovementImportBatchLine.findFirst({
+              where: {
+                mappedItemId: id,
+                appliedAt: { not: null },
+                rolledBackAt: null,
+              },
+              select: { id: true },
+            })
+          : Promise.resolve(null);
       const recipeUsageLookup =
         typeof db.recipeIngredient?.findFirst === "function"
           ? db.recipeIngredient.findFirst({
-            where: { ingredientItemId: id },
-            select: { id: true },
-          })
+              where: { ingredientItemId: id },
+              select: { id: true },
+            })
           : typeof db.recipeLine?.findFirst === "function"
-            ? db.recipeLine.findFirst({
+          ? db.recipeLine.findFirst({
               where: { itemId: id },
               select: { id: true },
             })
-            : Promise.resolve(null);
+          : Promise.resolve(null);
 
-      const [
-        stockMovement,
-        recipeLine,
-        recipe,
-        menuItem,
-        itemCostSheet,
-      ] = await Promise.all([
-        stockMovementLookup,
-        recipeUsageLookup,
-        db.recipe.findFirst({ where: { itemId: id }, select: { id: true } }),
-        db.menuItem.findFirst({ where: { itemId: id }, select: { id: true } }),
-        db.itemCostSheet.findFirst({ where: { itemId: id }, select: { id: true } }),
-      ]);
+      const [stockMovement, recipeLine, recipe, menuItem, itemCostSheet] =
+        await Promise.all([
+          stockMovementLookup,
+          recipeUsageLookup,
+          db.recipe.findFirst({ where: { itemId: id }, select: { id: true } }),
+          db.menuItem.findFirst({
+            where: { itemId: id },
+            select: { id: true },
+          }),
+          db.itemCostSheet.findFirst({
+            where: { itemId: id },
+            select: { id: true },
+          }),
+        ]);
 
       const reasons: string[] = [];
       if (stockMovement) reasons.push("existem movimentações de estoque");
-      if (recipeLine) reasons.push("está sendo usado como ingrediente em receitas");
+      if (recipeLine)
+        reasons.push("está sendo usado como ingrediente em receitas");
       if (recipe) reasons.push("está vinculado a uma receita");
       if (menuItem) reasons.push("está vinculado ao cardápio");
       if (itemCostSheet) reasons.push("possui fichas de custo");
 
       if (reasons.length > 0) {
-        return badRequest(`Não é possível eliminar o item porque ${reasons.join(", ")}.`);
+        return badRequest(
+          `Não é possível eliminar o item porque ${reasons.join(", ")}.`
+        );
       }
 
       await db.item.delete({ where: { id } });
@@ -568,9 +676,14 @@ export async function action({ request, params }: ActionFunctionArgs) {
     }
 
     if (_action === "item-recipe-chatgpt-preview") {
-      const chatGptResponse = String(formData.get("chatGptResponse") || "").trim();
-      const existingRecipeImportMode = String(formData.get("existingRecipeImportMode") || "replace_existing").trim() as ExistingRecipeImportMode;
-      if (!chatGptResponse) return badRequest("Cole a resposta do ChatGPT antes de pré-visualizar");
+      const chatGptResponse = String(
+        formData.get("chatGptResponse") || ""
+      ).trim();
+      const existingRecipeImportMode = String(
+        formData.get("existingRecipeImportMode") || "replace_existing"
+      ).trim() as ExistingRecipeImportMode;
+      if (!chatGptResponse)
+        return badRequest("Cole a resposta do ChatGPT antes de pré-visualizar");
 
       const item = await db.item.findUnique({
         where: { id },
@@ -607,15 +720,21 @@ export async function action({ request, params }: ActionFunctionArgs) {
         });
       } catch (error) {
         return badRequest(
-          (error as Error)?.message || "Erro ao gerar pré-visualização da importação"
+          (error as Error)?.message ||
+            "Erro ao gerar pré-visualização da importação"
         );
       }
     }
 
     if (_action === "item-recipe-chatgpt-import") {
-      const chatGptResponse = String(formData.get("chatGptResponse") || "").trim();
-      const existingRecipeImportMode = String(formData.get("existingRecipeImportMode") || "replace_existing").trim() as ExistingRecipeImportMode;
-      if (!chatGptResponse) return badRequest("Cole a resposta do ChatGPT antes de importar");
+      const chatGptResponse = String(
+        formData.get("chatGptResponse") || ""
+      ).trim();
+      const existingRecipeImportMode = String(
+        formData.get("existingRecipeImportMode") || "replace_existing"
+      ).trim() as ExistingRecipeImportMode;
+      if (!chatGptResponse)
+        return badRequest("Cole a resposta do ChatGPT antes de importar");
 
       const item = await db.item.findUnique({
         where: { id },
@@ -640,7 +759,9 @@ export async function action({ request, params }: ActionFunctionArgs) {
       try {
         const payload = parseItemRecipeChatGptImportPayload(chatGptResponse);
         if (payload.ingredients.length === 0) {
-          return badRequest("A resposta só contém ingredientes faltantes. Cadastre os itens e tente novamente.");
+          return badRequest(
+            "A resposta só contém ingredientes faltantes. Cadastre os itens e tente novamente."
+          );
         }
 
         const result = await importItemRecipeFromChatGpt({
@@ -669,7 +790,9 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
       if (!currentItem) return badRequest("Item não encontrado");
       if (!currentItem.consumptionUm) {
-        return badRequest("Defina primeiro a unidade de consumo na aba Principal");
+        return badRequest(
+          "Defina primeiro a unidade de consumo na aba Principal"
+        );
       }
 
       const purchaseUm = normalizeUnit(formData.get("purchaseUm"));
@@ -677,10 +800,12 @@ export async function action({ request, params }: ActionFunctionArgs) {
       const factor = factorRaw ? Number(factorRaw) : null;
 
       if (!purchaseUm) return badRequest("Informe a unidade de compra");
-      if (!(Number.isFinite(factor) && factor > 0)) return badRequest("Informe um fator maior que zero");
+      if (!(Number.isFinite(factor) && factor > 0))
+        return badRequest("Informe um fator maior que zero");
 
       const availableUnits = await getAvailableItemUnits(id);
-      if (!availableUnits.includes(purchaseUm)) return badRequest("Unidade de compra inválida");
+      if (!availableUnits.includes(purchaseUm))
+        return badRequest("Unidade de compra inválida");
 
       await db.itemPurchaseConversion.upsert({
         where: { itemId_purchaseUm: { itemId: id, purchaseUm } },
@@ -695,8 +820,11 @@ export async function action({ request, params }: ActionFunctionArgs) {
       const conversionId = String(formData.get("conversionId") || "").trim();
       if (!conversionId) return badRequest("Conversão inválida");
 
-      const existing = await db.itemPurchaseConversion.findUnique({ where: { id: conversionId } });
-      if (!existing || existing.itemId !== id) return badRequest("Conversão não encontrada");
+      const existing = await db.itemPurchaseConversion.findUnique({
+        where: { id: conversionId },
+      });
+      if (!existing || existing.itemId !== id)
+        return badRequest("Conversão não encontrada");
 
       await db.itemPurchaseConversion.delete({ where: { id: conversionId } });
 
@@ -711,12 +839,15 @@ export async function action({ request, params }: ActionFunctionArgs) {
       const notes = String(formData.get("notes") || "").trim();
       const comparisonOnly = formData.get("comparisonOnly") === "on";
 
-      if (!(costAmount > 0)) return badRequest("Informe um custo maior que zero");
+      if (!(costAmount > 0))
+        return badRequest("Informe um custo maior que zero");
 
-      const baseItemVariation = await itemVariationPrismaEntity.findPrimaryVariationForItem(id, {
-        ensureBaseIfMissing: true,
-      });
-      if (!baseItemVariation?.id) return badRequest("Nenhuma variação disponível para registrar custo");
+      const baseItemVariation =
+        await itemVariationPrismaEntity.findPrimaryVariationForItem(id, {
+          ensureBaseIfMissing: true,
+        });
+      if (!baseItemVariation?.id)
+        return badRequest("Nenhuma variação disponível para registrar custo");
       const metadata = {
         supplierName: supplierName || null,
         notes: notes || null,
@@ -767,7 +898,8 @@ export async function action({ request, params }: ActionFunctionArgs) {
       const validFrom = parseDateTimeInput(formData.get("validFrom"));
 
       if (!historyId) return badRequest("Levantamento manual inválido");
-      if (!(costAmount > 0)) return badRequest("Informe um custo maior que zero");
+      if (!(costAmount > 0))
+        return badRequest("Informe um custo maior que zero");
       if (!validFrom) return badRequest("Informe uma data válida");
 
       await updateManualItemCostEntry({
@@ -832,7 +964,11 @@ export async function action({ request, params }: ActionFunctionArgs) {
             .filter(Boolean)
         )
       );
-      const referenceVariationId = String(formData.get("referenceVariationId") || "").trim();
+      const referenceVariationId = String(
+        formData.get("referenceVariationId") || ""
+      ).trim();
+      const confirmedRecipeVariationRemoval =
+        String(formData.get("confirmRecipeVariationRemoval") || "") === "true";
 
       const allowedVariations = await db.variation.findMany({
         where: {
@@ -842,14 +978,51 @@ export async function action({ request, params }: ActionFunctionArgs) {
         select: { id: true },
       });
 
-      const normalizedVariationIds = allowedVariations.map((row: any) => row.id);
-      const linked = await itemVariationPrismaEntity.replaceItemVariations(id, normalizedVariationIds);
+      const normalizedVariationIds = allowedVariations.map(
+        (row: any) => row.id
+      );
+      const recipeLinkedVariationsToDisable = await db.itemVariation.findMany({
+        where: {
+          itemId: id,
+          deletedAt: null,
+          recipeId: { not: null },
+          variationId: { notIn: normalizedVariationIds },
+        },
+        select: {
+          id: true,
+          Variation: { select: { name: true } },
+          Recipe: { select: { name: true } },
+        },
+      });
+
+      if (
+        recipeLinkedVariationsToDisable.length > 0 &&
+        !confirmedRecipeVariationRemoval
+      ) {
+        const labels = recipeLinkedVariationsToDisable
+          .map((row: any) => {
+            const variationName = row.Variation?.name || "Variação sem nome";
+            const recipeName = row.Recipe?.name || "receita vinculada";
+            return `${variationName} (${recipeName})`;
+          })
+          .join(", ");
+
+        return badRequest(
+          `Confirme a eliminação da variação com receita vinculada antes de salvar: ${labels}`
+        );
+      }
+
+      const linked = await itemVariationPrismaEntity.replaceItemVariations(
+        id,
+        normalizedVariationIds
+      );
 
       const activeRows = (linked || []).filter((row: any) => !row.deletedAt);
-      const requestedReference = activeRows.find((row: any) => row.variationId === referenceVariationId);
+      const requestedReference = activeRows.find(
+        (row: any) => row.variationId === referenceVariationId
+      );
       const fallbackReference =
-        activeRows.find((row: any) => row.isReference) ||
-        activeRows[0];
+        activeRows.find((row: any) => row.isReference) || activeRows[0];
 
       const nextReference = requestedReference || fallbackReference;
 
@@ -864,10 +1037,15 @@ export async function action({ request, params }: ActionFunctionArgs) {
     }
 
     if (_action === "item-unit-link") {
-      const unitCode = String(formData.get("unitCode") || "").trim().toUpperCase();
+      const unitCode = String(formData.get("unitCode") || "")
+        .trim()
+        .toUpperCase();
       if (!unitCode) return badRequest("Informe a unidade");
-      const unit = await db.measurementUnit.findUnique({ where: { code: unitCode } });
-      if (!unit || unit.scope !== "restricted") return badRequest("Unidade inválida ou não restrita");
+      const unit = await db.measurementUnit.findUnique({
+        where: { code: unitCode },
+      });
+      if (!unit || unit.scope !== "restricted")
+        return badRequest("Unidade inválida ou não restrita");
       await db.itemUnit.upsert({
         where: { itemId_unitCode: { itemId: id, unitCode } },
         create: { id: randomUUID(), itemId: id, unitCode },
@@ -879,8 +1057,11 @@ export async function action({ request, params }: ActionFunctionArgs) {
     if (_action === "item-unit-unlink") {
       const itemUnitId = String(formData.get("itemUnitId") || "").trim();
       if (!itemUnitId) return badRequest("Vínculo inválido");
-      const existing = await db.itemUnit.findUnique({ where: { id: itemUnitId } });
-      if (!existing || existing.itemId !== id) return badRequest("Vínculo não encontrado");
+      const existing = await db.itemUnit.findUnique({
+        where: { id: itemUnitId },
+      });
+      if (!existing || existing.itemId !== id)
+        return badRequest("Vínculo não encontrado");
       await db.itemUnit.delete({ where: { id: itemUnitId } });
       return ok("Unidade desvinculada");
     }
@@ -937,8 +1118,19 @@ export type AdminItemOutletContext = {
     averageSamplesCount: number;
   }>;
   averageWindowDays: number;
-  measurementUnits: Array<{ id: string; code: string; name: string; kind: string | null; scope: string | null }>;
-  restrictedUnits: Array<{ id: string; code: string; name: string; kind: string | null }>;
+  measurementUnits: Array<{
+    id: string;
+    code: string;
+    name: string;
+    kind: string | null;
+    scope: string | null;
+  }>;
+  restrictedUnits: Array<{
+    id: string;
+    code: string;
+    name: string;
+    kind: string | null;
+  }>;
   linkedUnitCodes: string[];
 };
 
@@ -947,19 +1139,31 @@ export default function AdminItemDetailLayout() {
   const actionData = useActionData<typeof action>();
   const location = useLocation();
   const navigate = useNavigate();
-  const [showMissingVariationsDialog, setShowMissingVariationsDialog] = useState(false);
+  const [showMissingVariationsDialog, setShowMissingVariationsDialog] =
+    useState(false);
 
   const item = (loaderData?.payload as any)?.item;
   const costMetrics = (loaderData?.payload as any)?.costMetrics;
-  const costAverageWindows = ((loaderData?.payload as any)?.costAverageWindows || []) as Array<{
+  const costAverageWindows = ((loaderData?.payload as any)
+    ?.costAverageWindows || []) as Array<{
     averageWindowDays: number;
     averageCostPerConsumptionUnit: number | null;
     averageSamplesCount: number;
   }>;
-  const averageWindowDays = Number((loaderData?.payload as any)?.averageWindowDays || 30);
-  const unitOptions = ((loaderData?.payload as any)?.unitOptions || ITEM_UNIT_OPTIONS) as string[];
-  const categories = ((loaderData?.payload as any)?.categories || []) as Array<{ id: string; name: string }>;
-  const suppliers = (((loaderData?.payload as any)?.suppliers || []) as Array<{ id: string; name: string; cnpj?: string | null }>);
+  const averageWindowDays = Number(
+    (loaderData?.payload as any)?.averageWindowDays || 30
+  );
+  const unitOptions = ((loaderData?.payload as any)?.unitOptions ||
+    ITEM_UNIT_OPTIONS) as string[];
+  const categories = ((loaderData?.payload as any)?.categories || []) as Array<{
+    id: string;
+    name: string;
+  }>;
+  const suppliers = ((loaderData?.payload as any)?.suppliers || []) as Array<{
+    id: string;
+    name: string;
+    cnpj?: string | null;
+  }>;
   const activeTab = getItemActiveTab(location.pathname);
 
   useEffect(() => {
@@ -968,7 +1172,11 @@ export default function AdminItemDetailLayout() {
     }
 
     if (actionData?.status && actionData.status >= 400) {
-      toast({ title: "Erro", description: actionData.message, variant: "destructive" });
+      toast({
+        title: "Erro",
+        description: actionData.message,
+        variant: "destructive",
+      });
     }
 
     const shouldPromptMissingVariations =
@@ -988,11 +1196,11 @@ export default function AdminItemDetailLayout() {
   return (
     <div className="flex flex-col gap-6">
       <section className="space-y-5 border-b border-slate-200/80 pb-5">
-
-
         <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
           <div className="space-y-1">
-            <h2 className="text-2xl font-semibold tracking-tight text-slate-950">{item.name}</h2>
+            <h2 className="text-2xl font-semibold tracking-tight text-slate-950">
+              {item.name}
+            </h2>
             <p className="text-sm text-slate-500">{item.id}</p>
           </div>
         </div>
@@ -1003,17 +1211,34 @@ export default function AdminItemDetailLayout() {
           <div className="flex min-w-max items-center gap-6 text-sm">
             {itemNavigation.map((navItem) => {
               const isActive = activeTab === navItem.href;
+              const navCount =
+                navItem.href === "recipes"
+                  ? Number(item._linkedRecipeCount || 0)
+                  : navItem.href === "item-cost-sheets"
+                  ? Number(item._itemCostSheetCount || 0)
+                  : null;
               return (
                 <Link
                   key={navItem.href}
                   to={navItem.href}
-                  className={`border-b-2 pb-3 font-medium transition ${
+                  className={`inline-flex items-center gap-1.5 border-b-2 pb-3 font-medium transition ${
                     isActive
                       ? "border-slate-950 text-slate-950"
                       : "border-transparent text-slate-400 hover:text-slate-700"
                   }`}
                 >
-                  {navItem.name}
+                  <span>{navItem.name}</span>
+                  {navCount !== null ? (
+                    <span
+                      className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none ${
+                        isActive
+                          ? "bg-slate-950 text-white"
+                          : "bg-slate-100 text-slate-500"
+                      }`}
+                    >
+                      {navCount}
+                    </span>
+                  ) : null}
                 </Link>
               );
             })}
@@ -1027,29 +1252,44 @@ export default function AdminItemDetailLayout() {
             unitOptions,
             categories,
             suppliers,
-            recipeAssistantItems: ((loaderData?.payload as any)?.recipeAssistantItems || []),
-            recipeAssistantChatGptProjectUrl: String((loaderData?.payload as any)?.recipeAssistantChatGptProjectUrl || ""),
+            recipeAssistantItems:
+              (loaderData?.payload as any)?.recipeAssistantItems || [],
+            recipeAssistantChatGptProjectUrl: String(
+              (loaderData?.payload as any)?.recipeAssistantChatGptProjectUrl ||
+                ""
+            ),
             costMetrics,
             costAverageWindows,
             averageWindowDays,
-            measurementUnits: ((loaderData?.payload as any)?.measurementUnits || []),
-            restrictedUnits: ((loaderData?.payload as any)?.restrictedUnits || []),
-            linkedUnitCodes: ((loaderData?.payload as any)?.linkedUnitCodes || []),
+            measurementUnits:
+              (loaderData?.payload as any)?.measurementUnits || [],
+            restrictedUnits:
+              (loaderData?.payload as any)?.restrictedUnits || [],
+            linkedUnitCodes:
+              (loaderData?.payload as any)?.linkedUnitCodes || [],
           }}
         />
       </div>
 
-      <AlertDialog open={showMissingVariationsDialog} onOpenChange={setShowMissingVariationsDialog}>
+      <AlertDialog
+        open={showMissingVariationsDialog}
+        onOpenChange={setShowMissingVariationsDialog}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Este item ainda não tem variações configuradas</AlertDialogTitle>
+            <AlertDialogTitle>
+              Este item ainda não tem variações configuradas
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              Você quer configurar as variações agora? Se continuar, o sistema vai abrir a aba de variações deste item.
+              Você quer configurar as variações agora? Se continuar, o sistema
+              vai abrir a aba de variações deste item.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Depois</AlertDialogCancel>
-            <AlertDialogAction onClick={() => navigate(`/admin/items/${item.id}/variations`)}>
+            <AlertDialogAction
+              onClick={() => navigate(`/admin/items/${item.id}/variations`)}
+            >
               Configurar agora
             </AlertDialogAction>
           </AlertDialogFooter>

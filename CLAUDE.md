@@ -14,6 +14,10 @@ Rules:
 - The pipx package/venv is named `graphifyy`, but the required importable Python module for this repo is `graphify`
 - Validation command: `/home/lanzo/.local/share/pipx/venvs/graphifyy/bin/python -c "from graphify.watch import _rebuild_code; print('ok')"`
 
+## UI Components
+
+- Use shadcn/ui `Select` (`Select`, `SelectTrigger`, `SelectValue`, `SelectContent`, `SelectItem` from `~/components/ui/select`) instead of native `<select>` elements.
+
 ## Remix loaders
 
 Default to `defer` + `Suspense`/`Await`, or the current Remix equivalent, for route loaders that fetch database data, lists, reports, dashboards, or heavy payloads.
