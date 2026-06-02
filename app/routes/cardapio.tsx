@@ -300,7 +300,7 @@ function CardapioHeader() {
 
             {/* Barra de informação de contato */}
 
-            <div className=" bg-white   flex items-center justify-between border-t border-b px-4 py-2">
+            <div className="hidden bg-white items-center justify-between border-t border-b px-4 py-2 md:flex">
                 <div className="flex gap-4 items-center">
                     <ExternalLink to={WEBSITE_LINKS.instagram.href} aria-label={WEBSITE_LINKS.instagram.title} ariaLabel="Link pagina instagram"
                     >
@@ -325,7 +325,7 @@ function CardapioHeader() {
                 </WhatsappExternalLink>
             </div>
 
-            <div className="bg-black flex items-center justify-center h-[24px] md:h-[32px]">
+            <div className="hidden bg-black items-center justify-center h-[24px] md:flex md:h-[32px]">
                 <p className="font-neue text-white text-[11px] md:text-sm uppercase tracking-wider font-semibold">
                     Hórarios de funcionamento: Qua <span className="lowercase">a</span> Dom, <span className="lowercase">das</span> 18h <span className="lowercase">às</span> 22h
                 </p>
