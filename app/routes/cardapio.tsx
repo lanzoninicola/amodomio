@@ -476,7 +476,7 @@ function CardapioFooter() {
                                 className="group h-9 rounded-lg border border-black px-4 py-0 shadow-[0_2px_0_rgba(0,0,0,0.18)] md:h-auto"
                                 cnLabel="text-[12px] leading-none tracking-wide font-semibold font-neue md:text-md"
                                 externalLinkURL={url}
-                                iconRight={<ArrowRight className="h-5 w-5 animate-[ctaArrowExit_1.8s_ease-in-out_infinite]" aria-hidden="true" />}
+                                iconRight={<CardapioFooterCtaArrow />}
                                 onClick={() => trackCardapioFacebookPixelTrigger("fazer_pedido_click")}
                             />
                         </div>
@@ -486,6 +486,15 @@ function CardapioFooter() {
 
         </footer>
     );
+}
+
+function CardapioFooterCtaArrow() {
+    return (
+        <span className="relative h-5 w-6 overflow-hidden" aria-hidden="true">
+            <ArrowRight className="absolute inset-y-0 right-0 h-5 w-5 animate-[ctaArrowExit_1.8s_ease-in-out_infinite]" />
+            <ArrowRight className="absolute inset-y-0 right-0 h-5 w-5 animate-[ctaArrowEnter_1.8s_ease-in-out_infinite]" />
+        </span>
+    )
 }
 
 
