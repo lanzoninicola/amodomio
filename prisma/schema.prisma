@@ -580,7 +580,7 @@ model MenuItem {
 
 model MenuItemImage {
   id               String     @id @default(uuid())
-  /// "secure_url": "https://res.cloudinary.com/dy8gw8ahl/image/upload/v1723138046/rvife3elpmmjojlnwypm.jpg",
+  /// "secure_url": "https://media.amodomio.com.br/items/margherita.jpg"
   secureUrl        String?    @map("secure_url")
   /// "asset_folder": "cardapio"
   assetFolder      String?    @map("asset_folder")
@@ -589,7 +589,7 @@ model MenuItemImage {
   displayName      String?    @map("display_name")
   height           Float?     @map("height")
   width            Float?     @map("width")
-  /// "thumbnail_url": "https://res.cloudinary.com/dy8gw8ahl/image/upload/c_limit,h_60,w_90/v1723138046/rvife3elpmmjojlnwypm.jpg"
+  /// "thumbnail_url": "https://media.amodomio.com.br/items/margherita-thumb.jpg"
   thumbnailUrl     String?    @map("thumbnail_url")
   format           String?    @map("format")
   publicId         String?    @map("public_id")

@@ -1,9 +1,6 @@
 import type { LoaderFunctionArgs } from "@remix-run/node";
 
-const ALLOWED_HOSTS = new Set([
-  "media.amodomio.com.br",
-  "res.cloudinary.com",
-]);
+const ALLOWED_HOSTS = new Set(["media.amodomio.com.br"]);
 
 function sanitizeFilename(input?: string | null) {
   const raw = String(input || "").trim();

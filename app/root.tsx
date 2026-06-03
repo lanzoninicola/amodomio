@@ -1,4 +1,8 @@
-import type { LinksFunction, LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
+import type {
+  LinksFunction,
+  LoaderFunctionArgs,
+  MetaFunction,
+} from "@remix-run/node";
 import {
   Link,
   Links,
@@ -14,48 +18,51 @@ import { Toaster } from "./components/ui/toaster";
 import stylesheet from "~/tailwind.css?url";
 import GoogleTagManagerScriptTag from "./components/primitives/google-tag-manager/gtm-script";
 import GoogleTagManagerNoScriptTag from "./components/primitives/google-tag-manager/gtm-noscript";
-import { Analytics } from '@vercel/analytics/react';
+import { Analytics } from "@vercel/analytics/react";
 import { ok } from "./utils/http-response.server";
 import { ArrowRight } from "lucide-react";
 import Logo from "./components/primitives/logo/logo";
 import MicrosoftClarityScriptTag from "./components/primitives/ms-clarity/ms-clarity-script";
 import WEBSITE_LINKS from "./domain/website-navigation/links/website-links";
-import { getErrorMessage, isDatabaseConnectivityError } from "./lib/errors/connectivity";
+import {
+  getErrorMessage,
+  isDatabaseConnectivityError,
+} from "./lib/errors/connectivity";
 
 export const meta: MetaFunction = () => {
   return [
     { title: "Pizza Delivery Italiana em Pato Branco - A Modo Mio" },
     {
       name: "description",
-      content: "Experimente a autêntica pizza italiana da A Modo Mio em Pato Branco. Crocante, artesanal e irresistível. Peça agora!",
+      content:
+        "Experimente a autêntica pizza italiana da A Modo Mio em Pato Branco. Crocante, artesanal e irresistível. Peça agora!",
     },
     {
       name: "keywords",
-      content: "pizza, pizza pato branco, pizza em pedaços, pizza al taglio, delivery, pizza delivery, pizza delivery a modo mio, pizzaria pato branco, pizza pato branco, pizza al taglio",
-    }
+      content:
+        "pizza, pizza pato branco, pizza em pedaços, pizza al taglio, delivery, pizza delivery, pizza delivery a modo mio, pizzaria pato branco, pizza pato branco, pizza al taglio",
+    },
   ];
 };
 
 const fontsVariants = (font: string) => {
   // const variants = ["Black", "Bold", "Light", "Medium", "Regular", "Semibold", "Thin"]
-  const variants = ["Medium"]
+  const variants = ["Medium"];
 
-  return variants.map(v => `${font}${v}`)
-}
+  return variants.map((v) => `${font}${v}`);
+};
 
 const linkFontVariant = (font: string) => {
-
-  return fontsVariants(font).map(variant => {
+  return fontsVariants(font).map((variant) => {
     return {
       rel: "preload",
       href: `/fonts/${variant}.ttf`,
       as: "font",
       type: "font/ttf",
       crossOrigin: "anonymous",
-    }
-  })
-}
-
+    };
+  });
+};
 
 // @ts-ignore
 export const links: LinksFunction = () => [
@@ -106,64 +113,54 @@ export const links: LinksFunction = () => [
   // { rel: 'icon', href: '/favicon.ico' },
 
   // ...linkFontVariant("Lufga"),
-
 ];
 
 export interface EnvironmentVariables {
-
-  MODE: "development" | "production"
-  GTM_ID?: string
-  CLOUDINARY_CLOUD_NAME?: string
-  REST_API_SECRET_KEY?: string
+  MODE: "development" | "production";
+  GTM_ID?: string;
+  REST_API_SECRET_KEY?: string;
 }
 
-
 export async function loader({ request }: LoaderFunctionArgs) {
-
-  const env = import.meta.env
+  const env = import.meta.env;
   const ENV: EnvironmentVariables = {
     MODE: env.VITE_MODE ?? "development",
     GTM_ID: env.VITE_GOOGLE_TAG_MANAGER_ID ?? "",
-    CLOUDINARY_CLOUD_NAME: env.VITE_CLOUDINARY_CLOUD_NAME ?? "",
-  }
+  };
 
   return ok({
-    env: ENV
-  })
+    env: ENV,
+  });
 }
 
 export default function App() {
-  const loaderData = useLoaderData<typeof loader>()
-  const ENV: EnvironmentVariables = loaderData?.payload?.env
-
-
+  const loaderData = useLoaderData<typeof loader>();
+  const ENV: EnvironmentVariables = loaderData?.payload?.env;
 
   return (
     <html lang="pt-br" className="scroll-smooth">
       <head>
         <meta charSet="utf-8" />
-        <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+        <meta
+          name="viewport"
+          content="width=device-width,initial-scale=1,viewport-fit=cover"
+        />
         <Meta />
         <Links />
         {ENV.GTM_ID !== "" && <GoogleTagManagerScriptTag id={ENV.GTM_ID} />}
         {ENV.MODE === "production" && <MicrosoftClarityScriptTag />}
       </head>
       <body>
-
         <Outlet />
         <Toaster />
         <ScrollRestoration />
         <Scripts />
-        <script src="https://upload-widget.cloudinary.com/latest/global/all.js" type="text/javascript" />
         <Analytics />
         {ENV.GTM_ID !== "" && <GoogleTagManagerNoScriptTag id={ENV.GTM_ID} />}
       </body>
     </html>
   );
 }
-
-
-
 
 export function ErrorBoundary() {
   const error = useRouteError();
@@ -172,7 +169,8 @@ export function ErrorBoundary() {
   const isAdminRootRoute = pathname === "/admin";
   const shouldRedirectCardapio = pathname.startsWith("/cardapio");
   const isDbUnavailable = isDatabaseConnectivityError(error);
-  const shouldForceCardapioRedirect = shouldRedirectCardapio && !isDbUnavailable;
+  const shouldForceCardapioRedirect =
+    shouldRedirectCardapio && !isDbUnavailable;
   const cardapioFallbackHref = WEBSITE_LINKS.saiposCardapio.href;
   const errorDetails = (() => {
     if (error instanceof Error) {
@@ -187,8 +185,13 @@ export function ErrorBoundary() {
   })();
 
   const primaryAction = (() => {
-    if (pathname.startsWith("/admin")) return { href: "/admin", label: "Voltar para o painel" };
-    if (pathname.startsWith("/cardapio")) return { href: cardapioFallbackHref, label: "Ir para finalizar o pedido" };
+    if (pathname.startsWith("/admin"))
+      return { href: "/admin", label: "Voltar para o painel" };
+    if (pathname.startsWith("/cardapio"))
+      return {
+        href: cardapioFallbackHref,
+        label: "Ir para finalizar o pedido",
+      };
     return { href: "/", label: "Ir para a página inicial" };
   })();
 
@@ -206,9 +209,13 @@ export function ErrorBoundary() {
           <div className="min-h-screen bg-slate-50 px-6 py-8 text-slate-900 md:px-10 md:py-10">
             <div className="mx-auto max-w-3xl space-y-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm md:p-8">
               <div className="space-y-2">
-                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Admin</p>
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+                  Admin
+                </p>
                 <h1 className="text-2xl font-semibold md:text-3xl">
-                  {isDbUnavailable ? "Banco temporariamente indisponível" : "Ocorreu um erro no painel administrativo"}
+                  {isDbUnavailable
+                    ? "Banco temporariamente indisponível"
+                    : "Ocorreu um erro no painel administrativo"}
                 </h1>
                 <p className="text-sm text-slate-600 md:text-base">
                   {isDbUnavailable
@@ -219,7 +226,8 @@ export function ErrorBoundary() {
 
               {isDbUnavailable ? (
                 <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-                  {getErrorMessage(error) || "Falha de conectividade com a base de dados."}
+                  {getErrorMessage(error) ||
+                    "Falha de conectividade com a base de dados."}
                 </div>
               ) : null}
 
@@ -276,7 +284,9 @@ export function ErrorBoundary() {
         {shouldForceCardapioRedirect ? (
           <script
             dangerouslySetInnerHTML={{
-              __html: `window.location.replace(${JSON.stringify(cardapioFallbackHref)});`,
+              __html: `window.location.replace(${JSON.stringify(
+                cardapioFallbackHref
+              )});`,
             }}
           />
         ) : null}
@@ -291,10 +301,14 @@ export function ErrorBoundary() {
 
             <main className="grid items-center gap-10 rounded-3xl border border-amber-100 bg-white/80 p-8 shadow-[0_20px_70px_rgba(17,24,39,0.08)] backdrop-blur-sm md:p-12 lg:grid-cols-[1.05fr_0.95fr]">
               <div className="space-y-6">
-                <p className="text-xs font-semibold uppercase tracking-[0.25em] text-amber-600">Algo saiu do forno errado</p>
+                <p className="text-xs font-semibold uppercase tracking-[0.25em] text-amber-600">
+                  Algo saiu do forno errado
+                </p>
                 <div className="space-y-3">
                   <h1 className="text-4xl font-semibold leading-tight md:text-5xl">
-                    {isDbUnavailable ? "Banco temporariamente indisponível." : "Desculpe, tivemos um imprevisto."}
+                    {isDbUnavailable
+                      ? "Banco temporariamente indisponível."
+                      : "Desculpe, tivemos um imprevisto."}
                   </h1>
                   <p className="text-lg text-slate-600 md:max-w-xl">
                     {isDbUnavailable
@@ -303,7 +317,8 @@ export function ErrorBoundary() {
                   </p>
                   {isDbUnavailable ? (
                     <p className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 md:max-w-xl">
-                      {getErrorMessage(error) || "Falha de conectividade com a base de dados."}
+                      {getErrorMessage(error) ||
+                        "Falha de conectividade com a base de dados."}
                     </p>
                   ) : null}
                   {shouldForceCardapioRedirect ? (
@@ -315,27 +330,52 @@ export function ErrorBoundary() {
 
                 <div className="flex flex-wrap gap-3">
                   <Link
-                    to={isDbUnavailable ? `${pathname}${location.search}` : primaryAction.href}
+                    to={
+                      isDbUnavailable
+                        ? `${pathname}${location.search}`
+                        : primaryAction.href
+                    }
                     reloadDocument={isDbUnavailable}
                     className="inline-flex items-center gap-2 rounded-full bg-slate-900 px-5 py-3 text-sm font-semibold uppercase tracking-wide text-white shadow-md transition hover:-translate-y-0.5 hover:shadow-lg"
                   >
-                    <span>{isDbUnavailable ? "Tentar novamente" : primaryAction.label}</span>
+                    <span>
+                      {isDbUnavailable
+                        ? "Tentar novamente"
+                        : primaryAction.label}
+                    </span>
                     <ArrowRight className="h-4 w-4" />
                   </Link>
                   <Link
-                    to={shouldForceCardapioRedirect ? cardapioFallbackHref : "/cardapio"}
+                    to={
+                      shouldForceCardapioRedirect
+                        ? cardapioFallbackHref
+                        : "/cardapio"
+                    }
                     className="inline-flex items-center gap-2 rounded-full border border-slate-300 px-5 py-3 text-sm font-semibold uppercase tracking-wide text-slate-700 transition hover:border-slate-400 hover:bg-slate-50"
                   >
-                    <span>{shouldForceCardapioRedirect ? "Ir para finalizar o pedido" : "Ver cardápio digital"}</span>
+                    <span>
+                      {shouldForceCardapioRedirect
+                        ? "Ir para finalizar o pedido"
+                        : "Ver cardápio digital"}
+                    </span>
                   </Link>
                 </div>
               </div>
 
               <div className="relative flex items-center justify-center">
-                <div className="absolute inset-0 -z-10 mx-auto h-72 w-72 rounded-full bg-amber-100/70 blur-3xl" aria-hidden />
+                <div
+                  className="absolute inset-0 -z-10 mx-auto h-72 w-72 rounded-full bg-amber-100/70 blur-3xl"
+                  aria-hidden
+                />
                 <div className="flex flex-col items-center gap-4 rounded-2xl border border-amber-100 bg-white/80 p-6 shadow-inner">
-                  <img src="/images/gato-chorando.gif" alt="Gatinho triste" className="w-44 md:w-52" />
-                  <div className="text-sm text-slate-500">Prometemos voltar a servir rapidinho.</div>
+                  <img
+                    src="/images/gato-chorando.gif"
+                    alt="Gatinho triste"
+                    className="w-44 md:w-52"
+                  />
+                  <div className="text-sm text-slate-500">
+                    Prometemos voltar a servir rapidinho.
+                  </div>
                 </div>
               </div>
             </main>
