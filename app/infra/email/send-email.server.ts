@@ -1,7 +1,5 @@
-import { getRandomFlyingKody } from "~/images";
 import { type User } from "~/types";
 import { markdownToHtmlDocument } from "./markdown.server";
-import { getOptionalTeam } from "./misc";
 
 let mailgunDomain = "mg.example.com";
 if (process.env.MAILGUN_DOMAIN) {
@@ -66,10 +64,6 @@ async function sendMagicLinkEmail({
   const { hostname } = new URL(domainUrl);
   const userExists = Boolean(user);
 
-  const randomSportyKody = getRandomFlyingKody(
-    user ? getOptionalTeam(user.team) : undefined
-  );
-
   const text = `
 Here's your sign-in link for ${hostname}:
 
@@ -125,9 +119,7 @@ P.S. If you did not request this email, you can safely ignore it.
           : `Hey ${emailAddress}! Welcome to ${hostname}`
       }</h2>
 
-      <center><img src="https://res.cloudinary.com/kentcdodds-com/image/upload/w_800,q_auto,f_auto/${
-        randomSportyKody.id
-      }" style="max-width: 80%"></center>
+      <center><img src="${domainUrl}/images/logo-transparent.png" style="max-width: 80%"></center>
 
       <h3 style="text-align: center">Click the button below to login to ${hostname}</h3>
 
