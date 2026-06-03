@@ -1,5 +1,16 @@
 import type { ActionFunctionArgs } from "@remix-run/node";
 import { Form, useActionData, useOutletContext } from "@remix-run/react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "~/components/ui/alert-dialog";
 import { Switch } from "~/components/ui/switch";
 import { invalidateCardapioIndexCache } from "~/domain/cardapio/cardapio-cache.server";
 import { buildAdminItemsMeta } from "~/domain/item/admin-items-meta";
@@ -14,7 +25,10 @@ function formatPercent(value: number) {
 }
 
 function formatCurrency(value: number) {
-  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(Number(value || 0));
+  return new Intl.NumberFormat("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+  }).format(Number(value || 0));
 }
 
 export async function action({ request, params }: ActionFunctionArgs) {
@@ -26,16 +40,57 @@ export async function action({ request, params }: ActionFunctionArgs) {
     const formData = await request.formData();
     const actionName = String(formData.get("_action") || "");
 
-    if (actionName !== "toggle-item-channel" && actionName !== "toggle-item-channel-visible") {
+    if (
+      actionName !== "toggle-item-channel" &&
+      actionName !== "toggle-item-channel-visible" &&
+      actionName !== "toggle-item-upcoming"
+    ) {
       return badRequest("Ação inválida");
     }
 
-    const itemSellingChannelId = String(formData.get("itemSellingChannelId") || "").trim();
+    if (actionName === "toggle-item-upcoming") {
+      const upcoming = String(formData.get("upcoming") || "").trim() === "true";
+      const item = await db.item.findUnique({
+        where: { id: itemId },
+        select: { id: true, name: true },
+      });
+
+      if (!item) return badRequest("Item não encontrado");
+
+      await db.itemSellingInfo.upsert({
+        where: { itemId },
+        update: {
+          upcoming,
+        },
+        create: {
+          itemId,
+          upcoming,
+        },
+      });
+
+      await invalidateCardapioIndexCache();
+
+      return ok(
+        upcoming
+          ? "Item marcado como lançamento futuro."
+          : "Item removido de lançamento futuro."
+      );
+    }
+
+    const itemSellingChannelId = String(
+      formData.get("itemSellingChannelId") || ""
+    ).trim();
     if (!itemSellingChannelId) return badRequest("Canal inválido");
 
     const [item, channel] = await Promise.all([
-      db.item.findUnique({ where: { id: itemId }, select: { id: true, name: true } }),
-      db.itemSellingChannel.findUnique({ where: { id: itemSellingChannelId }, select: { id: true, key: true, name: true } }),
+      db.item.findUnique({
+        where: { id: itemId },
+        select: { id: true, name: true },
+      }),
+      db.itemSellingChannel.findUnique({
+        where: { id: itemSellingChannelId },
+        select: { id: true, key: true, name: true },
+      }),
     ]);
 
     if (!item) return badRequest("Item não encontrado");
@@ -55,7 +110,9 @@ export async function action({ request, params }: ActionFunctionArgs) {
       });
 
       if (!channelItem) {
-        return badRequest("Vincule o item ao canal antes de controlar a visibilidade.");
+        return badRequest(
+          "Vincule o item ao canal antes de controlar a visibilidade."
+        );
       }
 
       if (visible && channelKey !== "cardapio") {
@@ -72,7 +129,9 @@ export async function action({ request, params }: ActionFunctionArgs) {
         });
 
         if (cardapioChannelItem?.visible !== true) {
-          return badRequest("Para exibir em outros canais, primeiro deixe o item visível no cardápio.");
+          return badRequest(
+            "Para exibir em outros canais, primeiro deixe o item visível no cardápio."
+          );
         }
       }
 
@@ -87,7 +146,9 @@ export async function action({ request, params }: ActionFunctionArgs) {
         });
         await invalidateCardapioIndexCache();
 
-        return ok("Item ocultado no cardápio e em todos os outros canais de venda.");
+        return ok(
+          "Item ocultado no cardápio e em todos os outros canais de venda."
+        );
       }
 
       await db.itemSellingChannelItem.update({
@@ -134,27 +195,48 @@ export async function action({ request, params }: ActionFunctionArgs) {
     const connectedPriceCount =
       typeof db.itemSellingPriceVariation?.count === "function"
         ? await db.itemSellingPriceVariation.count({
-            where: {
-              itemId,
-              itemSellingChannelId,
-            },
-          })
+          where: {
+            itemId,
+            itemSellingChannelId,
+          },
+        })
         : 0;
+    const confirmedPriceRemoval =
+      String(formData.get("confirmPriceRemoval") || "").trim() === "true";
 
-    if (connectedPriceCount > 0) {
+    if (connectedPriceCount > 0 && !confirmedPriceRemoval) {
       return badRequest(
-        `Nao foi possivel remover do canal ${channel.name}: existem ${connectedPriceCount} preco(s) conectado(s). Use a visibilidade do canal.`
+        `Confirme a remocao do canal ${channel.name}. Existem ${connectedPriceCount} preco(s) conectado(s) que serao apagados.`
       );
     }
 
-    await db.itemSellingChannelItem.deleteMany({
-      where: {
-        itemId,
-        itemSellingChannelId,
-      },
+    await db.$transaction(async (tx: any) => {
+      if (connectedPriceCount > 0) {
+        await tx.itemSellingPriceVariation.deleteMany({
+          where: {
+            itemId,
+            itemSellingChannelId,
+          },
+        });
+      }
+
+      await tx.itemSellingChannelItem.deleteMany({
+        where: {
+          itemId,
+          itemSellingChannelId,
+        },
+      });
     });
 
-    return ok(`Item desvinculado do canal ${channel.name}.`);
+    if (String(channel.key || "").toLowerCase() === "cardapio") {
+      await invalidateCardapioIndexCache();
+    }
+
+    return ok(
+      connectedPriceCount > 0
+        ? `Item removido do canal ${channel.name}. ${connectedPriceCount} preco(s) conectado(s) foram apagados.`
+        : `Item desvinculado do canal ${channel.name}.`
+    );
   } catch (error) {
     return serverError(error);
   }
@@ -162,51 +244,103 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
 export default function AdminItemVendaCanaisRoute() {
   const actionData = useActionData<typeof action>();
-  const { channels } = useOutletContext<AdminItemVendaOutletContext>();
+  const { channels, nativePublication } =
+    useOutletContext<AdminItemVendaOutletContext>();
   const enabledChannels = channels.filter((channel) => channel.enabledForItem);
-  const cardapioVisible = channels.some((channel) => channel.key === "cardapio" && channel.visibleForItem);
+  const cardapioVisible = channels.some(
+    (channel) => channel.key === "cardapio" && channel.visibleForItem
+  );
 
   return (
     <div className="space-y-4">
       {actionData?.message ? (
-        <div className={`rounded-md border px-3 py-2 text-sm ${actionData.status >= 400 ? "border-red-200 bg-red-50 text-red-700" : "border-emerald-200 bg-emerald-50 text-emerald-700"}`}>
+        <div
+          className={`rounded-md border px-3 py-2 text-sm ${actionData.status >= 400
+            ? "border-red-200 bg-red-50 text-red-700"
+            : "border-emerald-200 bg-emerald-50 text-emerald-700"
+            }`}
+        >
           {actionData.message}
         </div>
       ) : null}
 
-      <div className="rounded-xl border border-slate-200 bg-white p-4">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Disponibilidade por canal</h2>
-        <p className="mt-1 text-sm text-slate-600">
-          Aqui você define em quais canais este item entra. Isso passa a dirigir a visibilidade pública e a edição de preços por canal.
-        </p>
-        <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-500">
-          <span>{enabledChannels.length} canal(is) habilitado(s)</span>
-          {enabledChannels.length > 0 ? (
-            <span>
-              · {enabledChannels.map((channel) => channel.name).join(", ")}
-            </span>
-          ) : null}
-        </div>
+      <div className="">
+
+
+        <Form
+          id="item-upcoming-form"
+          method="post"
+          className={`mt-4 rounded-lg border px-3 py-3  max-w-2xl ${nativePublication?.upcoming
+            ? "border-amber-200 bg-amber-50"
+            : "border-slate-200 bg-slate-50"
+            }`}
+        >
+          <input type="hidden" name="_action" value="toggle-item-upcoming" />
+          <input
+            id="item-upcoming-value"
+            type="hidden"
+            name="upcoming"
+            value={nativePublication?.upcoming ? "true" : "false"}
+          />
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <div className="text-sm font-semibold text-slate-900">
+                Lançamento futuro
+              </div>
+              <p
+                className={`mt-1 text-xs ${nativePublication?.upcoming
+                  ? "text-amber-900"
+                  : "text-slate-500"
+                  }`}
+              >
+                {nativePublication?.upcoming
+                  ? "Mesmo vinculado aos canais, este item ainda não fica visível publicamente."
+                  : "Quando ativo, o item fica fora da vitrine pública nativa sem desfazer os vínculos por canal."}
+              </p>
+            </div>
+            <Switch
+              checked={nativePublication?.upcoming === true}
+              onCheckedChange={(checked) => {
+                const input = document.getElementById(
+                  "item-upcoming-value"
+                ) as HTMLInputElement | null;
+                const form = document.getElementById(
+                  "item-upcoming-form"
+                ) as HTMLFormElement | null;
+                if (input) input.value = checked ? "true" : "false";
+                form?.requestSubmit();
+              }}
+            />
+          </div>
+        </Form>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         {channels.map((channel) => (
-          <section key={channel.key} className="rounded-xl border border-slate-200 bg-white p-4">
+          <section
+            key={channel.key}
+            className="rounded-xl border border-slate-200 bg-white p-4"
+          >
             <div className="flex items-start justify-between gap-3">
               <div>
-                <h3 className="text-sm font-semibold text-slate-900">{channel.name}</h3>
+                <h3 className="text-sm font-semibold text-slate-900">
+                  {channel.name}
+                </h3>
                 {channel.description ? (
-                  <p className="mt-1 text-xs text-slate-600">{channel.description}</p>
+                  <p className="mt-1 text-xs text-slate-600">
+                    {channel.description}
+                  </p>
                 ) : null}
               </div>
               <span
-                className={`rounded-full px-2 py-1 text-[11px] font-semibold uppercase tracking-wide ${
-                  channel.enabledForItem
-                    ? "bg-emerald-100 text-emerald-700"
-                    : "bg-slate-100 text-slate-600"
-                }`}
+                className={`rounded-full px-2 py-1 text-[11px] font-semibold uppercase tracking-wide ${channel.enabledForItem
+                  ? "bg-emerald-100 text-emerald-700"
+                  : "bg-slate-100 text-slate-600"
+                  }`}
               >
-                {channel.enabledForItem ? "Item no canal" : "Item fora do canal"}
+                {channel.enabledForItem
+                  ? "Item no canal"
+                  : "Item fora do canal"}
               </span>
             </div>
 
@@ -241,7 +375,9 @@ export default function AdminItemVendaCanaisRoute() {
               </div>
               <div className="flex items-center justify-between gap-2">
                 <dt className="text-slate-500">Tipo</dt>
-                <dd>{channel.isMarketplace ? "Marketplace" : "Canal direto"}</dd>
+                <dd>
+                  {channel.isMarketplace ? "Marketplace" : "Canal direto"}
+                </dd>
               </div>
               <div className="flex items-center justify-between gap-2">
                 <dt className="text-slate-500">Visibilidade</dt>
@@ -280,11 +416,21 @@ export default function AdminItemVendaCanaisRoute() {
                       method="post"
                       className="rounded-lg border border-slate-200 px-3 py-3"
                     >
-                      <input type="hidden" name="_action" value="toggle-item-channel-visible" />
-                      <input type="hidden" name="itemSellingChannelId" value={channel.id} />
+                      <input
+                        type="hidden"
+                        name="_action"
+                        value="toggle-item-channel-visible"
+                      />
+                      <input
+                        type="hidden"
+                        name="itemSellingChannelId"
+                        value={channel.id}
+                      />
                       <div className="flex items-center justify-between gap-3">
                         <div>
-                          <div className="text-xs font-semibold text-slate-900">Visivel neste canal</div>
+                          <div className="text-xs font-semibold text-slate-900">
+                            Visivel neste canal
+                          </div>
                           <div className="text-xs text-slate-500">
                             {channel.key !== "cardapio" && !cardapioVisible
                               ? "Oculto enquanto o cardapio estiver oculto."
@@ -293,7 +439,9 @@ export default function AdminItemVendaCanaisRoute() {
                         </div>
                         <Switch
                           checked={channel.visibleForItem}
-                          disabled={channel.key !== "cardapio" && !cardapioVisible}
+                          disabled={
+                            channel.key !== "cardapio" && !cardapioVisible
+                          }
                           onCheckedChange={(checked) => {
                             const input = document.getElementById(
                               `channel-visible-${channel.key}`
@@ -315,36 +463,111 @@ export default function AdminItemVendaCanaisRoute() {
                     </Form>
                   ) : null}
 
-                  <Form
-                    id={channel.enabledForItem ? undefined : `channel-link-form-${channel.key}`}
-                    method="post"
-                    className="w-full"
-                  >
-                    <input type="hidden" name="_action" value="toggle-item-channel" />
-                    <input type="hidden" name="itemSellingChannelId" value={channel.id} />
-                    <input type="hidden" name="enabled" value={channel.enabledForItem ? "false" : "true"} />
-                    <button
-                      type="submit"
-                      className={`inline-flex h-9 w-full items-center justify-center rounded-md px-3 text-xs font-semibold transition ${
+                  {channel.enabledForItem && channel.totalPriceEntries > 0 ? (
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <button
+                          type="button"
+                          className="inline-flex h-9 w-full items-center justify-center rounded-md border border-red-200 bg-white px-3 text-xs font-semibold text-red-700 transition hover:bg-red-50"
+                        >
+                          Remover do canal
+                        </button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>
+                            Remover item do canal?
+                          </AlertDialogTitle>
+                          <AlertDialogDescription>
+                            Este item tem {channel.totalPriceEntries} preco(s)
+                            conectado(s) ao canal {channel.name}. Ao confirmar,
+                            o vinculo com o canal e esses precos serao apagados.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <Form
+                          method="post"
+                          id={`channel-remove-form-${channel.key}`}
+                        >
+                          <input
+                            type="hidden"
+                            name="_action"
+                            value="toggle-item-channel"
+                          />
+                          <input
+                            type="hidden"
+                            name="itemSellingChannelId"
+                            value={channel.id}
+                          />
+                          <input type="hidden" name="enabled" value="false" />
+                          <input
+                            type="hidden"
+                            name="confirmPriceRemoval"
+                            value="true"
+                          />
+                        </Form>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                          <AlertDialogAction asChild>
+                            <button
+                              type="submit"
+                              form={`channel-remove-form-${channel.key}`}
+                              className="bg-red-600 text-white hover:bg-red-700"
+                            >
+                              Remover e apagar precos
+                            </button>
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  ) : (
+                    <Form
+                      id={
                         channel.enabledForItem
+                          ? undefined
+                          : `channel-link-form-${channel.key}`
+                      }
+                      method="post"
+                      className="w-full"
+                    >
+                      <input
+                        type="hidden"
+                        name="_action"
+                        value="toggle-item-channel"
+                      />
+                      <input
+                        type="hidden"
+                        name="itemSellingChannelId"
+                        value={channel.id}
+                      />
+                      <input
+                        type="hidden"
+                        name="enabled"
+                        value={channel.enabledForItem ? "false" : "true"}
+                      />
+                      <button
+                        type="submit"
+                        className={`inline-flex h-9 w-full items-center justify-center rounded-md px-3 text-xs font-semibold transition ${channel.enabledForItem
                           ? "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
                           : "bg-slate-900 text-white hover:bg-slate-700"
-                      }`}
-                    >
-                      {channel.enabledForItem ? "Remover do canal" : "Vincular ao canal"}
-                    </button>
-                  </Form>
+                          }`}
+                      >
+                        {channel.enabledForItem
+                          ? "Remover do canal"
+                          : "Vincular ao canal"}
+                      </button>
+                    </Form>
+                  )}
                 </div>
               ) : (
                 <div className="rounded-lg border border-dashed border-slate-200 px-3 py-3 text-xs text-slate-400">
-                  Cadastre este canal em `/admin/canais-venda` para habilitá-lo aqui.
+                  Cadastre este canal em `/admin/canais-venda` para habilitá-lo
+                  aqui.
                 </div>
               )}
             </div>
           </section>
         ))}
       </div>
-
     </div>
   );
 }

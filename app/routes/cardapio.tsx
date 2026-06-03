@@ -1,6 +1,6 @@
 import { InstagramLogoIcon } from "@radix-ui/react-icons";
 import { LinksFunction, LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
-import { Await, Link, Outlet, defer, useLoaderData, useRouteError } from "@remix-run/react";
+import { Await, Link, Outlet, defer, useLoaderData, useLocation, useNavigate, useRouteError } from "@remix-run/react";
 import { ArrowRight, Bell, Divide, Info, Instagram, LayoutTemplate, MapPin, Proportions, SearchIcon } from "lucide-react";
 import React, { ReactNode, Suspense, useEffect, useState } from "react";
 
@@ -231,7 +231,7 @@ function CardapioHeader() {
 
     return (
         <header className="fixed top-0 w-full z-30 md:max-w-6xl md:-translate-x-1/2 md:left-1/2 " >
-            <div className="flex flex-col bg-white px-1 pt-2 py-3 h-[50px] md:h-[70px]">
+            <div className="flex flex-col border-b border-gray-200 bg-white px-1 pt-2 py-3 h-[50px] md:h-[70px] md:border-b-0">
                 <div className="grid grid-cols-3 items-center w-full">
                     {/* <div className="flex gap-1 items-center" onClick={() => setShowSearch(!showSearch)}>
                         <HamburgerMenuIcon className="w-6 h-6" />
@@ -240,59 +240,62 @@ function CardapioHeader() {
 
                     <Link to={WEBSITE_LINKS.cardapioPublic.href} className="flex col-span-2">
                         <div className="px-4 -py-3">
-                            <Logo color="black" onlyText={true} className="w-[120px] h-[30px] md:w-[150px] md:h-[50px]" tagline={false} />
+                            <Logo color="black" circle className="w-8 p-0 md:hidden" tagline={false} />
+                            <Logo color="black" onlyText={true} className="hidden h-[50px] w-[150px] md:block" tagline={false} />
                         </div>
                     </Link>
 
                     <div className="w-full flex items-center gap-x-2 justify-end col-span-1">
                         {notificationsEnabled && <NotificationBell />}
-                        <Link to={'buscar'} >
+                        <Link to={'buscar'} className="hidden md:block">
                             <div className="flex h-10 w-10 items-center justify-center cursor-pointer" onClick={() => setShowSearch(!showSearch)}>
                                 <SearchIcon color={"black"} className="h-5 w-5" />
                                 {/* <span className="font-neue text-[10px] font-semibold  uppercase text-brand-blue">Pesquisar</span> */}
                             </div>
                         </Link>
-                        <WebsiteNavigationSidebar
-                            homeLink={{ label: WEBSITE_LINKS.cardapioPublic.title, to: WEBSITE_LINKS.cardapioPublic.href }}
-                            navigationLinks={PUBLIC_NAVIGATION_LINKS}
-                            buttonTrigger={{
-                                label: "",
-                                classNameLabel: "block font-neue text-[10px] font-semibold uppercase",
-                                classNameButton: "justify-end h-full text-black bg-transparent hover:bg-transparent hover:text-black px-0",
-                            }}
-                            cnLink="font-neue md:text-xl uppercase tracking-widest"
-                            preMenuContent={
-                                <CompanyInfo />
-                            }
+                        <div className="hidden md:block">
+                            <WebsiteNavigationSidebar
+                                homeLink={{ label: WEBSITE_LINKS.cardapioPublic.title, to: WEBSITE_LINKS.cardapioPublic.href }}
+                                navigationLinks={PUBLIC_NAVIGATION_LINKS}
+                                buttonTrigger={{
+                                    label: "",
+                                    classNameLabel: "block font-neue text-[10px] font-semibold uppercase",
+                                    classNameButton: "justify-end h-full text-black bg-transparent hover:bg-transparent hover:text-black px-0",
+                                }}
+                                cnLink="font-neue md:text-xl uppercase tracking-widest"
+                                preMenuContent={
+                                    <CompanyInfo />
+                                }
 
-                        >
-                            <div className="flex flex-col justify-center mb-2 font-neue">
-                                <p className=" font-semibold md:text-xl leading-relaxed uppercase tracking-wide">Hórarios de funcionamento</p>
-                                <div className="flex flex-col justify-center mb-4">
-                                    <p className="text-muted-foreground font-neue md:text-xl">Quarta - Domingo</p>
-                                    <p className="text-muted-foreground font-neue md:text-xl">18:00 - 22:00</p>
+                            >
+                                <div className="flex flex-col justify-center mb-2 font-neue">
+                                    <p className=" font-semibold md:text-xl leading-relaxed uppercase tracking-wide">Hórarios de funcionamento</p>
+                                    <div className="flex flex-col justify-center mb-4">
+                                        <p className="text-muted-foreground font-neue md:text-xl">Quarta - Domingo</p>
+                                        <p className="text-muted-foreground font-neue md:text-xl">18:00 - 22:00</p>
+                                    </div>
                                 </div>
-                            </div>
 
 
-                            <div className="pr-4 mb-4">
-                                <Suspense fallback={<Loading />}>
-                                    <Await resolve={fazerPedidoPublicURL}>
-                                        {(url) => {
-                                            return (
-                                                <FazerPedidoButton
-                                                    cnLabel="text-2xl tracking-wider"
-                                                    externalLinkURL={url}
-                                                    onClick={() => trackCardapioFacebookPixelTrigger("fazer_pedido_click")}
-                                                />
-                                            )
-                                        }}
-                                    </Await>
-                                </Suspense>
+                                <div className="pr-4 mb-4">
+                                    <Suspense fallback={<Loading />}>
+                                        <Await resolve={fazerPedidoPublicURL}>
+                                            {(url) => {
+                                                return (
+                                                    <FazerPedidoButton
+                                                        cnLabel="text-2xl tracking-wider"
+                                                        externalLinkURL={url}
+                                                        onClick={() => trackCardapioFacebookPixelTrigger("fazer_pedido_click")}
+                                                    />
+                                                )
+                                            }}
+                                        </Await>
+                                    </Suspense>
 
-                            </div>
+                                </div>
 
-                        </WebsiteNavigationSidebar>
+                            </WebsiteNavigationSidebar>
+                        </div>
                     </div>
                 </div>
 
@@ -300,7 +303,7 @@ function CardapioHeader() {
 
             {/* Barra de informação de contato */}
 
-            <div className=" bg-white   flex items-center justify-between border-t border-b px-4 py-2">
+            <div className="hidden bg-white items-center justify-between border-t border-b px-4 py-2 md:flex">
                 <div className="flex gap-4 items-center">
                     <ExternalLink to={WEBSITE_LINKS.instagram.href} aria-label={WEBSITE_LINKS.instagram.title} ariaLabel="Link pagina instagram"
                     >
@@ -325,7 +328,7 @@ function CardapioHeader() {
                 </WhatsappExternalLink>
             </div>
 
-            <div className="bg-black flex items-center justify-center h-[24px] md:h-[32px]">
+            <div className="hidden bg-black items-center justify-center h-[24px] md:flex md:h-[32px]">
                 <p className="font-neue text-white text-[11px] md:text-sm uppercase tracking-wider font-semibold">
                     Hórarios de funcionamento: Qua <span className="lowercase">a</span> Dom, <span className="lowercase">das</span> 18h <span className="lowercase">às</span> 22h
                 </p>
@@ -455,33 +458,43 @@ function CardapioFooter() {
     const { fazerPedidoPublicURL } = useLoaderData<typeof loader>();
 
     return (
-        <footer className="fixed bottom-0 w-full h-[70px] bg-white px-4 flex gap-x-4 items-center justify-between border-t border-gray-200
-        z-10 md:max-w-6xl md:-translate-x-1/2 md:left-1/2
+        <footer className="fixed bottom-0 w-full h-12 bg-white px-2 flex gap-x-4 items-center justify-between border-t border-gray-200
+        z-10 md:h-[70px] md:px-4 md:max-w-6xl md:-translate-x-1/2 md:left-1/2
         ">
-            {/* Botão Tamanhos à esquerda */}
-            <div className="flex">
+            <div className="flex w-[76px] shrink-0 items-center justify-between md:w-auto md:gap-5">
                 <TamanhosLinkButton />
+                <CardapioHighlightsFooterButton />
             </div>
 
             {/* Botão central */}
             <Suspense fallback={<span>Carregando...</span>}>
                 <Await resolve={fazerPedidoPublicURL}>
                     {(url) => (
-                        <FazerPedidoButton
-                            cnLabel="text-md tracking-wider font-semibold font-neue"
-                            externalLinkURL={url}
-                            onClick={() => trackCardapioFacebookPixelTrigger("fazer_pedido_click")}
-                        />
+                        <div className="flex-1">
+                            <FazerPedidoButton
+                                size="sm"
+                                className="group h-9 rounded-lg border border-black px-4 py-0 shadow-[0_2px_0_rgba(0,0,0,0.18)] md:h-auto"
+                                cnLabel="text-[12px] leading-none tracking-wide font-semibold font-neue md:text-md"
+                                externalLinkURL={url}
+                                iconRight={<CardapioFooterCtaArrow />}
+                                onClick={() => trackCardapioFacebookPixelTrigger("fazer_pedido_click")}
+                            />
+                        </div>
                     )}
                 </Await>
             </Suspense>
 
-            {/* Botão Tamanhos à direita (se for necessário) */}
-            <div className="flex">
-                <TamanhosLinkButton />
-            </div>
         </footer>
     );
+}
+
+function CardapioFooterCtaArrow() {
+    return (
+        <span className="relative h-5 w-6 overflow-hidden" aria-hidden="true">
+            <ArrowRight className="absolute inset-y-0 right-0 h-5 w-5 animate-[ctaArrowExit_1.8s_ease-in-out_infinite]" />
+            <ArrowRight className="absolute inset-y-0 right-0 h-5 w-5 animate-[ctaArrowEnter_1.8s_ease-in-out_infinite]" />
+        </span>
+    )
 }
 
 
@@ -489,9 +502,34 @@ function TamanhosLinkButton() {
     return (
         <Link to={WEBSITE_LINKS.cardapioTamanhosPagina.href} className="flex col-span-2">
             <div className="flex flex-col items-center justify-center">
-                <Proportions className="col-span-1 md:col-span-2" />
-                <span className="font-neue text-[10px] uppercase tracking-widest">Tamanhos</span>
+                <Proportions className="h-4 w-4 md:col-span-2 md:h-6 md:w-6" />
+                <span className="font-neue text-[7px] uppercase tracking-widest md:text-[10px]">Tamanhos</span>
             </div>
         </Link>
+    )
+}
+
+function CardapioHighlightsFooterButton() {
+    const location = useLocation();
+    const navigate = useNavigate();
+
+    const openHighlights = () => {
+        if (location.pathname === WEBSITE_LINKS.cardapioPublic.href) {
+            window.dispatchEvent(new Event("cardapio:open-highlights"));
+            return;
+        }
+
+        navigate(`${WEBSITE_LINKS.cardapioPublic.href}?dicas=1`);
+    };
+
+    return (
+        <button
+            type="button"
+            className="flex flex-col items-center justify-center md:hidden"
+            onClick={openHighlights}
+        >
+            <Info className="h-4 w-4" />
+            <span className="font-neue text-[7px] uppercase tracking-widest">Dicas</span>
+        </button>
     )
 }

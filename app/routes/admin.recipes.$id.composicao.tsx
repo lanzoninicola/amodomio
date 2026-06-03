@@ -1,5 +1,5 @@
 import { Form, Link, useOutletContext } from "@remix-run/react";
-import { ArrowDown, ArrowUp, Sparkles, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, Plus, Sparkles, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "~/components/ui/button";
 import { Badge } from "~/components/ui/badge";
@@ -240,30 +240,47 @@ export default function AdminRecipeComposicaoTab() {
                                             const checked = builderSelectedItemIds.includes(item.id)
                                             const alreadyAdded = selectedBaseIngredientIds.has(item.id)
                                             return (
-                                                <label
+                                                <div
                                                     key={item.id}
                                                     className={cn(
-                                                        "flex cursor-pointer items-center gap-2 border-b border-slate-100 px-3 py-2.5 text-sm last:border-b-0",
+                                                        "flex items-center gap-2 border-b border-slate-100 px-3 py-2.5 text-sm last:border-b-0",
                                                         alreadyAdded ? "bg-slate-50 text-slate-400" : "text-slate-700"
                                                     )}
                                                 >
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={checked || alreadyAdded}
-                                                        onChange={() => !alreadyAdded && toggleBuilderItem(item.id)}
-                                                        disabled={alreadyAdded}
-                                                        className="h-3.5 w-3.5 rounded border-slate-300"
-                                                    />
-                                                    <span className="min-w-0 flex-1 truncate">{item.name}</span>
+                                                    <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-2">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={checked || alreadyAdded}
+                                                            onChange={() => !alreadyAdded && toggleBuilderItem(item.id)}
+                                                            disabled={alreadyAdded}
+                                                            className="h-3.5 w-3.5 rounded border-slate-300"
+                                                        />
+                                                        <span className="min-w-0 flex-1 truncate">{item.name}</span>
+                                                    </label>
                                                     {alreadyAdded ? (
                                                         <Badge variant="outline" className="border-emerald-200 bg-emerald-50 text-emerald-700">
                                                             na receita
                                                         </Badge>
-                                                    ) : null}
+                                                    ) : (
+                                                        <Form method="post" action=".." preventScrollReset className="shrink-0">
+                                                            <input type="hidden" name="recipeId" value={recipe.id} />
+                                                            <input type="hidden" name="tab" value="composicao" />
+                                                            <input type="hidden" name="targetItemIds" value={item.id} />
+                                                            <button
+                                                                type="submit"
+                                                                name="_action"
+                                                                value="recipe-ingredient-batch-add"
+                                                                className="inline-flex h-7 items-center gap-1 rounded-md border border-slate-200 px-2 text-xs font-medium text-slate-700 hover:bg-slate-100"
+                                                            >
+                                                                <Plus size={12} />
+                                                                Adicionar
+                                                            </button>
+                                                        </Form>
+                                                    )}
                                                     <Badge variant="outline" className={cn("font-medium", getClassificationBadgeClass(item.classification))}>
                                                         {formatClassificationLabel(item.classification)}
                                                     </Badge>
-                                                </label>
+                                                </div>
                                             )
                                         })}
                                     </div>

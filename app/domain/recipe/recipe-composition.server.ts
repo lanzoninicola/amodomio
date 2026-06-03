@@ -85,6 +85,76 @@ async function ensureOwnerItemVariationId(db: any, recipeId: string): Promise<st
   return byRecipe?.id || null
 }
 
+async function ensureBaseItemVariationForRecipe(db: any, recipeId: string): Promise<string | null> {
+  const recipe = await db.recipe.findUnique({
+    where: { id: recipeId },
+    select: { itemId: true },
+  })
+  const itemId = String(recipe?.itemId || "").trim()
+  if (!itemId) return null
+
+  const baseVariation =
+    (await db.variation.findFirst({
+      where: { kind: "base", code: "base" },
+      select: { id: true, deletedAt: true },
+    })) ||
+    (await db.variation.create({
+      data: { kind: "base", code: "base", name: "Base", sortOrderIndex: 0 },
+      select: { id: true, deletedAt: true },
+    }))
+
+  if (baseVariation.deletedAt) {
+    await db.variation.update({
+      where: { id: baseVariation.id },
+      data: { name: "Base", sortOrderIndex: 0, deletedAt: null },
+    })
+  }
+
+  const existing = await db.itemVariation.findFirst({
+    where: { itemId, variationId: baseVariation.id },
+    select: { id: true, deletedAt: true },
+  })
+
+  if (existing?.deletedAt) {
+    const activeReferenceCount = await db.itemVariation.count({
+      where: { itemId, deletedAt: null, isReference: true },
+    })
+    const restored = await db.itemVariation.update({
+      where: { id: existing.id },
+      data: {
+        deletedAt: null,
+        recipeId,
+        isReference: activeReferenceCount === 0,
+        updatedAt: new Date(),
+      },
+      select: { id: true },
+    })
+    return restored.id
+  }
+
+  if (existing) {
+    await db.itemVariation.update({
+      where: { id: existing.id },
+      data: { recipeId },
+    })
+    return existing.id
+  }
+
+  const activeVariationCount = await db.itemVariation.count({
+    where: { itemId, deletedAt: null },
+  })
+  const created = await db.itemVariation.create({
+    data: {
+      itemId,
+      variationId: baseVariation.id,
+      recipeId,
+      isReference: activeVariationCount === 0,
+    },
+    select: { id: true },
+  })
+  return created.id
+}
+
 export async function listRecipeLinkedVariations(db: any, recipeId: string): Promise<RecipeLinkedVariation[]> {
   const recipe = await db.recipe.findUnique({
     where: { id: recipeId },
@@ -320,8 +390,11 @@ async function resolveTargetItemVariationIdsForRecipe(db: any, recipeId: string)
       where: { id: { in: byItem.map((row: { id: string }) => row.id) } },
       data: { recipeId },
     })
+    return byItem.map((row: { id: string }) => row.id)
   }
-  return byItem.map((row: { id: string }) => row.id)
+
+  const baseItemVariationId = await ensureBaseItemVariationForRecipe(db, recipeId)
+  return baseItemVariationId ? [baseItemVariationId] : []
 }
 
 export async function createRecipeCompositionIngredientSkeleton(params: {

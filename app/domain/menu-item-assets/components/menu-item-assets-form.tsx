@@ -1,9 +1,34 @@
-import { ChangeEvent, DragEvent, useCallback, useMemo, useRef, useState } from "react";
+import {
+  ChangeEvent,
+  DragEvent,
+  useCallback,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { Button } from "~/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "~/components/ui/dialog";
 import { Input } from "~/components/ui/input";
 import { Switch } from "~/components/ui/switch";
 import { toast } from "~/components/ui/use-toast";
-import { Check, FileImage, FileVideo, GripVertical, ImagePlus, Star, Trash2, UploadCloud } from "lucide-react";
+import {
+  Check,
+  Download,
+  Eye,
+  FileImage,
+  FileVideo,
+  GripVertical,
+  ImagePlus,
+  Star,
+  Trash2,
+  UploadCloud,
+} from "lucide-react";
 import { cn } from "~/lib/utils";
 import {
   parseMenuItemAssetsApiResponse,
@@ -28,6 +53,13 @@ function sortImages(images: MenuItemAssetDto[]) {
     if (a.sortOrder !== b.sortOrder) return a.sortOrder - b.sortOrder;
     return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
   });
+}
+
+function getDownloadName(asset: MenuItemAssetDto) {
+  const urlPath = asset.url.split("?")[0] || "";
+  const fileName = urlPath.split("/").pop();
+  if (fileName?.includes(".")) return fileName;
+  return `item-galeria-${asset.id}.${asset.kind === "video" ? "mp4" : "jpg"}`;
 }
 
 async function readErrorMessage(response: Response, fallback: string) {
@@ -59,10 +91,13 @@ async function readErrorMessage(response: Response, fallback: string) {
       pickDetailMessage(parsed.error);
     if (detailed) return detailed;
 
-    const endpoint = typeof parsed.endpoint === "string" ? parsed.endpoint : null;
+    const endpoint =
+      typeof parsed.endpoint === "string" ? parsed.endpoint : null;
     const status = typeof parsed.status === "number" ? parsed.status : null;
     if (endpoint || status) {
-      return `Falha no upload (${endpoint || "media-api"}, status ${status || "?"}).`;
+      return `Falha no upload (${endpoint || "media-api"}, status ${
+        status || "?"
+      }).`;
     }
   } catch {
     // Non-JSON response
@@ -74,7 +109,9 @@ export default function MenuItemAssetsForm({
   initialImages,
   endpoints: endpointsProp,
 }: MenuItemAssetsFormProps) {
-  const [images, setImages] = useState<MenuItemAssetDto[]>(sortImages(initialImages || []));
+  const [images, setImages] = useState<MenuItemAssetDto[]>(
+    sortImages(initialImages || [])
+  );
   const [uploading, setUploading] = useState(false);
   const [draggingOverDropzone, setDraggingOverDropzone] = useState(false);
   const [draggingImageId, setDraggingImageId] = useState<string | null>(null);
@@ -82,6 +119,9 @@ export default function MenuItemAssetsForm({
   const [linkingByUrl, setLinkingByUrl] = useState(false);
   const [urlToLink, setUrlToLink] = useState("");
   const [visibleFromUrl, setVisibleFromUrl] = useState(true);
+  const [previewAsset, setPreviewAsset] = useState<MenuItemAssetDto | null>(
+    null
+  );
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const endpoints = useMemo(() => endpointsProp, [endpointsProp]);
@@ -92,7 +132,10 @@ export default function MenuItemAssetsForm({
   );
 
   const galleryImages = useMemo(
-    () => images.filter((img) => !img.isPrimary).sort((a, b) => a.sortOrder - b.sortOrder),
+    () =>
+      images
+        .filter((img) => !img.isPrimary)
+        .sort((a, b) => a.sortOrder - b.sortOrder),
     [images]
   );
 
@@ -123,7 +166,10 @@ export default function MenuItemAssetsForm({
           });
 
           if (!response.ok) {
-            const message = await readErrorMessage(response, "Falha no upload.");
+            const message = await readErrorMessage(
+              response,
+              "Falha no upload."
+            );
             throw new Error(message);
           }
         }
@@ -136,7 +182,9 @@ export default function MenuItemAssetsForm({
       } catch (error) {
         toast({
           title: "Erro no upload",
-          description: String((error as Error)?.message || "Não foi possível enviar os assets."),
+          description: String(
+            (error as Error)?.message || "Não foi possível enviar os assets."
+          ),
           variant: "destructive",
         });
       } finally {
@@ -149,7 +197,9 @@ export default function MenuItemAssetsForm({
   const onInputChange = useCallback(
     async (event: ChangeEvent<HTMLInputElement>) => {
       const files = Array.from(event.target.files || []).filter((file) =>
-        uploadKind === "image" ? file.type.startsWith("image/") : file.type.startsWith("video/")
+        uploadKind === "image"
+          ? file.type.startsWith("image/")
+          : file.type.startsWith("video/")
       );
       await uploadFiles(files);
       event.target.value = "";
@@ -162,7 +212,9 @@ export default function MenuItemAssetsForm({
       event.preventDefault();
       setDraggingOverDropzone(false);
       const files = Array.from(event.dataTransfer.files || []).filter((file) =>
-        uploadKind === "image" ? file.type.startsWith("image/") : file.type.startsWith("video/")
+        uploadKind === "image"
+          ? file.type.startsWith("image/")
+          : file.type.startsWith("video/")
       );
       await uploadFiles(files);
     },
@@ -325,23 +377,35 @@ export default function MenuItemAssetsForm({
   return (
     <section className="grid gap-6 lg:grid-cols-12">
       <div className="rounded-xl border p-4 lg:col-span-3">
-        <h2 className="text-sm font-semibold uppercase tracking-wider mb-3">Capa</h2>
+        <h2 className="text-sm font-semibold uppercase tracking-wider mb-3">
+          Capa
+        </h2>
         {primaryImage ? (
           <div className="flex items-center gap-4 lg:flex-col lg:items-start">
-            {primaryImage.kind === "video" ? (
-              <video
-                src={primaryImage.url}
-                className="h-28 w-28 rounded-lg object-cover border bg-black"
-                controls
-                preload="metadata"
-              />
-            ) : (
-              <img
-                src={primaryImage.url}
-                alt="Imagem de capa"
-                className="h-28 w-28 rounded-lg object-cover border"
-              />
-            )}
+            <button
+              type="button"
+              className="group relative h-28 w-28 overflow-hidden rounded-lg border bg-black text-left"
+              onClick={() => setPreviewAsset(primaryImage)}
+              aria-label="Visualizar capa em tamanho maior"
+            >
+              {primaryImage.kind === "video" ? (
+                <video
+                  src={primaryImage.url}
+                  className="h-full w-full object-cover"
+                  preload="metadata"
+                  muted
+                />
+              ) : (
+                <img
+                  src={primaryImage.url}
+                  alt="Imagem de capa"
+                  className="h-full w-full object-cover"
+                />
+              )}
+              <span className="absolute inset-0 flex items-center justify-center bg-black/0 text-white opacity-0 transition group-hover:bg-black/35 group-hover:opacity-100">
+                <Eye className="h-5 w-5" />
+              </span>
+            </button>
             <div className="flex flex-col gap-1">
               <p className="text-sm font-medium">
                 Tipo: {primaryImage.kind === "video" ? "Vídeo" : "Capa"}
@@ -353,10 +417,40 @@ export default function MenuItemAssetsForm({
                 <Check className="h-3.5 w-3.5" />
                 Imagem principal
               </div>
+              <div className="mt-2 flex gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-8 px-2 text-xs"
+                  onClick={() => setPreviewAsset(primaryImage)}
+                >
+                  <Eye className="mr-1 h-3.5 w-3.5" />
+                  Ver
+                </Button>
+                <Button
+                  asChild
+                  variant="outline"
+                  size="sm"
+                  className="h-8 px-2 text-xs"
+                >
+                  <a
+                    href={primaryImage.url}
+                    download={getDownloadName(primaryImage)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    <Download className="mr-1 h-3.5 w-3.5" />
+                    Baixar
+                  </a>
+                </Button>
+              </div>
             </div>
           </div>
         ) : (
-          <p className="text-sm text-muted-foreground">Nenhuma capa definida.</p>
+          <p className="text-sm text-muted-foreground">
+            Nenhuma capa definida.
+          </p>
         )}
       </div>
 
@@ -364,7 +458,9 @@ export default function MenuItemAssetsForm({
         <div
           className={cn(
             "rounded-xl border-2 border-dashed p-6 text-center transition-colors",
-            draggingOverDropzone ? "border-primary bg-primary/5" : "border-muted-foreground/30"
+            draggingOverDropzone
+              ? "border-primary bg-primary/5"
+              : "border-muted-foreground/30"
           )}
           onDragOver={(e) => {
             e.preventDefault();
@@ -397,10 +493,13 @@ export default function MenuItemAssetsForm({
           </div>
           <UploadCloud className="mx-auto mb-2 h-8 w-8 text-muted-foreground" />
           <p className="text-sm font-medium">
-            Arraste {uploadKind === "image" ? "assets de imagem" : "assets de vídeo"} aqui ou selecione arquivos
+            Arraste{" "}
+            {uploadKind === "image" ? "assets de imagem" : "assets de vídeo"}{" "}
+            aqui ou selecione arquivos
           </p>
           <p className="text-xs text-muted-foreground mb-4">
-            Upload múltiplo, somente {uploadKind === "image" ? "imagens" : "vídeos"}.
+            Upload múltiplo, somente{" "}
+            {uploadKind === "image" ? "imagens" : "vídeos"}.
           </p>
           <div className="flex items-center justify-center gap-2">
             <Button
@@ -436,7 +535,9 @@ export default function MenuItemAssetsForm({
               <span className="text-xs">Visível</span>
               <Switch
                 checked={visibleFromUrl}
-                onCheckedChange={(checked) => setVisibleFromUrl(Boolean(checked))}
+                onCheckedChange={(checked) =>
+                  setVisibleFromUrl(Boolean(checked))
+                }
               />
             </div>
             <Button
@@ -450,79 +551,165 @@ export default function MenuItemAssetsForm({
         </div>
 
         <div className="rounded-xl border p-4">
-          <h2 className="text-sm font-semibold uppercase tracking-wider mb-3">Galeria</h2>
+          <h2 className="text-sm font-semibold uppercase tracking-wider mb-3">
+            Galeria
+          </h2>
           {galleryImages.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Nenhum asset na galeria.</p>
+            <p className="text-sm text-muted-foreground">
+              Nenhum asset na galeria.
+            </p>
           ) : (
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-            {galleryImages.map((image) => (
-              <div
-                key={image.id}
-                className="rounded-lg border p-3 bg-background"
-                draggable
-                onDragStart={() => setDraggingImageId(image.id)}
-                onDragOver={(e) => e.preventDefault()}
-                onDrop={() => onGalleryDrop(image.id)}
-              >
-                <div className="relative mb-3">
-                  {image.kind === "video" ? (
-                    <video
-                      src={image.url}
-                      className="h-36 w-full rounded-md object-cover bg-black"
-                      controls
-                      preload="metadata"
-                    />
-                  ) : (
-                    <img
-                      src={image.url}
-                      alt={image.slot || "asset"}
-                      className="h-36 w-full rounded-md object-cover"
-                    />
-                  )}
-                  <div className="absolute right-2 top-2 rounded-md bg-black/70 p-1 text-white">
-                    <GripVertical className="h-4 w-4" />
+              {galleryImages.map((image) => (
+                <div
+                  key={image.id}
+                  className="rounded-lg border p-3 bg-background"
+                  draggable
+                  onDragStart={() => setDraggingImageId(image.id)}
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={() => onGalleryDrop(image.id)}
+                >
+                  <div className="relative mb-3">
+                    <button
+                      type="button"
+                      className="group relative h-36 w-full overflow-hidden rounded-md bg-black text-left"
+                      onClick={() => setPreviewAsset(image)}
+                      aria-label="Visualizar asset em tamanho maior"
+                    >
+                      {image.kind === "video" ? (
+                        <video
+                          src={image.url}
+                          className="h-full w-full object-cover"
+                          preload="metadata"
+                          muted
+                        />
+                      ) : (
+                        <img
+                          src={image.url}
+                          alt={image.slot || "asset"}
+                          className="h-full w-full object-cover"
+                        />
+                      )}
+                      <span className="absolute inset-0 flex items-center justify-center bg-black/0 text-white opacity-0 transition group-hover:bg-black/35 group-hover:opacity-100">
+                        <Eye className="h-5 w-5" />
+                      </span>
+                    </button>
+                    <div className="absolute right-2 top-2 rounded-md bg-black/70 p-1 text-white">
+                      <GripVertical className="h-4 w-4" />
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between gap-2 mb-2">
+                    <p className="text-xs text-muted-foreground truncate">
+                      Tipo: {image.kind === "video" ? "Vídeo" : "Galeria"}
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs">Visível</span>
+                      <Switch
+                        checked={image.visible}
+                        onCheckedChange={() => toggleVisibility(image)}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="text-xs"
+                      onClick={() => setPreviewAsset(image)}
+                    >
+                      <Eye className="h-3.5 w-3.5 mr-1" />
+                      Ver
+                    </Button>
+                    <Button asChild variant="outline" className="text-xs">
+                      <a
+                        href={image.url}
+                        download={getDownloadName(image)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        <Download className="h-3.5 w-3.5 mr-1" />
+                        Baixar
+                      </a>
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="text-xs"
+                      onClick={() => setPrimary(image.id)}
+                    >
+                      <Star className="h-3.5 w-3.5 mr-1" />
+                      Capa
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      className="text-xs"
+                      onClick={() => deleteImage(image)}
+                    >
+                      <Trash2 className="h-3.5 w-3.5 mr-1" />
+                      Excluir
+                    </Button>
                   </div>
                 </div>
-
-                <div className="flex items-center justify-between gap-2 mb-2">
-                  <p className="text-xs text-muted-foreground truncate">
-                    Tipo: {image.kind === "video" ? "Vídeo" : "Galeria"}
-                  </p>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs">Visível</span>
-                    <Switch
-                      checked={image.visible}
-                      onCheckedChange={() => toggleVisibility(image)}
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="text-xs"
-                    onClick={() => setPrimary(image.id)}
-                  >
-                    <Star className="h-3.5 w-3.5 mr-1" />
-                    Capa
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="destructive"
-                    className="text-xs"
-                    onClick={() => deleteImage(image)}
-                  >
-                    <Trash2 className="h-3.5 w-3.5 mr-1" />
-                    Excluir
-                  </Button>
-                </div>
-              </div>
-            ))}
+              ))}
             </div>
           )}
         </div>
       </div>
+      <Dialog
+        open={Boolean(previewAsset)}
+        onOpenChange={(open) => !open && setPreviewAsset(null)}
+      >
+        <DialogContent className="max-h-[92vh] max-w-[min(1100px,94vw)] overflow-hidden p-4 sm:p-5">
+          <DialogHeader className="pr-8">
+            <DialogTitle>
+              {previewAsset?.isPrimary ? "Capa" : "Asset da galeria"}
+            </DialogTitle>
+            <DialogDescription>
+              {previewAsset?.visible ? "Visível no site" : "Oculto no site"}
+            </DialogDescription>
+          </DialogHeader>
+          {previewAsset ? (
+            <div className="space-y-3">
+              <div className="flex max-h-[68vh] items-center justify-center overflow-hidden rounded-lg border bg-black">
+                {previewAsset.kind === "video" ? (
+                  <video
+                    src={previewAsset.url}
+                    className="max-h-[68vh] w-full object-contain"
+                    controls
+                    preload="metadata"
+                  />
+                ) : (
+                  <img
+                    src={previewAsset.url}
+                    alt={
+                      previewAsset.isPrimary
+                        ? "Imagem de capa"
+                        : "Imagem da galeria"
+                    }
+                    className="max-h-[68vh] w-full object-contain"
+                  />
+                )}
+              </div>
+              <div className="flex items-center justify-end gap-2">
+                <Button asChild variant="outline">
+                  <a
+                    href={previewAsset.url}
+                    download={getDownloadName(previewAsset)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    <Download className="mr-2 h-4 w-4" />
+                    Baixar arquivo
+                  </a>
+                </Button>
+              </div>
+            </div>
+          ) : null}
+        </DialogContent>
+      </Dialog>
     </section>
   );
 }

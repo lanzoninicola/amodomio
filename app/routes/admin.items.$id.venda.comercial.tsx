@@ -1,10 +1,21 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
-import { Form, useActionData, useLoaderData, useOutletContext } from "@remix-run/react";
-import { Copy, MessageCircle } from "lucide-react";
+import {
+  Form,
+  useActionData,
+  useLoaderData,
+  useOutletContext,
+} from "@remix-run/react";
+import { Copy, MessageCircle, Wand2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button } from "~/components/ui/button";
 import { Label } from "~/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "~/components/ui/select";
 import { Separator } from "~/components/ui/separator";
 import { Input } from "~/components/ui/input";
 import { Textarea } from "~/components/ui/textarea";
@@ -17,12 +28,11 @@ import { badRequest, ok, serverError } from "~/utils/http-response.server";
 
 export const meta = buildAdminItemsMeta("Venda comercial");
 
-function toBool(value: FormDataEntryValue | null) {
-  return value === "on" || value === "true";
-}
-
 function formatCurrency(value: number | null | undefined) {
-  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(Number(value || 0));
+  return new Intl.NumberFormat("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+  }).format(Number(value || 0));
 }
 
 function buildCardapioWhatsappMessage(params: {
@@ -30,8 +40,12 @@ function buildCardapioWhatsappMessage(params: {
   ingredients: string | null;
   priceLines: string[];
 }) {
-  const ingredientsText = params.ingredients?.trim() || "ingredientes ainda nao preenchidos";
-  const priceText = params.priceLines.length > 0 ? params.priceLines.join("\n") : "- sem precos cadastrados no cardapio";
+  const ingredientsText =
+    params.ingredients?.trim() || "ingredientes ainda nao preenchidos";
+  const priceText =
+    params.priceLines.length > 0
+      ? params.priceLines.join("\n")
+      : "- sem precos cadastrados no cardapio";
 
   return [
     "Oi! Por favor, adicionar o novo sabor no cardapio:",
@@ -64,8 +78,21 @@ export async function loader({ params }: LoaderFunctionArgs) {
               itemGroupId: true,
               notesPublic: true,
               slug: true,
-              upcoming: true,
             },
+          },
+          Recipe: {
+            select: {
+              id: true,
+              name: true,
+              RecipeIngredient: {
+                select: {
+                  sortOrderIndex: true,
+                  IngredientItem: { select: { name: true } },
+                },
+                orderBy: { sortOrderIndex: "asc" },
+              },
+            },
+            take: 1,
           },
         },
       }),
@@ -113,10 +140,11 @@ export async function action({ request, params }: ActionFunctionArgs) {
     }
 
     const ingredients = String(formData.get("ingredients") || "").trim();
-    const longDescriptionRaw = String(formData.get("longDescription") || "").trim();
+    const longDescriptionRaw = String(
+      formData.get("longDescription") || ""
+    ).trim();
     const notesPublicRaw = String(formData.get("notesPublic") || "").trim();
     const slugRaw = String(formData.get("slug") || "").trim();
-    const upcoming = toBool(formData.get("upcoming"));
     const categoryId = String(formData.get("categoryId") || "").trim();
     const itemGroupIdRaw = String(formData.get("itemGroupId") || "").trim();
     const slug = slugRaw ? slugifyString(slugRaw) : null;
@@ -126,7 +154,9 @@ export async function action({ request, params }: ActionFunctionArgs) {
     }
 
     if (slug) {
-      const slugConflict = await (prismaClient as any).itemSellingInfo.findFirst({
+      const slugConflict = await (
+        prismaClient as any
+      ).itemSellingInfo.findFirst({
         where: {
           slug,
           itemId: { not: itemId },
@@ -149,12 +179,12 @@ export async function action({ request, params }: ActionFunctionArgs) {
       }),
       itemGroupIdRaw
         ? prismaClient.itemGroup.findFirst({
-          where: {
-            id: itemGroupIdRaw,
-            deletedAt: null,
-          },
-          select: { id: true },
-        })
+            where: {
+              id: itemGroupIdRaw,
+              deletedAt: null,
+            },
+            select: { id: true },
+          })
         : Promise.resolve(null),
     ]);
 
@@ -173,7 +203,6 @@ export async function action({ request, params }: ActionFunctionArgs) {
         longDescription: longDescriptionRaw || null,
         notesPublic: notesPublicRaw || null,
         slug,
-        upcoming,
         categoryId,
         itemGroupId: itemGroupIdRaw || null,
       },
@@ -183,7 +212,6 @@ export async function action({ request, params }: ActionFunctionArgs) {
         longDescription: longDescriptionRaw || null,
         notesPublic: notesPublicRaw || null,
         slug,
-        upcoming,
         categoryId,
         itemGroupId: itemGroupIdRaw || null,
       },
@@ -209,10 +237,17 @@ export default function AdminItemVendaComercialRoute() {
         longDescription: string | null;
         notesPublic: string | null;
         slug: string | null;
-        upcoming: boolean;
         categoryId: string | null;
         itemGroupId: string | null;
       } | null;
+      Recipe?: Array<{
+        id: string;
+        name: string;
+        RecipeIngredient: Array<{
+          sortOrderIndex: number;
+          IngredientItem: { name: string };
+        }>;
+      }>;
     } | null;
     categories?: Array<{
       id: string;
@@ -227,12 +262,21 @@ export default function AdminItemVendaComercialRoute() {
 
   const item = payload.item || null;
   const sellingInfo = item?.ItemSellingInfo || null;
+  const linkedRecipe = item?.Recipe?.[0] || null;
+  const recipeIngredientNames = (linkedRecipe?.RecipeIngredient || []).map(
+    (ri) => ri.IngredientItem.name
+  );
   const categories = payload.categories || [];
   const groups = payload.groups || [];
-  const [categoryIdValue, setCategoryIdValue] = useState(sellingInfo?.categoryId || "");
-  const [groupIdValue, setGroupIdValue] = useState(sellingInfo?.itemGroupId || "__EMPTY__");
-  const [upcomingValue, setUpcomingValue] = useState(sellingInfo?.upcoming === true);
-  const [ingredientsValue, setIngredientsValue] = useState(sellingInfo?.ingredients || "");
+  const [categoryIdValue, setCategoryIdValue] = useState(
+    sellingInfo?.categoryId || ""
+  );
+  const [groupIdValue, setGroupIdValue] = useState(
+    sellingInfo?.itemGroupId || "__EMPTY__"
+  );
+  const [ingredientsValue, setIngredientsValue] = useState(
+    sellingInfo?.ingredients || ""
+  );
   const [whatsappMessage, setWhatsappMessage] = useState("");
 
   useEffect(() => {
@@ -241,16 +285,23 @@ export default function AdminItemVendaComercialRoute() {
     }
 
     if (actionData?.status && actionData.status >= 400) {
-      toast({ title: "Erro", description: actionData.message, variant: "destructive" });
+      toast({
+        title: "Erro",
+        description: actionData.message,
+        variant: "destructive",
+      });
     }
   }, [actionData]);
 
   useEffect(() => {
     setCategoryIdValue(sellingInfo?.categoryId || "");
     setGroupIdValue(sellingInfo?.itemGroupId || "__EMPTY__");
-    setUpcomingValue(sellingInfo?.upcoming === true);
     setIngredientsValue(sellingInfo?.ingredients || "");
-  }, [sellingInfo?.categoryId, sellingInfo?.ingredients, sellingInfo?.itemGroupId, sellingInfo?.upcoming]);
+  }, [
+    sellingInfo?.categoryId,
+    sellingInfo?.ingredients,
+    sellingInfo?.itemGroupId,
+  ]);
 
   if (!item) {
     return (
@@ -283,211 +334,218 @@ export default function AdminItemVendaComercialRoute() {
 
   function copyWhatsappMessage() {
     if (!navigator?.clipboard) {
-      toast({ title: "Erro", description: "Não foi possível copiar a mensagem.", variant: "destructive" });
+      toast({
+        title: "Erro",
+        description: "Não foi possível copiar a mensagem.",
+        variant: "destructive",
+      });
       return;
     }
 
     void navigator.clipboard.writeText(whatsappMessage).then(() => {
-      toast({ title: "Mensagem copiada", description: "Cole a mensagem no WhatsApp." });
+      toast({
+        title: "Mensagem copiada",
+        description: "Cole a mensagem no WhatsApp.",
+      });
     });
   }
 
   return (
-    <div className="space-y-8">
-      <Form method="post" className="space-y-10">
-        <input type="hidden" name="_action" value="update-commercial-info" />
-        <input type="hidden" name="categoryId" value={categoryIdValue} />
-        <input type="hidden" name="itemGroupId" value={groupIdValue === "__EMPTY__" ? "" : groupIdValue} />
-        <input type="hidden" name="upcoming" value={upcomingValue ? "true" : "false"} />
+    <Form method="post" className="space-y-6">
+      <input type="hidden" name="_action" value="update-commercial-info" />
+      <input type="hidden" name="categoryId" value={categoryIdValue} />
+      <input
+        type="hidden"
+        name="itemGroupId"
+        value={groupIdValue === "__EMPTY__" ? "" : groupIdValue}
+      />
 
-        <section className="space-y-4">
-          <div>
-            <h3 className="text-sm font-semibold text-slate-900">Conteúdo</h3>
-          </div>
+      <section className="space-y-4">
+        <div>
+          <h3 className="text-sm font-semibold text-slate-900">Conteúdo</h3>
+        </div>
 
-          <Separator />
+        <Separator />
 
-          <div className="grid gap-4 lg:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="ingredients">Lista ingredientes</Label>
-              <Textarea
-                id="ingredients"
-                name="ingredients"
-                value={ingredientsValue}
-                onChange={(event) => setIngredientsValue(event.target.value)}
-                placeholder="Ex.: molho de tomate, muçarela, manjericão..."
-                className="min-h-32"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="longDescription">Descrição extensa</Label>
-              <Textarea
-                id="longDescription"
-                name="longDescription"
-                defaultValue={sellingInfo?.longDescription || ""}
-                placeholder="Texto comercial mais completo para o canal."
-                className="min-h-32"
-              />
-            </div>
-          </div>
-        </section>
-
-        <section className="space-y-4">
-          <div>
-            <h3 className="text-sm font-semibold text-slate-900">Organização</h3>
-          </div>
-
-          <Separator />
-
-          <div className="grid gap-4 lg:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="categoryIdSelect">Categoria</Label>
-              <Select value={categoryIdValue} onValueChange={setCategoryIdValue}>
-                <SelectTrigger id="categoryIdSelect">
-                  <SelectValue placeholder="Selecionar..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {categories.map((category) => (
-                    <SelectItem key={category.id} value={category.id}>
-                      {category.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="itemGroupIdSelect">Grupo</Label>
-              <Select value={groupIdValue} onValueChange={setGroupIdValue}>
-                <SelectTrigger id="itemGroupIdSelect">
-                  <SelectValue placeholder="Sem grupo" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__EMPTY__">Sem grupo</SelectItem>
-                  {groups.map((group) => (
-                    <SelectItem key={group.id} value={group.id}>
-                      {group.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-        </section>
-
-        <section className="space-y-4">
-          <div>
-            <h3 className="text-sm font-semibold text-slate-900">Publicação</h3>
-          </div>
-
-          <Separator />
-
-          <div className="grid gap-4 lg:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="slug">Slug público</Label>
-              <Input
-                id="slug"
-                name="slug"
-                defaultValue={sellingInfo?.slug || ""}
-                placeholder={slugifyString(item.name) || "slug-publico"}
-              />
-              <p className="text-xs text-slate-500">Usado na URL do detalhe quando a source do cardápio é `items`.</p>
-            </div>
-
-            <div className="space-y-4 rounded-lg border border-slate-200 p-4">
-              <div className="rounded-md border border-slate-100 bg-slate-50 px-3 py-3 text-xs text-slate-600">
-                A visibilidade publica por canal e controlada na aba <span className="font-semibold">Canais</span>.
-                Aqui ficam apenas os dados comerciais gerais do item.
-              </div>
-
-              <div className="flex items-center justify-between gap-4">
-                <div>
-                  <Label htmlFor="upcomingSwitch">Lançamento futuro</Label>
-                  <p className="text-xs text-slate-500">Quando ativo, o item fica fora da vitrine pública nativa.</p>
-                </div>
-                <button
-                  id="upcomingSwitch"
-                  type="button"
-                  onClick={() => setUpcomingValue((current) => !current)}
-                  className={`inline-flex h-6 w-11 items-center rounded-full transition ${upcomingValue ? "bg-slate-900" : "bg-slate-300"
-                    }`}
-                  aria-pressed={upcomingValue}
-                >
-                  <span
-                    className={`inline-block h-5 w-5 rounded-full bg-white transition ${upcomingValue ? "translate-x-5" : "translate-x-0.5"
-                      }`}
-                  />
-                </button>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section className="space-y-4">
-          <div>
-            <h3 className="text-sm font-semibold text-slate-900">Observações</h3>
-          </div>
-
-          <Separator />
-
+        <div className="grid gap-4 lg:grid-cols-2">
           <div className="space-y-2">
-            <Label htmlFor="notesPublic">Observações públicas</Label>
+            <div className="flex items-center justify-between">
+              <Label htmlFor="ingredients">Lista ingredientes</Label>
+              {recipeIngredientNames.length > 0 && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 gap-1.5 px-2 text-xs text-slate-500 hover:text-slate-900"
+                  onClick={() =>
+                    setIngredientsValue(recipeIngredientNames.join(", "))
+                  }
+                >
+                  <Wand2 size={13} />
+                  Usar da receita
+                </Button>
+              )}
+            </div>
             <Textarea
-              id="notesPublic"
-              name="notesPublic"
-              defaultValue={sellingInfo?.notesPublic || ""}
-              placeholder="Informações adicionais visíveis para o cliente."
-              className="min-h-28"
+              id="ingredients"
+              name="ingredients"
+              value={ingredientsValue}
+              onChange={(event) => setIngredientsValue(event.target.value)}
+              placeholder="Ex.: molho de tomate, muçarela, manjericão..."
+              className="min-h-32"
             />
           </div>
-        </section>
 
-        <section className="space-y-4">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <h3 className="text-sm font-semibold text-slate-900">Mensagem para cardápio</h3>
-              <p className="text-xs text-slate-500">
-                Gera um texto para pedir a inclusão do sabor no cardápio pelo WhatsApp.
-              </p>
-            </div>
-            <Button type="button" variant="outline" className="gap-2" onClick={generateWhatsappMessage}>
-              <MessageCircle size={16} />
-              Gerar mensagem WhatsApp
+          <div className="space-y-2">
+            <Label htmlFor="longDescription">Descrição extensa</Label>
+            <Textarea
+              id="longDescription"
+              name="longDescription"
+              defaultValue={sellingInfo?.longDescription || ""}
+              placeholder="Texto comercial mais completo para o canal."
+              className="min-h-32"
+            />
+          </div>
+        </div>
+      </section>
+
+      <section className="space-y-4">
+        <div>
+          <h3 className="text-sm font-semibold text-slate-900">Organização</h3>
+        </div>
+
+        <Separator />
+
+        <div className="grid gap-4 lg:grid-cols-2">
+          <div className="space-y-2">
+            <Label htmlFor="categoryIdSelect">Categoria</Label>
+            <Select value={categoryIdValue} onValueChange={setCategoryIdValue}>
+              <SelectTrigger id="categoryIdSelect">
+                <SelectValue placeholder="Selecionar..." />
+              </SelectTrigger>
+              <SelectContent>
+                {categories.map((category) => (
+                  <SelectItem key={category.id} value={category.id}>
+                    {category.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="itemGroupIdSelect">Grupo</Label>
+            <Select value={groupIdValue} onValueChange={setGroupIdValue}>
+              <SelectTrigger id="itemGroupIdSelect">
+                <SelectValue placeholder="Sem grupo" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__EMPTY__">Sem grupo</SelectItem>
+                {groups.map((group) => (
+                  <SelectItem key={group.id} value={group.id}>
+                    {group.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+      </section>
+
+      <section className="space-y-4">
+        <div>
+          <h3 className="text-sm font-semibold text-slate-900">Publicação</h3>
+        </div>
+
+        <Separator />
+
+        <div className="grid gap-4 lg:grid-cols-2">
+          <div className="space-y-2">
+            <Label htmlFor="slug">Slug público</Label>
+            <Input
+              id="slug"
+              name="slug"
+              defaultValue={sellingInfo?.slug || ""}
+              placeholder={slugifyString(item.name) || "slug-publico"}
+            />
+            <p className="text-xs text-slate-500">
+              Usado na URL da pagina dos detalhes.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section className="space-y-4">
+        <div>
+          <h3 className="text-sm font-semibold text-slate-900">Observações</h3>
+        </div>
+
+        <Separator />
+
+        <div className="space-y-2">
+          <Label htmlFor="notesPublic">Observações públicas</Label>
+          <Textarea
+            id="notesPublic"
+            name="notesPublic"
+            defaultValue={sellingInfo?.notesPublic || ""}
+            placeholder="Informações adicionais visíveis para o cliente."
+            className="min-h-28"
+          />
+        </div>
+      </section>
+
+      <section className="space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h3 className="text-sm font-semibold text-slate-900">
+              Mensagem para cardápio
+            </h3>
+            <p className="text-xs text-slate-500">
+              Gera um texto para pedir a inclusão do sabor no cardápio pelo
+              WhatsApp.
+            </p>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            className="gap-2"
+            onClick={generateWhatsappMessage}
+          >
+            <MessageCircle size={16} />
+            Gerar mensagem WhatsApp
+          </Button>
+        </div>
+
+        <Separator />
+
+        {whatsappMessage ? (
+          <div className="space-y-3">
+            <Textarea
+              value={whatsappMessage}
+              onChange={(event) => setWhatsappMessage(event.target.value)}
+              className="min-h-48 font-mono text-sm"
+            />
+            <Button
+              type="button"
+              variant="outline"
+              className="gap-2"
+              onClick={copyWhatsappMessage}
+            >
+              <Copy size={16} />
+              Copiar mensagem
             </Button>
           </div>
+        ) : null}
+      </section>
 
-          <Separator />
-
-          {whatsappMessage ? (
-            <div className="space-y-3">
-              <Textarea
-                value={whatsappMessage}
-                onChange={(event) => setWhatsappMessage(event.target.value)}
-                className="min-h-48 font-mono text-sm"
-              />
-              <Button
-                type="button"
-                variant="outline"
-                className="gap-2"
-                onClick={copyWhatsappMessage}
-              >
-                <Copy size={16} />
-                Copiar mensagem
-              </Button>
-            </div>
-          ) : null}
-        </section>
-
-        <section className="flex flex-wrap items-center justify-between gap-4 border-t border-slate-100 pt-8">
-          <div className="text-sm text-slate-600">
-            <div className="font-medium text-slate-900">{item.name}</div>
-          </div>
-          <Button type="submit" className="bg-slate-900 hover:bg-slate-700">
-            Salvar informações comerciais
-          </Button>
-        </section>
-      </Form>
-    </div>
+      <section className="flex flex-wrap items-center justify-between gap-4 border-t border-slate-100 pt-8">
+        <div className="text-sm text-slate-600">
+          <div className="font-medium text-slate-900">{item.name}</div>
+        </div>
+        <Button type="submit" className="bg-slate-900 hover:bg-slate-700">
+          Salvar informações comerciais
+        </Button>
+      </section>
+    </Form>
   );
 }

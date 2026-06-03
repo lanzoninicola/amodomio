@@ -1,13 +1,18 @@
 import { Recipe } from "@prisma/client";
-import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import {
-  useLoaderData,
+  defer,
+  type ActionFunctionArgs,
+  type LoaderFunctionArgs,
+} from "@remix-run/node";
+import {
+  Await,
   Form,
   useActionData,
   Link,
+  useLoaderData,
   useSubmit,
 } from "@remix-run/react";
-import { useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import {
   EditItemButton,
   DeleteItemButton,
@@ -78,6 +83,23 @@ type SellingChannelOption = {
   name: string;
 };
 type ChannelVisibilityFilter = "all" | "visible" | "hidden";
+type RecipesIndexPayload = {
+  recipes: RecipeWithMeta[];
+  items: FilterItem[];
+  channels: SellingChannelOption[];
+  filters: {
+    q: string;
+    itemId: string;
+    channelId: string;
+    visibility: ChannelVisibilityFilter;
+  };
+  pagination: {
+    page: number;
+    pageSize: number;
+    totalItems: number;
+    totalPages: number;
+  };
+};
 
 const PAGE_SIZE = 20;
 
@@ -88,7 +110,9 @@ function parsePage(raw: string | null) {
 }
 
 function parseVisibilityFilter(raw: string | null): ChannelVisibilityFilter {
-  const normalized = String(raw || "").trim().toLowerCase();
+  const normalized = String(raw || "")
+    .trim()
+    .toLowerCase();
   if (normalized === "visible" || normalized === "hidden") return normalized;
   return "all";
 }
@@ -110,7 +134,9 @@ function buildPageHref(params: {
   return `/admin/recipes?${searchParams.toString()}`;
 }
 
-export async function loader({ request }: LoaderFunctionArgs) {
+async function loadRecipesIndexPayload(
+  request: Request
+): Promise<RecipesIndexPayload> {
   const db = prismaClient as any;
 
   const url = new URL(request.url);
@@ -153,7 +179,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const [countErr, totalItemsRaw] = await tryit(db.recipe.count({ where }));
 
   if (countErr) {
-    return serverError(countErr);
+    throw countErr;
   }
 
   const totalItems = Number(totalItemsRaw ?? 0);
@@ -215,13 +241,13 @@ export async function loader({ request }: LoaderFunctionArgs) {
   );
 
   if (err) {
-    return serverError(err);
+    throw err;
   }
 
   const [items, channels, recipesRaw] = result;
   const recipes: RecipeWithMeta[] = recipesRaw || [];
 
-  return ok({
+  return {
     recipes,
     items,
     channels,
@@ -237,6 +263,14 @@ export async function loader({ request }: LoaderFunctionArgs) {
       totalItems,
       totalPages,
     },
+  };
+}
+
+export async function loader({ request }: LoaderFunctionArgs) {
+  return defer({
+    status: 200,
+    message: "Ok",
+    payload: loadRecipesIndexPayload(request),
   });
 }
 
@@ -259,21 +293,22 @@ export async function action({ request }: ActionFunctionArgs) {
 
 export default function RecipesIndex() {
   const loaderData = useLoaderData<typeof loader>();
-  const recipes = loaderData?.payload.recipes as RecipeWithMeta[];
-  const items = loaderData?.payload.items as FilterItem[];
-  const channels = loaderData?.payload.channels as SellingChannelOption[];
-  const filters = loaderData?.payload.filters as {
-    q: string;
-    itemId: string;
-    channelId: string;
-    visibility: ChannelVisibilityFilter;
-  };
-  const pagination = loaderData?.payload.pagination as {
-    page: number;
-    pageSize: number;
-    totalItems: number;
-    totalPages: number;
-  };
+
+  return (
+    <Suspense fallback={<RecipesIndexLoading />}>
+      <Await resolve={loaderData.payload} errorElement={<RecipesIndexError />}>
+        {(payload) => <RecipesIndexContent payload={payload} />}
+      </Await>
+    </Suspense>
+  );
+}
+
+function RecipesIndexContent({ payload }: { payload: RecipesIndexPayload }) {
+  const recipes = payload.recipes;
+  const items = payload.items;
+  const channels = payload.channels;
+  const filters = payload.filters;
+  const pagination = payload.pagination;
   const submit = useSubmit();
   const formRef = useRef<HTMLFormElement>(null);
 
@@ -545,8 +580,9 @@ export default function RecipesIndex() {
               <button
                 type="button"
                 className="inline-flex h-9 items-center gap-2 rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-700"
-                aria-label={`Rows per page: ${pagination?.pageSize || PAGE_SIZE
-                  }`}
+                aria-label={`Rows per page: ${
+                  pagination?.pageSize || PAGE_SIZE
+                }`}
               >
                 <span>{pagination?.pageSize || PAGE_SIZE}</span>
                 <ChevronLeft className="h-4 w-4 rotate-[-90deg] text-slate-400" />
@@ -559,18 +595,19 @@ export default function RecipesIndex() {
                     href={
                       pagination?.page > 1
                         ? buildPageHref({
-                          q: filters?.q || "",
-                          itemId: filters?.itemId || "",
-                          channelId: filters?.channelId || "",
-                          visibility: filters?.visibility || "all",
-                          page: 1,
-                        })
+                            q: filters?.q || "",
+                            itemId: filters?.itemId || "",
+                            channelId: filters?.channelId || "",
+                            visibility: filters?.visibility || "all",
+                            page: 1,
+                          })
                         : "#"
                     }
-                    className={`h-8 w-8 rounded-md border border-slate-200 bg-white p-0 text-slate-600 hover:bg-slate-50 ${pagination?.page <= 1
+                    className={`h-8 w-8 rounded-md border border-slate-200 bg-white p-0 text-slate-600 hover:bg-slate-50 ${
+                      pagination?.page <= 1
                         ? "pointer-events-none opacity-40"
                         : ""
-                      }`}
+                    }`}
                     aria-label="Primeira pagina"
                   >
                     <ChevronsLeft className="h-4 w-4" />
@@ -581,18 +618,19 @@ export default function RecipesIndex() {
                     href={
                       pagination?.page > 1
                         ? buildPageHref({
-                          q: filters?.q || "",
-                          itemId: filters?.itemId || "",
-                          channelId: filters?.channelId || "",
-                          visibility: filters?.visibility || "all",
-                          page: (pagination?.page || 1) - 1,
-                        })
+                            q: filters?.q || "",
+                            itemId: filters?.itemId || "",
+                            channelId: filters?.channelId || "",
+                            visibility: filters?.visibility || "all",
+                            page: (pagination?.page || 1) - 1,
+                          })
                         : "#"
                     }
-                    className={`h-8 w-8 rounded-md border border-slate-200 bg-white p-0 text-slate-600 hover:bg-slate-50 ${pagination?.page <= 1
+                    className={`h-8 w-8 rounded-md border border-slate-200 bg-white p-0 text-slate-600 hover:bg-slate-50 ${
+                      pagination?.page <= 1
                         ? "pointer-events-none opacity-40"
                         : ""
-                      }`}
+                    }`}
                     aria-label="Pagina anterior"
                   >
                     <ChevronLeft className="h-4 w-4" />
@@ -603,18 +641,19 @@ export default function RecipesIndex() {
                     href={
                       pagination?.page < (pagination?.totalPages || 1)
                         ? buildPageHref({
-                          q: filters?.q || "",
-                          itemId: filters?.itemId || "",
-                          channelId: filters?.channelId || "",
-                          visibility: filters?.visibility || "all",
-                          page: (pagination?.page || 1) + 1,
-                        })
+                            q: filters?.q || "",
+                            itemId: filters?.itemId || "",
+                            channelId: filters?.channelId || "",
+                            visibility: filters?.visibility || "all",
+                            page: (pagination?.page || 1) + 1,
+                          })
                         : "#"
                     }
-                    className={`h-8 w-8 rounded-md border border-slate-200 bg-white p-0 text-slate-600 hover:bg-slate-50 ${pagination?.page >= (pagination?.totalPages || 1)
+                    className={`h-8 w-8 rounded-md border border-slate-200 bg-white p-0 text-slate-600 hover:bg-slate-50 ${
+                      pagination?.page >= (pagination?.totalPages || 1)
                         ? "pointer-events-none opacity-40"
                         : ""
-                      }`}
+                    }`}
                     aria-label="Proxima pagina"
                   >
                     <ChevronLeft className="h-4 w-4 rotate-180" />
@@ -625,18 +664,19 @@ export default function RecipesIndex() {
                     href={
                       pagination?.page < (pagination?.totalPages || 1)
                         ? buildPageHref({
-                          q: filters?.q || "",
-                          itemId: filters?.itemId || "",
-                          channelId: filters?.channelId || "",
-                          visibility: filters?.visibility || "all",
-                          page: pagination?.totalPages || 1,
-                        })
+                            q: filters?.q || "",
+                            itemId: filters?.itemId || "",
+                            channelId: filters?.channelId || "",
+                            visibility: filters?.visibility || "all",
+                            page: pagination?.totalPages || 1,
+                          })
                         : "#"
                     }
-                    className={`h-8 w-8 rounded-md border border-slate-200 bg-white p-0 text-slate-600 hover:bg-slate-50 ${pagination?.page >= (pagination?.totalPages || 1)
+                    className={`h-8 w-8 rounded-md border border-slate-200 bg-white p-0 text-slate-600 hover:bg-slate-50 ${
+                      pagination?.page >= (pagination?.totalPages || 1)
                         ? "pointer-events-none opacity-40"
                         : ""
-                      }`}
+                    }`}
                     aria-label="Ultima pagina"
                   >
                     <ChevronsRight className="h-4 w-4" />
@@ -647,6 +687,52 @@ export default function RecipesIndex() {
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+function RecipesIndexLoading() {
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="space-y-4 border-b border-slate-200 pb-4">
+        <div className="h-4 w-48 animate-pulse rounded bg-slate-100" />
+        <div className="flex flex-wrap gap-3">
+          <div className="h-10 min-w-[220px] flex-1 animate-pulse rounded-md bg-slate-100" />
+          <div className="h-10 w-56 animate-pulse rounded-md bg-slate-100" />
+          <div className="h-10 w-48 animate-pulse rounded-md bg-slate-100" />
+          <div className="h-10 w-44 animate-pulse rounded-md bg-slate-100" />
+        </div>
+      </div>
+
+      <div className="rounded-2xl border border-slate-200 bg-white">
+        <div className="grid grid-cols-4 gap-4 border-b border-slate-100 bg-slate-50 px-4 py-3">
+          {Array.from({ length: 4 }).map((_, index) => (
+            <div
+              key={index}
+              className="h-3 animate-pulse rounded bg-slate-200"
+            />
+          ))}
+        </div>
+        {Array.from({ length: 8 }).map((_, index) => (
+          <div
+            key={index}
+            className="grid grid-cols-4 gap-4 border-b border-slate-100 px-4 py-4 last:border-b-0"
+          >
+            <div className="h-4 animate-pulse rounded bg-slate-100" />
+            <div className="h-4 animate-pulse rounded bg-slate-100" />
+            <div className="h-4 animate-pulse rounded bg-slate-100" />
+            <div className="ml-auto h-4 w-20 animate-pulse rounded bg-slate-100" />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function RecipesIndexError() {
+  return (
+    <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+      Não foi possível carregar a lista de receitas.
     </div>
   );
 }

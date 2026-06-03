@@ -19,6 +19,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~
 import { Switch } from "~/components/ui/switch";
 import { buildAdminItemsMeta } from "~/domain/item/admin-items-meta";
 import type { AdminItemOutletContext } from "./admin.items.$id";
+import { Separator } from "~/components/ui/separator";
 
 export const meta = buildAdminItemsMeta("Principal");
 
@@ -42,8 +43,47 @@ export default function AdminItemMainTab() {
       <Form method="post" action=".." className="space-y-4" ref={formRef}>
         <input type="hidden" name="_action" value="item-update" />
 
+        <div className="flex justify-end">
+          <div className="flex flex-wrap items-center gap-3 ">
+            <Button type="submit" className="bg-slate-900 hover:bg-slate-700">
+              Salvar item
+            </Button>
+            <Button type="button" variant="outline" asChild>
+              <Link to="/admin/items/new" target="_blank" rel="noreferrer">
+                Criar item
+              </Link>
+            </Button>
+            <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+              <AlertDialogTrigger asChild>
+                <Button type="button" variant="destructive">
+                  Eliminar item
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Eliminar item?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Esta ação remove <strong>{item.name}</strong>. Se a eliminação for permitida, você será redirecionado para a lista completa de itens.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                  <Form method="post" action="..">
+                    <input type="hidden" name="_action" value="item-delete" />
+                    <Button type="submit" variant="destructive">
+                      Confirmar eliminação
+                    </Button>
+                  </Form>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </div>
+        </div>
+
+        <Separator />
+
         <div className="grid gap-4 lg:grid-cols-2">
-          <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-4">
+          <div className=" p-4 space-y-4">
             <div className="grid gap-4 md:grid-cols-2">
               <div>
                 <Label htmlFor="name">Nome</Label>
@@ -135,7 +175,7 @@ export default function AdminItemMainTab() {
             </div>
           </div>
 
-          <div className="rounded-xl border border-slate-200 bg-white p-4">
+          <div className=" p-4">
             <div className="mb-3">
               <h3 className="text-sm font-semibold text-slate-900">Configurações do item</h3>
               <p className="text-xs text-slate-600">Ative somente os comportamentos que este item precisa.</p>
@@ -189,42 +229,7 @@ export default function AdminItemMainTab() {
           </div>
         </div>
 
-        <div className="rounded-xl border border-slate-200 bg-white p-4">
-          <div className="flex flex-wrap items-center gap-3">
-            <Button type="submit" className="bg-slate-900 hover:bg-slate-700">
-              Salvar item
-            </Button>
-            <Button type="button" variant="outline" asChild>
-              <Link to="/admin/items/new" target="_blank" rel="noreferrer">
-                Criar item
-              </Link>
-            </Button>
-            <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
-              <AlertDialogTrigger asChild>
-                <Button type="button" variant="destructive">
-                  Eliminar item
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Eliminar item?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    Esta ação remove <strong>{item.name}</strong>. Se a eliminação for permitida, você será redirecionado para a lista completa de itens.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                  <Form method="post" action="..">
-                    <input type="hidden" name="_action" value="item-delete" />
-                    <Button type="submit" variant="destructive">
-                      Confirmar eliminação
-                    </Button>
-                  </Form>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
-          </div>
-        </div>
+
       </Form>
 
     </div>

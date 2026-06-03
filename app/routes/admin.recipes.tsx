@@ -1,16 +1,29 @@
 import type { MetaFunction } from "@remix-run/node";
 import { Link, NavLink, Outlet } from "@remix-run/react";
-import { ChevronLeft, LayoutGrid, List, PlusCircle } from "lucide-react";
+import { ChevronLeft, PlusCircle } from "lucide-react";
 import Container from "~/components/layout/container/container";
-import { cn } from "~/lib/utils";
 
 export const meta: MetaFunction = () => [{ title: "Receitas" }];
+
+const tabs = [
+  {
+    to: "/admin/recipes",
+    label: "Lista",
+    dotClassName: "bg-sky-500",
+    end: true,
+  },
+  {
+    to: "/admin/recipes/worksheet",
+    label: "Worksheet",
+    dotClassName: "bg-amber-300",
+  },
+];
 
 export default function RecipesOutlet() {
   return (
     <Container fullWidth className=" px-4">
       <div className="flex flex-col gap-6">
-        <section className="space-y-5 pb-5">
+        <section className="space-y-5 border-b border-slate-200/80 pb-5">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex flex-wrap items-center gap-2 text-sm">
               <Link
@@ -37,49 +50,38 @@ export default function RecipesOutlet() {
             </div>
           </div>
 
-          <div className="space-y-1">
-            <h1 className="text-2xl font-semibold tracking-tight text-slate-950">
-              Receitas
-            </h1>
-            <p className="max-w-3xl text-sm text-slate-500">
-              Cadastro, composição e variações das receitas vinculadas aos
-              itens.
-            </p>
-          </div>
-
-          <nav className="overflow-x-auto border-b border-slate-100">
-            <div className="flex min-w-max items-center gap-6 text-sm">
-              <NavLink
-                to="/admin/recipes"
-                end
-                className={({ isActive }) =>
-                  cn(
-                    "inline-flex items-center gap-1.5 border-b-2 pb-3 font-medium transition",
-                    isActive
-                      ? "border-slate-950 text-slate-950"
-                      : "border-transparent text-slate-400 hover:text-slate-700"
-                  )
-                }
-              >
-                <List size={14} />
-                lista
-              </NavLink>
-              <NavLink
-                to="/admin/recipes/worksheet"
-                className={({ isActive }) =>
-                  cn(
-                    "inline-flex items-center gap-1.5 border-b-2 pb-3 font-medium transition",
-                    isActive
-                      ? "border-slate-950 text-slate-950"
-                      : "border-transparent text-slate-400 hover:text-slate-700"
-                  )
-                }
-              >
-                <LayoutGrid size={14} />
-                worksheet
-              </NavLink>
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+            <div className="space-y-1">
+              <h1 className="text-2xl font-semibold tracking-tight text-slate-950">
+                Receitas
+              </h1>
+              <p className="max-w-3xl text-sm text-slate-500">
+                Cadastro, composição e variações das receitas vinculadas aos
+                itens.
+              </p>
             </div>
-          </nav>
+
+            <nav className="flex flex-wrap items-center gap-8 border-b border-slate-200">
+              {tabs.map((tab) => (
+                <NavLink
+                  key={tab.to}
+                  to={tab.to}
+                  end={tab.end}
+                  className={({ isActive }) =>
+                    [
+                      "inline-flex h-10 items-center gap-2 border-b-2 px-1 text-sm font-semibold transition",
+                      isActive
+                        ? "border-sky-500 text-slate-950"
+                        : "border-transparent text-slate-400 hover:text-slate-700",
+                    ].join(" ")
+                  }
+                >
+                  <span className={`size-2 rounded-full ${tab.dotClassName}`} />
+                  {tab.label}
+                </NavLink>
+              ))}
+            </nav>
+          </div>
         </section>
 
         <Outlet />

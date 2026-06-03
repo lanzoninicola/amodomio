@@ -10,7 +10,13 @@
       "Bash(grep -r enqueueAsyncJob /home/lanzo/Documents/Coding/amodomio/app --include=*.ts --include=*.tsx)",
       "Bash(npx prisma:*)",
       "Bash(grep -E \"admin\\\\.$|admin\\\\.producao|$\")",
-      "Bash(grep -E \"clientes-inativos|cost-impact|cost-monitoring|crm$|daily-orders$\")"
+      "Bash(grep -E \"clientes-inativos|cost-impact|cost-monitoring|crm$|daily-orders$\")",
+      "Bash(grep -n \"recipe-chatgpt-import\\\\|recipe-chatgpt-preview\\\\|ignoredDeleteItemIds\\\\|manualDelete\" /home/lanzo/Documents/Coding/amodomio/app/routes/admin.recipes.\\\\$id.tsx | head -40)",
+      "Read(//home/lanzo/Documents/Coding/amodomio/app/routes/**)",
+      "Bash(grep -n \"buildRecipeChatGptImportPreview\\\\|previewAction\\\\|importableIngredients\" /home/lanzo/Documents/Coding/amodomio/app/routes/admin.recipes.\\\\$id.tsx | head -30)",
+      "Bash(grep -n \"Recipe\\\\|ingredient\" \"/home/lanzo/Documents/Coding/amodomio/app/routes/admin.items.\\\\$id.tsx\" | head -40)",
+      "Bash(sed -n '185,200p' /home/lanzo/Documents/Coding/amodomio/prisma/schema.prisma)",
+      "Bash(sed -n '355,395p' /home/lanzo/Documents/Coding/amodomio/prisma/schema.prisma)"
     ],
     "additionalDirectories": [
       "/home/lanzo/Documents/Coding/amodomio/app/routes"

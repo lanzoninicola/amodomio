@@ -7,10 +7,30 @@ import { RemixVitePWA } from "@vite-pwa/remix";
 
 installGlobals();
 // Gera um hash/versão por build com base em timestamp
-const buildVersion = `v${new Date().toISOString().replace(/[-:.TZ]/g, '')}`;
+const buildVersion = `v${new Date().toISOString().replace(/[-:.TZ]/g, "")}`;
 const isVitest = process.env.VITEST === "true";
+const devWatchIgnored = [
+  /graphify-out/,
+  /\/build\//,
+  /vite\.config\.mjs\.timestamp-/,
+];
 
 const { RemixVitePWAPlugin, RemixPWAPreset } = RemixVitePWA();
+
+function ignoreGeneratedFilesForDevServer() {
+  return {
+    name: "ignore-generated-files-for-dev-server",
+    config() {
+      return {
+        server: {
+          watch: {
+            ignored: devWatchIgnored,
+          },
+        },
+      };
+    },
+  };
+}
 
 export default defineConfig(({ command }) => ({
   define: {
@@ -20,8 +40,12 @@ export default defineConfig(({ command }) => ({
     https: false,
     host: "localhost", // importante manter "localhost"
     port: 3000,
+    watch: {
+      ignored: devWatchIgnored,
+    },
   },
   plugins: [
+    command === "serve" && ignoreGeneratedFilesForDevServer(),
     !isVitest && command === "serve" && mkcert(),
     remix({
       presets: [RemixPWAPreset()],
@@ -49,7 +73,12 @@ export default defineConfig(({ command }) => ({
         theme_color: "#262626",
         icons: [
           { src: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
-          { src: "/icons/icon-512.png", sizes: "512x512", type: "image/png", purpose: "any maskable" },
+          {
+            src: "/icons/icon-512.png",
+            sizes: "512x512",
+            type: "image/png",
+            purpose: "any maskable",
+          },
         ],
       },
       workbox: {
