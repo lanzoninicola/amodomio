@@ -1,4 +1,4 @@
-import { Link, useNavigation } from "@remix-run/react";
+import { Link, useNavigate, useNavigation } from "@remix-run/react";
 import { QuestionMarkCircledIcon } from "@radix-ui/react-icons";
 import {
   ChevronRight,
@@ -30,16 +30,27 @@ type CardapioLinkProps = {
 };
 
 function CardapioLink({ mode = "hero", className }: CardapioLinkProps) {
+  const navigate = useNavigate();
   const navigation = useNavigation();
   const cardapioPath = WEBSITE_LINKS.cardapioPublic.href;
   const nextPath = navigation.location?.pathname ?? "";
   const isNavigatingToCardapio =
     navigation.state !== "idle" && nextPath.startsWith(cardapioPath);
 
-  const preventRepeatedClick = (e: MouseEvent<HTMLAnchorElement>) => {
-    if (isNavigatingToCardapio) {
-      e.preventDefault();
+  const handleCardapioClick = (e: MouseEvent<HTMLAnchorElement>) => {
+    if (e.defaultPrevented) return;
+
+    if (e.button !== 0 || e.metaKey || e.altKey || e.ctrlKey || e.shiftKey) {
+      return;
     }
+
+    e.preventDefault();
+
+    if (isNavigatingToCardapio) {
+      return;
+    }
+
+    navigate(cardapioPath);
   };
 
   if (mode === "header") {
@@ -51,7 +62,7 @@ function CardapioLink({ mode = "hero", className }: CardapioLinkProps) {
           className,
           isNavigatingToCardapio && "pointer-events-none"
         )}
-        onClick={preventRepeatedClick}
+        onClick={handleCardapioClick}
         aria-disabled={isNavigatingToCardapio}
       >
         <div
@@ -85,10 +96,9 @@ function CardapioLink({ mode = "hero", className }: CardapioLinkProps) {
           className,
           isNavigatingToCardapio && "pointer-events-none opacity-80"
         )}
-        onClick={preventRepeatedClick}
+        onClick={handleCardapioClick}
         aria-disabled={isNavigatingToCardapio}
         aria-label="Abrir cardápio"
-        prefetch="intent"
       >
         <span>
           {isNavigatingToCardapio ? "Abrindo cardápio..." : "Cardápio"}
@@ -108,9 +118,8 @@ function CardapioLink({ mode = "hero", className }: CardapioLinkProps) {
         className,
         isNavigatingToCardapio && "pointer-events-none"
       )}
-      onClick={preventRepeatedClick}
+      onClick={handleCardapioClick}
       aria-disabled={isNavigatingToCardapio}
-      prefetch="intent"
     >
       <div className="relative overflow-hidden rounded-xl border border-black bg-black px-6 py-3.5 text-white shadow-[0_10px_30px_rgba(0,0,0,0.25)] transition-all duration-150 md:group-hover:-translate-y-0.5 md:group-hover:shadow-[0_16px_40px_rgba(0,0,0,0.28)] group-focus-visible:outline group-focus-visible:outline-2 group-focus-visible:outline-offset-2 group-focus-visible:outline-black">
         <div
