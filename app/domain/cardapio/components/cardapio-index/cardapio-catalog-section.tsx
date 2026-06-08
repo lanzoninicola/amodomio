@@ -31,11 +31,13 @@ export function CardapioCatalogSection({
   tags,
   interestTrackingEnabled,
   likesEnabled,
+  desktopFeedLayout = false,
 }: {
   items: CardapioIndexItem[] | GroupedItems[];
   tags: Tag[];
   interestTrackingEnabled: boolean;
   likesEnabled: boolean;
+  desktopFeedLayout?: boolean;
 }) {
   const [currentItems, setCurrentItems] = useState(items);
   const [currentFilterTag, setCurrentFilterTag] = useState<Tag | null>(null);
@@ -91,7 +93,13 @@ export function CardapioCatalogSection({
   );
 
   return (
-    <div className="flex flex-col m-4">
+    <div
+      className={cn(
+        "flex flex-col m-4",
+        desktopFeedLayout &&
+          "md:mx-auto md:my-0 md:w-full md:max-w-[700px] md:px-6 md:py-6"
+      )}
+    >
       <div className="sticky top-[calc(50px+env(safe-area-inset-top))] z-30 -mx-4 mb-2 bg-white px-4 py-2 md:static md:mx-0 md:mb-4 md:bg-transparent md:px-0 md:py-0">
         <h2 className="hidden font-lora text-2xl font-bold tracking-tight leading-tight mb-3 md:block">
           Sabores da casa
@@ -174,11 +182,13 @@ export function CardapioCatalogSection({
               title={group.group}
               subtitle={getGroupedItemsDescription(group)}
               profile={SECTION_THREAD_PROFILE_BY_SECTION.chef}
+              desktopFeedLayout={desktopFeedLayout}
             />
             <CardapioItemsGrid
               items={getGroupedItemsList(group)}
               interestTrackingEnabled={interestTrackingEnabled}
               likesEnabled={likesEnabled}
+              desktopFeedLayout={desktopFeedLayout}
             />
           </section>
         ))
@@ -187,6 +197,7 @@ export function CardapioCatalogSection({
           items={currentItems as CardapioIndexItem[]}
           interestTrackingEnabled={interestTrackingEnabled}
           likesEnabled={likesEnabled}
+          desktopFeedLayout={desktopFeedLayout}
         />
       )}
     </div>
@@ -197,14 +208,26 @@ function CardapioGroupHeader({
   title,
   subtitle,
   profile,
+  desktopFeedLayout = false,
 }: {
   title: string;
   subtitle?: string;
   profile: ThreadSectionProfile;
+  desktopFeedLayout?: boolean;
 }) {
   return (
-    <div className="mb-3 pb-3 border-b">
-      <div className="flex items-start gap-2">
+    <div
+      className={cn(
+        "mb-3 pb-3 border-b",
+        desktopFeedLayout && "md:mb-5 md:pb-4"
+      )}
+    >
+      <div
+        className={cn(
+          "flex items-start gap-2",
+          desktopFeedLayout && "md:hidden"
+        )}
+      >
         <div className="flex-1 min-w-0">
           <h3 className="font-lora text-lg font-bold tracking-tight leading-tight">
             {title}
@@ -225,12 +248,22 @@ function CardapioGroupHeader({
       </div>
 
       {subtitle ? (
-        <p className="font-neue text-sm tracking-wide mt-2 text-zinc-700">
+        <p
+          className={cn(
+            "font-neue text-sm tracking-wide mt-2 text-zinc-700",
+            desktopFeedLayout && "md:hidden"
+          )}
+        >
           {subtitle}
         </p>
       ) : null}
 
-      <div className="hidden items-center gap-2 mt-3 md:flex">
+      <div
+        className={cn(
+          "hidden items-center gap-2 mt-3 md:flex",
+          desktopFeedLayout && "md:hidden"
+        )}
+      >
         {profile.avatarImageUrl ? (
           <img
             src={profile.avatarImageUrl}
@@ -242,6 +275,34 @@ function CardapioGroupHeader({
           {profile.username}
         </span>
       </div>
+
+      {desktopFeedLayout ? (
+        <div className="hidden md:block">
+          <div className="flex items-start justify-between gap-4">
+            <h3 className="min-w-0 flex-1 font-lora text-3xl font-bold leading-tight tracking-tight text-zinc-950">
+              {title}
+            </h3>
+            <div className="flex shrink-0 items-center gap-2">
+              {profile.avatarImageUrl ? (
+                <img
+                  src={profile.avatarImageUrl}
+                  alt={profile.username}
+                  className="h-8 w-8 rounded-full border border-zinc-200 object-cover"
+                />
+              ) : null}
+              <span className="font-neue text-base font-semibold text-zinc-950">
+                {profile.username}
+              </span>
+            </div>
+          </div>
+
+          {subtitle ? (
+            <p className="mt-3 font-neue text-base leading-relaxed tracking-wide text-zinc-600">
+              {subtitle}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -250,10 +311,12 @@ function CardapioItemsGrid({
   items,
   interestTrackingEnabled,
   likesEnabled,
+  desktopFeedLayout = false,
 }: {
   items: CardapioIndexItem[];
   interestTrackingEnabled: boolean;
   likesEnabled: boolean;
+  desktopFeedLayout?: boolean;
 }) {
   const [expandedItemId, setExpandedItemId] = useState<string | null>(null);
   const [isDesktop, setIsDesktop] = useState(false);
@@ -352,7 +415,13 @@ function CardapioItemsGrid({
   if (!items.length) return null;
 
   return (
-    <ul className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4">
+    <ul
+      className={cn(
+        "mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4",
+        desktopFeedLayout &&
+          "md:grid-cols-2 md:gap-5 lg:grid-cols-2 xl:grid-cols-2"
+      )}
+    >
       {items.map((item) => (
         <CardapioGridItem
           key={item.id}
@@ -363,6 +432,7 @@ function CardapioItemsGrid({
           onView={() => trackViewOnce(item)}
           isDesktop={isDesktop}
           likesEnabled={likesEnabled}
+          desktopFeedLayout={desktopFeedLayout}
           innerRef={(element) => {
             itemRefs.current[item.id] = element;
           }}
@@ -381,6 +451,7 @@ function CardapioGridItem({
   isDesktop,
   innerRef,
   likesEnabled,
+  desktopFeedLayout,
 }: {
   item: CardapioIndexItem;
   isExpanded: boolean;
@@ -390,6 +461,7 @@ function CardapioGridItem({
   isDesktop: boolean;
   innerRef?: (el: HTMLLIElement | null) => void;
   likesEnabled: boolean;
+  desktopFeedLayout: boolean;
 }) {
   const localRef = useRef<HTMLLIElement | null>(null);
   const [isMediaFullscreen, setIsMediaFullscreen] = useState(false);
@@ -467,7 +539,8 @@ function CardapioGridItem({
       <div
         className={cn(
           "relative overflow-hidden transition-all duration-300 ease-in-out",
-          isExpanded ? "h-[220px]" : "h-[160px]"
+          isExpanded ? "h-[220px]" : "h-[160px]",
+          desktopFeedLayout && "md:h-[260px]"
         )}
       >
         <CardapioItemImageSingle

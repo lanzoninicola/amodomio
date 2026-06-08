@@ -316,12 +316,20 @@ function BannerFechado() {
 
 function CardapioHeader() {
   const currentPage = useCurrentPage();
+  const location = useLocation();
   const [showSearch, setShowSearch] = useState(false);
   const { fazerPedidoPublicURL, notificationsEnabled, vapidPublicKey } =
     useLoaderData<typeof loader>();
+  const isCardapioIndex =
+    location.pathname === WEBSITE_LINKS.cardapioPublic.href;
 
   return (
-    <header className="fixed top-0 w-full z-30 bg-white md:max-w-6xl md:-translate-x-1/2 md:left-1/2">
+    <header
+      className={cn(
+        "fixed top-0 w-full z-30 bg-white md:max-w-6xl md:-translate-x-1/2 md:left-1/2",
+        isCardapioIndex && "md:hidden"
+      )}
+    >
       <div className="flex h-[calc(50px+env(safe-area-inset-top))] flex-col border-b border-gray-200 bg-white px-1 pb-3 pt-[calc(0.5rem+env(safe-area-inset-top))] md:h-[70px] md:border-b-0 md:pt-2">
         <div className="grid grid-cols-3 items-center w-full">
           {/* <div className="flex gap-1 items-center" onClick={() => setShowSearch(!showSearch)}>
@@ -589,7 +597,7 @@ function CardapioFooter() {
   return (
     <footer
       className="fixed bottom-0 grid w-full grid-cols-[auto_1fr] items-center gap-3 border-t border-gray-200 bg-white px-3 py-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] shadow-[0_-8px_24px_rgba(0,0,0,0.08)]
-        z-10 md:min-h-[76px] md:px-4 md:py-3 md:max-w-6xl md:-translate-x-1/2 md:left-1/2
+        z-10 md:hidden
         "
     >
       <div className="flex shrink-0 items-center gap-3 md:gap-4">

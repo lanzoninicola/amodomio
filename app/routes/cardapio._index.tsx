@@ -15,8 +15,8 @@ import { MapPin, SearchIcon } from "lucide-react";
 import React, { Suspense, useEffect, useState } from "react";
 import Loading from "~/components/loading/loading";
 import ExternalLink from "~/components/primitives/external-link/external-link";
+import Logo from "~/components/primitives/logo/logo";
 import WhatsappExternalLink from "~/components/primitives/whatsapp/whatsapp-external-link";
-import { Separator } from "~/components/ui/separator";
 import {
   Sheet,
   SheetContent,
@@ -38,6 +38,10 @@ import {
 } from "~/domain/cardapio/components/cardapio-index/cardapio-index-sections";
 import CardapioOrderCtaButton from "~/domain/cardapio/components/cardapio-order-cta-button";
 import { trackCardapioFacebookPixelTrigger } from "~/domain/cardapio/facebook-pixel.client";
+import type {
+  CardapioIndexItem,
+  GroupedItems,
+} from "~/domain/cardapio/cardapio-index.shared";
 import type { loader as cardapioLayoutLoader } from "./cardapio";
 
 export const headers: HeadersFunction = () => ({
@@ -180,7 +184,7 @@ export default function CardapioWebIndex() {
 
   return (
     <section
-      className="mb-28 flex flex-col pt-[calc(4rem+env(safe-area-inset-top))] md:pt-48"
+      className="mb-28 flex flex-col pt-[calc(4rem+env(safe-area-inset-top))] md:fixed md:inset-0 md:z-20 md:mb-0 md:block md:overflow-y-auto md:bg-white md:pt-0"
       data-element="cardapio-index"
     >
       <LikeCelebrationOverlay
@@ -246,12 +250,14 @@ export default function CardapioWebIndex() {
         <Await resolve={items}>
           {(items) => {
             return (
-              <CardapioHighlightsSection
-                items={items}
-                likesEnabled={likesEnabled}
-                reelUrls={reelUrls}
-                reelsEnabled={reelsEnabled}
-              />
+              <div className="md:hidden">
+                <CardapioHighlightsSection
+                  items={items}
+                  likesEnabled={likesEnabled}
+                  reelUrls={reelUrls}
+                  reelsEnabled={reelsEnabled}
+                />
+              </div>
             );
           }}
         </Await>
@@ -261,17 +267,134 @@ export default function CardapioWebIndex() {
         <Await resolve={Promise.all([tags, items])}>
           {([loadedTags, loadedItems]) => {
             return (
-              <CardapioCatalogSection
-                items={loadedItems}
-                tags={loadedTags}
-                interestTrackingEnabled={menuItemInterestEnabled}
-                likesEnabled={likesEnabled}
-              />
+              <>
+                <aside className="fixed inset-y-0 left-0 hidden w-[300px] overflow-y-auto border-r border-zinc-200 bg-white px-5 py-6 md:block lg:w-[340px]">
+                  <DesktopCardapioSidebar
+                    items={loadedItems}
+                    likesEnabled={likesEnabled}
+                    reelUrls={reelUrls}
+                    reelsEnabled={reelsEnabled}
+                  />
+                </aside>
+
+                <main className="min-h-full md:ml-[300px] md:mr-[72px] lg:ml-[340px] 2xl:mx-auto 2xl:max-w-[780px]">
+                  <CardapioCatalogSection
+                    items={loadedItems}
+                    tags={loadedTags}
+                    interestTrackingEnabled={menuItemInterestEnabled}
+                    likesEnabled={likesEnabled}
+                    desktopFeedLayout
+                  />
+                </main>
+
+                <DesktopFloatingOrderButton />
+              </>
             );
           }}
         </Await>
       </Suspense>
     </section>
+  );
+}
+
+function DesktopCardapioSidebar({
+  items,
+  likesEnabled,
+  reelUrls,
+  reelsEnabled,
+}: {
+  items: CardapioIndexItem[] | GroupedItems[];
+  likesEnabled: boolean;
+  reelUrls: string[];
+  reelsEnabled: boolean;
+}) {
+  return (
+    <div className="flex min-h-full flex-col gap-6">
+      <div className="space-y-4">
+        <Link to={WEBSITE_LINKS.cardapioPublic.href} className="block w-fit">
+          <Logo
+            color="black"
+            onlyText
+            className="h-[50px] w-[150px]"
+            tagline={false}
+          />
+        </Link>
+
+        <div className="flex items-center justify-between gap-4 border-b border-zinc-200 pb-4">
+          <div className="flex items-center gap-4">
+            <ExternalLink
+              to={WEBSITE_LINKS.instagram.href}
+              aria-label={WEBSITE_LINKS.instagram.title}
+              ariaLabel="Link pagina instagram"
+            >
+              <InstagramLogoIcon color="black" className="h-5 w-5" />
+            </ExternalLink>
+            <ExternalLink
+              to={WEBSITE_LINKS.maps.href}
+              aria-label={WEBSITE_LINKS.maps.title}
+              ariaLabel="Link para o google maps"
+            >
+              <MapPin color="black" className="h-5 w-5" />
+            </ExternalLink>
+          </div>
+
+          <WhatsappExternalLink
+            phoneNumber="46991272525"
+            ariaLabel="Envia uma mensagem com WhatsApp"
+            message={"Olá, gostaria fazer um pedido"}
+            className="font-mono text-sm font-semibold"
+          >
+            (46) 99127-2525
+          </WhatsappExternalLink>
+        </div>
+
+        <div className="border-b border-zinc-200 pb-4">
+          <p className="font-neue text-[11px] font-semibold uppercase tracking-widest text-zinc-500">
+            Horários de funcionamento
+          </p>
+          <p className="mt-1 font-neue text-sm font-semibold uppercase tracking-wide text-zinc-950">
+            Qua a Dom, das 18h às 22h
+          </p>
+        </div>
+      </div>
+
+      <CardapioHighlightsSection
+        items={items}
+        likesEnabled={likesEnabled}
+        reelUrls={reelUrls}
+        reelsEnabled={reelsEnabled}
+        includeNovelties={false}
+        showMobileHiddenContent
+        desktopColumnLayout
+      />
+    </div>
+  );
+}
+
+function DesktopFloatingOrderButton() {
+  const cardapioLayoutData =
+    useRouteLoaderData<typeof cardapioLayoutLoader>("routes/cardapio");
+
+  return (
+    <div className="fixed bottom-6 right-12 z-50 hidden w-[240px] md:block lg:right-16">
+      <Suspense fallback={<span>Carregando...</span>}>
+        <Await
+          resolve={
+            cardapioLayoutData?.fazerPedidoPublicURL ??
+            WEBSITE_LINKS.cardapioFallbackURL.href
+          }
+        >
+          {(url) => (
+            <CardapioOrderCtaButton
+              externalLinkURL={url}
+              onClick={() =>
+                trackCardapioFacebookPixelTrigger("fazer_pedido_click")
+              }
+            />
+          )}
+        </Await>
+      </Suspense>
+    </div>
   );
 }
 
