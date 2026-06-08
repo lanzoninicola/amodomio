@@ -41,6 +41,7 @@ import {
   isSafePath,
   normalizeFolderSegment,
   normalizePath,
+  normalizeStorageKey,
   replacePathPrefix,
   type LibraryPayload,
   type MediaAsset,
@@ -84,6 +85,13 @@ type UploadResult = {
   ok: boolean;
   message: string;
   payload?: LibraryPayload;
+  rawResponse?: string;
+  httpStatus?: number;
+};
+
+type DirectUploadConfig = {
+  uploadBaseUrl: string;
+  apiKey: string;
 };
 
 export const meta: MetaFunction = () => [{ title: "Admin • Asset Drive" }];
@@ -481,16 +489,33 @@ export default function AdminAssetsPage() {
     }
   }
 
-  async function uploadSingleFile(file: File, queueId: string) {
+  async function fetchDirectUploadConfig(): Promise<DirectUploadConfig | null> {
+    try {
+      const response = await fetch("/api/media/upload-config");
+      if (!response.ok) return null;
+      const data = (await response.json()) as { ok: boolean; uploadBaseUrl: string; apiKey: string };
+      if (!data.ok) return null;
+      return { uploadBaseUrl: data.uploadBaseUrl, apiKey: data.apiKey };
+    } catch {
+      return null;
+    }
+  }
+
+  async function uploadSingleFile(file: File, queueId: string, config: DirectUploadConfig) {
     return new Promise<UploadResult>((resolve) => {
+      const assetKey = normalizeStorageKey(file.name) || `asset-${Date.now()}`;
+
+      const uploadUrl = new URL(`${config.uploadBaseUrl}/v2/upload`);
+      uploadUrl.searchParams.set("kind", uploadKind);
+      uploadUrl.searchParams.set("folderPath", currentFolder);
+      uploadUrl.searchParams.set("assetKey", assetKey);
+
       const formData = new FormData();
-      formData.append("_intent", "upload");
-      formData.append("kind", uploadKind);
-      formData.append("assetPath", currentFolder);
-      formData.append("files", file, file.name);
+      formData.append("file", file, file.name);
 
       const xhr = new XMLHttpRequest();
-      xhr.open("POST", "/admin/assets");
+      xhr.open("POST", uploadUrl.toString());
+      xhr.setRequestHeader("x-api-key", config.apiKey);
 
       xhr.upload.onprogress = (event) => {
         if (!event.lengthComputable) return;
@@ -501,34 +526,51 @@ export default function AdminAssetsPage() {
       };
 
       xhr.onload = () => {
-        let data: ActionData | null = null;
-        try {
-          data = JSON.parse(xhr.responseText) as ActionData;
-        } catch {
-          data = null;
-        }
-
-        if (data) {
-          if (data.ok) {
-            resolve({ ok: true, message: data.message, payload: data.payload });
-            return;
+        void (async () => {
+          type MediaApiData = { ok?: boolean; url?: string; assetKey?: string };
+          let mediaData: MediaApiData | null = null;
+          try {
+            mediaData = JSON.parse(xhr.responseText) as MediaApiData;
+          } catch {
+            // stays null
           }
-          resolve({ ok: false, message: data.message });
-          return;
-        }
 
-        if (xhr.status >= 200 && xhr.status < 300) {
+          const mediaUrl = mediaData !== null ? mediaData.url : undefined;
+          const mediaAssetKey = mediaData !== null ? mediaData.assetKey : undefined;
+          if (xhr.status >= 200 && xhr.status < 300 && mediaUrl) {
+            try {
+              const regResponse = await fetch("/api/media/register-asset", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  url: mediaUrl,
+                  kind: uploadKind,
+                  assetPath: currentFolder,
+                  fileName: file.name,
+                  assetKey: mediaAssetKey || assetKey,
+                  sizeBytes: file.size,
+                }),
+              });
+              const regData = (await regResponse.json()) as { ok: boolean; payload?: LibraryPayload };
+              if (regData.ok && regData.payload) {
+                resolve({ ok: true, message: "Upload concluído.", payload: regData.payload });
+                return;
+              }
+              resolve({ ok: false, message: "Upload ok, mas falha ao registrar no banco." });
+              return;
+            } catch {
+              resolve({ ok: false, message: "Upload ok, mas falha ao registrar no banco." });
+              return;
+            }
+          }
+
           resolve({
-            ok: true,
-            message: "Upload concluído. Atualizando biblioteca...",
+            ok: false,
+            message: `Falha no upload (status ${xhr.status || "?"}).`,
+            rawResponse: xhr.responseText,
+            httpStatus: xhr.status,
           });
-          return;
-        }
-
-        resolve({
-          ok: false,
-          message: `Resposta inválida do servidor no upload (status ${xhr.status || "?"}).`,
-        });
+        })();
       };
 
       xhr.onerror = () => {
@@ -546,6 +588,12 @@ export default function AdminAssetsPage() {
     }
     if (!selectedFiles.length) {
       toast({ title: "Erro", description: "Selecione ao menos um arquivo.", variant: "destructive" });
+      return;
+    }
+
+    const config = await fetchDirectUploadConfig();
+    if (!config) {
+      toast({ title: "Erro", description: "Não foi possível obter configuração de upload.", variant: "destructive" });
       return;
     }
 
@@ -571,7 +619,7 @@ export default function AdminAssetsPage() {
         current.map((row) => (row.id === item.id ? { ...row, status: "uploading", progress: 1 } : row))
       );
 
-      const result = await uploadSingleFile(file, item.id);
+      const result = await uploadSingleFile(file, item.id, config);
 
       if (result.ok) {
         successCount += 1;
@@ -588,6 +636,14 @@ export default function AdminAssetsPage() {
         );
       } else {
         failCount += 1;
+        const debugLines = [
+          `[upload-debug] ${new Date().toISOString()}`,
+          `file=${file.name}`,
+          `http_status=${result.httpStatus ?? "?"}`,
+          `message=${result.message}`,
+          `raw=${result.rawResponse || "none"}`,
+        ].join("\n");
+        setLastErrorDebug(debugLines);
         setUploadQueue((current) =>
           current.map((row) =>
             row.id === item.id ? { ...row, status: "error", progress: 100, message: result.message } : row
