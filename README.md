@@ -237,6 +237,27 @@ Implementação:
 - `app/routes/admin.tsx` (loader/query do painel)
 - `app/routes/api.admin-wpp-alerts.tsx` (ações e leitura da mensagem)
 
+## Media Drive (`admin/assets`)
+
+A pagina `admin/assets` faz upload direto do browser para `media-api.amodomio.com.br` via XHR (sem passar pelo servidor Remix), o que exige CORS configurado na `media-api`.
+
+Sem a variavel `CORS_ALLOWED_ORIGINS` correta no deploy da `amodomio-media`, o upload falha silenciosamente com `Erro de rede durante upload` e `http_status=?` — o browser bloqueia o preflight OPTIONS antes de enviar qualquer dado.
+
+### Configuracao necessaria na `amodomio-media`
+
+Adicionar a variavel de ambiente:
+
+```
+CORS_ALLOWED_ORIGINS=https://amodomio.com.br,http://localhost:3000
+```
+
+Incluir todas as origens que precisam fazer upload (producao + dev local).
+
+### Diferenca entre as paginas de upload
+
+- `admin/gerenciamento/cardapio/assets-batch`: upload via Remix server (sem CORS, funciona sem essa var)
+- `admin/assets`: upload direto browser → media-api (requer `CORS_ALLOWED_ORIGINS`)
+
 ## Deployment
 
 First, build your app for production:

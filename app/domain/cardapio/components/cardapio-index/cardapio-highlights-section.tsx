@@ -31,6 +31,7 @@ export function CardapioHighlightsSection({
     reelsEnabled,
     includeNovelties = true,
     showMobileHiddenContent = false,
+    desktopColumnLayout = false,
 }: {
     items: CardapioIndexItem[] | GroupedItems[];
     likesEnabled: boolean;
@@ -38,6 +39,7 @@ export function CardapioHighlightsSection({
     reelsEnabled: boolean;
     includeNovelties?: boolean;
     showMobileHiddenContent?: boolean;
+    desktopColumnLayout?: boolean;
 }) {
     const noveltyItems = getNoveltyItems(items);
     const flatItems = isGrouped(items) ? items.flatMap((group) => getGroupedItemsList(group)) : items;
@@ -51,6 +53,35 @@ export function CardapioHighlightsSection({
             .slice(0, 6)
         : [];
 
+    if (desktopColumnLayout) {
+        return (
+            <div className="flex flex-col">
+                <SidebarAccordionSection title="Sugestões para hoje">
+                    <ChefSuggestionsCarousel
+                        groups={chefSuggestionGroups}
+                        contentOnly
+                    />
+                </SidebarAccordionSection>
+
+                {likesEnabled && topLikedItems.length > 0 ? (
+                    <SidebarAccordionSection title="Mais curtidas">
+                        <MaisCurtidasRanking items={topLikedItems} contentOnly />
+                    </SidebarAccordionSection>
+                ) : null}
+
+                {reelsEnabled && reelUrls.length > 0 ? (
+                    <SidebarAccordionSection title="Reels sugeridos">
+                        <ReelsCarousel urls={reelUrls} largeThumbnails />
+                    </SidebarAccordionSection>
+                ) : null}
+
+                <section className="mt-6 pt-6">
+                    <ItalianIngredientsSection />
+                </section>
+            </div>
+        );
+    }
+
     return (
         <>
             {includeNovelties && noveltyItems.length > 0 ? <NoveltiesHeroSection items={noveltyItems} /> : null}
@@ -58,10 +89,11 @@ export function CardapioHighlightsSection({
             <div
                 className={cn(
                     showMobileHiddenContent ? "flex flex-col gap-4" : "hidden gap-4",
-                    "md:flex md:flex-row md:items-start"
+                    "md:flex md:items-start",
+                    desktopColumnLayout ? "md:flex-col" : "md:flex-row"
                 )}
             >
-                <section id="destaque" className="mx-2 flex min-w-0 flex-col gap-4 md:flex-1">
+                <section id="destaque" className={cn("mx-2 flex min-w-0 flex-col gap-4 md:flex-1", desktopColumnLayout && "md:mx-0 md:w-full")}>
                     <ChefSuggestionsCarousel
                         title="O que vou sugerir para vocês hoje: "
                         subtitle="selecionei uma combinação que valoriza ingredientes nobres e equilíbrio de sabores."
@@ -72,8 +104,8 @@ export function CardapioHighlightsSection({
 
                 {likesEnabled ? (
                     <>
-                        <div className="col-span-full mx-2 my-4 h-[2px] bg-zinc-900 md:hidden" />
-                        <section id="mais-curtidas" className="mx-2 flex min-w-0 flex-col gap-4 md:flex-1">
+                        <div className={cn("col-span-full mx-2 my-4 h-[2px] bg-zinc-900 md:hidden", desktopColumnLayout && "md:block md:w-full")} />
+                        <section id="mais-curtidas" className={cn("mx-2 flex min-w-0 flex-col gap-4 md:flex-1", desktopColumnLayout && "md:mx-0 md:w-full")}>
                             <MaisCurtidasRanking
                                 items={topLikedItems}
                                 headerProfile={SECTION_THREAD_PROFILE_BY_SECTION.likes}
@@ -124,6 +156,46 @@ export function CardapioHighlightsSection({
                 )}
             />
         </>
+    );
+}
+
+function SidebarAccordionSection({
+    title,
+    children,
+}: {
+    title: string;
+    children: React.ReactNode;
+}) {
+    const [isOpen, setIsOpen] = useState(false);
+
+    return (
+        <section className="border-b border-zinc-200 py-1">
+            <button
+                type="button"
+                className="flex w-full items-center justify-between gap-3 py-4 text-left"
+                onClick={() => setIsOpen((value) => !value)}
+                aria-expanded={isOpen}
+            >
+                <h2 className="font-lora text-lg font-bold leading-tight tracking-tight">
+                    {title}
+                </h2>
+                <ChevronRight
+                    className={cn(
+                        "h-5 w-5 shrink-0 transition-transform duration-300",
+                        isOpen && "rotate-90"
+                    )}
+                />
+            </button>
+
+            <div
+                className={cn(
+                    "overflow-hidden transition-all duration-300 ease-in-out",
+                    isOpen ? "max-h-[900px] pb-4 opacity-100" : "max-h-0 opacity-0"
+                )}
+            >
+                {children}
+            </div>
+        </section>
     );
 }
 
@@ -265,7 +337,13 @@ function NoveltiesHeroSection({ items }: { items: CardapioIndexItem[] }) {
     );
 }
 
-function ReelsCarousel({ urls }: { urls: string[] }) {
+function ReelsCarousel({
+    urls,
+    largeThumbnails = false,
+}: {
+    urls: string[];
+    largeThumbnails?: boolean;
+}) {
     const videoRefs = useRef<Array<HTMLVideoElement | null>>([]);
     const containerRefs = useRef<Array<HTMLDivElement | null>>([]);
     const [fullscreenIndex, setFullscreenIndex] = useState<number | null>(null);
@@ -348,7 +426,13 @@ function ReelsCarousel({ urls }: { urls: string[] }) {
         <Carousel opts={{ align: "start" }} className="relative">
             <CarouselContent>
                 {urls.map((url, index) => (
-                    <CarouselItem key={`${url}-${index}`} className="basis-[18%] md:basis-1/5 lg:basis-1/6">
+                    <CarouselItem
+                        key={`${url}-${index}`}
+                        className={cn(
+                            "basis-[18%] md:basis-1/5 lg:basis-1/6",
+                            largeThumbnails && "md:basis-[62%] lg:basis-[62%]"
+                        )}
+                    >
                         <div
                             ref={(element) => {
                                 containerRefs.current[index] = element;
@@ -647,12 +731,14 @@ function ChefSuggestionsCarousel({
     mobileTitle,
     groups,
     headerProfile,
+    contentOnly = false,
 }: {
     title?: string;
     subtitle?: string;
     mobileTitle?: React.ReactNode;
     groups: CardapioIndexItem[][];
     headerProfile?: ThreadSectionProfile;
+    contentOnly?: boolean;
 }) {
     const [isOpen, setIsOpen] = useState(false);
 
@@ -660,6 +746,8 @@ function ChefSuggestionsCarousel({
 
     const items = groups.flat();
     const carousel = <SuggestionMiniCarousel items={items} />;
+
+    if (contentOnly) return carousel;
 
     return (
         <div className="p-2">
@@ -729,9 +817,11 @@ function ChefSuggestionsCarousel({
 function MaisCurtidasRanking({
     items,
     headerProfile,
+    contentOnly = false,
 }: {
     items: CardapioIndexItem[];
     headerProfile?: ThreadSectionProfile;
+    contentOnly?: boolean;
 }) {
     const [isOpen, setIsOpen] = useState(false);
 
@@ -798,6 +888,8 @@ function MaisCurtidasRanking({
             })}
         </div>
     );
+
+    if (contentOnly) return rankList;
 
     return (
         <div className="p-2">
