@@ -1,7 +1,6 @@
 // app/routes/cardapio._index.tsx
 
 import { HeadersFunction, LoaderFunctionArgs } from "@remix-run/node";
-import { InstagramLogoIcon } from "@radix-ui/react-icons";
 import {
   Await,
   defer,
@@ -9,20 +8,9 @@ import {
   useLoaderData,
   useRouteError,
   useRouteLoaderData,
-  useSearchParams,
 } from "@remix-run/react";
-import { MapPin, SearchIcon } from "lucide-react";
 import React, { Suspense, useEffect, useState } from "react";
 import Loading from "~/components/loading/loading";
-import ExternalLink from "~/components/primitives/external-link/external-link";
-import Logo from "~/components/primitives/logo/logo";
-import WhatsappExternalLink from "~/components/primitives/whatsapp/whatsapp-external-link";
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-} from "~/components/ui/sheet";
 import CardapioDatabaseUnavailable from "~/domain/cardapio/components/cardapio-database-unavailable/cardapio-database-unavailable";
 import prismaClient from "~/lib/prisma/client.server";
 import CardapioErrorRedirect from "~/domain/cardapio/components/cardapio-error-redirect/cardapio-error-redirect";
@@ -37,6 +25,7 @@ import {
   LikeCelebrationOverlay,
 } from "~/domain/cardapio/components/cardapio-index/cardapio-index-sections";
 import CardapioOrderCtaButton from "~/domain/cardapio/components/cardapio-order-cta-button";
+import CardapioDesktopSidebarHeader from "~/domain/cardapio/components/cardapio-desktop-sidebar-header";
 import { trackCardapioFacebookPixelTrigger } from "~/domain/cardapio/facebook-pixel.client";
 import type {
   CardapioIndexItem,
@@ -128,12 +117,8 @@ export default function CardapioWebIndex() {
     menuItemInterestEnabled,
     likesEnabled,
   } = useLoaderData<typeof loader>();
-  const cardapioLayoutData =
-    useRouteLoaderData<typeof cardapioLayoutLoader>("routes/cardapio");
   const [showLikeCelebration, setShowLikeCelebration] = useState(false);
-  const [showHighlightsSheet, setShowHighlightsSheet] = useState(false);
   const [likeCelebrationSeed, setLikeCelebrationSeed] = useState(1);
-  const [searchParams, setSearchParams] = useSearchParams();
   const forceLikeOverlay = false;
 
   useEffect(() => {
@@ -145,23 +130,6 @@ export default function CardapioWebIndex() {
     window.addEventListener("cardapio:like-celebration", handler);
     return () =>
       window.removeEventListener("cardapio:like-celebration", handler);
-  }, []);
-
-  useEffect(() => {
-    if (searchParams.get("dicas") !== "1") return;
-
-    setShowHighlightsSheet(true);
-    const nextSearchParams = new URLSearchParams(searchParams);
-    nextSearchParams.delete("dicas");
-    setSearchParams(nextSearchParams, { replace: true });
-  }, [searchParams, setSearchParams]);
-
-  useEffect(() => {
-    const handler = () => setShowHighlightsSheet(true);
-
-    window.addEventListener("cardapio:open-highlights", handler);
-    return () =>
-      window.removeEventListener("cardapio:open-highlights", handler);
   }, []);
 
   useEffect(() => {
@@ -192,59 +160,6 @@ export default function CardapioWebIndex() {
         seed={likeCelebrationSeed}
         onClose={() => setShowLikeCelebration(false)}
       />
-
-      <Sheet open={showHighlightsSheet} onOpenChange={setShowHighlightsSheet}>
-        <SheetContent
-          side="left"
-          className="w-[92vw] overflow-y-auto p-0 md:hidden"
-        >
-          <SheetHeader className="px-4 pb-2 pt-6 text-left">
-            <SheetTitle className="font-neue text-base uppercase tracking-widest">
-              Inspirações
-            </SheetTitle>
-          </SheetHeader>
-          <CardapioHighlightsSheetContactHeader />
-          <CardapioHighlightsSheetSearchButton />
-
-          <Suspense fallback={<Loading />}>
-            <Await resolve={items}>
-              {(items) => (
-                <div className="pb-8 pt-2">
-                  <CardapioHighlightsSection
-                    items={items}
-                    likesEnabled={likesEnabled}
-                    reelUrls={reelUrls}
-                    reelsEnabled={reelsEnabled}
-                    includeNovelties={false}
-                    showMobileHiddenContent
-                  />
-                  <div className="px-4 pb-4 pt-2">
-                    <Suspense fallback={<span>Carregando...</span>}>
-                      <Await
-                        resolve={
-                          cardapioLayoutData?.fazerPedidoPublicURL ??
-                          WEBSITE_LINKS.cardapioFallbackURL.href
-                        }
-                      >
-                        {(url) => (
-                          <CardapioOrderCtaButton
-                            externalLinkURL={url}
-                            onClick={() =>
-                              trackCardapioFacebookPixelTrigger(
-                                "fazer_pedido_click"
-                              )
-                            }
-                          />
-                        )}
-                      </Await>
-                    </Suspense>
-                  </div>
-                </div>
-              )}
-            </Await>
-          </Suspense>
-        </SheetContent>
-      </Sheet>
 
       <Suspense fallback={null}>
         <Await resolve={items}>
@@ -310,53 +225,7 @@ function DesktopCardapioSidebar({
 }) {
   return (
     <div className="flex min-h-full flex-col gap-6">
-      <div className="space-y-4">
-        <Link to={WEBSITE_LINKS.cardapioPublic.href} className="block w-fit">
-          <Logo
-            color="black"
-            onlyText
-            className="h-[50px] w-[150px]"
-            tagline={false}
-          />
-        </Link>
-
-        <div className="flex items-center justify-between gap-4 border-b border-zinc-200 pb-4">
-          <div className="flex items-center gap-4">
-            <ExternalLink
-              to={WEBSITE_LINKS.instagram.href}
-              aria-label={WEBSITE_LINKS.instagram.title}
-              ariaLabel="Link pagina instagram"
-            >
-              <InstagramLogoIcon color="black" className="h-5 w-5" />
-            </ExternalLink>
-            <ExternalLink
-              to={WEBSITE_LINKS.maps.href}
-              aria-label={WEBSITE_LINKS.maps.title}
-              ariaLabel="Link para o google maps"
-            >
-              <MapPin color="black" className="h-5 w-5" />
-            </ExternalLink>
-          </div>
-
-          <WhatsappExternalLink
-            phoneNumber="46991272525"
-            ariaLabel="Envia uma mensagem com WhatsApp"
-            message={"Olá, gostaria fazer um pedido"}
-            className="font-mono text-sm font-semibold"
-          >
-            (46) 99127-2525
-          </WhatsappExternalLink>
-        </div>
-
-        <div className="border-b border-zinc-200 pb-4">
-          <p className="font-neue text-[11px] font-semibold uppercase tracking-widest text-zinc-500">
-            Horários de funcionamento
-          </p>
-          <p className="mt-1 font-neue text-sm font-semibold uppercase tracking-wide text-zinc-950">
-            Qua a Dom, das 18h às 22h
-          </p>
-        </div>
-      </div>
+      <CardapioDesktopSidebarHeader />
 
       <CardapioHighlightsSection
         items={items}
@@ -394,61 +263,6 @@ function DesktopFloatingOrderButton() {
           )}
         </Await>
       </Suspense>
-    </div>
-  );
-}
-
-function CardapioHighlightsSheetSearchButton() {
-  return (
-    <div className="px-4 pb-4">
-      <Link
-        to="/cardapio/buscar"
-        className="flex h-12 w-full items-center justify-center gap-2 bg-zinc-950 px-4 font-neue text-sm font-semibold uppercase tracking-widest text-white"
-      >
-        <SearchIcon className="h-4 w-4" />
-        Buscar sabores
-      </Link>
-    </div>
-  );
-}
-
-function CardapioHighlightsSheetContactHeader() {
-  return (
-    <div className="mx-4 mb-4 rounded-sm bg-white">
-      <div className="flex items-center justify-between px-4 py-3">
-        <div className="flex items-center gap-4">
-          <ExternalLink
-            to={WEBSITE_LINKS.instagram.href}
-            aria-label={WEBSITE_LINKS.instagram.title}
-            ariaLabel="Link pagina instagram"
-          >
-            <InstagramLogoIcon color="black" className="h-5 w-5" />
-          </ExternalLink>
-          <ExternalLink
-            to={WEBSITE_LINKS.maps.href}
-            aria-label={WEBSITE_LINKS.maps.title}
-            ariaLabel="Link para o google maps"
-          >
-            <MapPin color="black" className="h-5 w-5" />
-          </ExternalLink>
-        </div>
-
-        <WhatsappExternalLink
-          phoneNumber="46991272525"
-          ariaLabel="Envia uma mensagem com WhatsApp"
-          message={"Olá, gostaria fazer um pedido"}
-          className="font-mono text-sm font-semibold"
-        >
-          (46) 99127-2525
-        </WhatsappExternalLink>
-      </div>
-
-      <div className="bg-black px-4 py-2 text-center">
-        <p className="font-neue text-[11px] font-semibold uppercase tracking-wider text-white">
-          Horários: Qua <span className="lowercase">a</span> Dom, 18h{" "}
-          <span className="lowercase">às</span> 22h
-        </p>
-      </div>
     </div>
   );
 }

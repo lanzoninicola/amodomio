@@ -2,19 +2,25 @@ import { LoaderFunctionArgs, MetaFunction, redirect } from "@remix-run/node";
 import { Link, useLoaderData } from "@remix-run/react";
 import { Button } from "~/components/ui/button";
 import { Separator } from "~/components/ui/separator";
-import { LikeIt, ShareIt } from "~/domain/cardapio/components/cardapio-item-action-bar/cardapio-item-action-bar";
+import {
+  LikeIt,
+  ShareIt,
+} from "~/domain/cardapio/components/cardapio-item-action-bar/cardapio-item-action-bar";
 import { findCardapioItemBySlug } from "~/domain/cardapio/cardapio-items-source.server";
 import CardapioItemImageSingle from "~/domain/cardapio/components/cardapio-item-image-single/cardapio-item-image-single";
 import { CardapioItemPrice } from "~/domain/cardapio/components/cardapio-item-price/cardapio-item-price";
 import ItalyIngredientsStatement from "~/domain/cardapio/components/italy-ingredient-statement/italy-ingredient-statement";
 import { getEngagementSettings } from "~/domain/cardapio/engagement-settings.server";
+import CardapioDesktopSidebarHeader from "~/domain/cardapio/components/cardapio-desktop-sidebar-header";
 
 const CARDAPIO_BASE_URL = "https://www.amodomio.com.br";
 
 function sanitizeMediaUrl(url?: string | null) {
   const normalized = typeof url === "string" ? url.trim() : "";
   if (!normalized) return "";
-  return /^https?:\/\/res\.cloudinary\.com\//i.test(normalized) ? "" : normalized;
+  return /^https?:\/\/res\.cloudinary\.com\//i.test(normalized)
+    ? ""
+    : normalized;
 }
 
 function collapseWhitespace(value?: string | null) {
@@ -59,7 +65,9 @@ function buildCardapioItemSeoDescription(item?: {
 export const meta: MetaFunction<typeof loader> = ({ data, params }) => {
   const item = data?.item ?? null;
   const slug = params.slug ? encodeURIComponent(params.slug) : "";
-  const canonicalUrl = slug ? `${CARDAPIO_BASE_URL}/cardapio/${slug}` : `${CARDAPIO_BASE_URL}/cardapio`;
+  const canonicalUrl = slug
+    ? `${CARDAPIO_BASE_URL}/cardapio/${slug}`
+    : `${CARDAPIO_BASE_URL}/cardapio`;
 
   if (!item) {
     return [
@@ -115,25 +123,32 @@ export default function SingleCardapioItem() {
   const allMedia = (item.MenuItemGalleryImage || []).filter((media) =>
     Boolean(
       sanitizeMediaUrl(media?.secureUrl) ||
-      sanitizeMediaUrl((media as { url?: string | null })?.url)
+        sanitizeMediaUrl((media as { url?: string | null })?.url)
     )
   );
-  const featuredImage = allMedia.find((img) => img.isPrimary) || allMedia[0] || null;
-  const galleryMedia = allMedia.filter((media) => media.id !== featuredImage?.id);
+  const featuredImage =
+    allMedia.find((img) => img.isPrimary) || allMedia[0] || null;
+  const galleryMedia = allMedia.filter(
+    (media) => media.id !== featuredImage?.id
+  );
   const imageUrl =
     sanitizeMediaUrl(featuredImage?.secureUrl) ||
     sanitizeMediaUrl((featuredImage as { url?: string | null })?.url) ||
     "";
   const featuredKind =
     featuredImage?.kind === "video" ||
-      /\.(mp4|mov|webm|m4v|ogg|ogv)(\?|$)/i.test(imageUrl)
+    /\.(mp4|mov|webm|m4v|ogg|ogv)(\?|$)/i.test(imageUrl)
       ? "video"
       : "image";
   const ingredients = item.ingredients || "";
 
   return (
-    <div className="relative min-h-screen flex flex-col mt-44 md:mt-52">
-      <div className="mx-4 md:grid md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] md:gap-8 md:items-start">
+    <div className="relative min-h-screen flex flex-col pt-[calc(4rem+env(safe-area-inset-top))] md:block md:pt-0">
+      <aside className="fixed inset-y-0 left-0 hidden w-[300px] overflow-y-auto border-r border-zinc-200 bg-white px-5 py-6 md:block lg:w-[340px]">
+        <CardapioDesktopSidebarHeader />
+      </aside>
+
+      <div className="mx-4 pb-[calc(2rem+env(safe-area-inset-bottom))] md:ml-[300px] md:mr-[72px] md:flex md:flex-col md:px-6 md:py-6 lg:ml-[340px] xl:mx-auto xl:w-full xl:max-w-[700px]">
         <div className="flex flex-col">
           <div className="h-[40vh] sm:h-[70vh] md:h-[60vh] overflow-hidden">
             <CardapioItemImageSingle
@@ -147,12 +162,18 @@ export default function SingleCardapioItem() {
           </div>
         </div>
 
-        <Separator className="my-2 md:hidden" />
+        <Separator className="my-2 md:my-4" />
 
         <div className="flex flex-col">
-          {(engagementSettings.sharesEnabled || engagementSettings.likesEnabled) && (
+          {(engagementSettings.sharesEnabled ||
+            engagementSettings.likesEnabled) && (
             <div
-              className={`grid grid-cols-1 gap-2 mt-2 mb-4 md:mt-0 md:mb-0 ${engagementSettings.sharesEnabled && engagementSettings.likesEnabled ? "md:grid-cols-2" : "md:grid-cols-1"}`}
+              className={`grid grid-cols-1 gap-2 mt-2 mb-4 md:mt-0 md:mb-0 ${
+                engagementSettings.sharesEnabled &&
+                engagementSettings.likesEnabled
+                  ? "md:grid-cols-2"
+                  : "md:grid-cols-1"
+              }`}
             >
               {engagementSettings.sharesEnabled && (
                 <ShareIt
@@ -160,7 +181,9 @@ export default function SingleCardapioItem() {
                   size={20}
                   cnContainer="w-full px-2 py-0 h-8 border border-black"
                 >
-                  <span className="font-neue text-xs uppercase tracking-wide">Compartilhar</span>
+                  <span className="font-neue text-xs uppercase tracking-wide">
+                    Compartilhar
+                  </span>
                 </ShareIt>
               )}
               {engagementSettings.likesEnabled && (
@@ -170,7 +193,9 @@ export default function SingleCardapioItem() {
                   cnContainer="w-full px-2 py-0 h-8 bg-red-500 text-white"
                   color="white"
                 >
-                  <span className="font-neue text-xs uppercase tracking-wide">Gostei</span>
+                  <span className="font-neue text-xs uppercase tracking-wide">
+                    Gostei
+                  </span>
                 </LikeIt>
               )}
             </div>
@@ -200,7 +225,7 @@ export default function SingleCardapioItem() {
                     "";
                   const mediaKind =
                     media?.kind === "video" ||
-                      /\.(mp4|mov|webm|m4v|ogg|ogv)(\?|$)/i.test(mediaUrl)
+                    /\.(mp4|mov|webm|m4v|ogg|ogv)(\?|$)/i.test(mediaUrl)
                       ? "video"
                       : "image";
 
@@ -244,10 +269,20 @@ export default function SingleCardapioItem() {
             />
           </div>
 
-          <Link to={"/cardapio"} className="mt-6 md:mb-6">
-            <Button className="w-full uppercase tracking-wider font-neue">Voltar</Button>
+          <Link to={"/cardapio"} className="mt-6 md:hidden">
+            <Button className="w-full uppercase tracking-wider font-neue">
+              Voltar
+            </Button>
           </Link>
         </div>
+      </div>
+
+      <div className="fixed bottom-6 right-12 z-50 hidden w-[240px] md:block lg:right-16">
+        <Link to="/cardapio">
+          <Button className="w-full uppercase tracking-wider font-neue">
+            Voltar
+          </Button>
+        </Link>
       </div>
     </div>
   );

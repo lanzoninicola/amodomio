@@ -521,10 +521,7 @@ function CardapioGridItem({
   }, [isExpanded, onClick]);
 
   const visiblePrices = getVisiblePublicPriceVariations(item);
-  const featuredPrice = getFeaturedCatalogPrice(visiblePrices);
-  const secondaryPrices = visiblePrices.filter(
-    (variation) => variation.id !== featuredPrice?.id
-  );
+  const priceRange = getCatalogPriceRange(visiblePrices);
 
   return (
     <li
@@ -600,33 +597,15 @@ function CardapioGridItem({
           </span>
         </div>
 
-        {featuredPrice ? (
+        {priceRange ? (
           <div className="relative mt-auto min-w-0 pb-1">
-            <div className="min-w-0">
-              <div className="inline-flex max-w-full flex-col rounded-xl bg-white/[0.07] px-3 py-2.5">
-                <span className="block truncate font-neue text-[9px] font-semibold uppercase leading-none tracking-[0.16em] text-zinc-300">
-                  {getCatalogVariationLabel(featuredPrice.label)}
-                </span>
-                <span className="mt-1.5 block whitespace-nowrap font-neue text-[1.85rem] font-bold leading-none text-white sm:text-[2.15rem]">
-                  {formatMoneyString(featuredPrice.priceAmount)}
-                </span>
-              </div>
-
-              {secondaryPrices.length > 0 ? (
-                <div className="mt-2.5 flex flex-col gap-1.5 pr-14">
-                  {secondaryPrices.map((variation) => (
-                    <div key={variation.id} className="min-w-0">
-                      <span className="block truncate font-neue text-[8px] font-semibold uppercase leading-none tracking-[0.14em] text-zinc-500">
-                        {getCatalogVariationLabel(variation.label)}
-                      </span>
-                      <span className="mt-0.5 block whitespace-nowrap font-neue text-base font-bold leading-none text-white/80">
-                        {formatMoneyString(variation.priceAmount)}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              ) : null}
-            </div>
+            <span className="block pr-14 font-neue text-base font-semibold leading-tight text-white">
+              {priceRange.minimum === priceRange.maximum
+                ? formatMoneyString(priceRange.minimum)
+                : `De ${formatMoneyString(
+                    priceRange.minimum
+                  )} a ${formatMoneyString(priceRange.maximum)}`}
+            </span>
 
             {isDesktop ? (
               <Link
@@ -717,19 +696,12 @@ function CardapioGridItem({
   );
 }
 
-function getFeaturedCatalogPrice(
-  variations: Array<{
-    id: string;
-    isReference?: boolean | null;
-  }>
-) {
-  return (
-    variations.find((variation) => variation.isReference) ??
-    variations[0] ??
-    null
-  );
-}
+function getCatalogPriceRange(variations: Array<{ priceAmount: number }>) {
+  if (!variations.length) return null;
 
-function getCatalogVariationLabel(label: string) {
-  return label.trim().replace(/^tamanho\s+/i, "");
+  const prices = variations.map((variation) => variation.priceAmount);
+  return {
+    minimum: Math.min(...prices),
+    maximum: Math.max(...prices),
+  };
 }

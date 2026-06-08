@@ -320,14 +320,15 @@ function CardapioHeader() {
   const [showSearch, setShowSearch] = useState(false);
   const { fazerPedidoPublicURL, notificationsEnabled, vapidPublicKey } =
     useLoaderData<typeof loader>();
-  const isCardapioIndex =
-    location.pathname === WEBSITE_LINKS.cardapioPublic.href;
+  const usesDesktopSidebar =
+    location.pathname === WEBSITE_LINKS.cardapioPublic.href ||
+    currentPage === "single";
 
   return (
     <header
       className={cn(
         "fixed top-0 w-full z-30 bg-white md:max-w-6xl md:-translate-x-1/2 md:left-1/2",
-        isCardapioIndex && "md:hidden"
+        usesDesktopSidebar && "md:hidden"
       )}
     >
       <div className="flex h-[calc(50px+env(safe-area-inset-top))] flex-col border-b border-gray-200 bg-white px-1 pb-3 pt-[calc(0.5rem+env(safe-area-inset-top))] md:h-[70px] md:border-b-0 md:pt-2">

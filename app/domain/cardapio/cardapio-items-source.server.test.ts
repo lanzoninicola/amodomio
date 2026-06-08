@@ -84,4 +84,44 @@ describe("buildPublicPriceVariations", () => {
       },
     ]);
   });
+
+  it("ordena os valores pela ordem configurada das variacoes", () => {
+    const result = buildPublicPriceVariations({
+      ItemSellingPriceVariation: [
+        {
+          id: "price-large",
+          priceAmount: 79.9,
+          ItemVariation: {
+            id: "item-variation-large",
+            isReference: false,
+            Variation: {
+              id: "variation-large",
+              code: "large",
+              name: "Grande",
+              sortOrderIndex: 30,
+            },
+          },
+        },
+        {
+          id: "price-small",
+          priceAmount: 39.9,
+          ItemVariation: {
+            id: "item-variation-small",
+            isReference: false,
+            Variation: {
+              id: "variation-small",
+              code: "small",
+              name: "Pequena",
+              sortOrderIndex: 10,
+            },
+          },
+        },
+      ],
+    } as any);
+
+    expect(result.map((variation) => variation.label)).toEqual([
+      "Pequena",
+      "Grande",
+    ]);
+  });
 });
