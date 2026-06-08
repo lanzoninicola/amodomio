@@ -8,6 +8,7 @@ export interface NavigationLink {
   icon?: LucideIcon | ((props: React.SVGProps<SVGSVGElement>) => JSX.Element);
   label?: string;
   highlight?: boolean;
+  tags?: string[];
 }
 
 export interface NavigationSection extends NavigationLink {

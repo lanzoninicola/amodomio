@@ -16,7 +16,9 @@
       "Bash(grep -n \"buildRecipeChatGptImportPreview\\\\|previewAction\\\\|importableIngredients\" /home/lanzo/Documents/Coding/amodomio/app/routes/admin.recipes.\\\\$id.tsx | head -30)",
       "Bash(grep -n \"Recipe\\\\|ingredient\" \"/home/lanzo/Documents/Coding/amodomio/app/routes/admin.items.\\\\$id.tsx\" | head -40)",
       "Bash(sed -n '185,200p' /home/lanzo/Documents/Coding/amodomio/prisma/schema.prisma)",
-      "Bash(sed -n '355,395p' /home/lanzo/Documents/Coding/amodomio/prisma/schema.prisma)"
+      "Bash(sed -n '355,395p' /home/lanzo/Documents/Coding/amodomio/prisma/schema.prisma)",
+      "Bash(find /home/lanzo/Documents/Coding/amodomio -name \"*.ts\" -path \"*/media-api/*\" 2>/dev/null | head -5; ls /home/lanzo/Documents/Coding/ 2>/dev/null)",
+      "Read(//home/lanzo/Documents/Coding/**)"
     ],
     "additionalDirectories": [
       "/home/lanzo/Documents/Coding/amodomio/app/routes"
