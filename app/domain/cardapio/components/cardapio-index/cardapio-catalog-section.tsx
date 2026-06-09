@@ -60,8 +60,8 @@ export function CardapioCatalogSection({
   const groupedItems = isGrouped(currentItems) ? currentItems : [];
   const orderedGroups = groupedItems.length
     ? [...groupedItems].sort(
-        (a, b) => (a.sortOrderIndex ?? 0) - (b.sortOrderIndex ?? 0)
-      )
+      (a, b) => (a.sortOrderIndex ?? 0) - (b.sortOrderIndex ?? 0)
+    )
     : [];
 
   const onCurrentTagSelected = useCallback(
@@ -98,7 +98,7 @@ export function CardapioCatalogSection({
       className={cn(
         "flex flex-col m-4",
         desktopFeedLayout &&
-          "md:mx-auto md:my-0 md:w-full md:max-w-[700px] md:px-6 md:py-6"
+        "md:mx-auto md:my-0 md:w-full md:max-w-[700px] md:px-6 md:py-6"
       )}
     >
       <div
@@ -441,7 +441,7 @@ function CardapioItemsGrid({
       className={cn(
         "mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4",
         desktopFeedLayout &&
-          "md:grid-cols-2 md:gap-5 lg:grid-cols-2 xl:grid-cols-2"
+        "md:grid-cols-2 md:gap-5 lg:grid-cols-2 xl:grid-cols-2"
       )}
     >
       {items.map((item) => (
@@ -493,7 +493,7 @@ function CardapioGridItem({
     featuredImage?.thumbnailUrl || item.imagePlaceholderURL || "";
   const featuredMediaKind =
     featuredImage?.kind === "video" ||
-    /\.(mp4|mov|webm|m4v|ogg|ogv)(\?|$)/i.test(featuredMediaUrl)
+      /\.(mp4|mov|webm|m4v|ogg|ogv)(\?|$)/i.test(featuredMediaUrl)
       ? "video"
       : "image";
 
@@ -590,12 +590,13 @@ function CardapioGridItem({
           <div className="absolute -top-2 -right-2 z-10">
             <LikeIt
               item={item}
-              size={22}
-              cnContainer="w-16 h-16 rounded-full bg-white hover:bg-white/90 flex-col items-center justify-center gap-1 p-0"
+              size={20}
+              cnContainer="w-[3.5rem] h-[3.5rem] bg-white/60 rounded-bl-2xl rounded-tl-lg backdrop-blur-lg backdrop-brightness-20 hover:bg-white/90 flex-col items-center justify-center mx-1"
               color="red"
+
               filled
             >
-              <span className="font-neue text-[10px] uppercase tracking-wide text-red-500 leading-tight">
+              <span className="font-neue text-[12px] tracking-wide text-red-500 leading-none">
                 Adorei
               </span>
             </LikeIt>
@@ -625,8 +626,8 @@ function CardapioGridItem({
               {priceRange.minimum === priceRange.maximum
                 ? formatMoneyString(priceRange.minimum)
                 : `De ${formatMoneyString(
-                    priceRange.minimum
-                  )} a ${formatMoneyString(priceRange.maximum)}`}
+                  priceRange.minimum
+                )} a ${formatMoneyString(priceRange.maximum)}`}
             </span>
 
             {isDesktop ? (
