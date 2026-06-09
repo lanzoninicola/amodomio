@@ -799,6 +799,8 @@ function CardapioGridItem({
             <img
               src={featuredMediaUrl}
               alt={item.name}
+              loading="lazy"
+              decoding="async"
               className="max-h-[100dvh] w-full object-contain"
               onClick={(event) => event.stopPropagation()}
             />

@@ -158,6 +158,7 @@ export default function SingleCardapioItem() {
               placeholderIcon={true}
               cnContainer="h-full w-full object-cover"
               enableOverlay={false}
+              imageLoading="eager"
             />
           </div>
         </div>
@@ -251,6 +252,7 @@ export default function SingleCardapioItem() {
                       alt={`${item.name} galeria ${index + 1}`}
                       className="h-16 w-16 shrink-0 rounded-md object-cover border border-zinc-200"
                       loading="lazy"
+                      decoding="async"
                     />
                   );
                 })}
