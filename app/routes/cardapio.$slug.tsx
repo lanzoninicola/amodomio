@@ -140,6 +140,15 @@ export default function SingleCardapioItem() {
     /\.(mp4|mov|webm|m4v|ogg|ogv)(\?|$)/i.test(imageUrl)
       ? "video"
       : "image";
+  const featuredSrcSet = (() => {
+    const variants = (featuredImage as { variants?: Record<string, string> | null } | null)?.variants;
+    if (!variants) return "";
+    return Object.entries(variants)
+      .filter(([w, url]) => /^\d+$/.test(w) && Boolean(url))
+      .sort(([a], [b]) => Number(a) - Number(b))
+      .map(([w, url]) => `${url} ${w}w`)
+      .join(", ");
+  })();
   const ingredients = item.ingredients || "";
 
   return (
@@ -153,6 +162,8 @@ export default function SingleCardapioItem() {
           <div className="h-[40vh] sm:h-[70vh] md:h-[60vh] overflow-hidden">
             <CardapioItemImageSingle
               src={imageUrl || ""}
+              srcSet={featuredSrcSet}
+              sizes="(max-width: 768px) 100vw, 700px"
               kind={featuredKind}
               placeholder={item.imagePlaceholderURL || ""}
               placeholderIcon={true}

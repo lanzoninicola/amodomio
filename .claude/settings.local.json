@@ -18,7 +18,22 @@
       "Bash(sed -n '185,200p' /home/lanzo/Documents/Coding/amodomio/prisma/schema.prisma)",
       "Bash(sed -n '355,395p' /home/lanzo/Documents/Coding/amodomio/prisma/schema.prisma)",
       "Bash(find /home/lanzo/Documents/Coding/amodomio -name \"*.ts\" -path \"*/media-api/*\" 2>/dev/null | head -5; ls /home/lanzo/Documents/Coding/ 2>/dev/null)",
-      "Read(//home/lanzo/Documents/Coding/**)"
+      "Read(//home/lanzo/Documents/Coding/**)",
+      "Bash(grep -n \"CardapioItemImageSingle\\\\|getPrimaryCardapioMedia\\\\|secureUrl\\\\|mediaAssets\\\\|variants\\\\|srcSet\" /home/lanzo/Documents/Coding/amodomio/app/routes/cardapio.\\\\$slug.tsx | head -30)",
+      "Bash(npm install *)",
+      "Bash(npm uninstall *)",
+      "Bash(npm test *)",
+      "Bash(sed -n '1,15p' /home/lanzo/Documents/Coding/amodomio/app/routes/cardapio.buscar.tsx)",
+      "Bash(sed -n '215,250p' /home/lanzo/Documents/Coding/amodomio/app/routes/cardapio.buscar.tsx)",
+      "Bash(sed -n '1,15p' /home/lanzo/Documents/Coding/amodomio/app/routes/cardapio.\\\\$slug.tsx)",
+      "Bash(grep -n \"sanitizeMediaUrl\\\\|cardapio-index.shared\" /home/lanzo/Documents/Coding/amodomio/app/routes/cardapio.\\\\$slug.tsx | head -10)",
+      "Bash(sed -n '119,165p' /home/lanzo/Documents/Coding/amodomio/app/routes/cardapio.\\\\$slug.tsx)",
+      "Bash(npx esbuild *)",
+      "Bash(/home/lanzo/.local/share/pipx/venvs/graphifyy/bin/python scripts/rebuild-graphify-wiki.py)",
+      "Bash(npx tsx *)",
+      "Bash(PGPASSWORD=cglCDH3gxCOaaheFGBw psql -h 69.62.91.94 -p 55433 -U zzeeuuss -d amodomio -c 'ALTER TABLE \"item_gallery_images\" ADD COLUMN IF NOT EXISTS \"variants_json\" JSONB;')",
+      "Bash(PGPASSWORD=cglCDH3gxCOaaheFGBw psql -h 69.62.91.94 -p 55433 -U zzeeuuss -d amodomio -c \"SELECT migration_name, finished_at FROM _prisma_migrations ORDER BY started_at DESC LIMIT 5;\")",
+      "Bash(NODE_ENV=development MEDIA_UPLOAD_API_KEY=b7f0c8d8a3b14c2f9e6d1a0c4f2e7b9c8d1f3a6b5e2c9f0a7d4b1c8e6f9a2d3 npx tsx scripts/backfill-image-variants.ts --run --limit 200)"
     ],
     "additionalDirectories": [
       "/home/lanzo/Documents/Coding/amodomio/app/routes"

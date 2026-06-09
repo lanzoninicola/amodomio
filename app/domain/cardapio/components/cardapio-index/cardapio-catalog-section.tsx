@@ -11,6 +11,7 @@ import { cn } from "~/lib/utils";
 import formatMoneyString from "~/utils/format-money-string";
 import {
   type CardapioIndexItem,
+  buildImageSrcSet,
   getCardapioInterestItemId,
   getCardapioItemHref,
   getGroupedItemsDescription,
@@ -586,6 +587,7 @@ function CardapioGridItem({
       /\.(mp4|mov|webm|m4v|ogg|ogv)(\?|$)/i.test(featuredMediaUrl)
       ? "video"
       : "image";
+  const featuredMediaSrcSet = buildImageSrcSet(featuredImage?.variants);
 
   const setRefs = useCallback(
     (element: HTMLLIElement | null) => {
@@ -654,6 +656,8 @@ function CardapioGridItem({
       >
         <CardapioItemImageSingle
           src={featuredMediaUrl}
+          srcSet={featuredMediaSrcSet}
+          sizes="(max-width: 640px) calc(50vw - 16px), (max-width: 1024px) calc(33vw - 24px), 320px"
           kind={featuredMediaKind}
           placeholder={featuredMediaPlaceholder}
           placeholderIcon={false}

@@ -25,6 +25,7 @@ type CompatMediaAsset = {
   kind?: string | null;
   secureUrl?: string | null;
   thumbnailUrl?: string | null;
+  variantsJson?: Record<string, string> | null;
   isPrimary?: boolean | null;
   visible?: boolean | null;
   sortOrder?: number | null;
@@ -124,12 +125,23 @@ function getPrimaryImageMedia(galleryAssets?: CompatMediaAsset[] | null) {
   );
 }
 
+function parseVariantsJson(raw: unknown): Record<string, string> | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const obj = raw as Record<string, unknown>;
+  const result: Record<string, string> = {};
+  for (const [k, v] of Object.entries(obj)) {
+    if (typeof v === "string" && v) result[k] = v;
+  }
+  return Object.keys(result).length > 0 ? result : null;
+}
+
 function mapCompatGalleryAssets(assets?: CompatMediaAsset[] | null) {
   return (assets || []).map((asset, index) => ({
     id: asset?.id || `compat-media-${index}`,
     kind: asset?.kind || "image",
     secureUrl: asset?.secureUrl || null,
     thumbnailUrl: asset?.thumbnailUrl || null,
+    variants: parseVariantsJson(asset?.variantsJson),
     isPrimary: Boolean(asset?.isPrimary),
     visible: asset?.visible !== false,
     sortOrder: Number(asset?.sortOrder || 0),
@@ -550,6 +562,7 @@ async function listNativeCardapioItems(
           kind: true,
           secureUrl: true,
           thumbnailUrl: true,
+          variantsJson: true,
           isPrimary: true,
           visible: true,
           sortOrder: true,

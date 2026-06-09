@@ -4,6 +4,8 @@ import { cn } from "~/lib/utils";
 
 type Props = {
     src?: string;
+    srcSet?: string;
+    sizes?: string;
     kind?: "image" | "video";
     alt?: string;
     imageLoading?: "eager" | "lazy";
@@ -16,11 +18,13 @@ type Props = {
     cnPlaceholderContainer?: string;
     cnContainer?: string;
     enableOverlay?: boolean;
-    itemId?: string; // Opcional: para gerar frases diferentes para cada item
+    itemId?: string;
 };
 
 export default function CardapioItemImageSingle({
     src,
+    srcSet,
+    sizes,
     kind,
     alt = "Imagem do item",
     imageLoading = "lazy",
@@ -152,6 +156,8 @@ export default function CardapioItemImageSingle({
                     <img
                         ref={imgRef}
                         src={src}
+                        srcSet={srcSet || undefined}
+                        sizes={sizes || undefined}
                         alt={alt}
                         loading={imageLoading}
                         decoding="async"
