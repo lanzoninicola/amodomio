@@ -12,6 +12,8 @@ import { parseBooleanSetting } from "~/utils/parse-boolean-setting";
 const REELS_SETTING_KEY = "reel.urls";
 const REELS_ENABLED_SETTING_NAME = "reels.enabled";
 const REELS_SETTING_CONTEXT = "cardapio";
+export const CARDAPIO_FILTER_VIEW_SETTING_NAME = "filter.view-mode";
+export const DEFAULT_CARDAPIO_FILTER_VIEW_MODE = "chip";
 const MENU_ITEM_INTEREST_SETTING_CONTEXT = "cardapio";
 const MENU_ITEM_INTEREST_SETTING_NAME = "menu-item-interest-enabled";
 const SIMULATE_ERROR_SETTING_CONTEXT = "cardapio";
@@ -26,6 +28,7 @@ export type CardapioIndexLoaderData = {
     menuItemInterestEnabled: boolean;
     likesEnabled: boolean;
     sharesEnabled: boolean;
+    filterViewMode: "chip" | "stories";
 };
 
 export async function loadCardapioIndexData(request: Request): Promise<CardapioIndexLoaderData> {
@@ -110,14 +113,24 @@ export async function loadCardapioIndexData(request: Request): Promise<CardapioI
             reelUrls = await loadReelUrls(request);
         }
 
-        const menuItemInterestSetting = await prismaClient.setting.findFirst({
-            where: {
-                context: MENU_ITEM_INTEREST_SETTING_CONTEXT,
-                name: MENU_ITEM_INTEREST_SETTING_NAME,
-            },
-            orderBy: [{ createdAt: "desc" }],
-        });
+        const [menuItemInterestSetting, filterViewSetting] = await Promise.all([
+            prismaClient.setting.findFirst({
+                where: {
+                    context: MENU_ITEM_INTEREST_SETTING_CONTEXT,
+                    name: MENU_ITEM_INTEREST_SETTING_NAME,
+                },
+                orderBy: [{ createdAt: "desc" }],
+            }),
+            prismaClient.setting.findFirst({
+                where: {
+                    context: REELS_SETTING_CONTEXT,
+                    name: CARDAPIO_FILTER_VIEW_SETTING_NAME,
+                },
+                orderBy: [{ createdAt: "desc" }],
+            }),
+        ]);
         const menuItemInterestEnabled = parseBooleanSetting(menuItemInterestSetting?.value, true);
+        const filterViewMode = filterViewSetting?.value === "stories" ? "stories" : DEFAULT_CARDAPIO_FILTER_VIEW_MODE;
         const { likesEnabled, sharesEnabled } = await getEngagementSettings();
         const [items, tags] = await Promise.all([itemsPromise, tagsPromise]);
 
@@ -129,6 +142,7 @@ export async function loadCardapioIndexData(request: Request): Promise<CardapioI
             menuItemInterestEnabled,
             likesEnabled,
             sharesEnabled,
+            filterViewMode,
         };
 
         await redisSetJson(

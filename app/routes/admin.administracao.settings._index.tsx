@@ -48,6 +48,10 @@ import {
   DEFAULT_COST_REVIEW_WHATSAPP_PHONE,
 } from "~/domain/stock-movement/cost-review-notification-settings";
 import { ensureAdminNavigationMenuLayoutSetting } from "~/domain/website-navigation/admin-navigation-settings.server";
+import {
+  CARDAPIO_FILTER_VIEW_SETTING_NAME,
+  DEFAULT_CARDAPIO_FILTER_VIEW_MODE,
+} from "~/domain/cardapio/cardapio-index.server";
 
 const SETTING_TYPES = ["string", "boolean", "float", "int", "json"] as const;
 const REELS_SETTINGS_CONTEXT = "cardapio";
@@ -94,6 +98,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     likesSetting,
     sharesSetting,
     reelsEnabledSetting,
+    cardapioFilterViewSetting,
     itemCostAverageWindowSetting,
     doughStockWhatsappRecipientsSetting,
     doughStockWhatsappTemplateSetting,
@@ -113,6 +118,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
     }),
     prismaClient.setting.findFirst({
       where: { context: REELS_SETTINGS_CONTEXT, name: REELS_ENABLED_SETTING_NAME },
+      orderBy: [{ createdAt: "desc" }],
+    }),
+    prismaClient.setting.findFirst({
+      where: { context: REELS_SETTINGS_CONTEXT, name: CARDAPIO_FILTER_VIEW_SETTING_NAME },
       orderBy: [{ createdAt: "desc" }],
     }),
     prismaClient.setting.findFirst({
@@ -198,6 +207,18 @@ export async function loader({ request }: LoaderFunctionArgs) {
         name: REELS_ENABLED_SETTING_NAME,
         type: "boolean",
         value: "true",
+        createdAt: new Date(),
+      },
+    });
+  }
+
+  if (!cardapioFilterViewSetting) {
+    await prismaClient.setting.create({
+      data: {
+        context: REELS_SETTINGS_CONTEXT,
+        name: CARDAPIO_FILTER_VIEW_SETTING_NAME,
+        type: "string",
+        value: DEFAULT_CARDAPIO_FILTER_VIEW_MODE,
         createdAt: new Date(),
       },
     });
@@ -315,7 +336,16 @@ export async function loader({ request }: LoaderFunctionArgs) {
     .filter(Boolean)
     .sort((a, b) => a.localeCompare(b, "pt-BR"));
 
-  return json({ settings, q, context, contexts });
+  return json({
+    settings,
+    q,
+    context,
+    contexts,
+    cardapioFilterViewMode:
+      cardapioFilterViewSetting?.value === "stories"
+        ? "stories"
+        : DEFAULT_CARDAPIO_FILTER_VIEW_MODE,
+  });
 }
 
 export async function action({ request }: ActionFunctionArgs) {
@@ -324,6 +354,29 @@ export async function action({ request }: ActionFunctionArgs) {
 
   try {
     switch (action) {
+      case "save-cardapio-filter-view": {
+        const value = str(formData.get("value")) === "stories" ? "stories" : DEFAULT_CARDAPIO_FILTER_VIEW_MODE;
+        const current = await prismaClient.setting.findFirst({
+          where: { context: REELS_SETTINGS_CONTEXT, name: CARDAPIO_FILTER_VIEW_SETTING_NAME },
+          orderBy: [{ createdAt: "desc" }],
+        });
+
+        if (current) {
+          await prismaClient.setting.update({ where: { id: current.id }, data: { value } });
+        } else {
+          await prismaClient.setting.create({
+            data: {
+              context: REELS_SETTINGS_CONTEXT,
+              name: CARDAPIO_FILTER_VIEW_SETTING_NAME,
+              type: "string",
+              value,
+              createdAt: new Date(),
+            },
+          });
+        }
+        await invalidateCardapioIndexCache();
+        return json({ ok: true });
+      }
       case "create": {
         const context = str(formData.get("context"));
         const name = str(formData.get("name"));
@@ -426,7 +479,7 @@ export async function action({ request }: ActionFunctionArgs) {
 }
 
 export default function AdminSettingsPage() {
-  const { settings, q, context, contexts } = useLoaderData<typeof loader>();
+  const { settings, q, context, contexts, cardapioFilterViewMode } = useLoaderData<typeof loader>();
   const submit = useSubmit();
   const actionData = useActionData<typeof action>();
 
@@ -442,6 +495,34 @@ export default function AdminSettingsPage() {
 
         <CreateDialog contexts={contexts} defaultError={actionData as any} />
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg">Cardápio público</CardTitle>
+        </CardHeader>
+        <Separator />
+        <CardContent className="pt-6">
+          <Form method="post" className="flex flex-col gap-3 md:flex-row md:items-end">
+            <input type="hidden" name="_action" value="save-cardapio-filter-view" />
+            <div className="grid max-w-md flex-1 gap-2">
+              <Label htmlFor="cardapio-filter-view">Visualização dos filtros</Label>
+              <select
+                id="cardapio-filter-view"
+                name="value"
+                defaultValue={cardapioFilterViewMode}
+                className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
+              >
+                <option value="chip">Chips</option>
+                <option value="stories">Stories horizontais</option>
+              </select>
+              <p className="text-xs text-muted-foreground">
+                Stories gera ilustrações SVG automaticamente com base no nome e na cor de cada tag pública.
+              </p>
+            </div>
+            <Button type="submit">Salvar visualização</Button>
+          </Form>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader className="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
