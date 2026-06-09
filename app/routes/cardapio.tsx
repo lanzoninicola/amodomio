@@ -41,7 +41,6 @@ import {
 import { Separator } from "~/components/ui/separator";
 import FazerPedidoButton from "~/domain/cardapio/components/fazer-pedido-button/fazer-pedido-button";
 import CardapioOrderCtaButton from "~/domain/cardapio/components/cardapio-order-cta-button";
-import { MenuItemWithAssociations } from "~/domain/cardapio/menu-item.prisma.entity.server";
 import { WebsiteNavigationSidebar } from "~/domain/website-navigation/components/website-navigation-sidebar";
 import WEBSITE_LINKS from "~/domain/website-navigation/links/website-links";
 import PUBLIC_NAVIGATION_LINKS from "~/domain/website-navigation/links/public-navigation";
@@ -85,10 +84,6 @@ import { trackCardapioFacebookPixelTrigger } from "~/domain/cardapio/facebook-pi
  * - [] Me sinto fortunado (choose a random menu item)
  * - [] Cache https://vercel.com/docs/frameworks/remix
  */
-
-export interface CardapioOutletContext {
-  items: MenuItemWithAssociations[];
-}
 
 export const meta: MetaFunction = ({ data }) => {
   return [
