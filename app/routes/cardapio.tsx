@@ -585,7 +585,7 @@ function CardapioFooter() {
 
   return (
     <footer
-      className="fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] left-1/2 grid w-[calc(100%-2rem)] max-w-[300px] -translate-x-1/2 grid-cols-[auto_1fr] items-center gap-3 rounded-[1.5rem] border border-black/10 bg-white/95 px-3 py-1 shadow-[0_10px_35px_rgba(0,0,0,0.24)] backdrop-blur-xl
+      className="fixed bottom-[calc(0.75rem+env(safe-area-inset-bottom))] left-1/2 grid w-[calc(100%-2rem)] max-w-[308px] -translate-x-1/2 grid-cols-[auto_1fr] items-center gap-3 rounded-[1.5rem] border border-black/10 bg-white/95 px-3 py-1 shadow-[0_10px_35px_rgba(0,0,0,0.24)] backdrop-blur-xl
         z-50 md:hidden
         "
     >
