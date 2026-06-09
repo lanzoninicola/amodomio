@@ -1,7 +1,7 @@
 import type { Tag } from "@prisma/client";
 import { Link } from "@remix-run/react";
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowRight, X } from "lucide-react";
+import { ArrowRight, ListFilter, X } from "lucide-react";
 import { LikeIt } from "~/domain/cardapio/components/cardapio-item-action-bar/cardapio-item-action-bar";
 import CardapioItemImageSingle from "~/domain/cardapio/components/cardapio-item-image-single/cardapio-item-image-single";
 import type { ThreadSectionProfile } from "~/domain/cardapio/components/section-thread-header/section-thread-header";
@@ -41,6 +41,7 @@ export function CardapioCatalogSection({
 }) {
   const [currentItems, setCurrentItems] = useState(items);
   const [currentFilterTag, setCurrentFilterTag] = useState<Tag | null>(null);
+  const [showMobileTags, setShowMobileTags] = useState(false);
   const groupRefs = useRef<Record<string, HTMLElement | null>>({});
 
   useEffect(() => {
@@ -59,8 +60,8 @@ export function CardapioCatalogSection({
   const groupedItems = isGrouped(currentItems) ? currentItems : [];
   const orderedGroups = groupedItems.length
     ? [...groupedItems].sort(
-        (a, b) => (a.sortOrderIndex ?? 0) - (b.sortOrderIndex ?? 0)
-      )
+      (a, b) => (a.sortOrderIndex ?? 0) - (b.sortOrderIndex ?? 0)
+    )
     : [];
 
   const onCurrentTagSelected = useCallback(
@@ -97,22 +98,28 @@ export function CardapioCatalogSection({
       className={cn(
         "flex flex-col m-4",
         desktopFeedLayout &&
-          "md:mx-auto md:my-0 md:w-full md:max-w-[700px] md:px-6 md:py-6"
+        "md:mx-auto md:my-0 md:w-full md:max-w-[700px] md:px-6 md:py-6"
       )}
     >
-      <div className="sticky top-[calc(50px+env(safe-area-inset-top))] z-30 -mx-4 mb-2 bg-white px-4 py-2 md:static md:mx-0 md:mb-4 md:bg-transparent md:px-0 md:py-0">
+      <div
+        id="cardapio-tag-filters"
+        className={cn(
+          "fixed left-4 right-4 top-[calc(4.75rem+env(safe-area-inset-top))] z-40 mb-2 max-h-[50vh] overflow-y-auto rounded-2xl border border-black/10 bg-white/95 p-3 shadow-[0_10px_35px_rgba(0,0,0,0.2)] backdrop-blur-xl md:static md:mx-0 md:mb-4 md:block md:max-h-none md:overflow-visible md:rounded-none md:border-0 md:bg-transparent md:p-0 md:shadow-none md:backdrop-blur-none",
+          showMobileTags ? "block" : "hidden"
+        )}
+      >
         <h2 className="hidden font-lora text-2xl font-bold tracking-tight leading-tight mb-3 md:block">
           Sabores da casa
         </h2>
-        <div className="flex flex-wrap gap-x-4 gap-y-2 md:gap-y-1">
+        <div className="flex flex-wrap gap-2 md:gap-x-4 md:gap-y-1">
           <button
             type="button"
             onClick={() => onCurrentTagSelected(null)}
             className={cn(
-              "font-neue text-xs font-semibold tracking-widest uppercase transition-colors",
+              "rounded-full border px-3 py-1.5 font-neue text-xs font-bold uppercase tracking-wide shadow-sm transition-colors md:rounded-none md:border-0 md:px-0 md:py-0 md:font-semibold md:tracking-widest md:shadow-none",
               !currentFilterTag
-                ? "text-black underline underline-offset-4"
-                : "text-zinc-400 hover:text-black"
+                ? "border-zinc-950 bg-zinc-950 text-white md:bg-transparent md:text-black md:underline md:underline-offset-4"
+                : "border-black/10 bg-white text-black active:bg-zinc-100 md:border-0 md:bg-transparent md:text-zinc-400 md:hover:text-black"
             )}
           >
             Todos
@@ -123,10 +130,10 @@ export function CardapioCatalogSection({
               type="button"
               onClick={() => onCurrentTagSelected(tag)}
               className={cn(
-                "font-neue text-xs font-semibold tracking-widest uppercase transition-colors",
+                "rounded-full border px-3 py-1.5 font-neue text-xs font-bold uppercase tracking-wide shadow-sm transition-colors md:rounded-none md:border-0 md:px-0 md:py-0 md:font-semibold md:tracking-widest md:shadow-none",
                 currentFilterTag?.id === tag.id
-                  ? "text-black underline underline-offset-4"
-                  : "text-zinc-400 hover:text-black"
+                  ? "border-zinc-950 bg-zinc-950 text-white md:bg-transparent md:text-black md:underline md:underline-offset-4"
+                  : "border-black/10 bg-white text-black active:bg-zinc-100 md:border-0 md:bg-transparent md:text-zinc-400 md:hover:text-black"
               )}
             >
               {tag.name}
@@ -136,18 +143,33 @@ export function CardapioCatalogSection({
       </div>
 
       {orderedGroups.length > 0 ? (
-        <div className="fixed left-[72px] right-0 top-[env(safe-area-inset-top)] z-40 flex h-[50px] items-center overflow-x-auto border-b border-gray-200 bg-white pr-3 md:hidden">
-          <div className="flex w-max gap-2">
+        <div className="fixed left-4 right-4 top-[calc(1rem+env(safe-area-inset-top))] z-40 flex h-[50px] items-center md:hidden">
+          <div className="flex w-full items-center gap-2">
             {orderedGroups.map((group) => (
               <button
                 key={group.groupId}
                 type="button"
                 onClick={() => scrollToGroup(group.groupId)}
-                className="whitespace-nowrap rounded-full bg-zinc-950 px-3 py-1 font-neue text-xs uppercase tracking-wider text-white transition hover:bg-zinc-800"
+                className="min-w-0 flex-1 whitespace-nowrap rounded-full border border-black/10 bg-white px-2.5 py-1.5 font-neue text-[13px] font-bold capitalize tracking-wide text-black shadow-[0_6px_20px_rgba(0,0,0,0.18)] transition active:bg-zinc-100"
               >
                 {group.group}
               </button>
             ))}
+            <button
+              type="button"
+              onClick={() => setShowMobileTags((current) => !current)}
+              className={cn(
+                "inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border border-black/10 px-3 py-1.5 font-neue text-[13px] font-bold capitalize tracking-wide shadow-[0_6px_20px_rgba(0,0,0,0.18)] transition active:bg-zinc-100",
+                showMobileTags
+                  ? "bg-zinc-950 text-white"
+                  : "bg-white text-black"
+              )}
+              aria-expanded={showMobileTags}
+              aria-controls="cardapio-tag-filters"
+            >
+              <ListFilter className="h-4 w-4" />
+              Filtro
+            </button>
           </div>
         </div>
       ) : null}
@@ -419,7 +441,7 @@ function CardapioItemsGrid({
       className={cn(
         "mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4",
         desktopFeedLayout &&
-          "md:grid-cols-2 md:gap-5 lg:grid-cols-2 xl:grid-cols-2"
+        "md:grid-cols-2 md:gap-5 lg:grid-cols-2 xl:grid-cols-2"
       )}
     >
       {items.map((item) => (
@@ -471,7 +493,7 @@ function CardapioGridItem({
     featuredImage?.thumbnailUrl || item.imagePlaceholderURL || "";
   const featuredMediaKind =
     featuredImage?.kind === "video" ||
-    /\.(mp4|mov|webm|m4v|ogg|ogv)(\?|$)/i.test(featuredMediaUrl)
+      /\.(mp4|mov|webm|m4v|ogg|ogv)(\?|$)/i.test(featuredMediaUrl)
       ? "video"
       : "image";
 
@@ -521,10 +543,7 @@ function CardapioGridItem({
   }, [isExpanded, onClick]);
 
   const visiblePrices = getVisiblePublicPriceVariations(item);
-  const featuredPrice = getFeaturedCatalogPrice(visiblePrices);
-  const secondaryPrices = visiblePrices.filter(
-    (variation) => variation.id !== featuredPrice?.id
-  );
+  const priceRange = getCatalogPriceRange(visiblePrices);
 
   return (
     <li
@@ -571,12 +590,13 @@ function CardapioGridItem({
           <div className="absolute -top-2 -right-2 z-10">
             <LikeIt
               item={item}
-              size={22}
-              cnContainer="w-16 h-16 rounded-full bg-white hover:bg-white/90 flex-col items-center justify-center gap-1 p-0"
+              size={20}
+              cnContainer="w-[3.5rem] h-[3.5rem] bg-white/60 rounded-bl-2xl rounded-tl-lg backdrop-blur-lg backdrop-brightness-20 hover:bg-white/90 flex-col items-center justify-center mx-1"
               color="red"
+
               filled
             >
-              <span className="font-neue text-[10px] uppercase tracking-wide text-red-500 leading-tight">
+              <span className="font-neue text-[12px] tracking-wide text-red-500 leading-none">
                 Adorei
               </span>
             </LikeIt>
@@ -600,38 +620,20 @@ function CardapioGridItem({
           </span>
         </div>
 
-        {featuredPrice ? (
+        {priceRange ? (
           <div className="relative mt-auto min-w-0 pb-1">
-            <div className="min-w-0">
-              <div className="inline-flex max-w-full flex-col rounded-xl bg-white/[0.07] px-3 py-2.5">
-                <span className="block truncate font-neue text-[9px] font-semibold uppercase leading-none tracking-[0.16em] text-zinc-300">
-                  {getCatalogVariationLabel(featuredPrice.label)}
-                </span>
-                <span className="mt-1.5 block whitespace-nowrap font-neue text-[1.85rem] font-bold leading-none text-white sm:text-[2.15rem]">
-                  {formatMoneyString(featuredPrice.priceAmount)}
-                </span>
-              </div>
-
-              {secondaryPrices.length > 0 ? (
-                <div className="mt-2.5 flex flex-col gap-1.5 pr-14">
-                  {secondaryPrices.map((variation) => (
-                    <div key={variation.id} className="min-w-0">
-                      <span className="block truncate font-neue text-[8px] font-semibold uppercase leading-none tracking-[0.14em] text-zinc-500">
-                        {getCatalogVariationLabel(variation.label)}
-                      </span>
-                      <span className="mt-0.5 block whitespace-nowrap font-neue text-base font-bold leading-none text-white/80">
-                        {formatMoneyString(variation.priceAmount)}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              ) : null}
-            </div>
+            <span className="block pr-14 font-neue text-base font-semibold leading-tight text-white">
+              {priceRange.minimum === priceRange.maximum
+                ? formatMoneyString(priceRange.minimum)
+                : `De ${formatMoneyString(
+                  priceRange.minimum
+                )} a ${formatMoneyString(priceRange.maximum)}`}
+            </span>
 
             {isDesktop ? (
               <Link
                 to={getCardapioItemHref(item)}
-                className="absolute bottom-[-0.25rem] right-0 flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-white text-black shadow-[0_12px_24px_rgba(0,0,0,0.3)] sm:h-14 sm:w-14"
+                className="absolute bottom-[-0.25rem] -right-1 flex h-12 w-12 flex-shrink-0 items-center justify-center text-white sm:h-14 sm:w-14"
                 aria-label={`Abrir ${item.name}`}
                 onClick={(event) => {
                   event.stopPropagation();
@@ -646,7 +648,7 @@ function CardapioGridItem({
             ) : (
               <button
                 type="button"
-                className="absolute bottom-[-0.25rem] right-0 flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-white text-black shadow-[0_12px_24px_rgba(0,0,0,0.3)] sm:h-14 sm:w-14"
+                className="absolute bottom-[-0.25rem] -right-1 flex h-12 w-12 flex-shrink-0 items-center justify-center text-white sm:h-14 sm:w-14"
                 aria-label={`Alternar detalhes de ${item.name}`}
                 onClick={(event) => {
                   event.stopPropagation();
@@ -717,19 +719,12 @@ function CardapioGridItem({
   );
 }
 
-function getFeaturedCatalogPrice(
-  variations: Array<{
-    id: string;
-    isReference?: boolean | null;
-  }>
-) {
-  return (
-    variations.find((variation) => variation.isReference) ??
-    variations[0] ??
-    null
-  );
-}
+function getCatalogPriceRange(variations: Array<{ priceAmount: number }>) {
+  if (!variations.length) return null;
 
-function getCatalogVariationLabel(label: string) {
-  return label.trim().replace(/^tamanho\s+/i, "");
+  const prices = variations.map((variation) => variation.priceAmount);
+  return {
+    minimum: Math.min(...prices),
+    maximum: Math.max(...prices),
+  };
 }

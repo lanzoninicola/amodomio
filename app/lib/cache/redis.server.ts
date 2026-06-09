@@ -8,6 +8,10 @@ function getRedisClient() {
   const redisUrl = process.env.REDIS_URL;
   if (!redisUrl) return undefined;
 
+  if (globalThis.__redisClient__?.status === "end") {
+    globalThis.__redisClient__ = undefined;
+  }
+
   if (!globalThis.__redisClient__) {
     const client = new Redis(redisUrl, {
       maxRetriesPerRequest: 1,
@@ -22,6 +26,12 @@ function getRedisClient() {
 
     client.on("error", (error) => {
       console.error("[redis] client error", error);
+    });
+
+    client.once("end", () => {
+      if (globalThis.__redisClient__ === client) {
+        globalThis.__redisClient__ = undefined;
+      }
     });
 
     globalThis.__redisClient__ = client;
@@ -53,7 +63,9 @@ export async function redisSetJson(
   if (!client) return;
 
   const serialized = JSON.stringify(value);
-  const ttl = Number.isFinite(ttlSeconds) ? Math.max(1, Math.floor(ttlSeconds)) : 60;
+  const ttl = Number.isFinite(ttlSeconds)
+    ? Math.max(1, Math.floor(ttlSeconds))
+    : 60;
   try {
     await client.set(key, serialized, "EX", ttl);
   } catch (error) {

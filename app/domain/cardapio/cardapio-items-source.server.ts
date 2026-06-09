@@ -157,7 +157,7 @@ function resolveSortOrderIndex(
 ) {
   if (row?.isReference) return -1;
   if (row?.Variation?.code === "base") return -1;
-  return fallbackIndex + 1;
+  return Number(row?.Variation?.sortOrderIndex ?? fallbackIndex + 1);
 }
 
 function buildCompatPriceRows(item: NativeCardapioRow) {
@@ -576,7 +576,9 @@ async function listNativeCardapioItems(
         select: {
           id: true,
           isReference: true,
-          Variation: { select: { id: true, code: true, name: true } },
+          Variation: {
+            select: { id: true, code: true, name: true, sortOrderIndex: true },
+          },
         },
       },
       ItemSellingPriceVariation: {
@@ -598,7 +600,14 @@ async function listNativeCardapioItems(
             select: {
               id: true,
               isReference: true,
-              Variation: { select: { id: true, code: true, name: true } },
+              Variation: {
+                select: {
+                  id: true,
+                  code: true,
+                  name: true,
+                  sortOrderIndex: true,
+                },
+              },
             },
           },
           ItemSellingChannel: {

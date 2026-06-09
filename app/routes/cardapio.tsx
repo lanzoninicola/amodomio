@@ -11,7 +11,6 @@ import {
   defer,
   useLoaderData,
   useLocation,
-  useNavigate,
   useRouteError,
 } from "@remix-run/react";
 import {
@@ -320,17 +319,18 @@ function CardapioHeader() {
   const [showSearch, setShowSearch] = useState(false);
   const { fazerPedidoPublicURL, notificationsEnabled, vapidPublicKey } =
     useLoaderData<typeof loader>();
-  const isCardapioIndex =
-    location.pathname === WEBSITE_LINKS.cardapioPublic.href;
+  const usesDesktopSidebar =
+    location.pathname === WEBSITE_LINKS.cardapioPublic.href ||
+    currentPage === "single";
 
   return (
     <header
       className={cn(
-        "fixed top-0 w-full z-30 bg-white md:max-w-6xl md:-translate-x-1/2 md:left-1/2",
-        isCardapioIndex && "md:hidden"
+        "fixed right-4 top-[calc(1rem+env(safe-area-inset-top))] z-30 md:left-1/2 md:right-auto md:top-0 md:w-full md:max-w-6xl md:-translate-x-1/2 md:bg-white",
+        usesDesktopSidebar && "md:hidden"
       )}
     >
-      <div className="flex h-[calc(50px+env(safe-area-inset-top))] flex-col border-b border-gray-200 bg-white px-1 pb-3 pt-[calc(0.5rem+env(safe-area-inset-top))] md:h-[70px] md:border-b-0 md:pt-2">
+      <div className="flex h-[50px] flex-col md:h-[70px] md:border-b-0 md:bg-white md:px-1 md:pb-3 md:pt-2">
         <div className="grid grid-cols-3 items-center w-full">
           {/* <div className="flex gap-1 items-center" onClick={() => setShowSearch(!showSearch)}>
                         <HamburgerMenuIcon className="w-6 h-6" />
@@ -339,15 +339,9 @@ function CardapioHeader() {
 
           <Link
             to={WEBSITE_LINKS.cardapioPublic.href}
-            className="flex col-span-2"
+            className="col-span-2 hidden touch-manipulation rounded-full focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black md:flex"
           >
-            <div className="px-4 -py-3">
-              <Logo
-                color="black"
-                circle
-                className="w-8 p-0 md:hidden"
-                tagline={false}
-              />
+            <div className="flex h-10 items-center px-1 md:h-auto md:px-4 md:-py-3">
               <Logo
                 color="black"
                 onlyText={true}
@@ -357,7 +351,7 @@ function CardapioHeader() {
             </div>
           </Link>
 
-          <div className="w-full flex items-center gap-x-2 justify-end col-span-1">
+          <div className="col-span-1 col-start-3 flex w-full items-center justify-end gap-x-2">
             {notificationsEnabled && <NotificationBell />}
             <Link to={"buscar"} className="hidden md:block">
               <div
@@ -596,11 +590,11 @@ function CardapioFooter() {
 
   return (
     <footer
-      className="fixed bottom-0 grid w-full grid-cols-[auto_1fr] items-center gap-3 border-t border-gray-200 bg-white px-3 py-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] shadow-[0_-8px_24px_rgba(0,0,0,0.08)]
-        z-10 md:hidden
+      className="fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] left-1/2 grid w-[calc(100%-2rem)] max-w-[300px] -translate-x-1/2 grid-cols-[auto_1fr] items-center gap-3 rounded-[1.5rem] border border-black/10 bg-white/95 px-3 py-1 shadow-[0_10px_35px_rgba(0,0,0,0.24)] backdrop-blur-xl
+        z-50 md:hidden
         "
     >
-      <div className="flex shrink-0 items-center gap-3 md:gap-4">
+      <div className="flex shrink-0 items-center gap-1">
         <TamanhosLinkButton />
         <CardapioHighlightsFooterButton />
       </div>
@@ -611,6 +605,7 @@ function CardapioFooter() {
           {(url) => (
             <div className="min-w-0">
               <CardapioOrderCtaButton
+                compact
                 externalLinkURL={url}
                 onClick={() =>
                   trackCardapioFacebookPixelTrigger("fazer_pedido_click")
@@ -628,13 +623,13 @@ function TamanhosLinkButton() {
   return (
     <Link
       to={WEBSITE_LINKS.cardapioTamanhosPagina.href}
-      className="flex touch-manipulation rounded-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black"
+      className="flex touch-manipulation rounded-full focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black"
       prefetch="intent"
       aria-label="Ver tamanhos disponíveis"
     >
-      <div className="flex h-11 w-12 flex-col items-center justify-center gap-0.5 rounded-lg active:bg-black/5 md:h-12 md:w-14 md:hover:bg-black/5">
-        <Proportions className="h-5 w-5 md:h-6 md:w-6" />
-        <span className="font-neue text-[8px] uppercase tracking-wide md:text-[10px]">
+      <div className="flex h-10 w-11 flex-col items-center justify-center gap-0.5 rounded-full active:bg-black/10 md:h-12 md:w-14 md:hover:bg-black/5">
+        <Proportions className="h-4 w-4 md:h-6 md:w-6" />
+        <span className="font-neue text-[7px] uppercase leading-tight tracking-wide md:text-[10px]">
           Tamanhos
         </span>
       </div>
@@ -643,29 +638,16 @@ function TamanhosLinkButton() {
 }
 
 function CardapioHighlightsFooterButton() {
-  const location = useLocation();
-  const navigate = useNavigate();
-
-  const openHighlights = () => {
-    if (location.pathname === WEBSITE_LINKS.cardapioPublic.href) {
-      window.dispatchEvent(new Event("cardapio:open-highlights"));
-      return;
-    }
-
-    navigate(`${WEBSITE_LINKS.cardapioPublic.href}?dicas=1`);
-  };
-
   return (
-    <button
-      type="button"
-      className="flex h-11 w-12 touch-manipulation flex-col items-center justify-center gap-0.5 rounded-lg active:bg-black/5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black md:hidden"
-      onClick={openHighlights}
-      aria-label="Abrir dicas do cardápio"
+    <a
+      href="/cardapio/dicas"
+      className="flex h-10 w-10 touch-manipulation flex-col items-center justify-center gap-0.5 rounded-full active:bg-black/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black md:hidden"
+      aria-label="Ver dicas do cardápio"
     >
-      <Info className="h-5 w-5" />
-      <span className="font-neue text-[8px] uppercase tracking-wide">
+      <Info className="h-4 w-4" />
+      <span className="font-neue text-[7px] uppercase leading-tight tracking-wide">
         Dicas
       </span>
-    </button>
+    </a>
   );
 }
