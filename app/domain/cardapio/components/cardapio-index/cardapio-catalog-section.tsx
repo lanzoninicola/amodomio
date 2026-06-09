@@ -1,7 +1,7 @@
 import type { Tag } from "@prisma/client";
 import { Link } from "@remix-run/react";
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowRight, X } from "lucide-react";
+import { ArrowRight, ListFilter, X } from "lucide-react";
 import { LikeIt } from "~/domain/cardapio/components/cardapio-item-action-bar/cardapio-item-action-bar";
 import CardapioItemImageSingle from "~/domain/cardapio/components/cardapio-item-image-single/cardapio-item-image-single";
 import type { ThreadSectionProfile } from "~/domain/cardapio/components/section-thread-header/section-thread-header";
@@ -41,6 +41,7 @@ export function CardapioCatalogSection({
 }) {
   const [currentItems, setCurrentItems] = useState(items);
   const [currentFilterTag, setCurrentFilterTag] = useState<Tag | null>(null);
+  const [showMobileTags, setShowMobileTags] = useState(false);
   const groupRefs = useRef<Record<string, HTMLElement | null>>({});
 
   useEffect(() => {
@@ -100,19 +101,25 @@ export function CardapioCatalogSection({
           "md:mx-auto md:my-0 md:w-full md:max-w-[700px] md:px-6 md:py-6"
       )}
     >
-      <div className="sticky top-[calc(50px+env(safe-area-inset-top))] z-30 -mx-4 mb-2 bg-white px-4 py-2 md:static md:mx-0 md:mb-4 md:bg-transparent md:px-0 md:py-0">
+      <div
+        id="cardapio-tag-filters"
+        className={cn(
+          "fixed left-4 right-4 top-[calc(4.75rem+env(safe-area-inset-top))] z-40 mb-2 max-h-[50vh] overflow-y-auto rounded-2xl border border-black/10 bg-white/95 p-3 shadow-[0_10px_35px_rgba(0,0,0,0.2)] backdrop-blur-xl md:static md:mx-0 md:mb-4 md:block md:max-h-none md:overflow-visible md:rounded-none md:border-0 md:bg-transparent md:p-0 md:shadow-none md:backdrop-blur-none",
+          showMobileTags ? "block" : "hidden"
+        )}
+      >
         <h2 className="hidden font-lora text-2xl font-bold tracking-tight leading-tight mb-3 md:block">
           Sabores da casa
         </h2>
-        <div className="flex flex-wrap gap-x-4 gap-y-2 md:gap-y-1">
+        <div className="flex flex-wrap gap-2 md:gap-x-4 md:gap-y-1">
           <button
             type="button"
             onClick={() => onCurrentTagSelected(null)}
             className={cn(
-              "font-neue text-xs font-semibold tracking-widest uppercase transition-colors",
+              "rounded-full border px-3 py-1.5 font-neue text-xs font-bold uppercase tracking-wide shadow-sm transition-colors md:rounded-none md:border-0 md:px-0 md:py-0 md:font-semibold md:tracking-widest md:shadow-none",
               !currentFilterTag
-                ? "text-black underline underline-offset-4"
-                : "text-zinc-400 hover:text-black"
+                ? "border-zinc-950 bg-zinc-950 text-white md:bg-transparent md:text-black md:underline md:underline-offset-4"
+                : "border-black/10 bg-white text-black active:bg-zinc-100 md:border-0 md:bg-transparent md:text-zinc-400 md:hover:text-black"
             )}
           >
             Todos
@@ -123,10 +130,10 @@ export function CardapioCatalogSection({
               type="button"
               onClick={() => onCurrentTagSelected(tag)}
               className={cn(
-                "font-neue text-xs font-semibold tracking-widest uppercase transition-colors",
+                "rounded-full border px-3 py-1.5 font-neue text-xs font-bold uppercase tracking-wide shadow-sm transition-colors md:rounded-none md:border-0 md:px-0 md:py-0 md:font-semibold md:tracking-widest md:shadow-none",
                 currentFilterTag?.id === tag.id
-                  ? "text-black underline underline-offset-4"
-                  : "text-zinc-400 hover:text-black"
+                  ? "border-zinc-950 bg-zinc-950 text-white md:bg-transparent md:text-black md:underline md:underline-offset-4"
+                  : "border-black/10 bg-white text-black active:bg-zinc-100 md:border-0 md:bg-transparent md:text-zinc-400 md:hover:text-black"
               )}
             >
               {tag.name}
@@ -136,18 +143,33 @@ export function CardapioCatalogSection({
       </div>
 
       {orderedGroups.length > 0 ? (
-        <div className="fixed left-[72px] right-0 top-[env(safe-area-inset-top)] z-40 flex h-[50px] items-center overflow-x-auto border-b border-gray-200 bg-white pr-3 md:hidden">
-          <div className="flex w-max gap-2">
+        <div className="fixed left-4 right-4 top-[calc(1rem+env(safe-area-inset-top))] z-40 flex h-[50px] items-center md:hidden">
+          <div className="flex w-full items-center gap-2">
             {orderedGroups.map((group) => (
               <button
                 key={group.groupId}
                 type="button"
                 onClick={() => scrollToGroup(group.groupId)}
-                className="whitespace-nowrap rounded-full bg-zinc-950 px-3 py-1 font-neue text-xs uppercase tracking-wider text-white transition hover:bg-zinc-800"
+                className="min-w-0 flex-1 whitespace-nowrap rounded-full border border-black/10 bg-white px-2.5 py-1.5 font-neue text-[13px] font-bold capitalize tracking-wide text-black shadow-[0_6px_20px_rgba(0,0,0,0.18)] transition active:bg-zinc-100"
               >
                 {group.group}
               </button>
             ))}
+            <button
+              type="button"
+              onClick={() => setShowMobileTags((current) => !current)}
+              className={cn(
+                "inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border border-black/10 px-3 py-1.5 font-neue text-[13px] font-bold capitalize tracking-wide shadow-[0_6px_20px_rgba(0,0,0,0.18)] transition active:bg-zinc-100",
+                showMobileTags
+                  ? "bg-zinc-950 text-white"
+                  : "bg-white text-black"
+              )}
+              aria-expanded={showMobileTags}
+              aria-controls="cardapio-tag-filters"
+            >
+              <ListFilter className="h-4 w-4" />
+              Filtro
+            </button>
           </div>
         </div>
       ) : null}
@@ -610,7 +632,7 @@ function CardapioGridItem({
             {isDesktop ? (
               <Link
                 to={getCardapioItemHref(item)}
-                className="absolute bottom-[-0.25rem] right-0 flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-white text-black shadow-[0_12px_24px_rgba(0,0,0,0.3)] sm:h-14 sm:w-14"
+                className="absolute bottom-[-0.25rem] -right-1 flex h-12 w-12 flex-shrink-0 items-center justify-center text-white sm:h-14 sm:w-14"
                 aria-label={`Abrir ${item.name}`}
                 onClick={(event) => {
                   event.stopPropagation();
@@ -625,7 +647,7 @@ function CardapioGridItem({
             ) : (
               <button
                 type="button"
-                className="absolute bottom-[-0.25rem] right-0 flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-white text-black shadow-[0_12px_24px_rgba(0,0,0,0.3)] sm:h-14 sm:w-14"
+                className="absolute bottom-[-0.25rem] -right-1 flex h-12 w-12 flex-shrink-0 items-center justify-center text-white sm:h-14 sm:w-14"
                 aria-label={`Alternar detalhes de ${item.name}`}
                 onClick={(event) => {
                   event.stopPropagation();
