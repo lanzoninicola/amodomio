@@ -634,7 +634,9 @@ function CardapioGridItem({
     setIsMediaFullscreen(true);
   }, [isExpanded, onClick]);
 
-  const visiblePrices = getVisiblePublicPriceVariations(item);
+  const visiblePrices = [...getVisiblePublicPriceVariations(item)].sort(
+    (a, b) => (a.sortOrderIndex ?? 0) - (b.sortOrderIndex ?? 0)
+  );
   const priceRange = getCatalogPriceRange(visiblePrices);
 
   return (
@@ -755,6 +757,32 @@ function CardapioGridItem({
                 />
               </button>
             )}
+          </div>
+        ) : null}
+
+        {!isDesktop && isExpanded && visiblePrices.length > 0 ? (
+          <div className="mt-4 border-t border-white/20 pt-3">
+            <div className="grid grid-cols-2 gap-2">
+              {visiblePrices.map((variation, index) => (
+                <div
+                  key={variation.id}
+                  className={cn(
+                    "flex min-h-16 flex-col justify-between gap-1 rounded-xl border border-white/10 bg-gradient-to-br p-2.5 font-neue shadow-sm",
+                    index % 4 === 0 && "from-amber-500/35 to-orange-950/30",
+                    index % 4 === 1 && "from-rose-500/35 to-fuchsia-950/30",
+                    index % 4 === 2 && "from-emerald-500/35 to-teal-950/30",
+                    index % 4 === 3 && "from-sky-500/35 to-indigo-950/30"
+                  )}
+                >
+                  <span className="text-[10px] font-bold uppercase leading-tight tracking-wider text-white/80">
+                    {variation.label}
+                  </span>
+                  <span className="whitespace-nowrap text-lg font-bold leading-none text-white">
+                    {formatMoneyString(variation.priceAmount)}
+                  </span>
+                </div>
+              ))}
+            </div>
           </div>
         ) : null}
       </div>
