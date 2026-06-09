@@ -443,6 +443,7 @@ function toCardapioIndexItem(item: CardapioCompatItem): CardapioIndexItem {
     id: item.id,
     slug: item.slug || null,
     name: item.name,
+    description: item.description || null,
     ingredients: item.ingredients || null,
     imagePlaceholderURL: item.imagePlaceholderURL || null,
     mediaAssets: (item.MenuItemGalleryImage || []) as any,
@@ -698,6 +699,14 @@ export async function findAllCardapioItemsGroupedByGroupLight(
         )
         .map(toCardapioIndexItem),
     })) as GroupedItems[];
+}
+
+export async function findAllCardapioItemsLight(
+  params: MenuItemEntityFindAllParams = {},
+  options: MenuItemEntityFindAllOptions = {}
+): Promise<CardapioIndexItem[]> {
+  const allItems = await findAllCardapioItemsFromSource(params, options);
+  return allItems.map(toCardapioIndexItem);
 }
 
 export async function findCardapioItemBySlug(slug: string) {

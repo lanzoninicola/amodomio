@@ -140,8 +140,7 @@ export default function CardapioItemImageSingle({
                             onError={() => setHasVideoError(true)}
                             className={cn(
                                 "absolute inset-0 h-full w-full transition-opacity duration-700 ease-in-out",
-                                shouldUseContain ? "object-contain" : "object-cover",
-                                loaded ? "opacity-100" : "opacity-0"
+                                shouldUseContain ? "object-contain" : "object-cover"
                             )}
                         />
                     </>
@@ -152,8 +151,7 @@ export default function CardapioItemImageSingle({
                         alt={alt}
                         onLoad={() => setLoaded(true)}
                         className={cn(
-                            "absolute w-full h-full object-cover transition-opacity duration-700 ease-in-out",
-                            loaded ? "opacity-100 animate-zoomOnce" : "opacity-0"
+                            "absolute w-full h-full object-cover transition-opacity duration-700 ease-in-out animate-zoomOnce"
                         )}
                     />
                 )

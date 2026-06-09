@@ -41,7 +41,6 @@ import {
 import { Separator } from "~/components/ui/separator";
 import FazerPedidoButton from "~/domain/cardapio/components/fazer-pedido-button/fazer-pedido-button";
 import CardapioOrderCtaButton from "~/domain/cardapio/components/cardapio-order-cta-button";
-import { MenuItemWithAssociations } from "~/domain/cardapio/menu-item.prisma.entity.server";
 import { WebsiteNavigationSidebar } from "~/domain/website-navigation/components/website-navigation-sidebar";
 import WEBSITE_LINKS from "~/domain/website-navigation/links/website-links";
 import PUBLIC_NAVIGATION_LINKS from "~/domain/website-navigation/links/public-navigation";
@@ -85,10 +84,6 @@ import { trackCardapioFacebookPixelTrigger } from "~/domain/cardapio/facebook-pi
  * - [] Me sinto fortunado (choose a random menu item)
  * - [] Cache https://vercel.com/docs/frameworks/remix
  */
-
-export interface CardapioOutletContext {
-  items: MenuItemWithAssociations[];
-}
 
 export const meta: MetaFunction = ({ data }) => {
   return [
@@ -590,7 +585,7 @@ function CardapioFooter() {
 
   return (
     <footer
-      className="fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] left-1/2 grid w-[calc(100%-2rem)] max-w-[300px] -translate-x-1/2 grid-cols-[auto_1fr] items-center gap-3 rounded-[1.5rem] border border-black/10 bg-white/95 px-3 py-1 shadow-[0_10px_35px_rgba(0,0,0,0.24)] backdrop-blur-xl
+      className="fixed bottom-[calc(0.75rem+env(safe-area-inset-bottom))] left-1/2 grid w-[calc(100%-2rem)] max-w-[308px] -translate-x-1/2 grid-cols-[auto_1fr] items-center gap-3 rounded-[1.5rem] border border-black/10 bg-white/95 px-3 py-1 shadow-[0_10px_35px_rgba(0,0,0,0.24)] backdrop-blur-xl
         z-50 md:hidden
         "
     >

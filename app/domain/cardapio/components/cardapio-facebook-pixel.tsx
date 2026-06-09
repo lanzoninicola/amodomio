@@ -1,4 +1,3 @@
-import { FacebookPixelIntegrationMode } from "@prisma/client";
 import { useEffect } from "react";
 import { useLocation } from "@remix-run/react";
 
@@ -37,6 +36,11 @@ const META_STANDARD_EVENTS = new Set([
   "ViewContent",
 ]);
 
+const FACEBOOK_PIXEL_MODE = {
+  direct: "direct",
+  gtm: "gtm",
+} as const;
+
 type CardapioFacebookPixelProps = {
   config: CardapioFacebookPixelRuntimeConfig;
 };
@@ -45,7 +49,15 @@ function injectMetaPixel(pixelId: string) {
   if (typeof window === "undefined" || typeof document === "undefined") return;
   if (window.fbq) return;
 
-  ((f: any, b: Document, e: string, v: string, n?: any, t?: HTMLScriptElement, s?: Element) => {
+  ((
+    f: any,
+    b: Document,
+    e: string,
+    v: string,
+    n?: any,
+    t?: HTMLScriptElement,
+    s?: Element
+  ) => {
     if (f.fbq) return;
     n = f.fbq = function (...args: any[]) {
       if ((n as any).callMethod) {
@@ -64,7 +76,12 @@ function injectMetaPixel(pixelId: string) {
     t.src = v;
     s = b.getElementsByTagName(e)[0];
     s?.parentNode?.insertBefore(t, s);
-  })(window, document, "script", "https://connect.facebook.net/en_US/fbevents.js");
+  })(
+    window,
+    document,
+    "script",
+    "https://connect.facebook.net/en_US/fbevents.js"
+  );
 
   window.fbq?.("init", pixelId);
 }
@@ -73,7 +90,9 @@ function injectGoogleTagManager(containerId: string) {
   if (typeof window === "undefined" || typeof document === "undefined") return;
 
   window.dataLayer = window.dataLayer || [];
-  if (document.querySelector(`script[data-gtm-container-id="${containerId}"]`)) {
+  if (
+    document.querySelector(`script[data-gtm-container-id="${containerId}"]`)
+  ) {
     return;
   }
 
@@ -89,18 +108,20 @@ function injectGoogleTagManager(containerId: string) {
   document.head.appendChild(script);
 }
 
-export default function CardapioFacebookPixel({ config }: CardapioFacebookPixelProps) {
+export default function CardapioFacebookPixel({
+  config,
+}: CardapioFacebookPixelProps) {
   const location = useLocation();
   const enabledEvents = config.events.filter((event) => event.enabled);
 
   useEffect(() => {
     if (!config.enabled) return;
 
-    if (config.mode === FacebookPixelIntegrationMode.direct && config.pixelId) {
+    if (config.mode === FACEBOOK_PIXEL_MODE.direct && config.pixelId) {
       injectMetaPixel(config.pixelId);
     }
 
-    if (config.mode === FacebookPixelIntegrationMode.gtm && config.gtmContainerId) {
+    if (config.mode === FACEBOOK_PIXEL_MODE.gtm && config.gtmContainerId) {
       injectGoogleTagManager(config.gtmContainerId);
     }
   }, [config.enabled, config.gtmContainerId, config.mode, config.pixelId]);
@@ -109,7 +130,9 @@ export default function CardapioFacebookPixel({ config }: CardapioFacebookPixelP
     if (!config.enabled) return;
 
     const trackEvent = (trigger: string, payload?: Record<string, unknown>) => {
-      const matchingEvents = enabledEvents.filter((event) => event.trigger === trigger);
+      const matchingEvents = enabledEvents.filter(
+        (event) => event.trigger === trigger
+      );
       if (matchingEvents.length === 0) return;
 
       matchingEvents.forEach((event) => {
@@ -118,14 +141,16 @@ export default function CardapioFacebookPixel({ config }: CardapioFacebookPixelP
           ...(payload ?? {}),
         };
 
-        if (config.mode === FacebookPixelIntegrationMode.direct) {
+        if (config.mode === FACEBOOK_PIXEL_MODE.direct) {
           if (!window.fbq) return;
-          const method = META_STANDARD_EVENTS.has(event.eventName) ? "track" : "trackCustom";
+          const method = META_STANDARD_EVENTS.has(event.eventName)
+            ? "track"
+            : "trackCustom";
           window.fbq(method, event.eventName, mergedPayload);
           return;
         }
 
-        if (config.mode === FacebookPixelIntegrationMode.gtm) {
+        if (config.mode === FACEBOOK_PIXEL_MODE.gtm) {
           window.dataLayer = window.dataLayer || [];
           window.dataLayer.push({
             event: trigger,
@@ -140,14 +165,16 @@ export default function CardapioFacebookPixel({ config }: CardapioFacebookPixelP
     };
 
     const handler = (browserEvent: Event) => {
-      const customEvent = browserEvent as CustomEvent<CardapioFacebookPixelTrackDetail>;
+      const customEvent =
+        browserEvent as CustomEvent<CardapioFacebookPixelTrackDetail>;
       const detail = customEvent.detail;
       if (!detail?.trigger) return;
       trackEvent(detail.trigger, detail.payload);
     };
 
     window.addEventListener(CARDAPIO_FACEBOOK_PIXEL_TRACK_EVENT, handler);
-    return () => window.removeEventListener(CARDAPIO_FACEBOOK_PIXEL_TRACK_EVENT, handler);
+    return () =>
+      window.removeEventListener(CARDAPIO_FACEBOOK_PIXEL_TRACK_EVENT, handler);
   }, [config.enabled, config.mode, enabledEvents]);
 
   useEffect(() => {
@@ -156,7 +183,9 @@ export default function CardapioFacebookPixel({ config }: CardapioFacebookPixelP
     const path = `${location.pathname}${location.search}`;
     const pageViewPayload = { path };
 
-    const matchingEvents = enabledEvents.filter((event) => event.trigger === "page_view");
+    const matchingEvents = enabledEvents.filter(
+      (event) => event.trigger === "page_view"
+    );
     if (matchingEvents.length === 0) return;
 
     matchingEvents.forEach((event) => {
@@ -165,14 +194,16 @@ export default function CardapioFacebookPixel({ config }: CardapioFacebookPixelP
         ...pageViewPayload,
       };
 
-      if (config.mode === FacebookPixelIntegrationMode.direct) {
+      if (config.mode === FACEBOOK_PIXEL_MODE.direct) {
         if (!window.fbq) return;
-        const method = META_STANDARD_EVENTS.has(event.eventName) ? "track" : "trackCustom";
+        const method = META_STANDARD_EVENTS.has(event.eventName)
+          ? "track"
+          : "trackCustom";
         window.fbq(method, event.eventName, mergedPayload);
         return;
       }
 
-      if (config.mode === FacebookPixelIntegrationMode.gtm) {
+      if (config.mode === FACEBOOK_PIXEL_MODE.gtm) {
         window.dataLayer = window.dataLayer || [];
         window.dataLayer.push({
           event: event.trigger,
@@ -184,7 +215,13 @@ export default function CardapioFacebookPixel({ config }: CardapioFacebookPixelP
         });
       }
     });
-  }, [config.enabled, config.mode, enabledEvents, location.pathname, location.search]);
+  }, [
+    config.enabled,
+    config.mode,
+    enabledEvents,
+    location.pathname,
+    location.search,
+  ]);
 
   return null;
 }
