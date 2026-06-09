@@ -27,6 +27,21 @@ import {
 import CardapioOrderCtaButton from "~/domain/cardapio/components/cardapio-order-cta-button";
 import CardapioDesktopSidebarHeader from "~/domain/cardapio/components/cardapio-desktop-sidebar-header";
 import { trackCardapioFacebookPixelTrigger } from "~/domain/cardapio/facebook-pixel.client";
+import {
+  Carousel,
+  CarouselContent,
+  CarouselItem,
+  CarouselNext,
+  CarouselPrevious,
+  type CarouselApi,
+} from "~/components/ui/carousel";
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogTitle,
+} from "~/components/ui/dialog";
+import { ArrowLeft, Maximize2, X } from "lucide-react";
 import type {
   CardapioIndexItem,
   GroupedItems,
@@ -116,6 +131,7 @@ export default function CardapioWebIndex() {
     reelsEnabled,
     menuItemInterestEnabled,
     likesEnabled,
+    filterViewMode,
   } = useLoaderData<typeof loader>();
   const [showLikeCelebration, setShowLikeCelebration] = useState(false);
   const [likeCelebrationSeed, setLikeCelebrationSeed] = useState(1);
@@ -192,13 +208,16 @@ export default function CardapioWebIndex() {
                   />
                 </aside>
 
-                <main className="min-h-full md:ml-[300px] md:mr-[72px] lg:ml-[340px] 2xl:mx-auto 2xl:max-w-[780px]">
+                <ValentinesDayPromotionCarousel />
+
+                <main className="min-h-full md:ml-[300px] md:mr-[252px] lg:ml-[340px] lg:mr-[304px] 2xl:mx-auto 2xl:max-w-[780px]">
                   <CardapioCatalogSection
                     items={loadedItems}
                     tags={loadedTags}
                     interestTrackingEnabled={menuItemInterestEnabled}
                     likesEnabled={likesEnabled}
                     desktopFeedLayout
+                    filterViewMode={filterViewMode}
                   />
                 </main>
 
@@ -209,6 +228,220 @@ export default function CardapioWebIndex() {
         </Await>
       </Suspense>
     </section>
+  );
+}
+
+const VALENTINES_DAY_PROMOTION_IMAGES = [
+  "https://media.amodomio.com.br/images/marketing/2026-DIA-DOS-NAMORADOS/1---2026-dia-dos-namorados.png",
+  "https://media.amodomio.com.br/images/marketing/2026-DIA-DOS-NAMORADOS/2---2026-dia-dos-namorados.png",
+  "https://media.amodomio.com.br/images/marketing/2026-DIA-DOS-NAMORADOS/3---2026-dia-dos-namorados.png",
+];
+
+const VALENTINES_DAY_PROMOTION_FULLSCREEN_IMAGES = [
+  "https://media.amodomio.com.br/images/marketing/2026-DIA-DOS-NAMORADOS/1---2026-dia-dos-namorados-1080p.png",
+  "https://media.amodomio.com.br/images/marketing/2026-DIA-DOS-NAMORADOS/2---2026-dia-dos-namorados-1080p.png",
+  "https://media.amodomio.com.br/images/marketing/2026-DIA-DOS-NAMORADOS/3---2026-dia-dos-namorados-1080p.png",
+];
+
+function ValentinesDayPromotionCarousel() {
+  const [api, setApi] = useState<CarouselApi>();
+  const [mobileExpandedApi, setMobileExpandedApi] = useState<CarouselApi>();
+  const [currentSlide, setCurrentSlide] = useState(0);
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [isMobileExpanded, setIsMobileExpanded] = useState(false);
+
+  useEffect(() => {
+    if (!api) return;
+
+    const updateCurrentSlide = () => setCurrentSlide(api.selectedScrollSnap());
+    updateCurrentSlide();
+    api.on("select", updateCurrentSlide);
+
+    return () => {
+      api.off("select", updateCurrentSlide);
+    };
+  }, [api]);
+
+  useEffect(() => {
+    if (!mobileExpandedApi) return;
+
+    mobileExpandedApi.scrollTo(currentSlide, true);
+
+    const updateCurrentSlide = () => {
+      const selectedSlide = mobileExpandedApi.selectedScrollSnap();
+      setCurrentSlide(selectedSlide);
+      api?.scrollTo(selectedSlide, true);
+    };
+
+    mobileExpandedApi.on("select", updateCurrentSlide);
+
+    return () => {
+      mobileExpandedApi.off("select", updateCurrentSlide);
+    };
+  }, [api, currentSlide, mobileExpandedApi]);
+
+  return (
+    <>
+      <div className="mt-8 text-center md:hidden">
+        <h2 className="font-lora text-2xl font-bold tracking-tight">
+          Dia dos Namorados
+        </h2>
+        <p className="mt-1 font-neue text-sm font-semibold uppercase text-zinc-500">
+          Combo 2 sabores
+        </p>
+      </div>
+
+      <div
+        className={`relative mx-auto mb-6 mt-4 w-[70vw] max-w-[260px] -rotate-1 border border-black/10 bg-[#fffdf8] p-2 pb-5 shadow-[0_12px_24px_rgba(0,0,0,0.18)] transition-[width] duration-300 ease-out md:fixed md:right-6 md:top-6 md:z-30 md:m-0 md:max-w-none md:rotate-0 md:rounded-2xl md:bg-white md:p-1.5 md:shadow-lg lg:right-8 ${isExpanded ? "md:z-[60] md:w-[440px]" : "md:w-[220px] lg:w-[260px]"
+          }`}
+      >
+        <Carousel setApi={setApi} opts={{ align: "start" }}>
+          <CarouselContent className="-ml-0">
+            {(isExpanded
+              ? VALENTINES_DAY_PROMOTION_FULLSCREEN_IMAGES
+              : VALENTINES_DAY_PROMOTION_IMAGES
+            ).map((src, index) => (
+              <CarouselItem key={src} className="pl-0">
+                <div className="relative overflow-hidden md:rounded-xl">
+                  <img
+                    className={
+                      isExpanded
+                        ? "hidden h-[calc(100dvh-5rem)] w-full object-contain md:block"
+                        : "aspect-[4/5] w-full object-cover"
+                    }
+                    src={src}
+                    alt={`Promoção do Dia dos Namorados, imagem ${index + 1
+                      } de ${isExpanded
+                        ? VALENTINES_DAY_PROMOTION_FULLSCREEN_IMAGES.length
+                        : VALENTINES_DAY_PROMOTION_IMAGES.length
+                      }`}
+                    loading={index === 0 ? "eager" : "lazy"}
+                    decoding="async"
+                  />
+
+                  <button
+                    type="button"
+                    className="absolute inset-0 flex cursor-zoom-in items-start justify-end bg-transparent p-2 md:hidden"
+                    onClick={() => setIsMobileExpanded(true)}
+                    aria-label="Ampliar promoção"
+                  >
+                    <span className="rounded-full bg-black/65 p-2 text-white backdrop-blur-sm">
+                      <Maximize2 className="h-4 w-4" />
+                    </span>
+                  </button>
+
+                  {!isExpanded ? (
+                    <button
+                      type="button"
+                      className="absolute inset-0 hidden cursor-zoom-in items-start justify-end bg-transparent p-2 md:flex"
+                      onClick={() => setIsExpanded(true)}
+                      aria-label="Ampliar promoção"
+                    >
+                      <span className="rounded-full bg-black/65 p-2 text-white backdrop-blur-sm">
+                        <Maximize2 className="h-4 w-4" />
+                      </span>
+                    </button>
+                  ) : null}
+                </div>
+              </CarouselItem>
+            ))}
+          </CarouselContent>
+
+          {isExpanded ? (
+            <>
+              <CarouselPrevious className="left-3 border-0 bg-black/65 text-white hover:bg-black/80 hover:text-white" />
+              <CarouselNext className="right-3 border-0 bg-black/65 text-white hover:bg-black/80 hover:text-white" />
+            </>
+          ) : null}
+        </Carousel>
+
+        <div className="flex items-center justify-center gap-1.5 pt-3 md:py-1.5">
+          {VALENTINES_DAY_PROMOTION_IMAGES.map((src, index) => (
+            <button
+              key={src}
+              type="button"
+              className={`h-1.5 rounded-full transition-[width,background-color] ${currentSlide === index ? "w-5 bg-zinc-900" : "w-1.5 bg-zinc-300"
+                }`}
+              onClick={() => api?.scrollTo(index)}
+              aria-label={`Ir para imagem ${index + 1}`}
+            />
+          ))}
+        </div>
+
+        {isExpanded ? (
+          <button
+            type="button"
+            className="absolute right-3 top-3 z-10 hidden items-center gap-2 rounded-full bg-black/75 px-3 py-2 font-neue text-xs font-bold uppercase tracking-wide text-white shadow-lg backdrop-blur-sm transition hover:bg-black/90 md:flex"
+            onClick={() => setIsExpanded(false)}
+            aria-label="Fechar promoção ampliada"
+          >
+            <X className="h-4 w-4" />
+            Fechar
+          </button>
+        ) : null}
+      </div>
+
+      <Dialog open={isMobileExpanded} onOpenChange={setIsMobileExpanded}>
+        <DialogContent className="h-[100dvh] w-screen max-w-none border-0 bg-transparent p-2 pt-16 shadow-none md:hidden [&>button]:hidden">
+          <DialogTitle className="sr-only">
+            Promoção do Dia dos Namorados
+          </DialogTitle>
+
+          <div className="fixed left-3 top-3 z-[60]">
+            <DialogClose asChild>
+              <button
+                type="button"
+                className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-2.5 font-neue text-sm font-bold text-black shadow-xl"
+              >
+                <ArrowLeft className="h-5 w-5" />
+                Voltar ao cardápio
+              </button>
+            </DialogClose>
+          </div>
+
+          <div className="m-auto w-full max-w-[430px] bg-[#fffdf8] p-2 pb-5 shadow-2xl">
+            <Carousel
+              setApi={setMobileExpandedApi}
+              opts={{ align: "start", startIndex: currentSlide }}
+            >
+              <CarouselContent className="-ml-0">
+                {VALENTINES_DAY_PROMOTION_FULLSCREEN_IMAGES.map(
+                  (src, index) => (
+                    <CarouselItem key={src} className="pl-0">
+                      <img
+                        className="h-[calc(100dvh-5rem)] w-full object-contain"
+                        src={src}
+                        alt={`Promoção do Dia dos Namorados, imagem ${index + 1
+                          } de ${VALENTINES_DAY_PROMOTION_FULLSCREEN_IMAGES.length
+                          }`}
+                        decoding="async"
+                      />
+                    </CarouselItem>
+                  )
+                )}
+              </CarouselContent>
+              <CarouselPrevious className="left-3 border-0 bg-black/65 text-white hover:bg-black/80 hover:text-white" />
+              <CarouselNext className="right-3 border-0 bg-black/65 text-white hover:bg-black/80 hover:text-white" />
+            </Carousel>
+
+            <div className="flex items-center justify-center gap-1.5 pt-4">
+              {VALENTINES_DAY_PROMOTION_FULLSCREEN_IMAGES.map((src, index) => (
+                <button
+                  key={src}
+                  type="button"
+                  className={`h-1.5 rounded-full transition-[width,background-color] ${currentSlide === index
+                      ? "w-5 bg-zinc-900"
+                      : "w-1.5 bg-zinc-300"
+                    }`}
+                  onClick={() => mobileExpandedApi?.scrollTo(index)}
+                  aria-label={`Ir para imagem ${index + 1}`}
+                />
+              ))}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 

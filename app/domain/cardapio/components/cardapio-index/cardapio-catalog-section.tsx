@@ -32,12 +32,14 @@ export function CardapioCatalogSection({
   interestTrackingEnabled,
   likesEnabled,
   desktopFeedLayout = false,
+  filterViewMode = "chip",
 }: {
   items: CardapioIndexItem[] | GroupedItems[];
   tags: Tag[];
   interestTrackingEnabled: boolean;
   likesEnabled: boolean;
   desktopFeedLayout?: boolean;
+  filterViewMode?: "chip" | "stories";
 }) {
   const [currentItems, setCurrentItems] = useState(items);
   const [currentFilterTag, setCurrentFilterTag] = useState<Tag | null>(null);
@@ -101,6 +103,22 @@ export function CardapioCatalogSection({
         "md:mx-auto md:my-0 md:w-full md:max-w-[700px] md:px-6 md:py-6"
       )}
     >
+      {filterViewMode === "stories" ? (
+        <div className="-mx-4 mb-2 overflow-x-auto px-4 pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:mx-0 md:px-0">
+          <div className="flex w-max min-w-full gap-3">
+            <StoryFilter label="Todos" color="#18181b" selected={!currentFilterTag} onClick={() => onCurrentTagSelected(null)} />
+            {tags.map((tag) => (
+              <StoryFilter
+                key={tag.id}
+                label={tag.name}
+                color={tag.colorHEX}
+                selected={currentFilterTag?.id === tag.id}
+                onClick={() => onCurrentTagSelected(tag)}
+              />
+            ))}
+          </div>
+        </div>
+      ) : (
       <div
         id="cardapio-tag-filters"
         className={cn(
@@ -141,6 +159,7 @@ export function CardapioCatalogSection({
           ))}
         </div>
       </div>
+      )}
 
       {orderedGroups.length > 0 ? (
         <div className="fixed left-4 right-4 top-[calc(1rem+env(safe-area-inset-top))] z-40 flex h-[50px] items-center md:hidden">
@@ -155,7 +174,7 @@ export function CardapioCatalogSection({
                 {group.group}
               </button>
             ))}
-            <button
+            {filterViewMode === "chip" ? <button
               type="button"
               onClick={() => setShowMobileTags((current) => !current)}
               className={cn(
@@ -169,7 +188,7 @@ export function CardapioCatalogSection({
             >
               <ListFilter className="h-4 w-4" />
               Filtro
-            </button>
+            </button> : null}
           </div>
         </div>
       ) : null}
@@ -223,6 +242,77 @@ export function CardapioCatalogSection({
         />
       )}
     </div>
+  );
+}
+
+function StoryFilter({
+  label,
+  color,
+  selected,
+  onClick,
+}: {
+  label: string;
+  color: string;
+  selected: boolean;
+  onClick: () => void;
+}) {
+  const normalizedLabel = label.toLocaleLowerCase("pt-BR");
+  const initials = label
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((word) => word[0])
+    .join("")
+    .toLocaleUpperCase("pt-BR");
+  const symbol = /veg|salad|verde/.test(normalizedLabel)
+    ? "leaf"
+    : /doce|sobremesa|chocolate/.test(normalizedLabel)
+      ? "sparkle"
+      : /picante|apiment/.test(normalizedLabel)
+        ? "flame"
+        : /nov|destaque|promo/.test(normalizedLabel)
+          ? "star"
+          : "slice";
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={selected}
+      className="group flex w-[72px] shrink-0 flex-col items-center gap-1.5 text-center"
+    >
+      <span
+        className={cn(
+          "rounded-full bg-gradient-to-tr from-amber-400 via-rose-500 to-fuchsia-600 p-[2px] transition-transform group-active:scale-95",
+          selected && "ring-2 ring-zinc-950 ring-offset-2"
+        )}
+      >
+        <span className="block rounded-full bg-white p-[2px]">
+          <svg viewBox="0 0 64 64" role="img" aria-label={`Ilustração para ${label}`} className="h-14 w-14 rounded-full">
+            <rect width="64" height="64" rx="32" fill={color || "#e4e4e7"} />
+            <circle cx="21" cy="18" r="13" fill="white" fillOpacity=".18" />
+            <circle cx="48" cy="48" r="18" fill="black" fillOpacity=".1" />
+            {symbol === "leaf" ? (
+              <path d="M18 40c18 2 27-9 29-25-17 1-29 8-29 25Zm3-3c7-8 13-12 22-17" fill="none" stroke="white" strokeLinecap="round" strokeWidth="3" />
+            ) : symbol === "sparkle" ? (
+              <path d="m32 12 4.5 13.5L50 30l-13.5 4.5L32 48l-4.5-13.5L14 30l13.5-4.5L32 12Z" fill="white" fillOpacity=".9" />
+            ) : symbol === "flame" ? (
+              <path d="M34 11c4 11-7 12-2 21 2-5 6-7 8-12 8 12 8 28-7 32-14-2-18-17-8-27 0 8 4 10 6 11-4-12 3-15 3-25Z" fill="white" fillOpacity=".9" />
+            ) : symbol === "star" ? (
+              <path d="m32 11 6 13 14 2-10 10 3 14-13-7-13 7 3-14-10-10 14-2 6-13Z" fill="white" fillOpacity=".9" />
+            ) : (
+              <path d="M17 43c8-17 19-24 34-25-2 16-9 27-25 33l-9-8Zm5 0 5 4M29 28l3 3m8-7 3 3" fill="none" stroke="white" strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" />
+            )}
+            <text x="32" y="58" fill="white" fontFamily="Arial, sans-serif" fontSize="8" fontWeight="700" textAnchor="middle">
+              {initials}
+            </text>
+          </svg>
+        </span>
+      </span>
+      <span className={cn("w-full truncate font-neue text-[11px] leading-tight text-zinc-700", selected && "font-bold text-black")}>
+        {label}
+      </span>
+    </button>
   );
 }
 

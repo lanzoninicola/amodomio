@@ -89,7 +89,8 @@ describe("cardapio._index loader (blocker guard)", () => {
     mocks.settingFindFirst
       .mockResolvedValueOnce({ value: "false" }) // contingencia.simula.erro
       .mockResolvedValueOnce({ value: "true" }) // reels.enabled
-      .mockResolvedValueOnce({ value: "true" }); // menu-item-interest-enabled
+      .mockResolvedValueOnce({ value: "true" }) // menu-item-interest-enabled
+      .mockResolvedValueOnce(undefined); // filter.view-mode
   });
 
   it("carrega dados do cardapio quando o loader funciona", async () => {
@@ -99,7 +100,25 @@ describe("cardapio._index loader (blocker guard)", () => {
     expect(result.data).toHaveProperty("items");
     expect(result.data).toHaveProperty("tags");
     expect(result.data.menuItemInterestEnabled).toBe(true);
+    expect(result.data.filterViewMode).toBe("chip");
     expect(mocks.redisSetJson).toHaveBeenCalledTimes(1);
+  });
+
+  it("carrega a visualizacao stories configurada para os filtros", async () => {
+    mocks.settingFindFirst.mockReset();
+    mocks.settingFindFirst.mockImplementation(({ where }: any) => {
+      const valueByName: Record<string, string> = {
+        "contingencia.simula.erro": "false",
+        "reels.enabled": "true",
+        "menu-item-interest-enabled": "true",
+        "filter.view-mode": "stories",
+      };
+      return Promise.resolve(valueByName[where.name] ? { value: valueByName[where.name] } : undefined);
+    });
+
+    const result: any = await loader(buildArgs());
+
+    expect(result.data.filterViewMode).toBe("stories");
   });
 
   it("retorna cache quando houver hit no Redis", async () => {
@@ -172,7 +191,8 @@ describe("cardapio._index loader (blocker guard)", () => {
     mocks.settingFindFirst
       .mockResolvedValueOnce({ value: "false" }) // contingencia.simula.erro
       .mockResolvedValueOnce({ value: "false" }) // reels.enabled
-      .mockResolvedValueOnce({ value: "true" }); // menu-item-interest-enabled
+      .mockResolvedValueOnce({ value: "true" }) // menu-item-interest-enabled
+      .mockResolvedValueOnce(undefined); // filter.view-mode
 
     const result: any = await loader(buildArgs());
 
