@@ -11,8 +11,18 @@ export type CardapioMedia = {
   isPrimary?: boolean | null;
   secureUrl?: string | null;
   thumbnailUrl?: string | null;
+  variants?: Record<string, string> | null;
   kind?: string | null;
 };
+
+export function buildImageSrcSet(variants: Record<string, string> | null | undefined): string {
+  if (!variants) return "";
+  return Object.entries(variants)
+    .filter(([w, url]) => /^\d+$/.test(w) && Boolean(url))
+    .sort(([a], [b]) => Number(a) - Number(b))
+    .map(([w, url]) => `${url} ${w}w`)
+    .join(", ");
+}
 
 export type CardapioIndexItem = {
   id: string;

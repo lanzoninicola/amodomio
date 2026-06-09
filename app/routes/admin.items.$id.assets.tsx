@@ -215,6 +215,12 @@ export async function action({ request, params }: ActionFunctionArgs) {
       width: typeof uploadRaw?.width === "number" ? uploadRaw.width : null,
       height: typeof uploadRaw?.height === "number" ? uploadRaw.height : null,
       thumbnailUrl: typeof uploadRaw?.thumbnail_url === "string" ? uploadRaw.thumbnail_url : null,
+      variantsJson:
+        uploadRaw?.variants &&
+        typeof uploadRaw.variants === "object" &&
+        !Array.isArray(uploadRaw.variants)
+          ? (uploadRaw.variants as Record<string, string>)
+          : null,
       publicId: typeof uploadRaw?.public_id === "string" ? uploadRaw.public_id : null,
     });
 

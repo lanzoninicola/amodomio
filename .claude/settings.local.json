@@ -18,7 +18,18 @@
       "Bash(sed -n '185,200p' /home/lanzo/Documents/Coding/amodomio/prisma/schema.prisma)",
       "Bash(sed -n '355,395p' /home/lanzo/Documents/Coding/amodomio/prisma/schema.prisma)",
       "Bash(find /home/lanzo/Documents/Coding/amodomio -name \"*.ts\" -path \"*/media-api/*\" 2>/dev/null | head -5; ls /home/lanzo/Documents/Coding/ 2>/dev/null)",
-      "Read(//home/lanzo/Documents/Coding/**)"
+      "Read(//home/lanzo/Documents/Coding/**)",
+      "Bash(grep -n \"CardapioItemImageSingle\\\\|getPrimaryCardapioMedia\\\\|secureUrl\\\\|mediaAssets\\\\|variants\\\\|srcSet\" /home/lanzo/Documents/Coding/amodomio/app/routes/cardapio.\\\\$slug.tsx | head -30)",
+      "Bash(npm install *)",
+      "Bash(npm uninstall *)",
+      "Bash(npm test *)",
+      "Bash(sed -n '1,15p' /home/lanzo/Documents/Coding/amodomio/app/routes/cardapio.buscar.tsx)",
+      "Bash(sed -n '215,250p' /home/lanzo/Documents/Coding/amodomio/app/routes/cardapio.buscar.tsx)",
+      "Bash(sed -n '1,15p' /home/lanzo/Documents/Coding/amodomio/app/routes/cardapio.\\\\$slug.tsx)",
+      "Bash(grep -n \"sanitizeMediaUrl\\\\|cardapio-index.shared\" /home/lanzo/Documents/Coding/amodomio/app/routes/cardapio.\\\\$slug.tsx | head -10)",
+      "Bash(sed -n '119,165p' /home/lanzo/Documents/Coding/amodomio/app/routes/cardapio.\\\\$slug.tsx)",
+      "Bash(npx esbuild *)",
+      "Bash(/home/lanzo/.local/share/pipx/venvs/graphifyy/bin/python scripts/rebuild-graphify-wiki.py)"
     ],
     "additionalDirectories": [
       "/home/lanzo/Documents/Coding/amodomio/app/routes"

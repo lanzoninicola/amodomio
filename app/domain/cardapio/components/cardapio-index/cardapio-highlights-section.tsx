@@ -11,6 +11,7 @@ import { cn } from "~/lib/utils";
 import capitalize from "~/utils/capitalize";
 import formatMoneyString from "~/utils/format-money-string";
 import {
+    buildImageSrcSet,
     buildRandomGroups,
     type CardapioIndexItem,
     getCardapioItemHref,
@@ -289,6 +290,8 @@ function NoveltiesHeroSection({ items }: { items: CardapioIndexItem[] }) {
                                 >
                                     <CardapioItemImageSingle
                                         src={media?.secureUrl || ""}
+                                        srcSet={buildImageSrcSet(media?.variants)}
+                                        sizes="160px"
                                         placeholder={item.imagePlaceholderURL || ""}
                                         placeholderIcon={false}
                                         placeholderText={item.name}
@@ -620,6 +623,8 @@ function SuggestionMiniCarousel({ items }: { items: CardapioIndexItem[] }) {
                                     {hasImage ? (
                                         <CardapioItemImageSingle
                                             src={media?.secureUrl || ""}
+                                            srcSet={buildImageSrcSet(media?.variants)}
+                                            sizes="160px"
                                             placeholder={item.imagePlaceholderURL || ""}
                                             placeholderIcon={false}
                                             placeholderText=""

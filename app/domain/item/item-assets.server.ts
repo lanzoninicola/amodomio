@@ -85,6 +85,7 @@ type CreateItemAssetInput = {
   width?: number | null;
   height?: number | null;
   thumbnailUrl?: string | null;
+  variantsJson?: Record<string, string> | null;
   publicId?: string | null;
 };
 
@@ -126,6 +127,7 @@ export async function createItemAsset(input: CreateItemAssetInput) {
         width: input.width ?? null,
         height: input.height ?? null,
         thumbnailUrl: input.thumbnailUrl ?? null,
+        variantsJson: input.variantsJson ?? null,
         publicId: input.publicId ?? null,
         visible: input.visible ?? true,
         isPrimary: shouldSetPrimary,

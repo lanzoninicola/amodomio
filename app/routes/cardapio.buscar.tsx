@@ -6,6 +6,7 @@ import { Suspense, useMemo, useState } from "react";
 import Loading from "~/components/loading/loading";
 import CardapioItemImageSingle from "~/domain/cardapio/components/cardapio-item-image-single/cardapio-item-image-single";
 import {
+  buildImageSrcSet,
   type CardapioIndexItem,
   getCardapioItemHref,
   getPrimaryCardapioMedia,
@@ -229,6 +230,8 @@ function CardapioSearchResult({ item }: { item: CardapioIndexItem }) {
         <div className="h-44 overflow-hidden">
           <CardapioItemImageSingle
             src={mediaUrl}
+            srcSet={buildImageSrcSet(media?.variants)}
+            sizes="(max-width: 640px) calc(50vw - 16px), (max-width: 1024px) calc(33vw - 24px), 320px"
             kind={mediaKind}
             placeholder={media?.thumbnailUrl || item.imagePlaceholderURL || ""}
             placeholderIcon={false}

@@ -641,6 +641,7 @@ model ItemGalleryImage {
   height           Float?      @map("height")
   width            Float?      @map("width")
   thumbnailUrl     String?     @map("thumbnail_url")
+  variantsJson     Json?       @map("variants_json")
   format           String?     @map("format")
   publicId         String?     @map("public_id")
   isPrimary        Boolean     @default(false) @map("is_primary")

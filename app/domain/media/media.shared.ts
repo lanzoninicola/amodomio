@@ -1,11 +1,17 @@
 export type UploadKind = "image" | "video";
 
+export type ImageVariants = Record<string, string>;
+
 export type MediaUploadApiPayload = {
   ok: boolean;
   kind: UploadKind;
   folderPath: string;
   assetKey: string;
   url: string;
+  thumbnailUrl?: string | null;
+  variants?: ImageVariants | null;
+  width?: number | null;
+  height?: number | null;
 };
 
 export type MediaFolder = {
@@ -130,11 +136,31 @@ export function parseMediaUploadApiPayload(input: {
   const assetKey = normalizeStorageKey(assetKeyRaw) || input.fallbackAssetKey;
   const ok = typeof raw.ok === "boolean" ? raw.ok : true;
 
+  const thumbnailUrl =
+    typeof raw.thumbnail_url === "string" && raw.thumbnail_url.trim()
+      ? raw.thumbnail_url.trim()
+      : null;
+
+  const variants =
+    raw.variants && typeof raw.variants === "object" && !Array.isArray(raw.variants)
+      ? (raw.variants as ImageVariants)
+      : null;
+
+  const width =
+    typeof raw.width === "number" && Number.isFinite(raw.width) ? raw.width : null;
+
+  const height =
+    typeof raw.height === "number" && Number.isFinite(raw.height) ? raw.height : null;
+
   return {
     ok,
     kind,
     folderPath,
     assetKey,
     url,
+    thumbnailUrl,
+    variants,
+    width,
+    height,
   } as MediaUploadApiPayload;
 }
