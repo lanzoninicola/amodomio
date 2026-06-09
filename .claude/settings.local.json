@@ -29,7 +29,11 @@
       "Bash(grep -n \"sanitizeMediaUrl\\\\|cardapio-index.shared\" /home/lanzo/Documents/Coding/amodomio/app/routes/cardapio.\\\\$slug.tsx | head -10)",
       "Bash(sed -n '119,165p' /home/lanzo/Documents/Coding/amodomio/app/routes/cardapio.\\\\$slug.tsx)",
       "Bash(npx esbuild *)",
-      "Bash(/home/lanzo/.local/share/pipx/venvs/graphifyy/bin/python scripts/rebuild-graphify-wiki.py)"
+      "Bash(/home/lanzo/.local/share/pipx/venvs/graphifyy/bin/python scripts/rebuild-graphify-wiki.py)",
+      "Bash(npx tsx *)",
+      "Bash(PGPASSWORD=cglCDH3gxCOaaheFGBw psql -h 69.62.91.94 -p 55433 -U zzeeuuss -d amodomio -c 'ALTER TABLE \"item_gallery_images\" ADD COLUMN IF NOT EXISTS \"variants_json\" JSONB;')",
+      "Bash(PGPASSWORD=cglCDH3gxCOaaheFGBw psql -h 69.62.91.94 -p 55433 -U zzeeuuss -d amodomio -c \"SELECT migration_name, finished_at FROM _prisma_migrations ORDER BY started_at DESC LIMIT 5;\")",
+      "Bash(NODE_ENV=development MEDIA_UPLOAD_API_KEY=b7f0c8d8a3b14c2f9e6d1a0c4f2e7b9c8d1f3a6b5e2c9f0a7d4b1c8e6f9a2d3 npx tsx scripts/backfill-image-variants.ts --run --limit 200)"
     ],
     "additionalDirectories": [
       "/home/lanzo/Documents/Coding/amodomio/app/routes"

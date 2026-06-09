@@ -15,7 +15,23 @@
  *   npx tsx scripts/backfill-image-variants.ts --run --limit 50
  */
 
+import { config as loadEnv } from "dotenv";
+loadEnv({ path: new URL("../.env", import.meta.url).pathname });
+
 import { PrismaClient } from "@prisma/client";
+import { PrismaPg } from "@prisma/adapter-pg";
+import { Pool } from "pg";
+
+const _dbUrl =
+  process.env.NODE_ENV === "development"
+    ? process.env.PRISMA_DB_DEV_URL
+    : process.env.PRISMA_DB_URL;
+
+if (!_dbUrl) throw new Error("PRISMA_DB_URL / PRISMA_DB_DEV_URL not set");
+
+const _pool = new Pool({ connectionString: _dbUrl });
+const _adapter = new PrismaPg(_pool);
+const prismaClient = new PrismaClient({ adapter: _adapter });
 
 const MEDIA_API_BASE_URL = (
   process.env.MEDIA_API_BASE_URL ?? "https://media-api.amodomio.com.br"
@@ -123,34 +139,33 @@ async function main() {
     process.exit(1);
   }
 
-  const prisma = new PrismaClient();
-
   try {
-    const rows = await (prisma as any).itemGalleryImage.findMany({
-      where: {
-        kind: "image",
-        visible: true,
-        secureUrl: { not: null },
-        variantsJson: null,
-      },
-      select: {
-        id: true,
-        secureUrl: true,
-        thumbnailUrl: true,
-        width: true,
-        height: true,
-      },
-      orderBy: { createdAt: "asc" },
-      take: limit,
-    }) as Array<{
+    const rows = await prismaClient.$queryRaw<Array<{
       id: string;
-      secureUrl: string | null;
-      thumbnailUrl: string | null;
+      secure_url: string | null;
+      thumbnail_url: string | null;
       width: number | null;
       height: number | null;
-    }>;
+    }>>`
+      SELECT id, secure_url, thumbnail_url, width, height
+      FROM item_gallery_images
+      WHERE kind = 'image'
+        AND visible = true
+        AND secure_url IS NOT NULL
+        AND variants_json IS NULL
+      ORDER BY created_at ASC
+      LIMIT ${limit}
+    `;
 
-    const eligible = rows.filter((r) => {
+    const mapped = rows.map((r) => ({
+      id: r.id,
+      secureUrl: r.secure_url,
+      thumbnailUrl: r.thumbnail_url,
+      width: r.width,
+      height: r.height,
+    }));
+
+    const eligible = mapped.filter((r) => {
       if (!r.secureUrl) return false;
       if (!r.secureUrl.startsWith(MEDIA_BASE_URL)) return false;
       return Boolean(deriveFolderAndKey(r.secureUrl));
@@ -192,6 +207,7 @@ async function main() {
       const target = deriveFolderAndKey(row.secureUrl!)!;
       process.stdout.write(`  [${succeeded + failed + skipped + 1}/${eligible.length}] ${row.id} ... `);
 
+      await new Promise((r) => setTimeout(r, 4000));
       const result = await processVariants(target);
 
       if (!result.ok) {
@@ -206,7 +222,7 @@ async function main() {
         continue;
       }
 
-      await (prisma as any).itemGalleryImage.update({
+      await (prismaClient as any).itemGalleryImage.update({
         where: { id: row.id },
         data: {
           variantsJson: result.variants,
@@ -225,7 +241,7 @@ async function main() {
     console.log(`  Failed:    ${failed}`);
     console.log(`  Skipped:   ${skipped}`);
   } finally {
-    await prisma.$disconnect();
+    await prismaClient.$disconnect();
   }
 }
 
