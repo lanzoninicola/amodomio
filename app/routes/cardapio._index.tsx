@@ -9,7 +9,8 @@ import {
   useRouteError,
   useRouteLoaderData,
 } from "@remix-run/react";
-import React, { Suspense, useEffect, useState } from "react";
+import React, { Suspense, useEffect, useRef, useState } from "react";
+import Autoplay from "embla-carousel-autoplay";
 import Loading from "~/components/loading/loading";
 import CardapioDatabaseUnavailable from "~/domain/cardapio/components/cardapio-database-unavailable/cardapio-database-unavailable";
 import prismaClient from "~/lib/prisma/client.server";
@@ -244,6 +245,13 @@ const VALENTINES_DAY_PROMOTION_FULLSCREEN_IMAGES = [
 ];
 
 function ValentinesDayPromotionCarousel() {
+  const autoplayPlugin = useRef(
+    Autoplay({
+      delay: 2400,
+      stopOnInteraction: true,
+      stopOnMouseEnter: true,
+    })
+  );
   const [api, setApi] = useState<CarouselApi>();
   const [mobileExpandedApi, setMobileExpandedApi] = useState<CarouselApi>();
   const [currentSlide, setCurrentSlide] = useState(0);
@@ -280,6 +288,17 @@ function ValentinesDayPromotionCarousel() {
     };
   }, [api, currentSlide, mobileExpandedApi]);
 
+  useEffect(() => {
+    if (!api) return;
+
+    if (isExpanded || isMobileExpanded) {
+      autoplayPlugin.current.stop();
+      return;
+    }
+
+    autoplayPlugin.current.play();
+  }, [api, isExpanded, isMobileExpanded]);
+
   return (
     <>
       <div className="mt-8 text-center md:hidden">
@@ -292,10 +311,15 @@ function ValentinesDayPromotionCarousel() {
       </div>
 
       <div
-        className={`relative mx-auto mb-6 mt-4 w-[70vw] max-w-[260px] -rotate-1 border border-black/10 bg-[#fffdf8] p-2 pb-5 shadow-[0_12px_24px_rgba(0,0,0,0.18)] transition-[width] duration-300 ease-out md:fixed md:right-6 md:top-6 md:z-30 md:m-0 md:max-w-none md:rotate-0 md:rounded-2xl md:bg-white md:p-1.5 md:shadow-lg lg:right-8 ${isExpanded ? "md:z-[60] md:w-[440px]" : "md:w-[220px] lg:w-[260px]"
-          }`}
+        className={`relative mx-auto mb-6 mt-4 w-[70vw] max-w-[260px] -rotate-1 border border-black/10 bg-[#fffdf8] p-2 pb-5 shadow-[0_12px_24px_rgba(0,0,0,0.18)] transition-[width] duration-300 ease-out md:fixed md:right-6 md:top-6 md:z-30 md:m-0 md:max-w-none md:rotate-0 md:rounded-2xl md:bg-white md:p-1.5 md:shadow-lg lg:right-8 ${
+          isExpanded ? "md:z-[60] md:w-[440px]" : "md:w-[220px] lg:w-[260px]"
+        }`}
       >
-        <Carousel setApi={setApi} opts={{ align: "start" }}>
+        <Carousel
+          setApi={setApi}
+          opts={{ align: "start", loop: true }}
+          plugins={[autoplayPlugin.current]}
+        >
           <CarouselContent className="-ml-0">
             {(isExpanded
               ? VALENTINES_DAY_PROMOTION_FULLSCREEN_IMAGES
@@ -310,11 +334,13 @@ function ValentinesDayPromotionCarousel() {
                         : "aspect-[4/5] w-full object-cover"
                     }
                     src={src}
-                    alt={`Promoção do Dia dos Namorados, imagem ${index + 1
-                      } de ${isExpanded
+                    alt={`Promoção do Dia dos Namorados, imagem ${
+                      index + 1
+                    } de ${
+                      isExpanded
                         ? VALENTINES_DAY_PROMOTION_FULLSCREEN_IMAGES.length
                         : VALENTINES_DAY_PROMOTION_IMAGES.length
-                      }`}
+                    }`}
                     loading={index === 0 ? "eager" : "lazy"}
                     decoding="async"
                   />
@@ -355,17 +381,31 @@ function ValentinesDayPromotionCarousel() {
           ) : null}
         </Carousel>
 
-        <div className="flex items-center justify-center gap-1.5 pt-3 md:py-1.5">
-          {VALENTINES_DAY_PROMOTION_IMAGES.map((src, index) => (
-            <button
-              key={src}
-              type="button"
-              className={`h-1.5 rounded-full transition-[width,background-color] ${currentSlide === index ? "w-5 bg-zinc-900" : "w-1.5 bg-zinc-300"
+        <div className="pt-3 text-center md:py-1.5">
+          {!isExpanded ? (
+            <p className="mb-2 font-neue text-[11px] font-bold uppercase tracking-wide text-zinc-500">
+              <span className="md:hidden">Toque para ver a promoção</span>
+              <span className="hidden md:inline">
+                Clique para ver a promoção
+              </span>
+            </p>
+          ) : null}
+
+          <div className="flex items-center justify-center gap-1.5">
+            {VALENTINES_DAY_PROMOTION_IMAGES.map((src, index) => (
+              <button
+                key={src}
+                type="button"
+                className={`h-1.5 rounded-full transition-[width,background-color] ${
+                  currentSlide === index
+                    ? "w-5 bg-zinc-900"
+                    : "w-1.5 bg-zinc-300"
                 }`}
-              onClick={() => api?.scrollTo(index)}
-              aria-label={`Ir para imagem ${index + 1}`}
-            />
-          ))}
+                onClick={() => api?.scrollTo(index)}
+                aria-label={`Ir para imagem ${index + 1}`}
+              />
+            ))}
+          </div>
         </div>
 
         {isExpanded ? (
@@ -411,9 +451,11 @@ function ValentinesDayPromotionCarousel() {
                       <img
                         className="h-[calc(100dvh-5rem)] w-full object-contain"
                         src={src}
-                        alt={`Promoção do Dia dos Namorados, imagem ${index + 1
-                          } de ${VALENTINES_DAY_PROMOTION_FULLSCREEN_IMAGES.length
-                          }`}
+                        alt={`Promoção do Dia dos Namorados, imagem ${
+                          index + 1
+                        } de ${
+                          VALENTINES_DAY_PROMOTION_FULLSCREEN_IMAGES.length
+                        }`}
                         decoding="async"
                       />
                     </CarouselItem>
@@ -429,10 +471,11 @@ function ValentinesDayPromotionCarousel() {
                 <button
                   key={src}
                   type="button"
-                  className={`h-1.5 rounded-full transition-[width,background-color] ${currentSlide === index
+                  className={`h-1.5 rounded-full transition-[width,background-color] ${
+                    currentSlide === index
                       ? "w-5 bg-zinc-900"
                       : "w-1.5 bg-zinc-300"
-                    }`}
+                  }`}
                   onClick={() => mobileExpandedApi?.scrollTo(index)}
                   aria-label={`Ir para imagem ${index + 1}`}
                 />

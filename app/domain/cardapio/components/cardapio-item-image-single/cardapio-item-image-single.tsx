@@ -6,6 +6,7 @@ type Props = {
     src?: string;
     kind?: "image" | "video";
     alt?: string;
+    imageLoading?: "eager" | "lazy";
     fallbackColor?: string;
     placeholder?: string;
     placeholderIcon?: boolean;
@@ -22,6 +23,7 @@ export default function CardapioItemImageSingle({
     src,
     kind,
     alt = "Imagem do item",
+    imageLoading = "lazy",
     fallbackColor = "#1f2937",
     placeholder,
     placeholderIcon = false,
@@ -107,6 +109,8 @@ export default function CardapioItemImageSingle({
                 <img
                     src={placeholder}
                     alt="Placeholder"
+                    loading="lazy"
+                    decoding="async"
                     className="absolute w-full h-full object-cover blur-sm scale-105 transition-opacity duration-500"
                 />
             )}
@@ -149,6 +153,8 @@ export default function CardapioItemImageSingle({
                         ref={imgRef}
                         src={src}
                         alt={alt}
+                        loading={imageLoading}
+                        decoding="async"
                         onLoad={() => setLoaded(true)}
                         className={cn(
                             "absolute w-full h-full object-cover transition-opacity duration-700 ease-in-out animate-zoomOnce"
@@ -170,6 +176,8 @@ export default function CardapioItemImageSingle({
                                 <img
                                     src="/images/cardapio-web-app/pizza-placeholder-grey-sm.png"
                                     alt="Placeholder icon"
+                                    loading="lazy"
+                                    decoding="async"
                                     className={cn("w-[50px] mx-auto mb-4", cnPlaceholderIcon)}
                                 />
                             )}
