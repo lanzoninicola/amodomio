@@ -2050,11 +2050,56 @@ model DeliveryZone {
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")
 
-  distances           DeliveryZoneDistance[]
-  deliveryFees        DeliveryFee[]
-  KdsDailyOrderDetail KdsDailyOrderDetail[]
+  distances                  DeliveryZoneDistance[]
+  deliveryFees               DeliveryFee[]
+  KdsDailyOrderDetail        KdsDailyOrderDetail[]
+  marketingPizzaReservations MarketingPizzaReservation[]
 
   @@map("delivery_zones")
+}
+
+model MarketingCampaign {
+  id        String    @id @default(uuid())
+  key       String    @unique
+  name      String
+  validFrom DateTime  @map("valid_from")
+  validTo   DateTime  @map("valid_to")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @default(now()) @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  pizzaReservations MarketingPizzaReservation[]
+
+  @@index([validFrom, validTo], map: "marketing_campaigns_validity_idx")
+  @@index([deletedAt], map: "marketing_campaigns_deleted_at_idx")
+  @@map("marketing_campaigns")
+}
+
+model MarketingPizzaReservation {
+  id               String            @id @default(uuid())
+  campaignId       String            @map("campaign_id")
+  campaign         MarketingCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  sequenceNumber   Int               @map("sequence_number")
+  customerName     String?           @map("customer_name")
+  customerPhone    String?           @map("customer_phone")
+  size             String?
+  comboCount       Int               @default(0) @map("combo_count")
+  deliveryZoneId   String?           @map("delivery_zone_id")
+  deliveryZone     DeliveryZone?     @relation(fields: [deliveryZoneId], references: [id], onDelete: SetNull)
+  takeAway         Boolean           @default(false) @map("take_away")
+  convertedToOrder Boolean           @default(false) @map("converted_to_order")
+  paymentMethod    String?           @map("payment_method")
+  address          String?           @db.Text
+  orderDetails     String?           @map("order_details") @db.Text
+  note             String?           @db.Text
+  createdAt        DateTime          @default(now()) @map("created_at")
+  updatedAt        DateTime          @default(now()) @updatedAt @map("updated_at")
+  deletedAt        DateTime?         @map("deleted_at")
+
+  @@unique([campaignId, sequenceNumber], map: "marketing_pizza_reservations_campaign_sequence_key")
+  @@index([campaignId, deletedAt], map: "marketing_pizza_reservations_campaign_deleted_idx")
+  @@index([deliveryZoneId], map: "marketing_pizza_reservations_delivery_zone_idx")
+  @@map("marketing_pizza_reservations")
 }
 
 model CompanyLocation {

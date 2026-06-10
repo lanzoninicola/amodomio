@@ -7,11 +7,13 @@ export function SizeSelector({
   onChange,
   disabled,
   limit,
+  visibleKeys = ["F", "M", "P", "I", "FT"],
 }: {
   counts: SizeCounts;
   onChange: (next: SizeCounts) => void;
   disabled?: boolean;
   limit?: Partial<Record<keyof SizeCounts, number>>;
+  visibleKeys?: (keyof SizeCounts)[];
 }) {
   function inc(k: keyof SizeCounts) {
     if (disabled) return;
@@ -27,9 +29,10 @@ export function SizeSelector({
 
   return (
     <div className="flex items-center gap-3">
-      {(["F", "M", "P", "I", "FT"] as (keyof SizeCounts)[]).map((k) => {
+      {visibleKeys.map((k) => {
         const max = limit?.[k];
-        const title = max != null ? `${k} (até ${max})` : k === "FT" ? "FATIA" : String(k);
+        const title =
+          max != null ? `${k} (até ${max})` : k === "FT" ? "FATIA" : String(k);
 
         return (
           <button
@@ -37,7 +40,9 @@ export function SizeSelector({
             type="button"
             onClick={() => inc(k)}
             className={`w-10 h-10 rounded-full border flex items-center justify-center text-sm font-semibold
-        ${counts[k] > 0 ? "bg-blue-800 text-white" : "bg-white"} ${disabled ? "opacity-50 cursor-not-allowed" : ""}`}
+        ${counts[k] > 0 ? "bg-blue-800 text-white" : "bg-white"} ${
+              disabled ? "opacity-50 cursor-not-allowed" : ""
+            }`}
             disabled={disabled}
             title={title}
           >
@@ -49,7 +54,9 @@ export function SizeSelector({
       <Badge
         variant="secondary"
         onClick={reset}
-        className={`ml-1 cursor-pointer ${disabled ? "opacity-50 pointer-events-none" : ""}`}
+        className={`ml-1 cursor-pointer ${
+          disabled ? "opacity-50 pointer-events-none" : ""
+        }`}
       >
         Zerar
       </Badge>

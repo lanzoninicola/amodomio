@@ -775,6 +775,13 @@ const ADMIN_NAVIGATION_LINKS: WebsiteNavigationConfig = {
       disabled: false,
       items: [
         {
+          title: "Reservas de pizza",
+          href: "/admin/marketing/reservas-pizza",
+          items: [],
+          disabled: false,
+          tags: ["reserva", "pizza", "campanha", "marketing", "bairro"],
+        },
+        {
           title: "Notificações (Push)",
           href: "/admin/push-notifications",
           items: [],
