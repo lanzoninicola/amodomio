@@ -1,6 +1,6 @@
-import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
-import { Form, Link, useActionData, useLoaderData, useNavigation } from "@remix-run/react";
-import { useEffect, useMemo, useState } from "react";
+import { defer, type ActionFunctionArgs, type LoaderFunctionArgs } from "@remix-run/node";
+import { Await, Form, Link, useActionData, useLoaderData, useNavigation } from "@remix-run/react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import {
@@ -25,18 +25,9 @@ import type {
 } from "~/domain/item/item-cost-recalculate.server";
 import { ChevronLeft } from "lucide-react";
 
-type LoaderData = {
-  itemOptions: Array<{
-    id: string;
-    name: string;
-    purchaseUm: string | null;
-    consumptionUm: string | null;
-  }>;
-};
-
-export async function loader({ request: _request }: LoaderFunctionArgs) {
+export function loader({ request: _request }: LoaderFunctionArgs) {
   const db = prismaClient as any;
-  const itemOptions = await db.item.findMany({
+  const itemOptions = db.item.findMany({
     where: { active: true, classification: "insumo" },
     select: {
       id: true,
@@ -46,9 +37,9 @@ export async function loader({ request: _request }: LoaderFunctionArgs) {
     },
     orderBy: [{ name: "asc" }],
     take: 300,
-  });
+  }) as Promise<Array<{ id: string; name: string; purchaseUm: string | null; consumptionUm: string | null }>>;
 
-  return ok<LoaderData>({ itemOptions });
+  return defer({ itemOptions });
 }
 
 // ─── action ───────────────────────────────────────────────────────────────────
@@ -655,7 +646,7 @@ function DonePanel({ bulk }: { bulk: BulkRecalculateResult }) {
 // ─── page ─────────────────────────────────────────────────────────────────────
 
 export default function RecalculateCostsRootPage() {
-  const loaderData = useLoaderData<typeof loader>();
+  const { itemOptions: itemOptionsPromise } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const navigation = useNavigation();
   const submitting = navigation.state === "submitting";
@@ -665,13 +656,6 @@ export default function RecalculateCostsRootPage() {
   const scan: ScanResult | null = payload?.scan ?? null;
   const bulk: BulkRecalculateResult | null = payload?.bulk ?? null;
   const filters = payload?.filters ?? {};
-  const itemOptions = (loaderData.payload?.itemOptions || []).map((item: any) => ({
-    value: String(item.id || ""),
-    label: String(item.name || ""),
-    searchText: [item.name, item.purchaseUm, item.consumptionUm]
-      .filter(Boolean)
-      .join(" "),
-  }));
 
   return (
     <div className="w-full space-y-8">
@@ -686,7 +670,6 @@ export default function RecalculateCostsRootPage() {
           </span>
           voltar
         </Link>
-
       </div>
 
       {/* Header */}
@@ -734,11 +717,26 @@ export default function RecalculateCostsRootPage() {
       </div>
 
       {phase === "idle" && (
-        <IdlePanel
-          submitting={submitting}
-          itemOptions={itemOptions}
-          initialItemId={filters.itemId}
-        />
+        <Suspense fallback={<div className="py-6 text-sm text-slate-400">Carregando insumos…</div>}>
+          <Await resolve={itemOptionsPromise}>
+            {(resolved) => {
+              const itemOptions = resolved.map((item) => ({
+                value: String(item.id || ""),
+                label: String(item.name || ""),
+                searchText: [item.name, item.purchaseUm, item.consumptionUm]
+                  .filter(Boolean)
+                  .join(" "),
+              }));
+              return (
+                <IdlePanel
+                  submitting={submitting}
+                  itemOptions={itemOptions}
+                  initialItemId={filters.itemId}
+                />
+              );
+            }}
+          </Await>
+        </Suspense>
       )}
 
       {phase === "scanned" && scan && (

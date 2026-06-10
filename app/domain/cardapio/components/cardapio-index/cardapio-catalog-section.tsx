@@ -420,7 +420,7 @@ function CardapioGroupHeader({
   );
 }
 
-function CardapioItemsGrid({
+export function CardapioItemsGrid({
   items,
   interestTrackingEnabled,
   likesEnabled,

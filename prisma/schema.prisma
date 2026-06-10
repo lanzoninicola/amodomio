@@ -2830,3 +2830,21 @@ model MediaAsset {
   @@index([folderPath, createdAt], map: "media_assets_folder_path_created_at_idx")
   @@map("media_assets")
 }
+
+model CompetitorMenuSnapshot {
+  id               String   @id @default(uuid())
+  city             String
+  sourceUrl        String   @map("source_url") @db.Text
+  collectedAt      DateTime @map("collected_at")
+  restaurantCount  Int      @map("restaurant_count")
+  excludedCount    Int      @map("excluded_count")
+  targetCategories Json     @map("target_categories")
+  rawData          Json     @map("raw_data")
+  originalFileName String?  @map("original_file_name")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @default(now()) @updatedAt @map("updated_at")
+
+  @@unique([city, collectedAt], map: "competitor_menu_snapshots_city_collected_at_key")
+  @@index([collectedAt], map: "competitor_menu_snapshots_collected_at_idx")
+  @@map("competitor_menu_snapshots")
+}
