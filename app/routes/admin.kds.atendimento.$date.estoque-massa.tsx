@@ -107,6 +107,10 @@ export default function EstoqueMassaPage() {
     setDraftManual((prev) => ({ ...prev, [key]: safe }));
   }
 
+  function adjust(key: keyof SizeCounts, delta: number) {
+    setDraftManual((prev) => ({ ...prev, [key]: Math.max(0, prev[key] + delta) }));
+  }
+
   function moveCursorToStart(event: FocusEvent<HTMLInputElement> | MouseEvent<HTMLInputElement>) {
     const input = event.currentTarget;
     requestAnimationFrame(() => {
@@ -179,12 +183,12 @@ export default function EstoqueMassaPage() {
 
         <div className="flex flex-col gap-4">
           <section className="space-y-2">
-            <div className="flex flex-col gap-0.5">
-              <div className="text-sm font-semibold">{isMobileRoute ? "Saldo atual" : "Saldo manual"}</div>
-              {!isMobileRoute ? (
+            {!isMobileRoute ? (
+              <div className="flex flex-col gap-0.5">
+                <div className="text-sm font-semibold">Saldo manual</div>
                 <p className="text-sm text-slate-600">Defina o saldo atual. Use quando o número real de discos mudar (perdas, queima, doações, etc.).</p>
-              ) : null}
-            </div>
+              </div>
+            ) : null}
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-3">
               {inputs.map((k) => {
@@ -194,21 +198,31 @@ export default function EstoqueMassaPage() {
                   return (
                     <div key={k} className="border-b border-slate-100 pb-5">
                       <div className="flex items-start gap-4">
-                      <div className="min-w-0 w-16 shrink-0">
-                        <div className="text-sm font-semibold leading-none">{size.label}</div>
-                        <div className="mt-1 text-[11px] text-slate-500">{size.abbr || size.key}</div>
-                      </div>
+                        <div className="min-w-0 w-16 shrink-0">
+                          <div className="text-sm font-semibold leading-none">{size.label}</div>
+                          <div className="mt-1 text-[11px] text-slate-500">{size.abbr || size.key}</div>
+                        </div>
 
-                        <div className="min-w-0 flex-1">
-                          <NumericInput
-                            name={`adjust${k}`}
-                            value={draftManual[k]}
-                            onChange={(e) => onChangeManual(k, e.target.value)}
-                            onFocus={moveCursorToStart}
-                            onClick={moveCursorToStart}
-                            inputMode="numeric"
-                            className="h-16 w-full text-right font-mono text-3xl"
-                          />
+                        <div className="min-w-0 flex-1 flex flex-col gap-2">
+                          <div className="flex items-center gap-2">
+                            <NumericInput
+                              name={`adjust${k}`}
+                              value={draftManual[k]}
+                              onChange={(e) => onChangeManual(k, e.target.value)}
+                              onFocus={moveCursorToStart}
+                              onClick={moveCursorToStart}
+                              inputMode="numeric"
+                              className="h-16 w-full text-right font-mono text-3xl"
+                            />
+                            <div className="flex gap-1">
+                              <Button type="button" variant="outline" className="h-16 w-12 px-0 text-xl font-bold" onClick={() => adjust(k, -1)}>−</Button>
+                              <Button type="button" variant="outline" className="h-16 w-12 px-0 text-xl font-bold" onClick={() => adjust(k, 1)}>+</Button>
+                            </div>
+                          </div>
+                          <div className="flex gap-2">
+                            <Button type="button" className="h-7 flex-1 text-sm font-semibold bg-slate-600 text-white hover:bg-slate-700" onClick={() => adjust(k, -10)}>−10</Button>
+                            <Button type="button" className="h-7 flex-1 text-sm font-semibold bg-slate-600 text-white hover:bg-slate-700" onClick={() => adjust(k, 10)}>+10</Button>
+                          </div>
                         </div>
                       </div>
                     </div>

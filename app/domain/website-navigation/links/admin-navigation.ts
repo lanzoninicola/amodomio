@@ -220,6 +220,13 @@ const ADMIN_NAVIGATION_LINKS: WebsiteNavigationConfig = {
               tags: ["combo", "promocao", "conjunto", "pacote", "kit"],
             },
             {
+              title: "Análise cardápio concorrência",
+              href: "/admin/vendas/analise-cardapio-concorrencia/pesquisar/resultados",
+              items: [],
+              disabled: false,
+              tags: ["concorrencia", "aiqfome", "ingrediente", "preco", "mercado", "cardapio"],
+            },
+            {
               title: "Promo 'Fotos Cardapio'",
               href: "/admin/gerenciamento/pizza-promo",
               items: [],

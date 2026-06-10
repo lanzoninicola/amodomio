@@ -482,6 +482,8 @@ export default function KdsProducaoPage() {
                   return {
                     size: row.size,
                     toProduce,
+                    min: row.min ?? 0,
+                    avg: row.avg ?? 0,
                   };
                 });
 
@@ -501,9 +503,15 @@ export default function KdsProducaoPage() {
                           key={item.size}
                           className="rounded-lg border bg-background px-4 py-3"
                         >
-                          <div className="flex items-baseline justify-between gap-4">
-                            <div className="text-lg font-bold uppercase tracking-wide text-slate-950">
-                              {item.size}
+                          <div className="flex items-center justify-between gap-4">
+                            <div className="flex flex-col">
+                              <div className="text-lg font-bold uppercase tracking-wide text-slate-950">
+                                {item.size}
+                              </div>
+                              <div className="text-xl font-semibold tabular-nums flex gap-2">
+                                <span className="text-muted-foreground text-2xl font-bold">mín {item.min}</span>
+                                <span className="text-slate-400">· méd {Math.ceil(item.avg)}</span>
+                              </div>
                             </div>
                             <div className="font-mono text-6xl font-bold leading-none tracking-tight text-blue-700">
                               {item.toProduce}

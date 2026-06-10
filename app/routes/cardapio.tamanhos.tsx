@@ -135,7 +135,7 @@ export default function CardapioTamanhosPage() {
     return (
         <main className="bg-white font-neue">
             {/* Hero Section */}
-            <section className="relative mx-auto w-full max-w-6xl px-4 pb-8 pt-36 md:pt-48">
+            <section className="relative mx-auto w-full max-w-6xl px-4 pb-8 pt-12 md:pt-48">
                 <div className="grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_420px] lg:gap-10">
                     <div className="flex flex-col gap-5 pt-1">
                         <span className="text-xs font-semibold uppercase tracking-[0.18em] text-brand-blue">Tamanhos</span>

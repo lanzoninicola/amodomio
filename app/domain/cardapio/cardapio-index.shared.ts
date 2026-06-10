@@ -2,6 +2,7 @@ export type CardapioPriceVariation = {
   id: string;
   label: string;
   priceAmount: number;
+  sortOrderIndex?: number | null;
   isReference?: boolean | null;
   showOnCardapio?: boolean | null;
   profitExpectedPerc?: number | null;

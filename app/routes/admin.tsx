@@ -328,7 +328,7 @@ export default function AdminOutlet() {
     if (isMobileRoute) {
         return (
             <div className="min-h-screen bg-slate-50">
-                <RouteProgressBar />
+                <RouteProgressBar showBlockingOverlay />
                 <Outlet context={{ loggedUser }} />
             </div>
         );
@@ -336,7 +336,7 @@ export default function AdminOutlet() {
 
     return (
         <SidebarProvider data-element="sidebar-provider">
-            <RouteProgressBar />
+            <RouteProgressBar showBlockingOverlay />
             {adminNavigationMenuLayout === "fullscreen" ? (
                 <AdminFullscreenMenu navigationLinks={ADMIN_NAVIGATION_LINKS} pinnedItems={pinnedNavItems} />
             ) : (

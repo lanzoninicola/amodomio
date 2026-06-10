@@ -4,7 +4,13 @@ import {
   type LoaderFunctionArgs,
   type MetaFunction,
 } from "@remix-run/node";
-import { Form, Link, useFetcher, useLoaderData } from "@remix-run/react";
+import {
+  Form,
+  Link,
+  useFetcher,
+  useLoaderData,
+  useNavigate,
+} from "@remix-run/react";
 import {
   AlertTriangle,
   ArrowUpDown,
@@ -65,6 +71,7 @@ const EXPORT_VISIBILITY_FILTERS = ["all", "visible", "hidden"] as const;
 const LIST_SORT_OPTIONS = [
   "channelOrder",
   "cardapio",
+  "costPercentage",
   "updatedAt",
   "name",
 ] as const;
@@ -167,9 +174,10 @@ function parseListSort(raw: string | null): ListSortOption {
   const normalized = String(raw || "")
     .trim()
     .toLowerCase();
-  return LIST_SORT_OPTIONS.includes(normalized as ListSortOption)
-    ? (normalized as ListSortOption)
-    : "channelOrder";
+  return (
+    LIST_SORT_OPTIONS.find((option) => option.toLowerCase() === normalized) ||
+    "channelOrder"
+  );
 }
 
 function formatMoney(value: number | null) {
@@ -475,6 +483,18 @@ function compareByChannelOrder(a: SellingRow, b: SellingRow) {
 function compareByCardapioVisibility(a: SellingRow, b: SellingRow) {
   return (
     Number(b.cardapioVisible) - Number(a.cardapioVisible) || compareByName(a, b)
+  );
+}
+
+function compareByCostPercentage(a: SellingRow, b: SellingRow) {
+  if (a.referenceCostPercentage == null) {
+    return b.referenceCostPercentage == null ? compareByName(a, b) : 1;
+  }
+  if (b.referenceCostPercentage == null) return -1;
+
+  return (
+    b.referenceCostPercentage - a.referenceCostPercentage ||
+    compareByName(a, b)
   );
 }
 
@@ -1223,6 +1243,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         if (sort === "updatedAt") return 0;
         if (sort === "name") return compareByName(a, b);
         if (sort === "channelOrder") return compareByChannelOrder(a, b);
+        if (sort === "costPercentage") return compareByCostPercentage(a, b);
         return compareByCardapioVisibility(a, b);
       });
     const rows = sortedRows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
@@ -1262,6 +1283,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
 export default function AdminVendasItensVendidosPage() {
   const loaderData = useLoaderData<typeof loader>();
+  const navigate = useNavigate();
   const hasLoaderError = Boolean(
     loaderData?.status && loaderData.status >= 400
   );
@@ -1328,6 +1350,21 @@ export default function AdminVendasItensVendidosPage() {
   const rows = payload.rows || [];
   const tabs = payload.tabs || [];
   const tags = payload.tags || [];
+  const navigateWithFilters = (next: {
+    sort?: ListSortOption;
+    status?: string;
+    tagId?: string;
+  }) =>
+    navigate(
+      buildPageHref({
+        q: filters.q || "",
+        status: next.status ?? currentStatus,
+        channel: currentChannel,
+        tagId: next.tagId ?? currentTagId,
+        sort: next.sort ?? currentSort,
+        page: 1,
+      })
+    );
   const [exportChannel, setExportChannel] = useState(
     currentChannel || tabs[0]?.key || ""
   );
@@ -1563,7 +1600,13 @@ export default function AdminVendasItensVendidosPage() {
 
           <div className="inline-flex items-center gap-1 text-sm text-slate-600">
             <ArrowUpDown className="h-3.5 w-3.5 text-slate-400" />
-            <Select name="sort" defaultValue={currentSort}>
+            <Select
+              name="sort"
+              value={currentSort}
+              onValueChange={(value) =>
+                navigateWithFilters({ sort: parseListSort(value) })
+              }
+            >
               <SelectTrigger className="h-auto w-auto gap-1 border-0 p-0 text-sm font-medium text-slate-600 shadow-none focus:ring-0 [&>svg]:h-3 [&>svg]:w-3 [&>svg]:text-slate-400">
                 <SelectValue>
                   {currentSort === "updatedAt"
@@ -1572,6 +1615,8 @@ export default function AdminVendasItensVendidosPage() {
                       ? "nome"
                       : currentSort === "channelOrder"
                         ? "ordem do canal"
+                        : currentSort === "costPercentage"
+                          ? "% ficha / venda"
                         : "visibilidade no cardápio"}
                 </SelectValue>
               </SelectTrigger>
@@ -1580,13 +1625,18 @@ export default function AdminVendasItensVendidosPage() {
                 <SelectItem value="cardapio">
                   visibilidade no cardápio
                 </SelectItem>
+                <SelectItem value="costPercentage">% ficha / venda</SelectItem>
                 <SelectItem value="updatedAt">última atualização</SelectItem>
                 <SelectItem value="name">nome</SelectItem>
               </SelectContent>
             </Select>
           </div>
 
-          <Select name="status" defaultValue={currentStatus}>
+          <Select
+            name="status"
+            value={currentStatus}
+            onValueChange={(value) => navigateWithFilters({ status: value })}
+          >
             <SelectTrigger className="h-auto w-auto gap-1 border-0 p-0 text-sm font-medium text-blue-600 shadow-none focus:ring-0 [&>svg]:h-3 [&>svg]:w-3 [&>svg]:text-blue-400">
               <SelectValue>
                 {currentStatus === "active"
@@ -1603,7 +1653,13 @@ export default function AdminVendasItensVendidosPage() {
             </SelectContent>
           </Select>
 
-          <Select name="tagId" defaultValue={currentTagId || "__all__"}>
+          <Select
+            name="tagId"
+            value={currentTagId || "__all__"}
+            onValueChange={(value) =>
+              navigateWithFilters({ tagId: value === "__all__" ? "" : value })
+            }
+          >
             <SelectTrigger className="h-auto w-auto gap-1 border-0 p-0 text-sm font-medium text-slate-600 shadow-none focus:ring-0 [&>svg]:h-3 [&>svg]:w-3 [&>svg]:text-slate-400">
               <SelectValue>{filters?.tagName || "todas as tags"}</SelectValue>
             </SelectTrigger>

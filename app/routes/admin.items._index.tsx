@@ -1,5 +1,5 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
-import { Form, Link, useActionData, useLoaderData } from "@remix-run/react";
+import { Form, Link, useActionData, useLoaderData, useNavigate } from "@remix-run/react";
 import { useEffect, useState } from "react";
 import { ArrowUpDown, ChevronLeft, ChevronsLeft, ChevronsRight, ListFilter, Search, SlidersHorizontal, XCircle } from "lucide-react";
 import { DeleteItemButton } from "~/components/primitives/table-list";
@@ -555,6 +555,7 @@ export async function action({ request }: ActionFunctionArgs) {
 export default function AdminItemsIndex() {
   const loaderData = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>() as any;
+  const navigate = useNavigate();
   const payload = loaderData?.payload as any;
 
   if (!payload) {
@@ -579,6 +580,16 @@ export default function AdminItemsIndex() {
   const [bulkCategoryValue, setBulkCategoryValue] = useState("__NO_CHANGE__");
   const [bulkClassificationValue, setBulkClassificationValue] = useState("__NO_CHANGE__");
   const [bulkActiveValue, setBulkActiveValue] = useState("__NO_CHANGE__");
+  const navigateWithFilters = (next: { categoryId?: string; status?: string }) =>
+    navigate(
+      buildPageHref({
+        q: filters.q || "",
+        categoryId: next.categoryId ?? filters.categoryId,
+        classification: classificationTabValue,
+        status: next.status ?? filters.status,
+        page: 1,
+      })
+    );
 
   const duplicateCounts = items.reduce((acc: Map<string, number>, item: any) => {
     const key = normalizeItemName(item?.name || "");
@@ -654,7 +665,13 @@ export default function AdminItemsIndex() {
           <span>nome</span>
         </button>
 
-        <Select value={statusFilterValue} onValueChange={setStatusFilterValue}>
+        <Select
+          value={statusFilterValue}
+          onValueChange={(value) => {
+            setStatusFilterValue(value);
+            navigateWithFilters({ status: value });
+          }}
+        >
           <SelectTrigger className="h-auto w-auto gap-1 border-0 p-0 text-sm font-medium text-blue-600 shadow-none focus:ring-0 [&>svg]:h-3 [&>svg]:w-3 [&>svg]:text-blue-400">
             <SelectValue>
               {statusFilterValue === "active" ? "produtos ativos" : statusFilterValue === "inactive" ? "produtos inativos" : "todos os produtos"}
@@ -667,7 +684,15 @@ export default function AdminItemsIndex() {
           </SelectContent>
         </Select>
 
-        <Select value={categoryFilterValue} onValueChange={setCategoryFilterValue}>
+        <Select
+          value={categoryFilterValue}
+          onValueChange={(value) => {
+            setCategoryFilterValue(value);
+            navigateWithFilters({
+              categoryId: value === "__all__" ? "" : value,
+            });
+          }}
+        >
           <SelectTrigger className="h-auto w-auto gap-1 border-0 p-0 text-sm font-medium text-slate-600 shadow-none focus:ring-0 [&>svg]:h-3 [&>svg]:w-3 [&>svg]:text-slate-400">
             <SelectValue>
               {categoryFilterValue === "__all__" ? "todas as categorias" : (categoryNameById.get(categoryFilterValue) ?? "categoria")}

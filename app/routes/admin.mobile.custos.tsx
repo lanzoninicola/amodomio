@@ -52,6 +52,10 @@ function formatClassificationLabel(value: string) {
   return value.replaceAll("_", " ");
 }
 
+function normalizeSearchText(value: string) {
+  return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+}
+
 function getClassificationBadgeClass(value: string, isActive: boolean) {
   const toneByClassification: Record<string, string> = {
     insumo: isActive
@@ -93,18 +97,22 @@ export default function AdminMobileCustosPage() {
   const chartWindowDays = Number(payload.chartWindowDays || 60);
   const isLoading = navigation.state !== "idle";
   const mobileItemOptions: SearchableSelectOption[] = itemOptions.map(
-    (entry: any) => ({
-      value: entry.id,
-      label: entry.name,
-      searchText: [
+    (entry: any) => {
+      const searchText = [
         entry.name,
         entry.classification || "",
         entry.purchaseUm || "",
         entry.consumptionUm || "",
       ]
         .filter(Boolean)
-        .join(" "),
-    })
+        .join(" ");
+
+      return {
+        value: entry.id,
+        label: entry.name,
+        searchText: `${searchText} ${normalizeSearchText(searchText)}`,
+      };
+    }
   );
   const selectedOption = itemOptions.find(
     (entry: any) =>
