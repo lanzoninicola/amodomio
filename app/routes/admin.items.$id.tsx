@@ -30,6 +30,10 @@ import {
 import { recalculateItemCostHistory } from "~/domain/item/item-cost-recalculate.server";
 import { loadItemCostAuditForItem } from "~/domain/item/item-cost-audit.server";
 import { getAvailableItemUnits as getAvailableItemUnitsFromServer } from "~/domain/item/item-units.server";
+import {
+  buildItemDeleteBlockedMessage,
+  getItemDeleteBlockers,
+} from "~/domain/item/item-delete-guard.server";
 import { itemVariationPrismaEntity } from "~/domain/item/item-variation.prisma.entity.server";
 import { registerItemCostEvent } from "~/domain/costs/item-cost-event.server";
 import {
@@ -612,62 +616,10 @@ export async function action({ request, params }: ActionFunctionArgs) {
     }
 
     if (_action === "item-delete") {
-      const stockMovementLookup =
-        typeof db.stockMovement?.findFirst === "function"
-          ? db.stockMovement.findFirst({
-              where: { itemId: id, deletedAt: null },
-              select: { id: true },
-            })
-          : typeof db.stockMovementImportBatchLine?.findFirst === "function"
-          ? db.stockMovementImportBatchLine.findFirst({
-              where: {
-                mappedItemId: id,
-                appliedAt: { not: null },
-                rolledBackAt: null,
-              },
-              select: { id: true },
-            })
-          : Promise.resolve(null);
-      const recipeUsageLookup =
-        typeof db.recipeIngredient?.findFirst === "function"
-          ? db.recipeIngredient.findFirst({
-              where: { ingredientItemId: id },
-              select: { id: true },
-            })
-          : typeof db.recipeLine?.findFirst === "function"
-          ? db.recipeLine.findFirst({
-              where: { itemId: id },
-              select: { id: true },
-            })
-          : Promise.resolve(null);
+      const blockers = await getItemDeleteBlockers(db, id);
 
-      const [stockMovement, recipeLine, recipe, menuItem, itemCostSheet] =
-        await Promise.all([
-          stockMovementLookup,
-          recipeUsageLookup,
-          db.recipe.findFirst({ where: { itemId: id }, select: { id: true } }),
-          db.menuItem.findFirst({
-            where: { itemId: id },
-            select: { id: true },
-          }),
-          db.itemCostSheet.findFirst({
-            where: { itemId: id },
-            select: { id: true },
-          }),
-        ]);
-
-      const reasons: string[] = [];
-      if (stockMovement) reasons.push("existem movimentações de estoque");
-      if (recipeLine)
-        reasons.push("está sendo usado como ingrediente em receitas");
-      if (recipe) reasons.push("está vinculado a uma receita");
-      if (menuItem) reasons.push("está vinculado ao cardápio");
-      if (itemCostSheet) reasons.push("possui fichas de custo");
-
-      if (reasons.length > 0) {
-        return badRequest(
-          `Não é possível eliminar o item porque ${reasons.join(", ")}.`
-        );
+      if (blockers.length > 0) {
+        return badRequest(buildItemDeleteBlockedMessage(blockers));
       }
 
       await db.item.delete({ where: { id } });

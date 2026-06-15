@@ -5,7 +5,7 @@ import type { FocusEvent, MouseEvent } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { normalizeCounts, getAvailableDoughSizes, getDoughStock, notifyTodayDoughStockSavedByWhatsapp, saveDoughStock, type DoughStockSnapshot } from "~/domain/kds/dough-stock.server";
+import { normalizeCounts, getAvailableDoughSizes, getDoughStock, getPreviousDoughStock, notifyTodayDoughStockSavedByWhatsapp, saveDoughStock, type DoughStockSnapshot } from "~/domain/kds/dough-stock.server";
 import { defaultSizeCounts, type SizeCounts } from "~/domain/kds";
 import { todayLocalYMD, ymdToDateInt, ymdToUtcNoon } from "~/domain/kds";
 import { NumericInput } from "~/components/numeric-input/numeric-input";
@@ -17,18 +17,20 @@ type LoaderData = {
   dateStr: string;
   sizes: Awaited<ReturnType<typeof getAvailableDoughSizes>>;
   stock: DoughStockSnapshot | null;
+  previousStock: Awaited<ReturnType<typeof getPreviousDoughStock>>;
 };
 
 export async function loader({ params }: LoaderFunctionArgs) {
   const dateStr = params.date ?? todayLocalYMD();
   const dateInt = ymdToDateInt(dateStr);
 
-  const [sizes, stock] = await Promise.all([
+  const [sizes, stock, previousStock] = await Promise.all([
     getAvailableDoughSizes(),
     getDoughStock(dateInt),
+    getPreviousDoughStock(dateInt),
   ]);
 
-  return json<LoaderData>({ dateStr, sizes, stock });
+  return json<LoaderData>({ dateStr, sizes, stock, previousStock });
 }
 
 export async function action({ request, params }: ActionFunctionArgs) {
@@ -72,7 +74,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
 }
 
 export default function EstoqueMassaPage() {
-  const { dateStr, sizes, stock } = useLoaderData<typeof loader>();
+  const { dateStr, sizes, stock, previousStock } = useLoaderData<typeof loader>();
   const fx = useFetcher<{ ok: boolean; stock: DoughStockSnapshot; message?: string; whatsappSent?: boolean }>();
   const navigate = useNavigate();
   const location = useLocation();
@@ -180,6 +182,12 @@ export default function EstoqueMassaPage() {
         {hiddenInputs.map((key) => (
           <input key={key} type="hidden" name={`adjust${key}`} value={draftManual[key]} />
         ))}
+
+        {previousStock ? (
+          <Button type="button" variant="secondary" className="h-11 w-full" onClick={() => setDraftManual(previousStock.stock.effective)}>
+            Carregar último estoque ({String(previousStock.dateInt).replace(/^(\d{4})(\d{2})(\d{2})$/, "$3/$2/$1")})
+          </Button>
+        ) : null}
 
         <div className="flex flex-col gap-4">
           <section className="space-y-2">

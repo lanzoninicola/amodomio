@@ -8,6 +8,7 @@ export type SupplierOrderItem = {
   itemId: string;
   itemName: string;
   unit: string | null;
+  unitOptions?: string[];
   qty: string;
 };
 
@@ -23,7 +24,10 @@ export function fmtSupplierOrderDate(value: unknown) {
   return date.toLocaleDateString("pt-BR");
 }
 
-export function buildSupplierOrderMessage(supplierName: string, items: SupplierOrderItem[]) {
+export function buildSupplierOrderMessage(
+  supplierName: string,
+  items: SupplierOrderItem[]
+) {
   const date = new Date().toLocaleDateString("pt-BR");
   const lines = items.map((item) => {
     const qty = item.qty.trim();
@@ -31,11 +35,16 @@ export function buildSupplierOrderMessage(supplierName: string, items: SupplierO
     return `- ${item.itemName} - ${qty}${unit}`;
   });
 
-  return `Pedido de compra - ${supplierName}\nData: ${date}\n\n${lines.join("\n")}`;
+  return `Pedido de compra - ${supplierName}\nData: ${date}\n\n${lines.join(
+    "\n"
+  )}`;
 }
 
 export function parseSupplierOrderSelection(searchParams: URLSearchParams) {
-  const itemIds = searchParams.getAll("itemId").map((value) => value.trim()).filter(Boolean);
+  const itemIds = searchParams
+    .getAll("itemId")
+    .map((value) => value.trim())
+    .filter(Boolean);
   const qtyValues = searchParams.getAll("qty");
   const unitValues = searchParams.getAll("unit");
 
@@ -45,4 +54,3 @@ export function parseSupplierOrderSelection(searchParams: URLSearchParams) {
     unit: String(unitValues[index] || "").trim() || null,
   }));
 }
-

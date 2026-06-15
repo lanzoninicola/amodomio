@@ -97,6 +97,23 @@ export async function getDoughStock(dateInt: number): Promise<DoughStockSnapshot
   return parseCounts(row.size);
 }
 
+export async function getPreviousDoughStock(dateInt: number): Promise<{
+  dateInt: number;
+  stock: DoughStockSnapshot;
+} | null> {
+  const row = await prisma.doughDailyStock.findFirst({
+    where: { dateInt: { lt: dateInt } },
+    select: { dateInt: true, size: true },
+    orderBy: { dateInt: "desc" },
+  });
+
+  if (!row) return null;
+  return {
+    dateInt: row.dateInt,
+    stock: parseCounts(row.size),
+  };
+}
+
 export async function saveDoughStock(dateInt: number, date: Date, counts: SizeCounts, adjustment?: SizeCounts): Promise<DoughStockSnapshot> {
   const base = normalizeCounts(counts);
   const adjustmentSafe = normalizeCounts(adjustment);

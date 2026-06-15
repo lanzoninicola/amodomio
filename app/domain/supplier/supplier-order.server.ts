@@ -1,5 +1,5 @@
 import { getSupplierNameFromMetadata } from "~/domain/item/item-cost-monitoring.server";
-import { getAllActiveMeasurementUnits } from "~/domain/item/item-units.server";
+import { getAvailableItemUnits } from "~/domain/item/item-units.server";
 import { itemPrismaEntity } from "~/domain/item/item.prisma.entity.server";
 import type { SupplierOrderItem } from "~/domain/supplier/supplier-order";
 
@@ -13,14 +13,22 @@ export type SupplierOrderProduct = {
   itemId: string;
   itemName: string;
   consumptionUm: string | null;
+  linkedUnitOptions: string[];
+  lastPurchaseUnit: string | null;
   lastCost: number | null;
   lastCostUnit: string | null;
   lastMovementAt: Date | null;
   totalMovements: number;
-  otherSupplierCosts: { supplierName: string; costAmount: number; unit: string | null }[];
+  otherSupplierCosts: {
+    supplierName: string;
+    costAmount: number;
+    unit: string | null;
+  }[];
 };
 
-export async function listSupplierOrderSuppliers(): Promise<SupplierOrderSupplier[]> {
+export async function listSupplierOrderSuppliers(): Promise<
+  SupplierOrderSupplier[]
+> {
   const db = itemPrismaEntity.client as any;
   return db.supplier.findMany({
     select: { id: true, name: true, phoneNumber: true },
@@ -28,7 +36,9 @@ export async function listSupplierOrderSuppliers(): Promise<SupplierOrderSupplie
   });
 }
 
-export async function getSupplierOrderSupplier(supplierId: string): Promise<SupplierOrderSupplier | null> {
+export async function getSupplierOrderSupplier(
+  supplierId: string
+): Promise<SupplierOrderSupplier | null> {
   const db = itemPrismaEntity.client as any;
   return db.supplier.findUnique({
     where: { id: supplierId },
@@ -39,12 +49,16 @@ export async function getSupplierOrderSupplier(supplierId: string): Promise<Supp
 export async function listSupplierOrderProducts(supplierId: string): Promise<{
   supplier: SupplierOrderSupplier | null;
   itemRows: SupplierOrderProduct[];
+  globalUnitOptions: string[];
 }> {
   const db = itemPrismaEntity.client as any;
-  const supplier = await getSupplierOrderSupplier(supplierId);
+  const [supplier, globalUnitOptions] = await Promise.all([
+    getSupplierOrderSupplier(supplierId),
+    getAvailableItemUnits(),
+  ]);
 
   if (!supplier) {
-    return { supplier: null, itemRows: [] };
+    return { supplier: null, itemRows: [], globalUnitOptions };
   }
 
   const movements = await db.stockMovement.findMany({
@@ -53,8 +67,17 @@ export async function listSupplierOrderProducts(supplierId: string): Promise<{
       itemId: true,
       newCostAtImport: true,
       newCostUnitAtImport: true,
+      movementUnit: true,
+      quantityUnit: true,
       movementAt: true,
-      Item: { select: { id: true, name: true, consumptionUm: true } },
+      Item: {
+        select: {
+          id: true,
+          name: true,
+          consumptionUm: true,
+          ItemUnit: { select: { unitCode: true } },
+        },
+      },
     },
     orderBy: { movementAt: "desc" },
   });
@@ -64,10 +87,37 @@ export async function listSupplierOrderProducts(supplierId: string): Promise<{
     if (!movement.itemId) continue;
 
     if (!itemMap.has(movement.itemId)) {
+      const consumptionUnit = normalizeSupplierOrderUnit(
+        movement.Item?.consumptionUm
+      );
+      const itemUnitOptions = Array.from(
+        new Set(
+          (movement.Item?.ItemUnit || [])
+            .map((row: { unitCode: string }) =>
+              normalizeSupplierOrderUnit(row.unitCode)
+            )
+            .filter(Boolean) as string[]
+        )
+      )
+        .filter((unit) => unit !== consumptionUnit)
+        .sort((a, b) => a.localeCompare(b, "pt-BR"));
+      const linkedUnitOptions = Array.from(
+        new Set(
+          [consumptionUnit, ...itemUnitOptions].filter(Boolean) as string[]
+        )
+      );
+
       itemMap.set(movement.itemId, {
         itemId: movement.itemId,
         itemName: movement.Item?.name ?? movement.itemId,
         consumptionUm: movement.Item?.consumptionUm ?? null,
+        linkedUnitOptions,
+        lastPurchaseUnit:
+          normalizeSupplierOrderUnit(
+            movement.movementUnit ||
+              movement.quantityUnit ||
+              movement.newCostUnitAtImport
+          ) || null,
         lastCost: movement.newCostAtImport ?? null,
         lastCostUnit: movement.newCostUnitAtImport ?? null,
         lastMovementAt: movement.movementAt ?? null,
@@ -86,7 +136,13 @@ export async function listSupplierOrderProducts(supplierId: string): Promise<{
       select: {
         itemId: true,
         ItemCostVariationHistory: {
-          select: { costAmount: true, unit: true, validFrom: true, createdAt: true, metadata: true },
+          select: {
+            costAmount: true,
+            unit: true,
+            validFrom: true,
+            createdAt: true,
+            metadata: true,
+          },
           orderBy: [{ validFrom: "desc" }, { createdAt: "desc" }],
           take: 200,
         },
@@ -95,13 +151,22 @@ export async function listSupplierOrderProducts(supplierId: string): Promise<{
 
     const currentSupplierNameLower = supplier.name.trim().toLowerCase();
     for (const variation of variations) {
-      const suppliersForItem = new Map<string, { costAmount: number; unit: string | null; date: number }>();
+      const suppliersForItem = new Map<
+        string,
+        { costAmount: number; unit: string | null; date: number }
+      >();
 
       for (const row of variation.ItemCostVariationHistory) {
         const supplierName = getSupplierNameFromMetadata(row.metadata);
         if (!supplierName) continue;
 
-        const rowDate = (row.validFrom ? new Date(row.validFrom) : row.createdAt ? new Date(row.createdAt) : new Date(0)).getTime();
+        const rowDate = (
+          row.validFrom
+            ? new Date(row.validFrom)
+            : row.createdAt
+            ? new Date(row.createdAt)
+            : new Date(0)
+        ).getTime();
         const existing = suppliersForItem.get(supplierName);
         if (!existing || rowDate > existing.date) {
           suppliersForItem.set(supplierName, {
@@ -113,8 +178,14 @@ export async function listSupplierOrderProducts(supplierId: string): Promise<{
       }
 
       const others = Array.from(suppliersForItem.entries())
-        .filter(([name]) => name.trim().toLowerCase() !== currentSupplierNameLower)
-        .map(([supplierName, { costAmount, unit }]) => ({ supplierName, costAmount, unit }))
+        .filter(
+          ([name]) => name.trim().toLowerCase() !== currentSupplierNameLower
+        )
+        .map(([supplierName, { costAmount, unit }]) => ({
+          supplierName,
+          costAmount,
+          unit,
+        }))
         .sort((a, b) => a.costAmount - b.costAmount);
 
       const row = itemMap.get(variation.itemId);
@@ -122,20 +193,22 @@ export async function listSupplierOrderProducts(supplierId: string): Promise<{
     }
   }
 
-  const itemRows = Array.from(itemMap.values()).sort((a, b) => a.itemName.localeCompare(b.itemName, "pt-BR"));
-  return { supplier, itemRows };
+  const itemRows = Array.from(itemMap.values()).sort((a, b) =>
+    a.itemName.localeCompare(b.itemName, "pt-BR")
+  );
+  return { supplier, itemRows, globalUnitOptions };
 }
 
 export async function getSupplierOrderDraftItems(
   supplierId: string,
-  selection: { itemId: string; qty?: string | null; unit?: string | null }[],
+  selection: { itemId: string; qty?: string | null; unit?: string | null }[]
 ): Promise<{
   supplier: SupplierOrderSupplier | null;
   items: SupplierOrderItem[];
   unitOptions: string[];
 }> {
-  const { supplier, itemRows } = await listSupplierOrderProducts(supplierId);
-  const unitOptions = await getAllActiveMeasurementUnits();
+  const { supplier, itemRows, globalUnitOptions } =
+    await listSupplierOrderProducts(supplierId);
   const rowsById = new Map(itemRows.map((row) => [row.itemId, row]));
 
   const items = selection
@@ -143,15 +216,186 @@ export async function getSupplierOrderDraftItems(
       const row = rowsById.get(entry.itemId);
       if (!row) return null;
 
+      const requestedUnit = String(entry.unit || "")
+        .trim()
+        .toUpperCase();
+      const allowedUnitOptions = Array.from(
+        new Set(
+          [
+            row.lastPurchaseUnit,
+            ...row.linkedUnitOptions,
+            ...globalUnitOptions,
+          ].filter(Boolean) as string[]
+        )
+      );
+      const defaultUnit = allowedUnitOptions.includes(
+        String(row.lastPurchaseUnit || "")
+          .trim()
+          .toUpperCase()
+      )
+        ? String(row.lastPurchaseUnit).trim().toUpperCase()
+        : allowedUnitOptions[0] || null;
+
       return {
         itemId: row.itemId,
         itemName: row.itemName,
-        unit: entry.unit || row.consumptionUm || row.lastCostUnit || unitOptions[0] || null,
+        unit: allowedUnitOptions.includes(requestedUnit)
+          ? requestedUnit
+          : defaultUnit,
+        unitOptions: allowedUnitOptions,
         qty: entry.qty || "",
       };
     })
     .filter(Boolean) as SupplierOrderItem[];
 
-  return { supplier, items, unitOptions };
+  return { supplier, items, unitOptions: globalUnitOptions };
 }
 
+function normalizeSupplierOrderUnit(value: unknown) {
+  return String(value || "")
+    .trim()
+    .toUpperCase();
+}
+
+export async function listRecentSupplierPurchaseOrders(limit = 20) {
+  const db = itemPrismaEntity.client as any;
+  return db.supplierPurchaseOrder.findMany({
+    take: limit,
+    orderBy: { createdAt: "desc" },
+    include: {
+      Supplier: { select: { id: true, name: true } },
+      Items: { select: { id: true, checked: true } },
+    },
+  });
+}
+
+export async function countOpenSupplierPurchaseOrders() {
+  const db = itemPrismaEntity.client as any;
+  return db.supplierPurchaseOrder.count({ where: { status: "open" } });
+}
+
+export async function listOpenSupplierPurchaseOrders(limit = 50) {
+  const db = itemPrismaEntity.client as any;
+  return db.supplierPurchaseOrder.findMany({
+    where: { status: "open" },
+    take: limit,
+    orderBy: { createdAt: "desc" },
+    include: {
+      Supplier: { select: { id: true, name: true } },
+      Items: { select: { id: true, checked: true } },
+    },
+  });
+}
+
+export async function getSupplierPurchaseOrder(orderId: string) {
+  const db = itemPrismaEntity.client as any;
+  return db.supplierPurchaseOrder.findUnique({
+    where: { id: orderId },
+    include: {
+      Supplier: { select: { id: true, name: true, phoneNumber: true } },
+      Items: {
+        orderBy: { createdAt: "asc" },
+        include: { Item: { select: { id: true, name: true } } },
+      },
+    },
+  });
+}
+
+export async function saveSupplierPurchaseOrder(
+  supplierId: string,
+  selection: { itemId: string; qty?: string | null; unit?: string | null }[],
+  orderId?: string | null
+) {
+  const db = itemPrismaEntity.client as any;
+  const draft = await getSupplierOrderDraftItems(supplierId, selection);
+  const validItems = draft.items
+    .map((item) => ({
+      ...item,
+      quantity: Number(String(item.qty || "").replace(",", ".")),
+    }))
+    .filter(
+      (item) => item.unit && Number.isFinite(item.quantity) && item.quantity > 0
+    );
+
+  if (!draft.supplier || validItems.length === 0) return null;
+
+  return db.$transaction(async (tx: any) => {
+    const existing = orderId
+      ? await tx.supplierPurchaseOrder.findFirst({
+          where: { id: orderId, supplierId },
+        })
+      : null;
+    const order = existing
+      ? await tx.supplierPurchaseOrder.update({
+          where: { id: existing.id },
+          data: { status: "open", receivedAt: null },
+        })
+      : await tx.supplierPurchaseOrder.create({ data: { supplierId } });
+
+    const itemIds = validItems.map((item) => item.itemId);
+    await tx.supplierPurchaseOrderItem.deleteMany({
+      where: { orderId: order.id, itemId: { notIn: itemIds } },
+    });
+    for (const item of validItems) {
+      await tx.supplierPurchaseOrderItem.upsert({
+        where: { orderId_itemId: { orderId: order.id, itemId: item.itemId } },
+        create: {
+          orderId: order.id,
+          itemId: item.itemId,
+          quantity: item.quantity,
+          unit: item.unit,
+        },
+        update: { quantity: item.quantity, unit: item.unit },
+      });
+    }
+
+    return order;
+  });
+}
+
+export async function removeSupplierPurchaseOrderItem(
+  orderId: string,
+  orderItemId: string
+) {
+  const db = itemPrismaEntity.client as any;
+  await db.$transaction([
+    db.supplierPurchaseOrderItem.deleteMany({
+      where: { id: orderItemId, orderId },
+    }),
+    db.supplierPurchaseOrder.update({
+      where: { id: orderId },
+      data: { status: "open", receivedAt: null },
+    }),
+  ]);
+}
+
+export async function toggleSupplierPurchaseOrderItemChecked(
+  orderId: string,
+  orderItemId: string
+) {
+  const db = itemPrismaEntity.client as any;
+  return db.$transaction(async (tx: any) => {
+    const item = await tx.supplierPurchaseOrderItem.findFirst({
+      where: { id: orderItemId, orderId },
+    });
+    if (!item) return null;
+
+    const checked = !item.checked;
+    await tx.supplierPurchaseOrderItem.update({
+      where: { id: item.id },
+      data: { checked, checkedAt: checked ? new Date() : null },
+    });
+
+    const remaining = await tx.supplierPurchaseOrderItem.count({
+      where: { orderId, checked: false },
+    });
+    await tx.supplierPurchaseOrder.update({
+      where: { id: orderId },
+      data: {
+        status: remaining === 0 ? "received" : "open",
+        receivedAt: remaining === 0 ? new Date() : null,
+      },
+    });
+    return checked;
+  });
+}
