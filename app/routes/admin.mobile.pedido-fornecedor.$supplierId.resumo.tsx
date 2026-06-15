@@ -67,6 +67,7 @@ export default function AdminMobilePedidoFornecedorResumo() {
       next.append("itemId", item.itemId);
       next.append("qty", item.qty || "");
       next.append("unit", item.unit || "");
+      next.append("supplierItemName", item.supplierItemName || "");
     }
     return selection.length > 0
       ? `/admin/mobile/pedido-fornecedor/${supplierId}/resumo?${next.toString()}`
@@ -119,7 +120,7 @@ export default function AdminMobilePedidoFornecedorResumo() {
           >
             <div className="min-w-0">
               <p className="truncate text-sm font-semibold text-slate-900">
-                {item.itemName}
+                {item.supplierItemName || item.itemName}
               </p>
               <p className="text-xs text-slate-500">
                 {item.qty} {item.unit || ""}

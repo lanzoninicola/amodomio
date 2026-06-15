@@ -201,7 +201,12 @@ export async function listSupplierOrderProducts(supplierId: string): Promise<{
 
 export async function getSupplierOrderDraftItems(
   supplierId: string,
-  selection: { itemId: string; qty?: string | null; unit?: string | null }[]
+  selection: {
+    itemId: string;
+    qty?: string | null;
+    unit?: string | null;
+    supplierItemName?: string | null;
+  }[]
 ): Promise<{
   supplier: SupplierOrderSupplier | null;
   items: SupplierOrderItem[];
@@ -239,6 +244,8 @@ export async function getSupplierOrderDraftItems(
       return {
         itemId: row.itemId,
         itemName: row.itemName,
+        supplierItemName:
+          String(entry.supplierItemName || "").trim() || row.itemName,
         unit: allowedUnitOptions.includes(requestedUnit)
           ? requestedUnit
           : defaultUnit,
@@ -301,9 +308,21 @@ export async function getSupplierPurchaseOrder(orderId: string) {
   });
 }
 
+export async function removeOpenSupplierPurchaseOrder(orderId: string) {
+  const db = itemPrismaEntity.client as any;
+  return db.supplierPurchaseOrder.deleteMany({
+    where: { id: orderId, status: "open" },
+  });
+}
+
 export async function saveSupplierPurchaseOrder(
   supplierId: string,
-  selection: { itemId: string; qty?: string | null; unit?: string | null }[],
+  selection: {
+    itemId: string;
+    qty?: string | null;
+    unit?: string | null;
+    supplierItemName?: string | null;
+  }[],
   orderId?: string | null
 ) {
   const db = itemPrismaEntity.client as any;
@@ -342,10 +361,15 @@ export async function saveSupplierPurchaseOrder(
         create: {
           orderId: order.id,
           itemId: item.itemId,
+          supplierItemName: item.supplierItemName || item.itemName,
           quantity: item.quantity,
           unit: item.unit,
         },
-        update: { quantity: item.quantity, unit: item.unit },
+        update: {
+          supplierItemName: item.supplierItemName || item.itemName,
+          quantity: item.quantity,
+          unit: item.unit,
+        },
       });
     }
 

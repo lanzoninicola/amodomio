@@ -516,15 +516,16 @@ model SupplierPurchaseOrder {
 }
 
 model SupplierPurchaseOrderItem {
-  id        String    @id @default(uuid())
-  orderId   String    @map("order_id")
-  itemId    String    @map("item_id")
-  quantity  Float
-  unit      String
-  checked   Boolean   @default(false)
-  checkedAt DateTime? @map("checked_at")
-  createdAt DateTime  @default(now()) @map("created_at")
-  updatedAt DateTime  @default(now()) @updatedAt @map("updated_at")
+  id               String    @id @default(uuid())
+  orderId          String    @map("order_id")
+  itemId           String    @map("item_id")
+  supplierItemName String?   @map("supplier_item_name")
+  quantity         Float
+  unit             String
+  checked          Boolean   @default(false)
+  checkedAt        DateTime? @map("checked_at")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @default(now()) @updatedAt @map("updated_at")
 
   Order SupplierPurchaseOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
   Item  Item                  @relation(fields: [itemId], references: [id], onDelete: Restrict)

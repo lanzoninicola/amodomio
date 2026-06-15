@@ -21,6 +21,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
     order.Items.map((item: any) => ({
       itemId: item.itemId,
       itemName: item.Item.name,
+      supplierItemName: item.supplierItemName || item.Item.name,
       qty: String(item.quantity),
       unit: item.unit,
     }))
@@ -123,8 +124,14 @@ export default function AdminMobilePedidoFornecedorPedido() {
                 </span>
                 <span className="min-w-0">
                   <span className="block truncate text-sm font-semibold text-slate-900">
-                    {item.Item.name}
+                    {item.supplierItemName || item.Item.name}
                   </span>
+                  {item.supplierItemName &&
+                  item.supplierItemName !== item.Item.name ? (
+                    <span className="block truncate text-[11px] text-slate-400">
+                      Cadastro: {item.Item.name}
+                    </span>
+                  ) : null}
                   <span className="block text-xs text-slate-500">
                     {item.quantity} {item.unit}
                   </span>

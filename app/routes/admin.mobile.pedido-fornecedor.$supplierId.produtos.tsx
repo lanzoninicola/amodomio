@@ -33,12 +33,13 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           itemId: item.itemId,
           qty: String(item.quantity),
           unit: item.unit,
+          supplierItemName: item.supplierItemName || item.Item?.name || "",
         }))
       : parseSupplierOrderSelection(url.searchParams);
   return ok({ supplierId, orderId: order?.id || null, selection, ...result });
 }
 
-type ProductSelection = { qty: string; unit: string };
+type ProductSelection = { qty: string; unit: string; supplierItemName: string };
 
 export default function AdminMobilePedidoFornecedorProdutos() {
   const { payload } = useLoaderData<typeof loader>();
@@ -78,6 +79,8 @@ export default function AdminMobilePedidoFornecedorProdutos() {
               unit: unitOptions.includes(requestedUnit)
                 ? requestedUnit
                 : defaultUnit,
+              supplierItemName:
+                String(entry.supplierItemName || "").trim() || row.itemName,
             },
           ];
         })
@@ -113,6 +116,7 @@ export default function AdminMobilePedidoFornecedorProdutos() {
           unit: unitOptions.includes(lastPurchaseUnit)
             ? lastPurchaseUnit
             : unitOptions[0],
+          supplierItemName: row.itemName,
         };
       }
       return next;
@@ -213,6 +217,11 @@ export default function AdminMobilePedidoFornecedorProdutos() {
                 <input type="hidden" name="itemId" value={itemId} />
                 <input type="hidden" name="qty" value={item.qty} />
                 <input type="hidden" name="unit" value={item.unit} />
+                <input
+                  type="hidden"
+                  name="supplierItemName"
+                  value={item.supplierItemName}
+                />
               </div>
             ))}
 
@@ -396,6 +405,22 @@ export default function AdminMobilePedidoFornecedorProdutos() {
                           </button>
                         </div>
                       </div>
+                      <label className="col-span-2 block min-w-0">
+                        <span className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                          Nome no fornecedor
+                        </span>
+                        <input
+                          type="text"
+                          value={selected.supplierItemName}
+                          onChange={(event) =>
+                            updateSelection(row.itemId, {
+                              supplierItemName: event.target.value,
+                            })
+                          }
+                          className="h-11 w-full min-w-0 rounded-xl border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-900 outline-none placeholder:text-slate-400 focus:border-slate-900"
+                          aria-label={`Nome no fornecedor para ${row.itemName}`}
+                        />
+                      </label>
                     </div>
                   ) : null}
                 </article>
