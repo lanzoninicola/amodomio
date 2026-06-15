@@ -7,6 +7,7 @@ const BRL = new Intl.NumberFormat("pt-BR", {
 export type SupplierOrderItem = {
   itemId: string;
   itemName: string;
+  supplierItemName?: string | null;
   unit: string | null;
   unitOptions?: string[];
   qty: string;
@@ -32,7 +33,8 @@ export function buildSupplierOrderMessage(
   const lines = items.map((item) => {
     const qty = item.qty.trim();
     const unit = item.unit ? ` ${item.unit}` : "";
-    return `- ${item.itemName} - ${qty}${unit}`;
+    const itemName = String(item.supplierItemName || item.itemName).trim();
+    return `- ${itemName} - ${qty}${unit}`;
   });
 
   return `Pedido de compra - ${supplierName}\nData: ${date}\n\n${lines.join(
@@ -47,10 +49,12 @@ export function parseSupplierOrderSelection(searchParams: URLSearchParams) {
     .filter(Boolean);
   const qtyValues = searchParams.getAll("qty");
   const unitValues = searchParams.getAll("unit");
+  const supplierItemNameValues = searchParams.getAll("supplierItemName");
 
   return itemIds.map((itemId, index) => ({
     itemId,
     qty: String(qtyValues[index] || "").trim(),
     unit: String(unitValues[index] || "").trim() || null,
+    supplierItemName: String(supplierItemNameValues[index] || "").trim(),
   }));
 }
