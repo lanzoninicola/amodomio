@@ -27,6 +27,14 @@ import {
   SECTION_THREAD_PROFILE_BY_SECTION,
 } from "./cardapio-index-shared";
 
+const MOBILE_CARD_IMAGE_HEIGHTS = [
+  "h-[132px]",
+  "h-[104px]",
+  "h-[176px]",
+  "h-[122px]",
+  "h-[154px]",
+];
+
 export function CardapioCatalogSection({
   items,
   tags,
@@ -63,8 +71,8 @@ export function CardapioCatalogSection({
   const groupedItems = isGrouped(currentItems) ? currentItems : [];
   const orderedGroups = groupedItems.length
     ? [...groupedItems].sort(
-      (a, b) => (a.sortOrderIndex ?? 0) - (b.sortOrderIndex ?? 0)
-    )
+        (a, b) => (a.sortOrderIndex ?? 0) - (b.sortOrderIndex ?? 0)
+      )
     : [];
 
   const onCurrentTagSelected = useCallback(
@@ -101,13 +109,18 @@ export function CardapioCatalogSection({
       className={cn(
         "flex flex-col m-4",
         desktopFeedLayout &&
-        "md:mx-auto md:my-0 md:w-full md:max-w-[700px] md:px-6 md:py-6"
+          "md:mx-auto md:my-0 md:w-full md:max-w-[700px] md:px-6 md:py-6"
       )}
     >
       {filterViewMode === "stories" ? (
         <div className="-mx-4 mb-2 overflow-x-auto px-4 pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:mx-0 md:px-0">
           <div className="flex w-max min-w-full gap-3">
-            <StoryFilter label="Todos" color="#18181b" selected={!currentFilterTag} onClick={() => onCurrentTagSelected(null)} />
+            <StoryFilter
+              label="Todos"
+              color="#18181b"
+              selected={!currentFilterTag}
+              onClick={() => onCurrentTagSelected(null)}
+            />
             {tags.map((tag) => (
               <StoryFilter
                 key={tag.id}
@@ -120,46 +133,46 @@ export function CardapioCatalogSection({
           </div>
         </div>
       ) : (
-      <div
-        id="cardapio-tag-filters"
-        className={cn(
-          "fixed left-4 right-4 top-[calc(4.75rem+env(safe-area-inset-top))] z-40 mb-2 max-h-[50vh] overflow-y-auto rounded-2xl border border-black/10 bg-white/95 p-3 shadow-[0_10px_35px_rgba(0,0,0,0.2)] backdrop-blur-xl md:static md:mx-0 md:mb-4 md:block md:max-h-none md:overflow-visible md:rounded-none md:border-0 md:bg-transparent md:p-0 md:shadow-none md:backdrop-blur-none",
-          showMobileTags ? "block" : "hidden"
-        )}
-      >
-        <h2 className="hidden font-lora text-2xl font-bold tracking-tight leading-tight mb-3 md:block">
-          Sabores da casa
-        </h2>
-        <div className="flex flex-wrap gap-2 md:gap-x-4 md:gap-y-1">
-          <button
-            type="button"
-            onClick={() => onCurrentTagSelected(null)}
-            className={cn(
-              "rounded-full border px-3 py-1.5 font-neue text-xs font-bold uppercase tracking-wide shadow-sm transition-colors md:rounded-none md:border-0 md:px-0 md:py-0 md:font-semibold md:tracking-widest md:shadow-none",
-              !currentFilterTag
-                ? "border-zinc-950 bg-zinc-950 text-white md:bg-transparent md:text-black md:underline md:underline-offset-4"
-                : "border-black/10 bg-white text-black active:bg-zinc-100 md:border-0 md:bg-transparent md:text-zinc-400 md:hover:text-black"
-            )}
-          >
-            Todos
-          </button>
-          {tags.map((tag) => (
+        <div
+          id="cardapio-tag-filters"
+          className={cn(
+            "fixed left-4 right-4 top-[calc(4.75rem+env(safe-area-inset-top))] z-40 mb-2 max-h-[50vh] overflow-y-auto rounded-2xl border border-black/10 bg-white/95 p-3 shadow-[0_10px_35px_rgba(0,0,0,0.2)] backdrop-blur-xl md:static md:mx-0 md:mb-4 md:block md:max-h-none md:overflow-visible md:rounded-none md:border-0 md:bg-transparent md:p-0 md:shadow-none md:backdrop-blur-none",
+            showMobileTags ? "block" : "hidden"
+          )}
+        >
+          <h2 className="hidden font-lora text-2xl font-bold tracking-tight leading-tight mb-3 md:block">
+            Sabores da casa
+          </h2>
+          <div className="flex flex-wrap gap-2 md:gap-x-4 md:gap-y-1">
             <button
-              key={tag.id}
               type="button"
-              onClick={() => onCurrentTagSelected(tag)}
+              onClick={() => onCurrentTagSelected(null)}
               className={cn(
                 "rounded-full border px-3 py-1.5 font-neue text-xs font-bold uppercase tracking-wide shadow-sm transition-colors md:rounded-none md:border-0 md:px-0 md:py-0 md:font-semibold md:tracking-widest md:shadow-none",
-                currentFilterTag?.id === tag.id
+                !currentFilterTag
                   ? "border-zinc-950 bg-zinc-950 text-white md:bg-transparent md:text-black md:underline md:underline-offset-4"
                   : "border-black/10 bg-white text-black active:bg-zinc-100 md:border-0 md:bg-transparent md:text-zinc-400 md:hover:text-black"
               )}
             >
-              {tag.name}
+              Todos
             </button>
-          ))}
+            {tags.map((tag) => (
+              <button
+                key={tag.id}
+                type="button"
+                onClick={() => onCurrentTagSelected(tag)}
+                className={cn(
+                  "rounded-full border px-3 py-1.5 font-neue text-xs font-bold uppercase tracking-wide shadow-sm transition-colors md:rounded-none md:border-0 md:px-0 md:py-0 md:font-semibold md:tracking-widest md:shadow-none",
+                  currentFilterTag?.id === tag.id
+                    ? "border-zinc-950 bg-zinc-950 text-white md:bg-transparent md:text-black md:underline md:underline-offset-4"
+                    : "border-black/10 bg-white text-black active:bg-zinc-100 md:border-0 md:bg-transparent md:text-zinc-400 md:hover:text-black"
+                )}
+              >
+                {tag.name}
+              </button>
+            ))}
+          </div>
         </div>
-      </div>
       )}
 
       {orderedGroups.length > 0 ? (
@@ -175,21 +188,23 @@ export function CardapioCatalogSection({
                 {group.group}
               </button>
             ))}
-            {filterViewMode === "chip" ? <button
-              type="button"
-              onClick={() => setShowMobileTags((current) => !current)}
-              className={cn(
-                "inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border border-black/10 px-3 py-1.5 font-neue text-[13px] font-bold capitalize tracking-wide shadow-[0_6px_20px_rgba(0,0,0,0.18)] transition active:bg-zinc-100",
-                showMobileTags
-                  ? "bg-zinc-950 text-white"
-                  : "bg-white text-black"
-              )}
-              aria-expanded={showMobileTags}
-              aria-controls="cardapio-tag-filters"
-            >
-              <ListFilter className="h-4 w-4" />
-              Filtro
-            </button> : null}
+            {filterViewMode === "chip" ? (
+              <button
+                type="button"
+                onClick={() => setShowMobileTags((current) => !current)}
+                className={cn(
+                  "inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border border-black/10 px-3 py-1.5 font-neue text-[13px] font-bold capitalize tracking-wide shadow-[0_6px_20px_rgba(0,0,0,0.18)] transition active:bg-zinc-100",
+                  showMobileTags
+                    ? "bg-zinc-950 text-white"
+                    : "bg-white text-black"
+                )}
+                aria-expanded={showMobileTags}
+                aria-controls="cardapio-tag-filters"
+              >
+                <ListFilter className="h-4 w-4" />
+                Filtro
+              </button>
+            ) : null}
           </div>
         </div>
       ) : null}
@@ -268,12 +283,12 @@ function StoryFilter({
   const symbol = /veg|salad|verde/.test(normalizedLabel)
     ? "leaf"
     : /doce|sobremesa|chocolate/.test(normalizedLabel)
-      ? "sparkle"
-      : /picante|apiment/.test(normalizedLabel)
-        ? "flame"
-        : /nov|destaque|promo/.test(normalizedLabel)
-          ? "star"
-          : "slice";
+    ? "sparkle"
+    : /picante|apiment/.test(normalizedLabel)
+    ? "flame"
+    : /nov|destaque|promo/.test(normalizedLabel)
+    ? "star"
+    : "slice";
 
   return (
     <button
@@ -289,28 +304,71 @@ function StoryFilter({
         )}
       >
         <span className="block rounded-full bg-white p-[2px]">
-          <svg viewBox="0 0 64 64" role="img" aria-label={`Ilustração para ${label}`} className="h-14 w-14 rounded-full">
+          <svg
+            viewBox="0 0 64 64"
+            role="img"
+            aria-label={`Ilustração para ${label}`}
+            className="h-14 w-14 rounded-full"
+          >
             <rect width="64" height="64" rx="32" fill={color || "#e4e4e7"} />
             <circle cx="21" cy="18" r="13" fill="white" fillOpacity=".18" />
             <circle cx="48" cy="48" r="18" fill="black" fillOpacity=".1" />
             {symbol === "leaf" ? (
-              <path d="M18 40c18 2 27-9 29-25-17 1-29 8-29 25Zm3-3c7-8 13-12 22-17" fill="none" stroke="white" strokeLinecap="round" strokeWidth="3" />
+              <path
+                d="M18 40c18 2 27-9 29-25-17 1-29 8-29 25Zm3-3c7-8 13-12 22-17"
+                fill="none"
+                stroke="white"
+                strokeLinecap="round"
+                strokeWidth="3"
+              />
             ) : symbol === "sparkle" ? (
-              <path d="m32 12 4.5 13.5L50 30l-13.5 4.5L32 48l-4.5-13.5L14 30l13.5-4.5L32 12Z" fill="white" fillOpacity=".9" />
+              <path
+                d="m32 12 4.5 13.5L50 30l-13.5 4.5L32 48l-4.5-13.5L14 30l13.5-4.5L32 12Z"
+                fill="white"
+                fillOpacity=".9"
+              />
             ) : symbol === "flame" ? (
-              <path d="M34 11c4 11-7 12-2 21 2-5 6-7 8-12 8 12 8 28-7 32-14-2-18-17-8-27 0 8 4 10 6 11-4-12 3-15 3-25Z" fill="white" fillOpacity=".9" />
+              <path
+                d="M34 11c4 11-7 12-2 21 2-5 6-7 8-12 8 12 8 28-7 32-14-2-18-17-8-27 0 8 4 10 6 11-4-12 3-15 3-25Z"
+                fill="white"
+                fillOpacity=".9"
+              />
             ) : symbol === "star" ? (
-              <path d="m32 11 6 13 14 2-10 10 3 14-13-7-13 7 3-14-10-10 14-2 6-13Z" fill="white" fillOpacity=".9" />
+              <path
+                d="m32 11 6 13 14 2-10 10 3 14-13-7-13 7 3-14-10-10 14-2 6-13Z"
+                fill="white"
+                fillOpacity=".9"
+              />
             ) : (
-              <path d="M17 43c8-17 19-24 34-25-2 16-9 27-25 33l-9-8Zm5 0 5 4M29 28l3 3m8-7 3 3" fill="none" stroke="white" strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" />
+              <path
+                d="M17 43c8-17 19-24 34-25-2 16-9 27-25 33l-9-8Zm5 0 5 4M29 28l3 3m8-7 3 3"
+                fill="none"
+                stroke="white"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth="3"
+              />
             )}
-            <text x="32" y="58" fill="white" fontFamily="Arial, sans-serif" fontSize="8" fontWeight="700" textAnchor="middle">
+            <text
+              x="32"
+              y="58"
+              fill="white"
+              fontFamily="Arial, sans-serif"
+              fontSize="8"
+              fontWeight="700"
+              textAnchor="middle"
+            >
               {initials}
             </text>
           </svg>
         </span>
       </span>
-      <span className={cn("w-full truncate font-neue text-[11px] leading-tight text-zinc-700", selected && "font-bold text-black")}>
+      <span
+        className={cn(
+          "w-full truncate font-neue text-[11px] leading-tight text-zinc-700",
+          selected && "font-bold text-black"
+        )}
+      >
         {label}
       </span>
     </button>
@@ -530,15 +588,16 @@ export function CardapioItemsGrid({
   return (
     <ul
       className={cn(
-        "mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4",
+        "mt-4 columns-2 gap-3 md:grid md:grid-cols-3 md:columns-auto md:gap-3 lg:grid-cols-4 xl:grid-cols-4",
         desktopFeedLayout &&
-        "md:grid-cols-2 md:gap-5 lg:grid-cols-2 xl:grid-cols-2"
+          "md:grid-cols-2 md:gap-5 lg:grid-cols-2 xl:grid-cols-2"
       )}
     >
-      {items.map((item) => (
+      {items.map((item, index) => (
         <CardapioGridItem
           key={item.id}
           item={item}
+          index={index}
           isExpanded={expandedItemId === item.id}
           onClick={() => onCardClick(item.id)}
           onOpenDetail={() => trackOpenDetailOnce(item)}
@@ -557,6 +616,7 @@ export function CardapioItemsGrid({
 
 function CardapioGridItem({
   item,
+  index,
   isExpanded,
   onClick,
   onOpenDetail,
@@ -567,6 +627,7 @@ function CardapioGridItem({
   desktopFeedLayout,
 }: {
   item: CardapioIndexItem;
+  index: number;
   isExpanded: boolean;
   onClick: () => void;
   onOpenDetail?: () => void;
@@ -584,7 +645,7 @@ function CardapioGridItem({
     featuredImage?.thumbnailUrl || item.imagePlaceholderURL || "";
   const featuredMediaKind =
     featuredImage?.kind === "video" ||
-      /\.(mp4|mov|webm|m4v|ogg|ogv)(\?|$)/i.test(featuredMediaUrl)
+    /\.(mp4|mov|webm|m4v|ogg|ogv)(\?|$)/i.test(featuredMediaUrl)
       ? "video"
       : "image";
   const featuredMediaSrcSet = buildImageSrcSet(featuredImage?.variants);
@@ -638,21 +699,25 @@ function CardapioGridItem({
     (a, b) => (a.sortOrderIndex ?? 0) - (b.sortOrderIndex ?? 0)
   );
   const priceRange = getCatalogPriceRange(visiblePrices);
+  const mobileImageHeight =
+    MOBILE_CARD_IMAGE_HEIGHTS[index % MOBILE_CARD_IMAGE_HEIGHTS.length];
 
   return (
     <li
       ref={setRefs}
       className={cn(
-        "flex flex-col rounded-xl overflow-hidden bg-zinc-900",
+        "mb-3 inline-flex w-full break-inside-avoid flex-col overflow-hidden border border-black/5 bg-white shadow-[0_16px_36px_rgba(15,23,42,0.09),0_2px_7px_rgba(15,23,42,0.05)] [border-radius:2.15rem/3rem] md:mb-0 md:flex md:rounded-xl md:border-0 md:bg-zinc-900 md:shadow-none md:[border-radius:0.75rem]",
         "transition-all duration-300 ease-in-out",
         "scroll-mt-24 lg:scroll-mt-0",
-        isExpanded ? "col-span-2 lg:col-span-1" : "col-span-1"
+        isExpanded ? "md:col-span-2 lg:col-span-1" : "md:col-span-1"
       )}
     >
       <div
         className={cn(
-          "relative overflow-hidden transition-all duration-300 ease-in-out",
-          isExpanded ? "h-[220px]" : "h-[160px]",
+          "relative mx-4 overflow-hidden rounded-b-[1.35rem] rounded-t-none transition-all duration-300 ease-in-out md:m-0 md:w-full md:rounded-none",
+          isExpanded
+            ? "h-[198px] md:h-[220px]"
+            : `${mobileImageHeight} md:h-[160px]`,
           desktopFeedLayout && "md:h-[260px]"
         )}
       >
@@ -665,7 +730,7 @@ function CardapioGridItem({
           placeholderIcon={false}
           cnPlaceholderText="font-lora font-bold leading-none text-white/80"
           cnPlaceholderContainer="from-zinc-900 via-zinc-800 to-zinc-700"
-          cnContainer="w-full h-full"
+          cnContainer="w-full h-full rounded-b-[1.35rem] rounded-t-none md:rounded-none"
           enableOverlay={false}
         />
 
@@ -683,13 +748,12 @@ function CardapioGridItem({
         ) : null}
 
         {likesEnabled ? (
-          <div className="absolute -top-2 -right-2 z-10">
+          <div className="absolute -right-2 -top-2 z-10 md:-right-2 md:-top-2">
             <LikeIt
               item={item}
               size={20}
-              cnContainer="w-[3.5rem] h-[3.5rem] bg-white/60 rounded-bl-2xl rounded-tl-lg backdrop-blur-lg backdrop-brightness-20 hover:bg-white/90 flex-col items-center justify-center mx-1"
+              cnContainer="w-[3.5rem] h-[3.5rem] bg-white/70 rounded-bl-2xl rounded-tl-lg backdrop-blur-lg backdrop-brightness-20 hover:bg-white/90 flex-col items-center justify-center mx-1"
               color="red"
-
               filled
             >
               <span className="font-neue text-[12px] tracking-wide text-red-500 leading-none">
@@ -701,29 +765,29 @@ function CardapioGridItem({
       </div>
 
       <div
-        className="flex flex-col flex-1 px-3 pt-2 pb-3 cursor-pointer"
+        className="flex flex-1 cursor-pointer flex-col px-4 pb-4 pt-3 md:px-3 md:pb-3 md:pt-2"
         onClick={isDesktop ? undefined : onClick}
         role={isDesktop ? undefined : "button"}
         aria-label={isDesktop ? undefined : `Alternar detalhes de ${item.name}`}
       >
-        <span className="font-neue text-md font-semibold uppercase text-white mb-4 leading-5">
+        <span className="mb-2 font-neue text-[15px] font-semibold uppercase leading-[1.05] text-zinc-950 md:mb-4 md:text-md md:leading-5 md:text-white">
           {item.name}
         </span>
 
-        <div className="flex-1 mb-6">
-          <span className="font-lora text-md text-white leading-none">
+        <div className="mb-5 flex-1 md:mb-6">
+          <span className="line-clamp-4 font-neue text-[12px] leading-snug text-zinc-700 md:text-md md:leading-none md:text-white">
             {item.ingredients}
           </span>
         </div>
 
         {priceRange ? (
           <div className="relative mt-auto min-w-0 pb-1">
-            <span className="block pr-14 font-neue text-base font-semibold leading-tight text-white">
+            <span className="block pr-10 font-neue text-[12px] font-extrabold leading-tight text-zinc-950 md:pr-14 md:text-base md:font-semibold md:text-white">
               {priceRange.minimum === priceRange.maximum
                 ? formatMoneyString(priceRange.minimum)
                 : `De ${formatMoneyString(
-                  priceRange.minimum
-                )} a ${formatMoneyString(priceRange.maximum)}`}
+                    priceRange.minimum
+                  )} a ${formatMoneyString(priceRange.maximum)}`}
             </span>
 
             {isDesktop ? (
@@ -744,7 +808,7 @@ function CardapioGridItem({
             ) : (
               <button
                 type="button"
-                className="absolute bottom-[-0.25rem] -right-1 flex h-12 w-12 flex-shrink-0 items-center justify-center text-white sm:h-14 sm:w-14"
+                className="absolute bottom-[-0.55rem] -right-2 flex h-11 w-11 flex-shrink-0 items-center justify-center bg-transparent text-zinc-950 sm:h-12 sm:w-12 md:bottom-[-0.25rem] md:-right-1 md:h-12 md:w-12 lg:h-14 lg:w-14"
                 aria-label={`Alternar detalhes de ${item.name}`}
                 onClick={(event) => {
                   event.stopPropagation();
@@ -761,13 +825,13 @@ function CardapioGridItem({
         ) : null}
 
         {!isDesktop && isExpanded && visiblePrices.length > 0 ? (
-          <div className="mt-4 border-t border-white/20 pt-3">
+          <div className="mt-4 border-t border-black/10 pt-3 md:border-white/20">
             <div className="grid grid-cols-2 gap-2">
               {visiblePrices.map((variation, index) => (
                 <div
                   key={variation.id}
                   className={cn(
-                    "flex min-h-16 flex-col justify-between gap-1 rounded-xl border border-white/10 bg-gradient-to-br p-2.5 font-neue shadow-sm",
+                    "flex min-h-16 flex-col justify-between gap-1 rounded-2xl border border-black/5 bg-gradient-to-br p-2.5 font-neue shadow-sm",
                     index % 4 === 0 && "from-amber-500/35 to-orange-950/30",
                     index % 4 === 1 && "from-rose-500/35 to-fuchsia-950/30",
                     index % 4 === 2 && "from-emerald-500/35 to-teal-950/30",
