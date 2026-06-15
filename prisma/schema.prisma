@@ -205,6 +205,7 @@ model Item {
   ItemLike                     ItemLike[]
   ItemShare                    ItemShare[]
   ItemInterestEvent            ItemInterestEvent[]
+  SupplierPurchaseOrderItem    SupplierPurchaseOrderItem[]
 
   @@index([categoryId], map: "items_category_id_idx")
   @@index([classification], map: "items_classification_idx")
@@ -474,6 +475,7 @@ model Supplier {
   contacts                     SupplierContact[]
   StockMovementImportBatchLine StockMovementImportBatchLine[]
   StockMovement                StockMovement[]
+  PurchaseOrder                SupplierPurchaseOrder[]
 
   @@index([cnpj], map: "suppliers_cnpj_idx")
   @@index([name], map: "suppliers_name_idx")
@@ -495,6 +497,41 @@ model SupplierContact {
   @@index([supplierId], map: "supplier_contacts_supplier_id_idx")
   @@index([supplierId, isPrimary], map: "supplier_contacts_supplier_id_primary_idx")
   @@map("supplier_contacts")
+}
+
+model SupplierPurchaseOrder {
+  id         String    @id @default(uuid())
+  supplierId String    @map("supplier_id")
+  status     String    @default("open") // open | received
+  receivedAt DateTime? @map("received_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @default(now()) @updatedAt @map("updated_at")
+
+  Supplier Supplier                    @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  Items    SupplierPurchaseOrderItem[]
+
+  @@index([supplierId, createdAt], map: "supplier_purchase_orders_supplier_created_idx")
+  @@index([status, createdAt], map: "supplier_purchase_orders_status_created_idx")
+  @@map("supplier_purchase_orders")
+}
+
+model SupplierPurchaseOrderItem {
+  id        String    @id @default(uuid())
+  orderId   String    @map("order_id")
+  itemId    String    @map("item_id")
+  quantity  Float
+  unit      String
+  checked   Boolean   @default(false)
+  checkedAt DateTime? @map("checked_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @default(now()) @updatedAt @map("updated_at")
+
+  Order SupplierPurchaseOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  Item  Item                  @relation(fields: [itemId], references: [id], onDelete: Restrict)
+
+  @@unique([orderId, itemId], map: "supplier_purchase_order_items_order_item_unique")
+  @@index([itemId], map: "supplier_purchase_order_items_item_idx")
+  @@map("supplier_purchase_order_items")
 }
 
 model MenuItemGroup {

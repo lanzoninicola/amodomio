@@ -1,9 +1,12 @@
 import type { LoaderFunctionArgs } from "@remix-run/node";
 import { redirect } from "@remix-run/node";
 import { Link, useFetcher, useLoaderData, useLocation } from "@remix-run/react";
-import { ArrowLeft, Copy, Send } from "lucide-react";
+import { Copy, Plus, Send, Trash2 } from "lucide-react";
 import { useState } from "react";
-import { buildSupplierOrderMessage, parseSupplierOrderSelection } from "~/domain/supplier/supplier-order";
+import {
+  buildSupplierOrderMessage,
+  parseSupplierOrderSelection,
+} from "~/domain/supplier/supplier-order";
 import { getSupplierOrderDraftItems } from "~/domain/supplier/supplier-order.server";
 import { settingPrismaEntity } from "~/domain/setting/setting.prisma.entity.server";
 import { ok } from "~/utils/http-response.server";
@@ -11,7 +14,9 @@ import { ok } from "~/utils/http-response.server";
 export async function loader({ request, params }: LoaderFunctionArgs) {
   const supplierId = String(params.supplierId || "");
   const url = new URL(request.url);
-  const selection = parseSupplierOrderSelection(url.searchParams).filter((item) => item.qty);
+  const selection = parseSupplierOrderSelection(url.searchParams).filter(
+    (item) => item.qty
+  );
 
   if (selection.length === 0) {
     return redirect(`/admin/mobile/pedido-fornecedor/${supplierId}/produtos`);
@@ -26,7 +31,10 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     return redirect(`/admin/mobile/pedido-fornecedor/${supplierId}/produtos`);
   }
 
-  const orderMessage = buildSupplierOrderMessage(draft.supplier?.name || "", draft.items);
+  const orderMessage = buildSupplierOrderMessage(
+    draft.supplier?.name || "",
+    draft.items
+  );
 
   return ok({
     supplierId,
@@ -39,13 +47,31 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
 export default function AdminMobilePedidoFornecedorResumo() {
   const { payload } = useLoaderData<typeof loader>();
-  const { supplier, items, orderMessage, testPhone, supplierId } = payload as any;
+  const { supplier, items, orderMessage, testPhone, supplierId } =
+    payload as any;
   const location = useLocation();
   const fetcher = useFetcher<{ ok: boolean; error?: string }>();
   const [copied, setCopied] = useState(false);
 
   const isSending = fetcher.state !== "idle";
   const sendResult = fetcher.data;
+  const productsUrl = `/admin/mobile/pedido-fornecedor/${supplierId}/produtos${location.search}`;
+
+  function orderUrlWithout(itemId: string) {
+    const searchParams = new URLSearchParams(location.search);
+    const selection = parseSupplierOrderSelection(searchParams).filter(
+      (item) => item.itemId !== itemId
+    );
+    const next = new URLSearchParams();
+    for (const item of selection) {
+      next.append("itemId", item.itemId);
+      next.append("qty", item.qty || "");
+      next.append("unit", item.unit || "");
+    }
+    return selection.length > 0
+      ? `/admin/mobile/pedido-fornecedor/${supplierId}/resumo?${next.toString()}`
+      : `/admin/mobile/pedido-fornecedor/${supplierId}/produtos`;
+  }
 
   function copyMessage() {
     navigator.clipboard.writeText(orderMessage).then(() => {
@@ -59,39 +85,69 @@ export default function AdminMobilePedidoFornecedorResumo() {
     formData.set("_intent", intent);
     formData.set("phone", phone);
     formData.set("message", orderMessage);
-    fetcher.submit(formData, { method: "post", action: "/admin/mobile/pedido-fornecedor" });
+    fetcher.submit(formData, {
+      method: "post",
+      action: "/admin/mobile/pedido-fornecedor",
+    });
   }
 
   return (
     <div className="space-y-4 pb-8">
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Riepilogo</p>
-          <p className="text-base font-semibold text-slate-900">{supplier?.name}</p>
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+            Riepilogo
+          </p>
+          <p className="text-base font-semibold text-slate-900">
+            {supplier?.name}
+          </p>
         </div>
-        <Link to={`/admin/mobile/pedido-fornecedor/${supplierId}/quantidades${location.search}`} className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700">
-          <ArrowLeft className="h-3.5 w-3.5" />
-          Alterar
+        <Link
+          to={productsUrl}
+          className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700"
+        >
+          <Plus className="h-3.5 w-3.5" />
+          Adicionar produtos
         </Link>
       </div>
 
       <div className="space-y-2">
         {items.map((item: any) => (
-          <article key={item.itemId} className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3">
+          <article
+            key={item.itemId}
+            className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3"
+          >
             <div className="min-w-0">
-              <p className="truncate text-sm font-semibold text-slate-900">{item.itemName}</p>
-              <p className="text-xs text-slate-500">{item.qty} {item.unit || ""}</p>
+              <p className="truncate text-sm font-semibold text-slate-900">
+                {item.itemName}
+              </p>
+              <p className="text-xs text-slate-500">
+                {item.qty} {item.unit || ""}
+              </p>
             </div>
+            <Link
+              to={orderUrlWithout(item.itemId)}
+              className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-red-200 text-red-600"
+              aria-label={`Remover ${item.itemName}`}
+            >
+              <Trash2 className="h-4 w-4" />
+            </Link>
           </article>
         ))}
       </div>
 
       <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
-        <pre className="whitespace-pre-wrap font-sans text-xs leading-relaxed text-slate-700">{orderMessage}</pre>
+        <pre className="whitespace-pre-wrap font-sans text-xs leading-relaxed text-slate-700">
+          {orderMessage}
+        </pre>
       </div>
 
       {sendResult ? (
-        <p className={`text-sm font-medium ${sendResult.ok ? "text-emerald-600" : "text-red-600"}`}>
+        <p
+          className={`text-sm font-medium ${
+            sendResult.ok ? "text-emerald-600" : "text-red-600"
+          }`}
+        >
           {sendResult.ok ? "Mensagem enviada." : sendResult.error}
         </p>
       ) : null}
@@ -110,7 +166,11 @@ export default function AdminMobilePedidoFornecedorResumo() {
           type="button"
           disabled={isSending || !supplier?.phoneNumber}
           onClick={() => sendOrder(supplier.phoneNumber, "send-order")}
-          title={!supplier?.phoneNumber ? "Fornecedor sem número cadastrado" : undefined}
+          title={
+            !supplier?.phoneNumber
+              ? "Fornecedor sem número cadastrado"
+              : undefined
+          }
           className="flex w-full items-center justify-center gap-2 rounded-xl bg-green-600 py-3 text-sm font-semibold text-white disabled:opacity-50"
         >
           <Send className="h-4 w-4" />
@@ -121,11 +181,17 @@ export default function AdminMobilePedidoFornecedorResumo() {
           type="button"
           disabled={isSending || !testPhone}
           onClick={() => sendOrder(testPhone, "send-test")}
-          title={!testPhone ? "Configure o número de teste nas configurações globais (pedido-compra.test-phone)" : `Enviar para ${testPhone}`}
+          title={
+            !testPhone
+              ? "Configure o número de teste nas configurações globais (pedido-compra.test-phone)"
+              : `Enviar para ${testPhone}`
+          }
           className="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-300 py-3 text-sm font-medium text-slate-600 disabled:opacity-40"
         >
           Enviar mensagem de teste
-          {testPhone ? <span className="text-[11px] text-slate-400">({testPhone})</span> : null}
+          {testPhone ? (
+            <span className="text-[11px] text-slate-400">({testPhone})</span>
+          ) : null}
         </button>
       </div>
     </div>

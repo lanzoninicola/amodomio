@@ -1,7 +1,22 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
-import { Form, Link, useActionData, useLoaderData, useNavigate } from "@remix-run/react";
+import {
+  Form,
+  Link,
+  useActionData,
+  useLoaderData,
+  useNavigate,
+} from "@remix-run/react";
 import { useEffect, useState } from "react";
-import { ArrowUpDown, ChevronLeft, ChevronsLeft, ChevronsRight, ListFilter, Search, SlidersHorizontal, XCircle } from "lucide-react";
+import {
+  ArrowUpDown,
+  ChevronLeft,
+  ChevronsLeft,
+  ChevronsRight,
+  ListFilter,
+  Search,
+  SlidersHorizontal,
+  XCircle,
+} from "lucide-react";
 import { DeleteItemButton } from "~/components/primitives/table-list";
 import { Badge } from "~/components/ui/badge";
 import {
@@ -10,10 +25,30 @@ import {
   PaginationItem,
   PaginationLink,
 } from "~/components/ui/pagination";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "~/components/ui/table";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "~/components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "~/components/ui/table";
 import { buildAdminItemsMeta } from "~/domain/item/admin-items-meta";
-import { calculateItemCostMetrics, getItemAverageCostWindowDays } from "~/domain/item/item-cost-metrics.server";
+import {
+  buildItemDeleteBlockedMessage,
+  getItemDeleteBlockers,
+} from "~/domain/item/item-delete-guard.server";
+import {
+  calculateItemCostMetrics,
+  getItemAverageCostWindowDays,
+} from "~/domain/item/item-cost-metrics.server";
 import { itemVariationPrismaEntity } from "~/domain/item/item-variation.prisma.entity.server";
 import prismaClient from "~/lib/prisma/client.server";
 import { badRequest, ok, serverError } from "~/utils/http-response.server";
@@ -132,7 +167,9 @@ function normalizeClassificationValue(classification?: string | null) {
   return value || "outro";
 }
 
-function buildClassificationTabs(classificationRows: Array<{ classification?: string | null }>) {
+function buildClassificationTabs(
+  classificationRows: Array<{ classification?: string | null }>
+) {
   const counts = new Map<string, number>();
 
   for (const row of classificationRows) {
@@ -140,9 +177,16 @@ function buildClassificationTabs(classificationRows: Array<{ classification?: st
     counts.set(value, (counts.get(value) || 0) + 1);
   }
 
-  const knownTabs = ITEM_CLASSIFICATION_ORDER.filter((classification) => (counts.get(classification) || 0) > 0);
+  const knownTabs = ITEM_CLASSIFICATION_ORDER.filter(
+    (classification) => (counts.get(classification) || 0) > 0
+  );
   const unknownTabs = Array.from(counts.keys())
-    .filter((classification) => !ITEM_CLASSIFICATIONS.includes(classification as (typeof ITEM_CLASSIFICATIONS)[number]))
+    .filter(
+      (classification) =>
+        !ITEM_CLASSIFICATIONS.includes(
+          classification as (typeof ITEM_CLASSIFICATIONS)[number]
+        )
+    )
     .sort((a, b) => a.localeCompare(b, "pt-BR"));
   const tabs = [...knownTabs, ...unknownTabs];
 
@@ -162,9 +206,11 @@ function buildPageHref(params: {
   const searchParams = new URLSearchParams();
   if (params.q) searchParams.set("q", params.q);
   if (params.categoryId) searchParams.set("categoryId", params.categoryId);
-  if (params.classification) searchParams.set("classification", params.classification);
+  if (params.classification)
+    searchParams.set("classification", params.classification);
   if (params.status) searchParams.set("status", params.status);
-  if (params.page && params.page > 1) searchParams.set("page", String(params.page));
+  if (params.page && params.page > 1)
+    searchParams.set("page", String(params.page));
   return `/admin/items?${searchParams.toString()}`;
 }
 
@@ -175,16 +221,31 @@ function formatClassificationTabLabel(value: string) {
 function getClassificationTabColor(value: string) {
   switch (value) {
     case "insumo":
-      return { dot: "bg-sky-400", activeBorder: "border-sky-600", activeText: "text-sky-900" };
+      return {
+        dot: "bg-sky-400",
+        activeBorder: "border-sky-600",
+        activeText: "text-sky-900",
+      };
     case "semi_acabado":
-      return { dot: "bg-amber-400", activeBorder: "border-amber-500", activeText: "text-amber-900" };
+      return {
+        dot: "bg-amber-400",
+        activeBorder: "border-amber-500",
+        activeText: "text-amber-900",
+      };
     case "produto_final":
-      return { dot: "bg-emerald-500", activeBorder: "border-emerald-600", activeText: "text-emerald-900" };
+      return {
+        dot: "bg-emerald-500",
+        activeBorder: "border-emerald-600",
+        activeText: "text-emerald-900",
+      };
     default:
-      return { dot: "bg-slate-400", activeBorder: "border-slate-500", activeText: "text-slate-900" };
+      return {
+        dot: "bg-slate-400",
+        activeBorder: "border-slate-500",
+        activeText: "text-slate-900",
+      };
   }
 }
-
 
 function formatClassificationLabel(value?: string | null) {
   if (!value) return "-";
@@ -209,9 +270,15 @@ function getClassificationBadgeClass(value?: string | null) {
 }
 
 function pickPrimaryItemVariation(item: any) {
-  const activeVariations = (item?.ItemVariation || []).filter((row: any) => !row?.deletedAt);
+  const activeVariations = (item?.ItemVariation || []).filter(
+    (row: any) => !row?.deletedAt
+  );
 
-  return activeVariations.find((row: any) => row.isReference) || activeVariations[0] || null;
+  return (
+    activeVariations.find((row: any) => row.isReference) ||
+    activeVariations[0] ||
+    null
+  );
 }
 
 export async function loader({ request }: LoaderFunctionArgs) {
@@ -220,9 +287,15 @@ export async function loader({ request }: LoaderFunctionArgs) {
     const url = new URL(request.url);
     const q = String(url.searchParams.get("q") || "").trim();
     const categoryId = String(url.searchParams.get("categoryId") || "").trim();
-    const classificationParam = String(url.searchParams.get("classification") || "").trim();
-    const statusParam = String(url.searchParams.get("status") || "").trim().toLowerCase();
-    const status = ITEM_STATUS_FILTERS.includes(statusParam as (typeof ITEM_STATUS_FILTERS)[number])
+    const classificationParam = String(
+      url.searchParams.get("classification") || ""
+    ).trim();
+    const statusParam = String(url.searchParams.get("status") || "")
+      .trim()
+      .toLowerCase();
+    const status = ITEM_STATUS_FILTERS.includes(
+      statusParam as (typeof ITEM_STATUS_FILTERS)[number]
+    )
       ? statusParam
       : "active";
     const requestedPage = parsePage(url.searchParams.get("page"));
@@ -230,27 +303,31 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
     const baseWhere = buildBaseItemWhere({ q, categoryId, status });
 
-    const [menuItemsLinked, categories, classificationRows] = await Promise.all([
-      db.menuItem.count({
-        where: {
-          itemId: {
-            not: null,
+    const [menuItemsLinked, categories, classificationRows] = await Promise.all(
+      [
+        db.menuItem.count({
+          where: {
+            itemId: {
+              not: null,
+            },
           },
-        },
-      }),
-      db.category.findMany({
-        where: { type: "item" },
-        select: { id: true, name: true },
-        orderBy: [{ name: "asc" }],
-      }),
-      db.item.findMany({
-        where: baseWhere,
-        select: { classification: true },
-      }),
-    ]);
+        }),
+        db.category.findMany({
+          where: { type: "item" },
+          select: { id: true, name: true },
+          orderBy: [{ name: "asc" }],
+        }),
+        db.item.findMany({
+          where: baseWhere,
+          select: { classification: true },
+        }),
+      ]
+    );
 
     const classificationTabData = buildClassificationTabs(classificationRows);
-    const classification = classificationTabData.tabs.includes(classificationParam)
+    const classification = classificationTabData.tabs.includes(
+      classificationParam
+    )
       ? classificationParam
       : classificationTabData.tabs[0];
     const where = buildClassificationWhere(baseWhere, classification);
@@ -364,8 +441,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
           baseHistory.length > 0
             ? baseHistory
             : currentCost
-              ? [currentCost]
-              : [];
+            ? [currentCost]
+            : [];
 
         return {
           ...item,
@@ -424,54 +501,10 @@ export async function action({ request }: ActionFunctionArgs) {
           return badRequest("Item não encontrado");
         }
 
-        const stockMovementLookup =
-          typeof db.stockMovement?.findFirst === "function"
-            ? db.stockMovement.findFirst({
-              where: { itemId, deletedAt: null },
-              select: { id: true },
-            })
-            : typeof db.stockMovementImportBatchLine?.findFirst === "function"
-              ? db.stockMovementImportBatchLine.findFirst({
-                where: { mappedItemId: itemId, appliedAt: { not: null }, rolledBackAt: null },
-                select: { id: true },
-              })
-              : Promise.resolve(null);
-        const recipeUsageLookup =
-          typeof db.recipeIngredient?.findFirst === "function"
-            ? db.recipeIngredient.findFirst({
-              where: { ingredientItemId: itemId },
-              select: { id: true },
-            })
-            : typeof db.recipeLine?.findFirst === "function"
-              ? db.recipeLine.findFirst({
-                where: { itemId },
-                select: { id: true },
-              })
-              : Promise.resolve(null);
+        const blockers = await getItemDeleteBlockers(db, itemId);
 
-        const [
-          stockMovement,
-          recipeLine,
-          recipe,
-          menuItem,
-          itemCostSheet,
-        ] = await Promise.all([
-          stockMovementLookup,
-          recipeUsageLookup,
-          db.recipe.findFirst({ where: { itemId }, select: { id: true } }),
-          db.menuItem.findFirst({ where: { itemId }, select: { id: true } }),
-          db.itemCostSheet.findFirst({ where: { itemId }, select: { id: true } }),
-        ]);
-
-        const reasons: string[] = [];
-        if (stockMovement) reasons.push("existem movimentações de estoque");
-        if (recipeLine) reasons.push("está sendo usado como ingrediente em receitas");
-        if (recipe) reasons.push("está vinculado a uma receita");
-        if (menuItem) reasons.push("está vinculado ao cardápio");
-        if (itemCostSheet) reasons.push("possui fichas de custo");
-
-        if (reasons.length > 0) {
-          return badRequest(`Não é possível eliminar o item porque ${reasons.join(", ")}.`);
+        if (blockers.length > 0) {
+          return badRequest(buildItemDeleteBlockedMessage(blockers));
         }
 
         await db.item.delete({ where: { id: itemId } });
@@ -487,30 +520,43 @@ export async function action({ request }: ActionFunctionArgs) {
         formData
           .getAll("itemIds")
           .map((value) => String(value || "").trim())
-          .filter(Boolean),
-      ),
+          .filter(Boolean)
+      )
     );
 
     if (itemIds.length === 0) {
       return badRequest("Selecione ao menos um item");
     }
 
-    const classificationRaw = String(formData.get("bulkClassification") || "").trim();
+    const classificationRaw = String(
+      formData.get("bulkClassification") || ""
+    ).trim();
     const categoryRaw = String(formData.get("bulkCategoryId") || "").trim();
     const activeRaw = String(formData.get("bulkActive") || "").trim();
 
-    const shouldUpdateClassification = classificationRaw && classificationRaw !== "__NO_CHANGE__";
+    const shouldUpdateClassification =
+      classificationRaw && classificationRaw !== "__NO_CHANGE__";
     const shouldUpdateCategory = categoryRaw && categoryRaw !== "__NO_CHANGE__";
     const shouldUpdateActive = activeRaw && activeRaw !== "__NO_CHANGE__";
 
-    if (!shouldUpdateClassification && !shouldUpdateCategory && !shouldUpdateActive) {
-      return badRequest("Selecione uma categoria, classificação e/ou status para atualizar");
+    if (
+      !shouldUpdateClassification &&
+      !shouldUpdateCategory &&
+      !shouldUpdateActive
+    ) {
+      return badRequest(
+        "Selecione uma categoria, classificação e/ou status para atualizar"
+      );
     }
 
     const data: any = {};
 
     if (shouldUpdateClassification) {
-      if (!ITEM_CLASSIFICATIONS.includes(classificationRaw as (typeof ITEM_CLASSIFICATIONS)[number])) {
+      if (
+        !ITEM_CLASSIFICATIONS.includes(
+          classificationRaw as (typeof ITEM_CLASSIFICATIONS)[number]
+        )
+      ) {
         return badRequest("Classificação inválida");
       }
       data.classification = classificationRaw;
@@ -559,28 +605,56 @@ export default function AdminItemsIndex() {
   const payload = loaderData?.payload as any;
 
   if (!payload) {
-    return <div className="p-4 text-sm text-muted-foreground">Nao foi possivel carregar itens.</div>;
+    return (
+      <div className="p-4 text-sm text-muted-foreground">
+        Nao foi possivel carregar itens.
+      </div>
+    );
   }
 
   const items = payload.items || [];
   const stats = payload.stats || { totalItems: 0, menuItemsLinked: 0 };
-  const filters = payload.filters || { q: "", categoryId: "", classification: "insumo", status: "active" };
-  const classificationTabs = payload.classificationTabs?.length ? payload.classificationTabs : ["insumo"];
+  const filters = payload.filters || {
+    q: "",
+    categoryId: "",
+    classification: "insumo",
+    status: "active",
+  };
+  const classificationTabs = payload.classificationTabs?.length
+    ? payload.classificationTabs
+    : ["insumo"];
   const classificationCounts = payload.classificationCounts || {};
   const categories = payload.categories || [];
-  const categoryNameById = new Map<string, string>(categories.map((category: any) => [category.id, category.name]));
-  const pagination = payload.pagination || { page: 1, pageSize: PAGE_SIZE, totalItems: 0, totalPages: 1 };
+  const categoryNameById = new Map<string, string>(
+    categories.map((category: any) => [category.id, category.name])
+  );
+  const pagination = payload.pagination || {
+    page: 1,
+    pageSize: PAGE_SIZE,
+    totalItems: 0,
+    totalPages: 1,
+  };
   const averageWindowDays = payload.averageWindowDays || 30;
-  const classificationTabValue = classificationTabs.includes(filters.classification)
+  const classificationTabValue = classificationTabs.includes(
+    filters.classification
+  )
     ? filters.classification
     : classificationTabs[0];
-  const [categoryFilterValue, setCategoryFilterValue] = useState(filters.categoryId || "__all__");
-  const [statusFilterValue, setStatusFilterValue] = useState(filters.status || "active");
+  const [categoryFilterValue, setCategoryFilterValue] = useState(
+    filters.categoryId || "__all__"
+  );
+  const [statusFilterValue, setStatusFilterValue] = useState(
+    filters.status || "active"
+  );
   const [selectedItemIds, setSelectedItemIds] = useState<string[]>([]);
   const [bulkCategoryValue, setBulkCategoryValue] = useState("__NO_CHANGE__");
-  const [bulkClassificationValue, setBulkClassificationValue] = useState("__NO_CHANGE__");
+  const [bulkClassificationValue, setBulkClassificationValue] =
+    useState("__NO_CHANGE__");
   const [bulkActiveValue, setBulkActiveValue] = useState("__NO_CHANGE__");
-  const navigateWithFilters = (next: { categoryId?: string; status?: string }) =>
+  const navigateWithFilters = (next: {
+    categoryId?: string;
+    status?: string;
+  }) =>
     navigate(
       buildPageHref({
         q: filters.q || "",
@@ -591,15 +665,20 @@ export default function AdminItemsIndex() {
       })
     );
 
-  const duplicateCounts = items.reduce((acc: Map<string, number>, item: any) => {
-    const key = normalizeItemName(item?.name || "");
-    if (!key) return acc;
-    acc.set(key, (acc.get(key) || 0) + 1);
-    return acc;
-  }, new Map<string, number>());
+  const duplicateCounts = items.reduce(
+    (acc: Map<string, number>, item: any) => {
+      const key = normalizeItemName(item?.name || "");
+      if (!key) return acc;
+      acc.set(key, (acc.get(key) || 0) + 1);
+      return acc;
+    },
+    new Map<string, number>()
+  );
 
   const pageItemIds = items.map((item: any) => item.id);
-  const allPageSelected = pageItemIds.length > 0 && pageItemIds.every((id: string) => selectedItemIds.includes(id));
+  const allPageSelected =
+    pageItemIds.length > 0 &&
+    pageItemIds.every((id: string) => selectedItemIds.includes(id));
   const selectedCount = selectedItemIds.length;
 
   useEffect(() => {
@@ -609,11 +688,18 @@ export default function AdminItemsIndex() {
 
   useEffect(() => {
     setSelectedItemIds([]);
-  }, [pagination.page, filters.q, filters.categoryId, filters.classification, filters.status]);
+  }, [
+    pagination.page,
+    filters.q,
+    filters.categoryId,
+    filters.classification,
+    filters.status,
+  ]);
 
   function toggleItemSelection(itemId: string, checked: boolean) {
     setSelectedItemIds((current) => {
-      if (checked) return current.includes(itemId) ? current : [...current, itemId];
+      if (checked)
+        return current.includes(itemId) ? current : [...current, itemId];
       return current.filter((id) => id !== itemId);
     });
   }
@@ -636,13 +722,23 @@ export default function AdminItemsIndex() {
         <span>·</span>
         <span>Custo médio: {averageWindowDays} dias</span>
         <span>·</span>
-        <span>Pág. {pagination.page}/{pagination.totalPages}</span>
+        <span>
+          Pág. {pagination.page}/{pagination.totalPages}
+        </span>
       </div>
 
       {/* Search + filter controls row */}
       <Form method="get" className="flex flex-wrap items-center gap-6">
-        <input type="hidden" name="classification" value={classificationTabValue} />
-        <input type="hidden" name="categoryId" value={categoryFilterValue === "__all__" ? "" : categoryFilterValue} />
+        <input
+          type="hidden"
+          name="classification"
+          value={classificationTabValue}
+        />
+        <input
+          type="hidden"
+          name="categoryId"
+          value={categoryFilterValue === "__all__" ? "" : categoryFilterValue}
+        />
         <input type="hidden" name="status" value={statusFilterValue} />
 
         <div className="relative flex min-w-[260px] flex-1 items-center ">
@@ -655,12 +751,19 @@ export default function AdminItemsIndex() {
             placeholder="Pesquise por nome ou descrição"
             className="h-9 w-full rounded-md border border-slate-300 bg-white py-2 pl-9 pr-10 text-sm focus:border-slate-400 focus:outline-none"
           />
-          <button type="submit" className="absolute right-2 rounded p-0.5 text-slate-400 hover:text-slate-600" title="Filtrar">
+          <button
+            type="submit"
+            className="absolute right-2 rounded p-0.5 text-slate-400 hover:text-slate-600"
+            title="Filtrar"
+          >
             <SlidersHorizontal className="h-4 w-4" />
           </button>
         </div>
 
-        <button type="submit" className="inline-flex items-center gap-1 text-sm text-slate-600 hover:text-slate-900">
+        <button
+          type="submit"
+          className="inline-flex items-center gap-1 text-sm text-slate-600 hover:text-slate-900"
+        >
           <ArrowUpDown className="h-3.5 w-3.5" />
           <span>nome</span>
         </button>
@@ -674,7 +777,11 @@ export default function AdminItemsIndex() {
         >
           <SelectTrigger className="h-auto w-auto gap-1 border-0 p-0 text-sm font-medium text-blue-600 shadow-none focus:ring-0 [&>svg]:h-3 [&>svg]:w-3 [&>svg]:text-blue-400">
             <SelectValue>
-              {statusFilterValue === "active" ? "produtos ativos" : statusFilterValue === "inactive" ? "produtos inativos" : "todos os produtos"}
+              {statusFilterValue === "active"
+                ? "produtos ativos"
+                : statusFilterValue === "inactive"
+                ? "produtos inativos"
+                : "todos os produtos"}
             </SelectValue>
           </SelectTrigger>
           <SelectContent>
@@ -695,32 +802,51 @@ export default function AdminItemsIndex() {
         >
           <SelectTrigger className="h-auto w-auto gap-1 border-0 p-0 text-sm font-medium text-slate-600 shadow-none focus:ring-0 [&>svg]:h-3 [&>svg]:w-3 [&>svg]:text-slate-400">
             <SelectValue>
-              {categoryFilterValue === "__all__" ? "todas as categorias" : (categoryNameById.get(categoryFilterValue) ?? "categoria")}
+              {categoryFilterValue === "__all__"
+                ? "todas as categorias"
+                : categoryNameById.get(categoryFilterValue) ?? "categoria"}
             </SelectValue>
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="__all__">todas as categorias</SelectItem>
             {categories.map((category: any) => (
-              <SelectItem key={category.id} value={category.id}>{category.name}</SelectItem>
+              <SelectItem key={category.id} value={category.id}>
+                {category.name}
+              </SelectItem>
             ))}
           </SelectContent>
         </Select>
 
-        <button type="submit" className="inline-flex items-center gap-1 text-sm text-slate-600 hover:text-slate-900">
+        <button
+          type="submit"
+          className="inline-flex items-center gap-1 text-sm text-slate-600 hover:text-slate-900"
+        >
           <ListFilter className="h-3.5 w-3.5" />
           <span>filtros</span>
         </button>
 
-        <Link to="/admin/items" className="inline-flex items-center gap-1 text-sm text-slate-400 hover:text-slate-600">
+        <Link
+          to="/admin/items"
+          className="inline-flex items-center gap-1 text-sm text-slate-400 hover:text-slate-600"
+        >
           <XCircle className="h-3.5 w-3.5" />
           <span>limpar filtros</span>
         </Link>
       </Form>
 
       {/* Bulk update form - compact bar, only visible when items are selected */}
-      <Form method="post" className={`flex flex-wrap items-center gap-2 rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 transition-all ${selectedCount > 0 ? "opacity-100" : "pointer-events-none opacity-0 h-0 py-0 overflow-hidden border-0"}`}>
+      <Form
+        method="post"
+        className={`flex flex-wrap items-center gap-2 rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 transition-all ${
+          selectedCount > 0
+            ? "opacity-100"
+            : "pointer-events-none opacity-0 h-0 py-0 overflow-hidden border-0"
+        }`}
+      >
         <input type="hidden" name="_action" value="items-bulk-update" />
-        <span className="text-xs font-medium text-slate-500">Lote ({selectedCount} selecionado(s)):</span>
+        <span className="text-xs font-medium text-slate-500">
+          Lote ({selectedCount} selecionado(s)):
+        </span>
 
         <input type="hidden" name="bulkCategoryId" value={bulkCategoryValue} />
         <Select value={bulkCategoryValue} onValueChange={setBulkCategoryValue}>
@@ -731,20 +857,31 @@ export default function AdminItemsIndex() {
             <SelectItem value="__NO_CHANGE__">Categoria</SelectItem>
             <SelectItem value="__EMPTY__">Remover categoria</SelectItem>
             {categories.map((category: any) => (
-              <SelectItem key={category.id} value={category.id}>{category.name}</SelectItem>
+              <SelectItem key={category.id} value={category.id}>
+                {category.name}
+              </SelectItem>
             ))}
           </SelectContent>
         </Select>
 
-        <input type="hidden" name="bulkClassification" value={bulkClassificationValue} />
-        <Select value={bulkClassificationValue} onValueChange={setBulkClassificationValue}>
+        <input
+          type="hidden"
+          name="bulkClassification"
+          value={bulkClassificationValue}
+        />
+        <Select
+          value={bulkClassificationValue}
+          onValueChange={setBulkClassificationValue}
+        >
           <SelectTrigger className="h-7 w-auto min-w-[130px] border-slate-200 bg-white text-xs">
             <SelectValue placeholder="Classificação" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="__NO_CHANGE__">Classificação</SelectItem>
             {ITEM_CLASSIFICATIONS.map((value) => (
-              <SelectItem key={value} value={value}>{value}</SelectItem>
+              <SelectItem key={value} value={value}>
+                {value}
+              </SelectItem>
             ))}
           </SelectContent>
         </Select>
@@ -772,7 +909,11 @@ export default function AdminItemsIndex() {
           Atualizar
         </button>
         {selectedCount > 0 && (
-          <button type="button" className="text-xs text-slate-400 underline hover:text-slate-600" onClick={() => setSelectedItemIds([])}>
+          <button
+            type="button"
+            className="text-xs text-slate-400 underline hover:text-slate-600"
+            onClick={() => setSelectedItemIds([])}
+          >
             Limpar seleção
           </button>
         )}
@@ -780,10 +921,11 @@ export default function AdminItemsIndex() {
 
       {actionData?.message ? (
         <div
-          className={`rounded-md px-3 py-2 text-sm ${actionData?.status === 200
-            ? "border border-emerald-200 bg-emerald-50 text-emerald-800"
-            : "border border-amber-200 bg-amber-50 text-amber-900"
-            }`}
+          className={`rounded-md px-3 py-2 text-sm ${
+            actionData?.status === 200
+              ? "border border-emerald-200 bg-emerald-50 text-emerald-800"
+              : "border border-amber-200 bg-amber-50 text-amber-900"
+          }`}
         >
           {actionData.message}
         </div>
@@ -798,23 +940,40 @@ export default function AdminItemsIndex() {
               return (
                 <Link
                   key={tabValue}
-                  to={buildPageHref({ q: filters.q, categoryId: filters.categoryId, classification: tabValue, status: filters.status })}
-                  className={`relative flex flex-col items-start px-4 py-3 text-sm transition-colors ${isActive
-                    ? `border-b-2 ${color.activeBorder} ${color.activeText}`
-                    : "text-slate-400 hover:text-slate-600"
-                    }`}
+                  to={buildPageHref({
+                    q: filters.q,
+                    categoryId: filters.categoryId,
+                    classification: tabValue,
+                    status: filters.status,
+                  })}
+                  className={`relative flex flex-col items-start px-4 py-3 text-sm transition-colors ${
+                    isActive
+                      ? `border-b-2 ${color.activeBorder} ${color.activeText}`
+                      : "text-slate-400 hover:text-slate-600"
+                  }`}
                 >
                   <span className="inline-flex items-center gap-1.5">
-                    <span className={`h-2 w-2 rounded-full ${color.dot} ${isActive ? "" : "opacity-50"}`} />
-                    <span className={isActive ? "font-semibold" : "font-medium"}>
-                      {formatClassificationTabLabel(tabValue)} ({classificationCounts[tabValue] || 0})
+                    <span
+                      className={`h-2 w-2 rounded-full ${color.dot} ${
+                        isActive ? "" : "opacity-50"
+                      }`}
+                    />
+                    <span
+                      className={isActive ? "font-semibold" : "font-medium"}
+                    >
+                      {formatClassificationTabLabel(tabValue)} (
+                      {classificationCounts[tabValue] || 0})
                     </span>
                   </span>
                 </Link>
               );
             })}
           </div>
-          <button type="button" className="mb-2 rounded p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600" title="Colunas">
+          <button
+            type="button"
+            className="mb-2 rounded p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+            title="Colunas"
+          >
             <SlidersHorizontal className="h-4 w-4" />
           </button>
         </div>
@@ -831,25 +990,41 @@ export default function AdminItemsIndex() {
                 />
               </TableHead>
               <TableHead className="h-10 px-4 text-xs font-medium text-slate-500">
-                <span className="inline-flex items-center gap-1">Nome <ArrowUpDown className="h-3 w-3 text-slate-400" /></span>
+                <span className="inline-flex items-center gap-1">
+                  Nome <ArrowUpDown className="h-3 w-3 text-slate-400" />
+                </span>
               </TableHead>
               <TableHead className="h-10 px-4 text-xs font-medium text-slate-500">
-                <span className="inline-flex items-center gap-1">Unidade <ArrowUpDown className="h-3 w-3 text-slate-400" /></span>
+                <span className="inline-flex items-center gap-1">
+                  Unidade <ArrowUpDown className="h-3 w-3 text-slate-400" />
+                </span>
               </TableHead>
               <TableHead className="h-10 px-4 text-xs font-medium text-slate-500">
-                <span className="inline-flex items-center gap-1">Classificação <ArrowUpDown className="h-3 w-3 text-slate-400" /></span>
+                <span className="inline-flex items-center gap-1">
+                  Classificação{" "}
+                  <ArrowUpDown className="h-3 w-3 text-slate-400" />
+                </span>
               </TableHead>
               <TableHead className="h-10 px-4 text-xs font-medium text-slate-500">
-                <span className="inline-flex items-center gap-1">Categoria <ArrowUpDown className="h-3 w-3 text-slate-400" /></span>
+                <span className="inline-flex items-center gap-1">
+                  Categoria <ArrowUpDown className="h-3 w-3 text-slate-400" />
+                </span>
               </TableHead>
               <TableHead className="h-10 px-4 text-xs font-medium text-slate-500">
-                <span className="inline-flex items-center gap-1">Status <ArrowUpDown className="h-3 w-3 text-slate-400" /></span>
+                <span className="inline-flex items-center gap-1">
+                  Status <ArrowUpDown className="h-3 w-3 text-slate-400" />
+                </span>
               </TableHead>
               <TableHead className="h-10 px-4 text-right text-xs font-medium text-slate-500">
-                <span className="inline-flex items-center justify-end gap-1">Último custo <ArrowUpDown className="h-3 w-3 text-slate-400" /></span>
+                <span className="inline-flex items-center justify-end gap-1">
+                  Último custo{" "}
+                  <ArrowUpDown className="h-3 w-3 text-slate-400" />
+                </span>
               </TableHead>
               <TableHead className="h-10 px-4 text-right text-xs font-medium text-slate-500">
-                <span className="inline-flex items-center justify-end gap-1">Custo médio <ArrowUpDown className="h-3 w-3 text-slate-400" /></span>
+                <span className="inline-flex items-center justify-end gap-1">
+                  Custo médio <ArrowUpDown className="h-3 w-3 text-slate-400" />
+                </span>
               </TableHead>
               <TableHead className="h-10 px-4 text-right text-xs font-medium text-slate-500">
                 Ações
@@ -859,36 +1034,51 @@ export default function AdminItemsIndex() {
           <TableBody>
             {items.length === 0 ? (
               <TableRow className="hover:bg-transparent">
-                <TableCell colSpan={9} className="px-4 py-8 text-sm text-slate-500">
+                <TableCell
+                  colSpan={9}
+                  className="px-4 py-8 text-sm text-slate-500"
+                >
                   Nenhum item encontrado.
                 </TableCell>
               </TableRow>
             ) : (
               items.map((item: any) => {
                 const normalizedName = normalizeItemName(item.name || "");
-                const duplicateCount = normalizedName ? duplicateCounts.get(normalizedName) || 0 : 0;
+                const duplicateCount = normalizedName
+                  ? duplicateCounts.get(normalizedName) || 0
+                  : 0;
                 const isDuplicate = duplicateCount > 1;
                 const latestCost = item._costMetrics?.latestCost || null;
                 const costMetrics = item._costMetrics || null;
                 const categoryName =
-                  (item.categoryId ? categoryNameById.get(item.categoryId) : null) ||
-                  "Não definido";
+                  (item.categoryId
+                    ? categoryNameById.get(item.categoryId)
+                    : null) || "Não definido";
                 const latestLabel = latestCost
-                  ? `${BRL_FORMATTER.format(Number(costMetrics?.latestCostPerConsumptionUnit || 0))} ${item.consumptionUm || latestCost.unit || ""}`.trim()
+                  ? `${BRL_FORMATTER.format(
+                      Number(costMetrics?.latestCostPerConsumptionUnit || 0)
+                    )} ${item.consumptionUm || latestCost.unit || ""}`.trim()
                   : "-";
                 const avgLabel =
                   costMetrics?.averageCostPerConsumptionUnit != null
-                    ? `${BRL_FORMATTER.format(Number(costMetrics.averageCostPerConsumptionUnit))} ${item.consumptionUm || ""}`.trim()
+                    ? `${BRL_FORMATTER.format(
+                        Number(costMetrics.averageCostPerConsumptionUnit)
+                      )} ${item.consumptionUm || ""}`.trim()
                     : "-";
 
                 return (
-                  <TableRow key={item.id} className="border-slate-100 hover:bg-slate-50/50">
+                  <TableRow
+                    key={item.id}
+                    className="border-slate-100 hover:bg-slate-50/50"
+                  >
                     <TableCell className="px-4 py-3 align-top">
                       <input
                         type="checkbox"
                         aria-label={`Selecionar ${item.name}`}
                         checked={selectedItemIds.includes(item.id)}
-                        onChange={(e) => toggleItemSelection(item.id, e.currentTarget.checked)}
+                        onChange={(e) =>
+                          toggleItemSelection(item.id, e.currentTarget.checked)
+                        }
                       />
                     </TableCell>
                     <TableCell className="px-4 py-3">
@@ -911,41 +1101,66 @@ export default function AdminItemsIndex() {
                             </Badge>
                           ) : null}
                         </div>
-                        <span className="text-xs text-slate-500">ID: {item.id}</span>
+                        <span className="text-xs text-slate-500">
+                          ID: {item.id}
+                        </span>
                       </div>
                     </TableCell>
                     <TableCell className="px-4 py-3">
-                      <Badge variant="outline" className="border-slate-200 bg-white font-medium text-slate-700">
+                      <Badge
+                        variant="outline"
+                        className="border-slate-200 bg-white font-medium text-slate-700"
+                      >
                         {item.consumptionUm || "-"}
                       </Badge>
                     </TableCell>
                     <TableCell className="px-4 py-3">
-                      <Badge variant="outline" className={getClassificationBadgeClass(item.classification)}>
+                      <Badge
+                        variant="outline"
+                        className={getClassificationBadgeClass(
+                          item.classification
+                        )}
+                      >
                         {formatClassificationLabel(item.classification)}
                       </Badge>
                     </TableCell>
                     <TableCell className="px-4 py-3">
                       {categoryName !== "Não definido" ? (
-                        <Badge variant="outline" className="border-slate-200 bg-slate-50 font-medium text-slate-700">
+                        <Badge
+                          variant="outline"
+                          className="border-slate-200 bg-slate-50 font-medium text-slate-700"
+                        >
                           {categoryName}
                         </Badge>
                       ) : (
-                        <span className="text-sm text-slate-400">Não definido</span>
+                        <span className="text-sm text-slate-400">
+                          Não definido
+                        </span>
                       )}
                     </TableCell>
                     <TableCell className="px-4 py-3">
                       {item.active ? (
-                        <Badge variant="outline" className="border-emerald-200 bg-emerald-50 text-emerald-700">
+                        <Badge
+                          variant="outline"
+                          className="border-emerald-200 bg-emerald-50 text-emerald-700"
+                        >
                           Ativo
                         </Badge>
                       ) : (
-                        <Badge variant="outline" className="border-slate-200 bg-slate-100 text-slate-700">
+                        <Badge
+                          variant="outline"
+                          className="border-slate-200 bg-slate-100 text-slate-700"
+                        >
                           Inativo
                         </Badge>
                       )}
                     </TableCell>
-                    <TableCell className="px-4 py-3 text-right font-medium text-slate-800">{latestLabel}</TableCell>
-                    <TableCell className="px-4 py-3 text-right font-medium text-slate-800">{avgLabel}</TableCell>
+                    <TableCell className="px-4 py-3 text-right font-medium text-slate-800">
+                      {latestLabel}
+                    </TableCell>
+                    <TableCell className="px-4 py-3 text-right font-medium text-slate-800">
+                      {avgLabel}
+                    </TableCell>
                     <TableCell className="px-4 py-3">
                       <div className="flex items-center justify-end">
                         <Form method="post">
@@ -962,11 +1177,15 @@ export default function AdminItemsIndex() {
         </Table>
 
         <div className="flex flex-col gap-3 border-t border-slate-200 px-4 py-3 text-sm text-slate-600 lg:flex-row lg:items-center lg:justify-between">
-          <div className="text-sm text-slate-500">{selectedCount} of {pagination.totalItems} row(s) selected.</div>
+          <div className="text-sm text-slate-500">
+            {selectedCount} of {pagination.totalItems} row(s) selected.
+          </div>
 
           <div className="flex flex-wrap items-center gap-4 lg:gap-6">
             <div className="flex items-center gap-2">
-              <span className="text-xs font-semibold text-slate-700">Rows per page</span>
+              <span className="text-xs font-semibold text-slate-700">
+                Rows per page
+              </span>
               <button
                 type="button"
                 className="inline-flex h-9 items-center gap-2 rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-700"
@@ -988,16 +1207,19 @@ export default function AdminItemsIndex() {
                     href={
                       pagination.page > 1
                         ? buildPageHref({
-                          q: filters.q,
-                          categoryId: filters.categoryId,
-                          classification: filters.classification,
-                          status: filters.status,
-                          page: 1,
-                        })
+                            q: filters.q,
+                            categoryId: filters.categoryId,
+                            classification: filters.classification,
+                            status: filters.status,
+                            page: 1,
+                          })
                         : "#"
                     }
-                    className={`h-8 w-8 rounded-md border border-slate-200 bg-white p-0 text-slate-600 hover:bg-slate-50 ${pagination.page <= 1 ? "pointer-events-none opacity-40" : ""
-                      }`}
+                    className={`h-8 w-8 rounded-md border border-slate-200 bg-white p-0 text-slate-600 hover:bg-slate-50 ${
+                      pagination.page <= 1
+                        ? "pointer-events-none opacity-40"
+                        : ""
+                    }`}
                     aria-label="Primeira pagina"
                   >
                     <ChevronsLeft className="h-4 w-4" />
@@ -1008,16 +1230,19 @@ export default function AdminItemsIndex() {
                     href={
                       pagination.page > 1
                         ? buildPageHref({
-                          q: filters.q,
-                          categoryId: filters.categoryId,
-                          classification: filters.classification,
-                          status: filters.status,
-                          page: pagination.page - 1,
-                        })
+                            q: filters.q,
+                            categoryId: filters.categoryId,
+                            classification: filters.classification,
+                            status: filters.status,
+                            page: pagination.page - 1,
+                          })
                         : "#"
                     }
-                    className={`h-8 w-8 rounded-md border border-slate-200 bg-white p-0 text-slate-600 hover:bg-slate-50 ${pagination.page <= 1 ? "pointer-events-none opacity-40" : ""
-                      }`}
+                    className={`h-8 w-8 rounded-md border border-slate-200 bg-white p-0 text-slate-600 hover:bg-slate-50 ${
+                      pagination.page <= 1
+                        ? "pointer-events-none opacity-40"
+                        : ""
+                    }`}
                     aria-label="Pagina anterior"
                   >
                     <ChevronLeft className="h-4 w-4" />
@@ -1028,16 +1253,19 @@ export default function AdminItemsIndex() {
                     href={
                       pagination.page < pagination.totalPages
                         ? buildPageHref({
-                          q: filters.q,
-                          categoryId: filters.categoryId,
-                          classification: filters.classification,
-                          status: filters.status,
-                          page: pagination.page + 1,
-                        })
+                            q: filters.q,
+                            categoryId: filters.categoryId,
+                            classification: filters.classification,
+                            status: filters.status,
+                            page: pagination.page + 1,
+                          })
                         : "#"
                     }
-                    className={`h-8 w-8 rounded-md border border-slate-200 bg-white p-0 text-slate-600 hover:bg-slate-50 ${pagination.page >= pagination.totalPages ? "pointer-events-none opacity-40" : ""
-                      }`}
+                    className={`h-8 w-8 rounded-md border border-slate-200 bg-white p-0 text-slate-600 hover:bg-slate-50 ${
+                      pagination.page >= pagination.totalPages
+                        ? "pointer-events-none opacity-40"
+                        : ""
+                    }`}
                     aria-label="Proxima pagina"
                   >
                     <ChevronLeft className="h-4 w-4 rotate-180" />
@@ -1048,16 +1276,19 @@ export default function AdminItemsIndex() {
                     href={
                       pagination.page < pagination.totalPages
                         ? buildPageHref({
-                          q: filters.q,
-                          categoryId: filters.categoryId,
-                          classification: filters.classification,
-                          status: filters.status,
-                          page: pagination.totalPages,
-                        })
+                            q: filters.q,
+                            categoryId: filters.categoryId,
+                            classification: filters.classification,
+                            status: filters.status,
+                            page: pagination.totalPages,
+                          })
                         : "#"
                     }
-                    className={`h-8 w-8 rounded-md border border-slate-200 bg-white p-0 text-slate-600 hover:bg-slate-50 ${pagination.page >= pagination.totalPages ? "pointer-events-none opacity-40" : ""
-                      }`}
+                    className={`h-8 w-8 rounded-md border border-slate-200 bg-white p-0 text-slate-600 hover:bg-slate-50 ${
+                      pagination.page >= pagination.totalPages
+                        ? "pointer-events-none opacity-40"
+                        : ""
+                    }`}
                     aria-label="Ultima pagina"
                   >
                     <ChevronsRight className="h-4 w-4" />
