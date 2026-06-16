@@ -698,12 +698,15 @@ function CardapioGridItem({
   const priceRange = getCatalogPriceRange(visiblePrices);
   const mobileImageHeight =
     MOBILE_CARD_IMAGE_HEIGHTS[index % MOBILE_CARD_IMAGE_HEIGHTS.length];
+  const catalogLabel = item.tags?.public?.find(
+    (tag) => tag.trim().toLocaleLowerCase("pt-BR") !== "novidade"
+  );
 
   return (
     <li
       ref={setRefs}
       className={cn(
-        "mb-5 inline-flex w-full break-inside-avoid flex-col overflow-hidden border border-black/5 bg-white shadow-[0_18px_38px_rgba(15,23,42,0.16),0_3px_10px_rgba(15,23,42,0.08)] [border-radius:2.75rem/3rem] md:mb-0 md:flex md:rounded-xl md:border-0 md:bg-zinc-900 md:shadow-none md:[border-radius:0.75rem]",
+        "mb-4 inline-flex w-full break-inside-avoid flex-col overflow-hidden rounded-[20px] bg-white shadow-[0_6px_16px_rgba(15,23,42,0.14)] md:mb-0 md:flex md:rounded-xl md:bg-zinc-900 md:shadow-none",
         "transition-all duration-300 ease-in-out",
         "scroll-mt-24 lg:scroll-mt-0",
         isExpanded ? "md:col-span-2 lg:col-span-1" : "md:col-span-1"
@@ -766,6 +769,12 @@ function CardapioGridItem({
         role={isDesktop ? undefined : "button"}
         aria-label={isDesktop ? undefined : `Alternar detalhes de ${item.name}`}
       >
+        {catalogLabel ? (
+          <span className="mb-1 block font-neue text-[11px] font-medium uppercase tracking-wide text-zinc-400 md:text-white/50">
+            {catalogLabel}
+          </span>
+        ) : null}
+
         <div className="mb-2 flex items-start gap-2 md:mb-4">
           <span className="min-w-0 flex-1 font-neue text-[17px] font-semibold leading-[1.08] text-zinc-950 md:text-lg md:uppercase md:leading-6 md:text-white">
             {item.name}
