@@ -37,7 +37,11 @@
       "Bash(grep -E 'destaques-cardapio\\\\.\\(new|\\\\$id\\)\\\\.tsx')",
       "Bash(xargs ls -la)",
       "Skill(run)",
-      "Skill(run:*)"
+      "Skill(run:*)",
+      "Bash(sleep 4 && cat /tmp/remix-dev.log)",
+      "Read(//tmp/**)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:3000/cardapio)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:3002/cardapio)"
     ]
   },
   "hooks": {
