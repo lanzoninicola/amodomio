@@ -34,7 +34,14 @@
       "Bash(~/.nvm/versions/node/v22.2.0/bin/node ~/.nvm/versions/node/v22.2.0/bin/npx prisma generate)",
       "Bash(/home/lanzo/Documents/Coding/amodomio/node_modules/.bin/prisma generate *)",
       "Bash(~/.nvm/versions/node/v22.2.0/bin/node /home/lanzo/Documents/Coding/amodomio/node_modules/.bin/prisma generate)",
-      "Bash(grep -E 'destaques-cardapio\\\\.\\(new|\\\\$id\\)\\\\.tsx')"
+      "Bash(grep -E 'destaques-cardapio\\\\.\\(new|\\\\$id\\)\\\\.tsx')",
+      "Bash(xargs ls -la)",
+      "Skill(run)",
+      "Skill(run:*)",
+      "Bash(sleep 4 && cat /tmp/remix-dev.log)",
+      "Read(//tmp/**)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:3000/cardapio)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:3002/cardapio)"
     ]
   },
   "hooks": {
