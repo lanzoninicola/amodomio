@@ -193,16 +193,13 @@ export function CardapioCatalogSection({
                 type="button"
                 onClick={() => setShowMobileTags((current) => !current)}
                 className={cn(
-                  "inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border border-black/10 px-3 py-1.5 font-neue text-[13px] font-bold capitalize tracking-wide shadow-[0_6px_20px_rgba(0,0,0,0.18)] transition active:bg-zinc-100",
-                  showMobileTags
-                    ? "bg-zinc-950 text-white"
-                    : "bg-white text-black"
+                  "inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border border-black/10 bg-zinc-950 px-3 py-1.5 font-neue text-[13px] font-bold capitalize tracking-wide text-white shadow-[0_6px_20px_rgba(0,0,0,0.18)] transition active:bg-zinc-800"
                 )}
                 aria-expanded={showMobileTags}
                 aria-controls="cardapio-tag-filters"
               >
                 <ListFilter className="h-4 w-4" />
-                Filtro
+                Filtrar
               </button>
             ) : null}
           </div>
@@ -588,7 +585,7 @@ export function CardapioItemsGrid({
   return (
     <ul
       className={cn(
-        "mt-4 columns-2 gap-3 md:grid md:grid-cols-3 md:columns-auto md:gap-3 lg:grid-cols-4 xl:grid-cols-4",
+        "mt-4 columns-2 gap-4 md:grid md:grid-cols-3 md:columns-auto md:gap-3 lg:grid-cols-4 xl:grid-cols-4",
         desktopFeedLayout &&
           "md:grid-cols-2 md:gap-5 lg:grid-cols-2 xl:grid-cols-2"
       )}
@@ -706,7 +703,7 @@ function CardapioGridItem({
     <li
       ref={setRefs}
       className={cn(
-        "mb-3 inline-flex w-full break-inside-avoid flex-col overflow-hidden border border-black/5 bg-white shadow-[0_16px_36px_rgba(15,23,42,0.09),0_2px_7px_rgba(15,23,42,0.05)] [border-radius:2.15rem/3rem] md:mb-0 md:flex md:rounded-xl md:border-0 md:bg-zinc-900 md:shadow-none md:[border-radius:0.75rem]",
+        "mb-5 inline-flex w-full break-inside-avoid flex-col overflow-hidden border border-black/5 bg-white shadow-[0_18px_38px_rgba(15,23,42,0.16),0_3px_10px_rgba(15,23,42,0.08)] [border-radius:2.75rem/3rem] md:mb-0 md:flex md:rounded-xl md:border-0 md:bg-zinc-900 md:shadow-none md:[border-radius:0.75rem]",
         "transition-all duration-300 ease-in-out",
         "scroll-mt-24 lg:scroll-mt-0",
         isExpanded ? "md:col-span-2 lg:col-span-1" : "md:col-span-1"
@@ -714,7 +711,7 @@ function CardapioGridItem({
     >
       <div
         className={cn(
-          "relative mx-4 overflow-hidden rounded-b-[1.35rem] rounded-t-none transition-all duration-300 ease-in-out md:m-0 md:w-full md:rounded-none",
+          "relative order-2 mx-4 mb-5 overflow-hidden rounded-[1.35rem] transition-all duration-300 ease-in-out md:order-1 md:m-0 md:w-full md:rounded-none",
           isExpanded
             ? "h-[198px] md:h-[220px]"
             : `${mobileImageHeight} md:h-[160px]`,
@@ -730,7 +727,7 @@ function CardapioGridItem({
           placeholderIcon={false}
           cnPlaceholderText="font-lora font-bold leading-none text-white/80"
           cnPlaceholderContainer="from-zinc-900 via-zinc-800 to-zinc-700"
-          cnContainer="w-full h-full rounded-b-[1.35rem] rounded-t-none md:rounded-none"
+          cnContainer="w-full h-full rounded-[1.35rem] md:rounded-none"
           enableOverlay={false}
         />
 
@@ -748,41 +745,64 @@ function CardapioGridItem({
         ) : null}
 
         {likesEnabled ? (
-          <div className="absolute -right-2 -top-2 z-10 md:-right-2 md:-top-2">
+          <div className="absolute right-2 top-2 z-10 hidden md:block md:-right-2 md:-top-2">
             <LikeIt
               item={item}
-              size={20}
-              cnContainer="w-[3.5rem] h-[3.5rem] bg-white/70 rounded-bl-2xl rounded-tl-lg backdrop-blur-lg backdrop-brightness-20 hover:bg-white/90 flex-col items-center justify-center mx-1"
+              size={18}
+              cnContainer="!h-9 !w-9 rounded-full bg-white/85 !p-0 shadow-[0_8px_22px_rgba(15,23,42,0.16)] backdrop-blur-md hover:bg-white/95 md:!h-[3.5rem] md:!w-[3.5rem] md:rounded-bl-2xl md:rounded-tl-lg md:bg-white/70 md:flex-col md:mx-1"
+              cnIcon="h-5 w-5"
               color="red"
               filled
             >
-              <span className="font-neue text-[12px] tracking-wide text-red-500 leading-none">
-                Adorei
-              </span>
+              <span className="sr-only">Adorei</span>
             </LikeIt>
           </div>
         ) : null}
       </div>
 
       <div
-        className="flex flex-1 cursor-pointer flex-col px-4 pb-4 pt-3 md:px-3 md:pb-3 md:pt-2"
+        className="order-1 flex flex-1 cursor-pointer flex-col px-4 pb-5 pt-6 md:order-2 md:px-3 md:pb-3 md:pt-2"
         onClick={isDesktop ? undefined : onClick}
         role={isDesktop ? undefined : "button"}
         aria-label={isDesktop ? undefined : `Alternar detalhes de ${item.name}`}
       >
-        <span className="mb-2 font-neue text-[15px] font-semibold uppercase leading-[1.05] text-zinc-950 md:mb-4 md:text-md md:leading-5 md:text-white">
-          {item.name}
-        </span>
+        <div className="mb-2 flex items-start gap-2 md:mb-4">
+          <span className="min-w-0 flex-1 font-neue text-[17px] font-semibold leading-[1.08] text-zinc-950 md:text-lg md:uppercase md:leading-6 md:text-white">
+            {item.name}
+          </span>
+          {likesEnabled ? (
+            <div
+              className="-mr-1 -mt-1 shrink-0 md:hidden"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <LikeIt
+                item={item}
+                size={18}
+                cnContainer="!h-8 !w-8 bg-transparent !p-0 shadow-none hover:bg-transparent"
+                cnIcon="h-5 w-5"
+                color="red"
+                filled
+              >
+                <span className="sr-only">Adorei</span>
+              </LikeIt>
+            </div>
+          ) : null}
+        </div>
 
         <div className="mb-5 flex-1 md:mb-6">
-          <span className="line-clamp-4 font-neue text-[12px] leading-snug text-zinc-700 md:text-md md:leading-none md:text-white">
+          <span
+            className={cn(
+              "font-neue text-[12px] leading-snug text-zinc-700 md:text-md md:leading-none md:text-white",
+              isExpanded ? "line-clamp-none" : "line-clamp-4"
+            )}
+          >
             {item.ingredients}
           </span>
         </div>
 
         {priceRange ? (
           <div className="relative mt-auto min-w-0 pb-1">
-            <span className="block pr-10 font-neue text-[12px] font-extrabold leading-tight text-zinc-950 md:pr-14 md:text-base md:font-semibold md:text-white">
+            <span className="block pr-10 font-neue text-[11px] font-semibold leading-tight text-zinc-950 md:pr-14 md:text-base md:text-white">
               {priceRange.minimum === priceRange.maximum
                 ? formatMoneyString(priceRange.minimum)
                 : `De ${formatMoneyString(
@@ -827,21 +847,15 @@ function CardapioGridItem({
         {!isDesktop && isExpanded && visiblePrices.length > 0 ? (
           <div className="mt-4 border-t border-black/10 pt-3 md:border-white/20">
             <div className="grid grid-cols-2 gap-2">
-              {visiblePrices.map((variation, index) => (
+              {visiblePrices.map((variation) => (
                 <div
                   key={variation.id}
-                  className={cn(
-                    "flex min-h-16 flex-col justify-between gap-1 rounded-2xl border border-black/5 bg-gradient-to-br p-2.5 font-neue shadow-sm",
-                    index % 4 === 0 && "from-amber-500/35 to-orange-950/30",
-                    index % 4 === 1 && "from-rose-500/35 to-fuchsia-950/30",
-                    index % 4 === 2 && "from-emerald-500/35 to-teal-950/30",
-                    index % 4 === 3 && "from-sky-500/35 to-indigo-950/30"
-                  )}
+                  className="flex min-h-16 flex-col justify-between gap-1 rounded-2xl border border-black/10 bg-white p-2.5 font-neue shadow-sm"
                 >
-                  <span className="text-[10px] font-bold uppercase leading-tight tracking-wider text-white/80">
+                  <span className="text-[10px] font-semibold uppercase leading-tight tracking-wide text-zinc-600">
                     {variation.label}
                   </span>
-                  <span className="whitespace-nowrap text-lg font-bold leading-none text-white">
+                  <span className="whitespace-nowrap text-sm font-semibold leading-none text-zinc-950">
                     {formatMoneyString(variation.priceAmount)}
                   </span>
                 </div>

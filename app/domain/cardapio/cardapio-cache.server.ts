@@ -1,6 +1,10 @@
-import { redisDel, redisGetString, redisSetString } from "~/lib/cache/redis.server";
+import {
+  redisDel,
+  redisGetString,
+  redisSetString,
+} from "~/lib/cache/redis.server";
 
-export const CARDAPIO_INDEX_CACHE_KEY = "cardapio:index:v1";
+export const CARDAPIO_INDEX_CACHE_KEY = "cardapio:index:v3";
 const SELLING_PRICE_HANDLER_CACHE_VERSION_KEY =
   "cardapio:selling-price-handler:version";
 

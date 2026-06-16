@@ -2143,6 +2143,25 @@ model MarketingPizzaReservation {
   @@map("marketing_pizza_reservations")
 }
 
+model CardapioHighlightSection {
+  id             String    @id @default(uuid())
+  key            String    @unique
+  title          String
+  subtitle       String?
+  published      Boolean   @default(false)
+  sortOrder      Int       @default(0) @map("sort_order")
+  displayStyle   String    @default("polaroid") @map("display_style")
+  showTitle      Boolean   @default(true) @map("show_title")
+  imageItemsJson Json?     @map("image_items_json")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @default(now()) @updatedAt @map("updated_at")
+  deletedAt      DateTime? @map("deleted_at")
+
+  @@index([published, sortOrder], map: "cardapio_highlight_sections_published_sort_idx")
+  @@index([deletedAt], map: "cardapio_highlight_sections_deleted_at_idx")
+  @@map("cardapio_highlight_sections")
+}
+
 model CompanyLocation {
   id          String   @id @default(uuid())
   name        String
