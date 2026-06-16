@@ -937,6 +937,13 @@ const ADMIN_NAVIGATION_LINKS: WebsiteNavigationConfig = {
           tags: ["reserva", "pizza", "campanha", "marketing", "bairro"],
         },
         {
+          title: "Destaques do cardápio",
+          href: "/admin/marketing/destaques-cardapio",
+          items: [],
+          disabled: false,
+          tags: ["cardapio", "destaque", "promocao", "marketing", "banner"],
+        },
+        {
           title: "Notificações (Push)",
           href: "/admin/push-notifications",
           items: [],

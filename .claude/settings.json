@@ -20,7 +20,21 @@
       "Bash(psql \"postgresql://zzeeuuss:cglCDH3gxCOaaheFGBw@69.62.91.94:55433/amodomio\" -c \"ALTER TABLE admin_navigation_clicks DROP CONSTRAINT IF EXISTS admin_navigation_clicks_href_key;\")",
       "Bash(psql \"postgresql://zzeeuuss:cglCDH3gxCOaaheFGBw@69.62.91.94:55433/amodomio\" -c \"INSERT INTO _prisma_migrations \\(id, checksum, finished_at, migration_name, logs, rolled_back_at, started_at, applied_steps_count\\) VALUES \\(gen_random_uuid\\(\\), 'manual', NOW\\(\\), '20260800000001_remove_unique_href_admin_navigation_click', NULL, NULL, NOW\\(\\), 1\\);\")",
       "Bash(grep -r \"cmdk-input-wrapper\\\\|sticky\" /home/lanzo/Documents/Coding/amodomio/node_modules/cmdk/dist/*.js)",
-      "Read(//home/lanzo/Documents/Coding/amodomio/app/routes/**)"
+      "Read(//home/lanzo/Documents/Coding/amodomio/app/routes/**)",
+      "Bash(grep -r 'prisma\\\\.$use\\\\|prisma\\\\.$extends\\\\|softDelete\\\\|deleted_at\\\\|deletedAt' /home/lanzo/Documents/Coding/amodomio/app/lib/prisma/)",
+      "Read(//home/lanzo/.config/google-chrome/Default/**)",
+      "Bash(curl -s \"http://localhost:3000/admin/marketing/destaques-cardapio\" -H \"Cookie: $\\(cat /home/lanzo/.config/google-chrome/Default/Cookies || echo ''\\)\")",
+      "Bash(curl -s \"http://localhost:3000/admin/marketing/destaques-cardapio\")",
+      "Bash(curl -sv \"http://localhost:3000/admin/marketing/destaques-cardapio\")",
+      "Bash(PGPASSWORD=cglCDH3gxCOaaheFGBw psql -h 69.62.91.94 -p 55433 -U zzeeuuss -d amodomio -c \"SELECT * FROM _prisma_migrations WHERE migration_name LIKE '%cardapio_highlight%';\")",
+      "Bash(PGPASSWORD=cglCDH3gxCOaaheFGBw psql -h 69.62.91.94 -p 55433 -U zzeeuuss -d amodomio -c \"SELECT id, title, published, deleted_at, created_at FROM cardapio_highlight_sections ORDER BY created_at DESC;\")",
+      "Bash(PGPASSWORD=cglCDH3gxCOaaheFGBw psql -h 69.62.91.94 -p 55433 -U zzeeuuss -d amodomio -c \"SELECT COUNT\\(*\\) FROM crm_campaign;\")",
+      "Bash(npx --yes prisma generate)",
+      "Bash(nvm ls *)",
+      "Bash(~/.nvm/versions/node/v22.2.0/bin/node ~/.nvm/versions/node/v22.2.0/bin/npx prisma generate)",
+      "Bash(/home/lanzo/Documents/Coding/amodomio/node_modules/.bin/prisma generate *)",
+      "Bash(~/.nvm/versions/node/v22.2.0/bin/node /home/lanzo/Documents/Coding/amodomio/node_modules/.bin/prisma generate)",
+      "Bash(grep -E 'destaques-cardapio\\\\.\\(new|\\\\$id\\)\\\\.tsx')"
     ]
   },
   "hooks": {

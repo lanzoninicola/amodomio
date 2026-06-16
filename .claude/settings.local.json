@@ -37,7 +37,9 @@
       "Bash(cat /proc/sys/fs/inotify/max_user_watches)",
       "Read(//proc/sys/fs/inotify/**)",
       "Bash(sudo tee -a /etc/sysctl.conf)",
-      "Bash(sudo sysctl -p)"
+      "Bash(sudo sysctl -p)",
+      "Bash(PGPASSWORD=cglCDH3gxCOaaheFGBw psql -h 69.62.91.94 -p 55433 -U zzeeuuss -d amodomio -c \"SELECT id, title, key, published, deleted_at FROM cardapio_highlight_sections LIMIT 10;\")",
+      "Bash(node --experimental-vm-modules -e ' *)"
     ],
     "additionalDirectories": [
       "/home/lanzo/Documents/Coding/amodomio/app/routes"
