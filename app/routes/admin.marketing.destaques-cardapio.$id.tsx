@@ -11,7 +11,7 @@ import {
   useLoaderData,
   useNavigation,
 } from "@remix-run/react";
-import { ChevronLeft, Trash2 } from "lucide-react";
+import { ChevronLeft, LinkIcon, Trash2 } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
@@ -33,7 +33,19 @@ type ImageItem = {
   imageUrl: string;
   fullscreenImageUrl?: string | null;
   alt?: string | null;
+  linkUrl?: string | null;
+  linkText?: string | null;
+  linkBackgroundColor?: string | null;
+  linkTextColor?: string | null;
 };
+
+const DEFAULT_LINK_BACKGROUND_COLOR = "#ffffff";
+const DEFAULT_LINK_TEXT_COLOR = "#111111";
+
+function normalizeHexColor(value: string, fallback: string) {
+  const color = value.trim();
+  return /^#[0-9a-fA-F]{6}$/.test(color) ? color : fallback;
+}
 
 export const meta: MetaFunction<typeof loader> = ({ data }) => [
   { title: `${data?.section.title || "Destaque"} | Marketing` },
@@ -58,6 +70,16 @@ function parseImageItems(form: FormData) {
     imageUrl,
     fullscreenImageUrl: fullscreenUrls[index]?.trim() || imageUrl,
     alt: `${title}, imagem ${index + 1}`,
+    linkUrl: String(form.get(`linkUrl_${index}`) || "").trim() || null,
+    linkText: String(form.get(`linkText_${index}`) || "").trim() || null,
+    linkBackgroundColor: normalizeHexColor(
+      String(form.get(`linkBackgroundColor_${index}`) || ""),
+      DEFAULT_LINK_BACKGROUND_COLOR
+    ),
+    linkTextColor: normalizeHexColor(
+      String(form.get(`linkTextColor_${index}`) || ""),
+      DEFAULT_LINK_TEXT_COLOR
+    ),
   }));
 }
 
@@ -74,6 +96,16 @@ function getImageItems(value: unknown): ImageItem[] {
           String((item as ImageItem).fullscreenImageUrl || "").trim() ||
           imageUrl,
         alt: String((item as ImageItem).alt || "").trim() || null,
+        linkUrl: String((item as ImageItem).linkUrl || "").trim() || null,
+        linkText: String((item as ImageItem).linkText || "").trim() || null,
+        linkBackgroundColor: normalizeHexColor(
+          String((item as ImageItem).linkBackgroundColor || ""),
+          DEFAULT_LINK_BACKGROUND_COLOR
+        ),
+        linkTextColor: normalizeHexColor(
+          String((item as ImageItem).linkTextColor || ""),
+          DEFAULT_LINK_TEXT_COLOR
+        ),
       };
     })
     .filter((item): item is ImageItem => Boolean(item));
@@ -196,9 +228,7 @@ function SectionHeading({
 }) {
   return (
     <div className="space-y-1">
-      <h3 className="text-lg font-semibold tracking-tighter ">
-        {title}
-      </h3>
+      <h3 className="text-lg font-semibold tracking-tighter ">{title}</h3>
       <p className="text-sm text-slate-500">{description}</p>
     </div>
   );
@@ -376,13 +406,86 @@ export default function AdminMarketingCardapioHighlightsDetail() {
                     key={`${image.imageUrl}-${index}`}
                     className="overflow-hidden rounded-lg border border-slate-200 bg-slate-50"
                   >
-                    <img
-                      src={image.imageUrl}
-                      alt={image.alt || `${section.title} ${index + 1}`}
-                      className="aspect-[4/5] w-full object-cover"
-                      loading="lazy"
-                      decoding="async"
-                    />
+                    <div className="relative">
+                      <img
+                        src={image.imageUrl}
+                        alt={image.alt || `${section.title} ${index + 1}`}
+                        className="aspect-[4/5] w-full object-cover"
+                        loading="lazy"
+                        decoding="async"
+                      />
+                      {image.linkUrl && image.linkText ? (
+                        <div
+                          className="absolute left-1/2 top-5 inline-flex max-w-[88%] -translate-x-1/2 items-center gap-2 rounded-2xl px-4 py-2 text-sm font-semibold shadow-lg"
+                          style={{
+                            backgroundColor:
+                              image.linkBackgroundColor ||
+                              DEFAULT_LINK_BACKGROUND_COLOR,
+                            color:
+                              image.linkTextColor || DEFAULT_LINK_TEXT_COLOR,
+                          }}
+                        >
+                          <LinkIcon className="h-4 w-4 shrink-0" />
+                          <span className="truncate">{image.linkText}</span>
+                        </div>
+                      ) : null}
+                    </div>
+                    <div className="grid gap-3 border-t border-slate-200 bg-white p-3">
+                      <div className="grid gap-2">
+                        <Label htmlFor={`linkUrl_${index}`}>
+                          Link da imagem {index + 1}
+                        </Label>
+                        <Input
+                          id={`linkUrl_${index}`}
+                          name={`linkUrl_${index}`}
+                          type="url"
+                          defaultValue={image.linkUrl || ""}
+                          placeholder="https://..."
+                        />
+                      </div>
+
+                      <div className="grid gap-2">
+                        <Label htmlFor={`linkText_${index}`}>
+                          Texto do link
+                        </Label>
+                        <Input
+                          id={`linkText_${index}`}
+                          name={`linkText_${index}`}
+                          defaultValue={image.linkText || ""}
+                          placeholder="Amodomio.com"
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="grid gap-2">
+                          <Label htmlFor={`linkBackgroundColor_${index}`}>
+                            Fundo
+                          </Label>
+                          <Input
+                            id={`linkBackgroundColor_${index}`}
+                            name={`linkBackgroundColor_${index}`}
+                            type="color"
+                            defaultValue={
+                              image.linkBackgroundColor ||
+                              DEFAULT_LINK_BACKGROUND_COLOR
+                            }
+                          />
+                        </div>
+                        <div className="grid gap-2">
+                          <Label htmlFor={`linkTextColor_${index}`}>
+                            Texto
+                          </Label>
+                          <Input
+                            id={`linkTextColor_${index}`}
+                            name={`linkTextColor_${index}`}
+                            type="color"
+                            defaultValue={
+                              image.linkTextColor || DEFAULT_LINK_TEXT_COLOR
+                            }
+                          />
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 ))}
               </div>

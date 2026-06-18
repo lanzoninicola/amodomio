@@ -4,7 +4,19 @@ export type CardapioHighlightImage = {
   imageUrl: string;
   fullscreenImageUrl?: string | null;
   alt?: string | null;
+  linkUrl?: string | null;
+  linkText?: string | null;
+  linkBackgroundColor?: string | null;
+  linkTextColor?: string | null;
 };
+
+const DEFAULT_LINK_BACKGROUND_COLOR = "#ffffff";
+const DEFAULT_LINK_TEXT_COLOR = "#111111";
+
+function normalizeHexColor(value: string, fallback: string) {
+  const color = value.trim();
+  return /^#[0-9a-fA-F]{6}$/.test(color) ? color : fallback;
+}
 
 export type CardapioHighlightDisplayStyle = "polaroid" | "default";
 
@@ -33,11 +45,33 @@ function parseImageItems(value: unknown): CardapioHighlightImage[] {
         (item as { fullscreenImageUrl?: unknown }).fullscreenImageUrl || ""
       ).trim();
       const alt = String((item as { alt?: unknown }).alt || "").trim();
+      const linkUrl = String(
+        (item as { linkUrl?: unknown }).linkUrl || ""
+      ).trim();
+      const linkText = String(
+        (item as { linkText?: unknown }).linkText || ""
+      ).trim();
+      const linkBackgroundColor = String(
+        (item as { linkBackgroundColor?: unknown }).linkBackgroundColor || ""
+      ).trim();
+      const linkTextColor = String(
+        (item as { linkTextColor?: unknown }).linkTextColor || ""
+      ).trim();
 
       return {
         imageUrl,
         fullscreenImageUrl: fullscreenImageUrl || null,
         alt: alt || null,
+        linkUrl: linkUrl || null,
+        linkText: linkText || null,
+        linkBackgroundColor: normalizeHexColor(
+          linkBackgroundColor,
+          DEFAULT_LINK_BACKGROUND_COLOR
+        ),
+        linkTextColor: normalizeHexColor(
+          linkTextColor,
+          DEFAULT_LINK_TEXT_COLOR
+        ),
       };
     })
     .filter((item): item is CardapioHighlightImage => Boolean(item));
@@ -61,7 +95,9 @@ export async function findPublishedCardapioHighlightSections(): Promise<
       key: row.key,
       title: row.title,
       subtitle: row.subtitle,
-      displayStyle: (row.displayStyle === "default" ? "default" : "polaroid") as CardapioHighlightDisplayStyle,
+      displayStyle: (row.displayStyle === "default"
+        ? "default"
+        : "polaroid") as CardapioHighlightDisplayStyle,
       showTitle: row.showTitle,
       images: parseImageItems(row.imageItemsJson),
     }))
