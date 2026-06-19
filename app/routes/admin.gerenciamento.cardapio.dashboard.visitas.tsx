@@ -1,6 +1,14 @@
 import { json, type LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
 import { useLoaderData, useSearchParams } from "@remix-run/react";
 import { Prisma } from "@prisma/client";
+import { Button } from "~/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "~/components/ui/select";
 import prismaClient from "~/lib/prisma/client.server";
 
 export const meta: MetaFunction = () => [
@@ -40,15 +48,28 @@ const resolveMonthRange = (monthParam: string | null): MonthRange => {
   const base = monthParam ? new Date(`${monthParam}-01T00:00:00`) : now;
   const start = new Date(base.getFullYear(), base.getMonth(), 1);
   const end = new Date(base.getFullYear(), base.getMonth() + 1, 1);
-  const label = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, "0")}`;
+  const label = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(
+    2,
+    "0"
+  )}`;
 
   return { label, start, end };
 };
 
 const resolvePreviousMonthRange = (current: MonthRange): MonthRange => {
-  const prevStart = new Date(current.start.getFullYear(), current.start.getMonth() - 1, 1);
-  const prevEnd = new Date(current.start.getFullYear(), current.start.getMonth(), 1);
-  const label = `${prevStart.getFullYear()}-${String(prevStart.getMonth() + 1).padStart(2, "0")}`;
+  const prevStart = new Date(
+    current.start.getFullYear(),
+    current.start.getMonth() - 1,
+    1
+  );
+  const prevEnd = new Date(
+    current.start.getFullYear(),
+    current.start.getMonth(),
+    1
+  );
+  const label = `${prevStart.getFullYear()}-${String(
+    prevStart.getMonth() + 1
+  ).padStart(2, "0")}`;
 
   return { label, start: prevStart, end: prevEnd };
 };
@@ -60,8 +81,15 @@ const buildMonthOptions = (base: MonthRange, total = 12): MonthOption[] => {
   });
 
   return Array.from({ length: total }).map((_, index) => {
-    const date = new Date(base.start.getFullYear(), base.start.getMonth() - index, 1);
-    const value = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+    const date = new Date(
+      base.start.getFullYear(),
+      base.start.getMonth() - index,
+      1
+    );
+    const value = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(
+      2,
+      "0"
+    )}`;
     const label = formatter.format(date);
     return { value, label };
   });
@@ -278,9 +306,6 @@ export default function AdminGerenciamentoCardapioVisitas() {
   return (
     <section className="flex flex-col gap-6">
       <header className="flex flex-col gap-3">
-        <span className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-          Dashboard
-        </span>
         <div className="flex flex-col gap-1">
           <h2 className="text-2xl font-semibold tracking-tight text-slate-900">
             Visitas do cardapio
@@ -295,34 +320,37 @@ export default function AdminGerenciamentoCardapioVisitas() {
             Mes
           </label>
           <div className="flex items-center gap-2">
-            <select
-              name="month"
-              defaultValue={selectedMonth}
-              className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-900 shadow-sm capitalize focus:outline-none focus:ring-2 focus:ring-slate-200"
-            >
-              {monthOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-            <select
-              name="range"
-              defaultValue={selectedRange}
-              className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-200"
-            >
-              {rangeOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-            <button
-              type="submit"
-              className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-900 shadow-sm transition hover:border-slate-300"
-            >
+            <Select name="month" defaultValue={selectedMonth}>
+              <SelectTrigger className="w-[190px] bg-white capitalize">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {monthOptions.map((option) => (
+                  <SelectItem
+                    key={option.value}
+                    value={option.value}
+                    className="capitalize"
+                  >
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select name="range" defaultValue={selectedRange}>
+              <SelectTrigger className="w-[190px] bg-white">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {rangeOptions.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button type="submit" variant="outline">
               Atualizar
-            </button>
+            </Button>
           </div>
           <span className="text-xs text-muted-foreground">
             Comparando {currentLabel} x {previousLabel} · {rangeLabel}
@@ -343,8 +371,12 @@ export default function AdminGerenciamentoCardapioVisitas() {
               <thead className="bg-slate-50 text-xs uppercase tracking-wide text-muted-foreground">
                 <tr>
                   <th className="px-3 py-2 text-left font-medium">Metrica</th>
-                  <th className="px-3 py-2 text-right font-medium">Mes atual</th>
-                  <th className="px-3 py-2 text-right font-medium">Mes anterior</th>
+                  <th className="px-3 py-2 text-right font-medium">
+                    Mes atual
+                  </th>
+                  <th className="px-3 py-2 text-right font-medium">
+                    Mes anterior
+                  </th>
                   <th className="px-3 py-2 text-right font-medium">
                     Total ({rangeLabel})
                   </th>
@@ -409,27 +441,31 @@ export default function AdminGerenciamentoCardapioVisitas() {
                   className="grid h-full items-end gap-2"
                   style={{ gridTemplateColumns: "repeat(24, minmax(0, 1fr))" }}
                 >
-                {uniqueVisitorsByHour.map((entry) => {
-                  const height = Math.max(
-                    4,
-                    Math.round((entry.count / maxUniqueVisitorsByHour) * 100)
-                  );
-                  return (
-                    <div
-                      key={entry.hour}
-                      className="flex h-full flex-col items-center justify-end gap-2"
-                      title={`${entry.hour}h: ${formatNumber.format(entry.count)}`}
-                    >
-                      <span className="text-[10px] font-semibold text-slate-500">
-                        {entry.count > 0 ? formatNumber.format(entry.count) : ""}
-                      </span>
+                  {uniqueVisitorsByHour.map((entry) => {
+                    const height = Math.max(
+                      4,
+                      Math.round((entry.count / maxUniqueVisitorsByHour) * 100)
+                    );
+                    return (
                       <div
-                        className="w-full rounded-t-md bg-slate-700"
-                        style={{ height: `${height}%` }}
-                      />
-                    </div>
-                  );
-                })}
+                        key={entry.hour}
+                        className="flex h-full flex-col items-center justify-end gap-2"
+                        title={`${entry.hour}h: ${formatNumber.format(
+                          entry.count
+                        )}`}
+                      >
+                        <span className="text-[10px] font-semibold text-slate-500">
+                          {entry.count > 0
+                            ? formatNumber.format(entry.count)
+                            : ""}
+                        </span>
+                        <div
+                          className="w-full rounded-t-md bg-slate-700"
+                          style={{ height: `${height}%` }}
+                        />
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
               <div className="mt-2 grid grid-cols-12 text-[11px] text-muted-foreground">
@@ -455,30 +491,36 @@ export default function AdminGerenciamentoCardapioVisitas() {
             <div className="mt-4">
               <div className="h-40 rounded-md border border-muted bg-slate-50 px-4 py-3">
                 <div className="grid h-full grid-cols-7 items-end gap-6">
-                {uniqueVisitorsByWeekday.map((entry) => {
-                  const height = Math.max(
-                    4,
-                    Math.round((entry.count / maxUniqueVisitorsByWeekday) * 100)
-                  );
-                  return (
-                    <div
-                      key={entry.day}
-                      className="flex h-full flex-col items-center justify-end gap-2"
-                      title={`${weekdayLabels[entry.day]}: ${formatNumber.format(entry.count)}`}
-                    >
-                      <span className="text-[10px] font-semibold text-slate-500">
-                        {entry.count > 0 ? formatNumber.format(entry.count) : ""}
-                      </span>
+                  {uniqueVisitorsByWeekday.map((entry) => {
+                    const height = Math.max(
+                      4,
+                      Math.round(
+                        (entry.count / maxUniqueVisitorsByWeekday) * 100
+                      )
+                    );
+                    return (
                       <div
-                        className="w-full rounded-t-md bg-slate-700"
-                        style={{ height: `${height}%` }}
-                      />
-                      <span className="text-[11px] text-muted-foreground">
-                        {weekdayLabels[entry.day]}
-                      </span>
-                    </div>
-                  );
-                })}
+                        key={entry.day}
+                        className="flex h-full flex-col items-center justify-end gap-2"
+                        title={`${
+                          weekdayLabels[entry.day]
+                        }: ${formatNumber.format(entry.count)}`}
+                      >
+                        <span className="text-[10px] font-semibold text-slate-500">
+                          {entry.count > 0
+                            ? formatNumber.format(entry.count)
+                            : ""}
+                        </span>
+                        <div
+                          className="w-full rounded-t-md bg-slate-700"
+                          style={{ height: `${height}%` }}
+                        />
+                        <span className="text-[11px] text-muted-foreground">
+                          {weekdayLabels[entry.day]}
+                        </span>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             </div>

@@ -1,5 +1,13 @@
 import { json, type LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
 import { useLoaderData, useSearchParams } from "@remix-run/react";
+import { Button } from "~/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "~/components/ui/select";
 import prismaClient from "~/lib/prisma/client.server";
 
 export const meta: MetaFunction = () => [
@@ -78,15 +86,28 @@ const resolveMonthRange = (monthParam: string | null): MonthRange => {
   const base = monthParam ? new Date(`${monthParam}-01T00:00:00`) : now;
   const start = new Date(base.getFullYear(), base.getMonth(), 1);
   const end = new Date(base.getFullYear(), base.getMonth() + 1, 1);
-  const label = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, "0")}`;
+  const label = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(
+    2,
+    "0"
+  )}`;
 
   return { label, start, end };
 };
 
 const resolvePreviousMonthRange = (current: MonthRange): MonthRange => {
-  const prevStart = new Date(current.start.getFullYear(), current.start.getMonth() - 1, 1);
-  const prevEnd = new Date(current.start.getFullYear(), current.start.getMonth(), 1);
-  const label = `${prevStart.getFullYear()}-${String(prevStart.getMonth() + 1).padStart(2, "0")}`;
+  const prevStart = new Date(
+    current.start.getFullYear(),
+    current.start.getMonth() - 1,
+    1
+  );
+  const prevEnd = new Date(
+    current.start.getFullYear(),
+    current.start.getMonth(),
+    1
+  );
+  const label = `${prevStart.getFullYear()}-${String(
+    prevStart.getMonth() + 1
+  ).padStart(2, "0")}`;
 
   return { label, start: prevStart, end: prevEnd };
 };
@@ -98,8 +119,15 @@ const buildMonthOptions = (base: MonthRange, total = 12): MonthOption[] => {
   });
 
   return Array.from({ length: total }).map((_, index) => {
-    const date = new Date(base.start.getFullYear(), base.start.getMonth() - index, 1);
-    const value = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+    const date = new Date(
+      base.start.getFullYear(),
+      base.start.getMonth() - index,
+      1
+    );
+    const value = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(
+      2,
+      "0"
+    )}`;
     const label = formatter.format(date);
     return { value, label };
   });
@@ -258,19 +286,13 @@ export async function loader({ request }: LoaderFunctionArgs) {
     .slice(0, 8);
 
   const likesMap = new Map(
-    likesCurrent.map((row) => [
-      row.itemId,
-      Number(row._sum?.amount) || 0,
-    ])
+    likesCurrent.map((row) => [row.itemId, Number(row._sum?.amount) || 0])
   );
   const sharesMap = new Map(
     sharesCurrent.map((row) => [row.itemId, getGroupCount(row)])
   );
   const likesPrevMap = new Map(
-    likesPrevious.map((row) => [
-      row.itemId,
-      Number(row._sum?.amount) || 0,
-    ])
+    likesPrevious.map((row) => [row.itemId, Number(row._sum?.amount) || 0])
   );
   const likesTotalMap = new Map(
     likesTotal.map((row) => [row.itemId, Number(row._sum?.amount) || 0])
@@ -372,15 +394,15 @@ export default function AdminGerenciamentoCardapioTracking() {
     };
   });
   const maxInterestRate = Math.max(
-    ...interestRateChartItems.flatMap((item) => [item.rateMonth, item.rateTotal]),
+    ...interestRateChartItems.flatMap((item) => [
+      item.rateMonth,
+      item.rateTotal,
+    ]),
     1
   );
   return (
     <section className="flex flex-col gap-6">
       <header className="flex flex-col gap-3">
-        <span className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-          Dashboard
-        </span>
         <div className="flex flex-col gap-1">
           <h2 className="text-2xl font-semibold tracking-tight text-slate-900">
             Interesse do cardapio
@@ -395,34 +417,37 @@ export default function AdminGerenciamentoCardapioTracking() {
             Mes
           </label>
           <div className="flex items-center gap-2">
-            <select
-              name="month"
-              defaultValue={selectedMonth}
-              className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-900 shadow-sm capitalize focus:outline-none focus:ring-2 focus:ring-slate-200"
-            >
-              {monthOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-            <select
-              name="range"
-              defaultValue={selectedRange}
-              className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-200"
-            >
-              {rangeOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-            <button
-              type="submit"
-              className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-900 shadow-sm transition hover:border-slate-300"
-            >
+            <Select name="month" defaultValue={selectedMonth}>
+              <SelectTrigger className="w-[190px] bg-white capitalize">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {monthOptions.map((option) => (
+                  <SelectItem
+                    key={option.value}
+                    value={option.value}
+                    className="capitalize"
+                  >
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select name="range" defaultValue={selectedRange}>
+              <SelectTrigger className="w-[190px] bg-white">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {rangeOptions.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button type="submit" variant="outline">
               Atualizar
-            </button>
+            </Button>
           </div>
           <span className="text-xs text-muted-foreground">
             Comparando {currentLabel} x {previousLabel} · {rangeLabel}
@@ -483,12 +508,16 @@ export default function AdminGerenciamentoCardapioTracking() {
                         <div
                           className="w-4 rounded-t-md bg-slate-900"
                           style={{ height: `${heightMonth}%` }}
-                          title={`${item.name} mes: ${(item.rateMonth * 100).toFixed(1)}%`}
+                          title={`${item.name} mes: ${(
+                            item.rateMonth * 100
+                          ).toFixed(1)}%`}
                         />
                         <div
                           className="w-4 rounded-t-md bg-slate-400"
                           style={{ height: `${heightTotal}%` }}
-                          title={`${item.name} total: ${(item.rateTotal * 100).toFixed(1)}%`}
+                          title={`${item.name} total: ${(
+                            item.rateTotal * 100
+                          ).toFixed(1)}%`}
                         />
                       </div>
                       <span className="mt-2 max-w-[90px] truncate text-center text-[11px] text-muted-foreground">
@@ -523,9 +552,15 @@ export default function AdminGerenciamentoCardapioTracking() {
                 <thead className="bg-slate-50 text-xs uppercase tracking-wide text-muted-foreground">
                   <tr>
                     <th className="px-3 py-2 text-left font-medium">Sabor</th>
-                    <th className="px-3 py-2 text-right font-medium">Taxa mês</th>
-                    <th className="px-3 py-2 text-right font-medium">Mês anterior</th>
-                    <th className="px-3 py-2 text-right font-medium">Total ({rangeLabel})</th>
+                    <th className="px-3 py-2 text-right font-medium">
+                      Taxa mês
+                    </th>
+                    <th className="px-3 py-2 text-right font-medium">
+                      Mês anterior
+                    </th>
+                    <th className="px-3 py-2 text-right font-medium">
+                      Total ({rangeLabel})
+                    </th>
                     <th className="px-3 py-2 text-right font-medium">Δ</th>
                   </tr>
                 </thead>
@@ -534,7 +569,8 @@ export default function AdminGerenciamentoCardapioTracking() {
                     const diff = pctDiff(item.rate, item.ratePrev);
                     const rateTotal =
                       item.countsTotal.view_list > 0
-                        ? item.countsTotal.open_detail / item.countsTotal.view_list
+                        ? item.countsTotal.open_detail /
+                          item.countsTotal.view_list
                         : 0;
                     return (
                       <tr key={item.id} className="border-t">
@@ -550,7 +586,9 @@ export default function AdminGerenciamentoCardapioTracking() {
                         <td className="px-3 py-2 text-right font-mono text-slate-500">
                           {(rateTotal * 100).toFixed(1)}%
                         </td>
-                        <td className={`px-3 py-2 text-right font-mono text-xs font-semibold ${diff.cls}`}>
+                        <td
+                          className={`px-3 py-2 text-right font-mono text-xs font-semibold ${diff.cls}`}
+                        >
                           {diff.text}
                         </td>
                       </tr>
@@ -580,15 +618,24 @@ export default function AdminGerenciamentoCardapioTracking() {
                 <thead className="bg-slate-50 text-xs uppercase tracking-wide text-muted-foreground">
                   <tr>
                     <th className="px-3 py-2 text-left font-medium">Sabor</th>
-                    <th className="px-3 py-2 text-right font-medium">Aberturas mês</th>
-                    <th className="px-3 py-2 text-right font-medium">Mês anterior</th>
-                    <th className="px-3 py-2 text-right font-medium">Total ({rangeLabel})</th>
+                    <th className="px-3 py-2 text-right font-medium">
+                      Aberturas mês
+                    </th>
+                    <th className="px-3 py-2 text-right font-medium">
+                      Mês anterior
+                    </th>
+                    <th className="px-3 py-2 text-right font-medium">
+                      Total ({rangeLabel})
+                    </th>
                     <th className="px-3 py-2 text-right font-medium">Δ</th>
                   </tr>
                 </thead>
                 <tbody>
                   {openDetailItems.map((item) => {
-                    const diff = pctDiff(item.counts7d.open_detail, item.counts30d.open_detail);
+                    const diff = pctDiff(
+                      item.counts7d.open_detail,
+                      item.counts30d.open_detail
+                    );
                     return (
                       <tr key={item.id} className="border-t">
                         <td className="px-3 py-2 font-medium text-slate-900">
@@ -603,7 +650,9 @@ export default function AdminGerenciamentoCardapioTracking() {
                         <td className="px-3 py-2 text-right font-mono text-slate-500">
                           {item.countsTotal.open_detail}
                         </td>
-                        <td className={`px-3 py-2 text-right font-mono text-xs font-semibold ${diff.cls}`}>
+                        <td
+                          className={`px-3 py-2 text-right font-mono text-xs font-semibold ${diff.cls}`}
+                        >
                           {diff.text}
                         </td>
                       </tr>
@@ -633,10 +682,18 @@ export default function AdminGerenciamentoCardapioTracking() {
                 <thead className="bg-slate-50 text-xs uppercase tracking-wide text-muted-foreground">
                   <tr>
                     <th className="px-3 py-2 text-left font-medium">Sabor</th>
-                    <th className="px-3 py-2 text-right font-medium">Likes mês</th>
-                    <th className="px-3 py-2 text-right font-medium">Shares mês</th>
-                    <th className="px-3 py-2 text-right font-medium">Mês anterior</th>
-                    <th className="px-3 py-2 text-right font-medium">Total ({rangeLabel})</th>
+                    <th className="px-3 py-2 text-right font-medium">
+                      Likes mês
+                    </th>
+                    <th className="px-3 py-2 text-right font-medium">
+                      Shares mês
+                    </th>
+                    <th className="px-3 py-2 text-right font-medium">
+                      Mês anterior
+                    </th>
+                    <th className="px-3 py-2 text-right font-medium">
+                      Total ({rangeLabel})
+                    </th>
                     <th className="px-3 py-2 text-right font-medium">Δ</th>
                   </tr>
                 </thead>
@@ -661,9 +718,12 @@ export default function AdminGerenciamentoCardapioTracking() {
                           {item.likesPrev} · {item.sharesPrev}
                         </td>
                         <td className="px-3 py-2 text-right font-mono text-slate-500">
-                          {item.likesTotal} · {item.sharesTotal} ({totalEngagement})
+                          {item.likesTotal} · {item.sharesTotal} (
+                          {totalEngagement})
                         </td>
-                        <td className={`px-3 py-2 text-right font-mono text-xs font-semibold ${diff.cls}`}>
+                        <td
+                          className={`px-3 py-2 text-right font-mono text-xs font-semibold ${diff.cls}`}
+                        >
                           {diff.text}
                         </td>
                       </tr>
@@ -693,9 +753,15 @@ export default function AdminGerenciamentoCardapioTracking() {
                 <thead className="bg-slate-50 text-xs uppercase tracking-wide text-muted-foreground">
                   <tr>
                     <th className="px-3 py-2 text-left font-medium">Sabor</th>
-                    <th className="px-3 py-2 text-right font-medium">Score mês</th>
-                    <th className="px-3 py-2 text-right font-medium">Mês anterior</th>
-                    <th className="px-3 py-2 text-right font-medium">Total ({rangeLabel})</th>
+                    <th className="px-3 py-2 text-right font-medium">
+                      Score mês
+                    </th>
+                    <th className="px-3 py-2 text-right font-medium">
+                      Mês anterior
+                    </th>
+                    <th className="px-3 py-2 text-right font-medium">
+                      Total ({rangeLabel})
+                    </th>
                     <th className="px-3 py-2 text-right font-medium">Δ</th>
                   </tr>
                 </thead>
@@ -716,7 +782,9 @@ export default function AdminGerenciamentoCardapioTracking() {
                         <td className="px-3 py-2 text-right font-mono text-slate-500">
                           {item.scoreTotal} pts
                         </td>
-                        <td className={`px-3 py-2 text-right font-mono text-xs font-semibold ${diff.cls}`}>
+                        <td
+                          className={`px-3 py-2 text-right font-mono text-xs font-semibold ${diff.cls}`}
+                        >
                           {diff.text}
                         </td>
                       </tr>

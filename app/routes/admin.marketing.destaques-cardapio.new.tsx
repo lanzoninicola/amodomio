@@ -22,6 +22,14 @@ export const meta: MetaFunction = () => [
   { title: "Novo destaque do cardápio | Marketing" },
 ];
 
+const DEFAULT_LINK_BACKGROUND_COLOR = "#ffffff";
+const DEFAULT_LINK_TEXT_COLOR = "#111111";
+
+function normalizeHexColor(value: string | undefined, fallback: string) {
+  const color = (value || "").trim();
+  return /^#[0-9a-fA-F]{6}$/.test(color) ? color : fallback;
+}
+
 function slugify(value: string) {
   return value
     .normalize("NFD")
@@ -45,12 +53,35 @@ function parseImageItems(form: FormData) {
   const fullscreenUrls = String(form.get("fullscreenImageUrls") || "")
     .split(/\r?\n/g)
     .map((url) => url.trim());
+  const linkUrls = String(form.get("linkUrls") || "")
+    .split(/\r?\n/g)
+    .map((url) => url.trim());
+  const linkTexts = String(form.get("linkTexts") || "")
+    .split(/\r?\n/g)
+    .map((text) => text.trim());
+  const linkBackgroundColors = String(form.get("linkBackgroundColors") || "")
+    .split(/\r?\n/g)
+    .map((color) => color.trim());
+  const linkTextColors = String(form.get("linkTextColors") || "")
+    .split(/\r?\n/g)
+    .map((color) => color.trim());
 
   return imageUrls.map((imageUrl, index) => ({
     imageUrl,
     fullscreenImageUrl: fullscreenUrls[index]?.trim() || imageUrl,
-    alt: `${String(form.get("title") || "Destaque").trim()}, imagem ${index + 1
-      }`,
+    alt: `${String(form.get("title") || "Destaque").trim()}, imagem ${
+      index + 1
+    }`,
+    linkUrl: linkUrls[index] || null,
+    linkText: linkTexts[index] || null,
+    linkBackgroundColor: normalizeHexColor(
+      linkBackgroundColors[index],
+      DEFAULT_LINK_BACKGROUND_COLOR
+    ),
+    linkTextColor: normalizeHexColor(
+      linkTextColors[index],
+      DEFAULT_LINK_TEXT_COLOR
+    ),
   }));
 }
 
@@ -93,6 +124,7 @@ export async function action({ request }: ActionFunctionArgs) {
       sortOrder: parseSortOrder(form.get("sortOrder")),
       displayStyle: displayStyle === "default" ? "default" : "polaroid",
       showTitle: form.get("showTitle") === "on",
+      showPromotionHint: form.get("showPromotionHint") === "on",
       imageItemsJson: imageItems,
     },
     select: { id: true },
@@ -199,7 +231,11 @@ function HighlightSectionFields({
 
         <div className="grid gap-2">
           <Label htmlFor="key">Chave</Label>
-          <Input id="key" name="key" placeholder="ex.: dia-dos-namorados-2026" />
+          <Input
+            id="key"
+            name="key"
+            placeholder="ex.: dia-dos-namorados-2026"
+          />
           <p className="text-xs text-slate-500">
             Identificador único. Se deixado vazio, é gerado a partir do título.
           </p>
@@ -221,12 +257,17 @@ function HighlightSectionFields({
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="polaroid">Foto instantânea (polaroid)</SelectItem>
-              <SelectItem value="default">Padrão (sem estilo especial)</SelectItem>
+              <SelectItem value="polaroid">
+                Foto instantânea (polaroid)
+              </SelectItem>
+              <SelectItem value="default">
+                Padrão (sem estilo especial)
+              </SelectItem>
             </SelectContent>
           </Select>
           <p className="text-xs text-slate-500">
-            Afeta apenas a versão mobile. No desktop o cartão segue sempre o estilo padrão.
+            Afeta apenas a versão mobile. No desktop o cartão segue sempre o
+            estilo padrão.
           </p>
         </div>
 
@@ -234,6 +275,13 @@ function HighlightSectionFields({
           name="showTitle"
           label="Mostrar título e subtítulo"
           description="Exibe o texto acima da imagem, no mobile."
+          defaultChecked
+        />
+
+        <SwitchRow
+          name="showPromotionHint"
+          label='Mostrar "Toque para ver a promoção"'
+          description="Exibe a chamada abaixo da imagem no mobile e a versão equivalente no desktop."
           defaultChecked
         />
 
@@ -248,7 +296,7 @@ function HighlightSectionFields({
 
       <SectionHeading
         title="Imagens"
-        description="Uma URL por linha. As imagens ampliadas são opcionais — use quando quiser uma versão em maior resolução para o modo expandido."
+        description="Uma URL por linha. As imagens ampliadas e links usam a mesma ordem das imagens públicas."
       />
 
       <div className="grid gap-5">
@@ -271,6 +319,58 @@ function HighlightSectionFields({
             rows={5}
             placeholder="Opcional. Uma URL por linha, na mesma ordem."
           />
+        </div>
+
+        <div className="grid gap-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
+          <div>
+            <div className="text-sm font-semibold text-slate-900">
+              Link estilo Instagram
+            </div>
+            <p className="mt-1 text-xs text-slate-500">
+              Opcional. Preencha uma linha por imagem, mantendo a mesma ordem.
+            </p>
+          </div>
+
+          <div className="grid gap-2">
+            <Label htmlFor="linkUrls">URLs dos links</Label>
+            <Textarea
+              id="linkUrls"
+              name="linkUrls"
+              rows={4}
+              placeholder="https://amodomio.com"
+            />
+          </div>
+
+          <div className="grid gap-2">
+            <Label htmlFor="linkTexts">Textos dos links</Label>
+            <Textarea
+              id="linkTexts"
+              name="linkTexts"
+              rows={4}
+              placeholder="Amodomio.com"
+            />
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid gap-2">
+              <Label htmlFor="linkBackgroundColors">Cores de fundo</Label>
+              <Textarea
+                id="linkBackgroundColors"
+                name="linkBackgroundColors"
+                rows={3}
+                placeholder="#ffffff"
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="linkTextColors">Cores do texto</Label>
+              <Textarea
+                id="linkTextColors"
+                name="linkTextColors"
+                rows={3}
+                placeholder="#111111"
+              />
+            </div>
+          </div>
         </div>
       </div>
     </div>

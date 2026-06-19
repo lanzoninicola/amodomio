@@ -43,7 +43,7 @@ import {
   DialogContent,
   DialogTitle,
 } from "~/components/ui/dialog";
-import { ArrowLeft, Maximize2, X } from "lucide-react";
+import { ArrowLeft, LinkIcon, Maximize2, X } from "lucide-react";
 import type {
   CardapioIndexItem,
   GroupedItems,
@@ -376,6 +376,8 @@ function CardapioHighlightPromotionCarousel({
                         </span>
                       </button>
                     ) : null}
+
+                    <PromotionLinkSticker image={image} />
                   </div>
                 </CarouselItem>
               );
@@ -391,7 +393,7 @@ function CardapioHighlightPromotionCarousel({
         </Carousel>
 
         <div className="pt-3 text-center md:py-1.5">
-          {!isExpanded ? (
+          {!isExpanded && section.showPromotionHint ? (
             <p className="mb-2 font-neue text-[11px] font-bold uppercase tracking-wide text-zinc-500">
               <span className="md:hidden">Toque para ver a promoção</span>
               <span className="hidden md:inline">
@@ -448,7 +450,13 @@ function CardapioHighlightPromotionCarousel({
             </DialogClose>
           </div>
 
-          <div className={`m-auto w-full max-w-[430px] shadow-2xl ${section.displayStyle === "polaroid" ? "bg-[#fffdf8] p-2 pb-5" : "overflow-hidden rounded-2xl bg-white"}`}>
+          <div
+            className={`relative m-auto w-full max-w-[430px] shadow-2xl ${
+              section.displayStyle === "polaroid"
+                ? "bg-[#fffdf8] p-2 pb-5"
+                : "overflow-hidden rounded-2xl bg-white"
+            }`}
+          >
             <Carousel
               setApi={setMobileExpandedApi}
               opts={{ align: "start", startIndex: currentSlide }}
@@ -458,17 +466,20 @@ function CardapioHighlightPromotionCarousel({
                   const src = image.fullscreenImageUrl || image.imageUrl;
                   return (
                     <CarouselItem key={`${src}-${index}`} className="pl-0">
-                      <img
-                        className="h-[calc(100dvh-5rem)] w-full object-contain"
-                        src={src}
-                        alt={
-                          image.alt ||
-                          `${section.title}, imagem ${index + 1} de ${
-                            images.length
-                          }`
-                        }
-                        decoding="async"
-                      />
+                      <div className="relative">
+                        <img
+                          className="h-[calc(100dvh-5rem)] w-full object-contain"
+                          src={src}
+                          alt={
+                            image.alt ||
+                            `${section.title}, imagem ${index + 1} de ${
+                              images.length
+                            }`
+                          }
+                          decoding="async"
+                        />
+                        <PromotionLinkSticker image={image} />
+                      </div>
                     </CarouselItem>
                   );
                 })}
@@ -482,7 +493,7 @@ function CardapioHighlightPromotionCarousel({
             </Carousel>
 
             {hasMultipleImages ? (
-              <div className="flex items-center justify-center gap-1.5 pt-4">
+              <div className="absolute bottom-4 left-1/2 z-30 flex -translate-x-1/2 items-center justify-center gap-1.5 rounded-full bg-white/90 px-3 py-2 shadow-lg backdrop-blur-sm">
                 {images.map((image, index) => (
                   <button
                     key={`${image.imageUrl}-${index}`}
@@ -502,6 +513,31 @@ function CardapioHighlightPromotionCarousel({
         </DialogContent>
       </Dialog>
     </>
+  );
+}
+
+function PromotionLinkSticker({
+  image,
+}: {
+  image: CardapioHighlightSection["images"][number];
+}) {
+  if (!image.linkUrl || !image.linkText) return null;
+
+  return (
+    <a
+      href={image.linkUrl}
+      target="_blank"
+      rel="noreferrer"
+      className="absolute left-1/2 top-5 z-20 inline-flex max-w-[88%] -translate-x-1/2 items-center gap-2 rounded-2xl px-4 py-2.5 font-neue text-base font-semibold leading-none shadow-xl transition hover:scale-[1.02] focus:outline-none focus:ring-2 focus:ring-black/30 md:top-6 md:text-sm"
+      style={{
+        backgroundColor: image.linkBackgroundColor || "#ffffff",
+        color: image.linkTextColor || "#111111",
+      }}
+      onClick={(event) => event.stopPropagation()}
+    >
+      <LinkIcon className="h-5 w-5 shrink-0 md:h-4 md:w-4" />
+      <span className="min-w-0 truncate">{image.linkText}</span>
+    </a>
   );
 }
 

@@ -6,6 +6,7 @@ import { LikeIt } from "~/domain/cardapio/components/cardapio-item-action-bar/ca
 import CardapioItemImageSingle from "~/domain/cardapio/components/cardapio-item-image-single/cardapio-item-image-single";
 import type { ThreadSectionProfile } from "~/domain/cardapio/components/section-thread-header/section-thread-header";
 import { getOrCreateMenuItemInterestClientId } from "~/domain/cardapio/menu-item-interest/menu-item-interest.client";
+import { trackCardapioNavigation } from "~/domain/cardapio/cardapio-interaction/cardapio-interaction.client";
 import { Separator } from "~/components/ui/separator";
 import { cn } from "~/lib/utils";
 import formatMoneyString from "~/utils/format-money-string";
@@ -34,6 +35,18 @@ const MOBILE_CARD_IMAGE_HEIGHTS = [
   "h-[122px]",
   "h-[154px]",
 ];
+
+function trackFilterClick(
+  control: "group" | "filter_toggle" | "tag",
+  value: string,
+  placement: "mobile_header" | "mobile_panel" | "desktop_nav" | "stories"
+) {
+  trackCardapioNavigation({
+    control,
+    value,
+    placement,
+  });
+}
 
 export function CardapioCatalogSection({
   items,
@@ -119,7 +132,10 @@ export function CardapioCatalogSection({
               label="Todos"
               color="#18181b"
               selected={!currentFilterTag}
-              onClick={() => onCurrentTagSelected(null)}
+              onClick={() => {
+                trackFilterClick("tag", "todos", "stories");
+                onCurrentTagSelected(null);
+              }}
             />
             {tags.map((tag) => (
               <StoryFilter
@@ -127,7 +143,10 @@ export function CardapioCatalogSection({
                 label={tag.name}
                 color={tag.colorHEX}
                 selected={currentFilterTag?.id === tag.id}
-                onClick={() => onCurrentTagSelected(tag)}
+                onClick={() => {
+                  trackFilterClick("tag", tag.name, "stories");
+                  onCurrentTagSelected(tag);
+                }}
               />
             ))}
           </div>
@@ -146,7 +165,14 @@ export function CardapioCatalogSection({
           <div className="flex flex-wrap gap-2 md:gap-x-4 md:gap-y-1">
             <button
               type="button"
-              onClick={() => onCurrentTagSelected(null)}
+              onClick={() => {
+                trackFilterClick(
+                  "tag",
+                  "todos",
+                  showMobileTags ? "mobile_panel" : "desktop_nav"
+                );
+                onCurrentTagSelected(null);
+              }}
               className={cn(
                 "rounded-full border px-3 py-1.5 font-neue text-xs font-bold uppercase tracking-wide shadow-sm transition-colors md:rounded-none md:border-0 md:px-0 md:py-0 md:font-semibold md:tracking-widest md:shadow-none",
                 !currentFilterTag
@@ -160,7 +186,14 @@ export function CardapioCatalogSection({
               <button
                 key={tag.id}
                 type="button"
-                onClick={() => onCurrentTagSelected(tag)}
+                onClick={() => {
+                  trackFilterClick(
+                    "tag",
+                    tag.name,
+                    showMobileTags ? "mobile_panel" : "desktop_nav"
+                  );
+                  onCurrentTagSelected(tag);
+                }}
                 className={cn(
                   "rounded-full border px-3 py-1.5 font-neue text-xs font-bold uppercase tracking-wide shadow-sm transition-colors md:rounded-none md:border-0 md:px-0 md:py-0 md:font-semibold md:tracking-widest md:shadow-none",
                   currentFilterTag?.id === tag.id
@@ -182,7 +215,10 @@ export function CardapioCatalogSection({
               <button
                 key={group.groupId}
                 type="button"
-                onClick={() => scrollToGroup(group.groupId)}
+                onClick={() => {
+                  trackFilterClick("group", group.group, "mobile_header");
+                  scrollToGroup(group.groupId);
+                }}
                 className="min-w-0 flex-1 whitespace-nowrap rounded-full border border-black/10 bg-white px-2.5 py-1.5 font-neue text-[13px] font-bold capitalize tracking-wide text-black shadow-[0_6px_20px_rgba(0,0,0,0.18)] transition active:bg-zinc-100"
               >
                 {group.group}
@@ -191,7 +227,14 @@ export function CardapioCatalogSection({
             {filterViewMode === "chip" ? (
               <button
                 type="button"
-                onClick={() => setShowMobileTags((current) => !current)}
+                onClick={() => {
+                  trackFilterClick(
+                    "filter_toggle",
+                    showMobileTags ? "fechar" : "abrir",
+                    "mobile_header"
+                  );
+                  setShowMobileTags((current) => !current);
+                }}
                 className={cn(
                   "inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border border-black/10 bg-zinc-950 px-3 py-1.5 font-neue text-[13px] font-bold capitalize tracking-wide text-white shadow-[0_6px_20px_rgba(0,0,0,0.18)] transition active:bg-zinc-800"
                 )}
@@ -212,7 +255,10 @@ export function CardapioCatalogSection({
             <button
               key={group.groupId}
               type="button"
-              onClick={() => scrollToGroup(group.groupId)}
+              onClick={() => {
+                trackFilterClick("group", group.group, "desktop_nav");
+                scrollToGroup(group.groupId);
+              }}
               className="whitespace-nowrap px-3 py-1 rounded-full bg-zinc-100 text-xs md:text-sm font-neue uppercase tracking-wider hover:bg-zinc-200 transition"
             >
               {group.group}
