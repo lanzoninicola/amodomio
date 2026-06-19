@@ -1317,6 +1317,22 @@ model ItemInterestEvent {
   @@map("item_interest_events")
 }
 
+model CardapioInteractionEvent {
+  id        String   @id @default(uuid())
+  eventName String   @map("event_name") @db.VarChar(64)
+  control   String   @db.VarChar(32)
+  value     String   @db.VarChar(120)
+  placement String   @db.VarChar(32)
+  clientId  String?  @map("client_id") @db.VarChar(120)
+  path      String   @db.VarChar(255)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([eventName, createdAt])
+  @@index([control, value, createdAt])
+  @@index([clientId, createdAt])
+  @@map("cardapio_interaction_events")
+}
+
 /// here we can manage: featured (recommended), vegetarian, kids, meat
 model MenuItemTag {
   id         String    @id @default(uuid())
@@ -2152,6 +2168,7 @@ model CardapioHighlightSection {
   sortOrder      Int       @default(0) @map("sort_order")
   displayStyle   String    @default("polaroid") @map("display_style")
   showTitle      Boolean   @default(true) @map("show_title")
+  showPromotionHint Boolean @default(true) @map("show_promotion_hint")
   imageItemsJson Json?     @map("image_items_json")
   createdAt      DateTime  @default(now()) @map("created_at")
   updatedAt      DateTime  @default(now()) @updatedAt @map("updated_at")

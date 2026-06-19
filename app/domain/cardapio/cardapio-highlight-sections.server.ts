@@ -27,6 +27,7 @@ export type CardapioHighlightSection = {
   subtitle?: string | null;
   displayStyle: CardapioHighlightDisplayStyle;
   showTitle: boolean;
+  showPromotionHint: boolean;
   images: CardapioHighlightImage[];
 };
 
@@ -99,6 +100,7 @@ export async function findPublishedCardapioHighlightSections(): Promise<
         ? "default"
         : "polaroid") as CardapioHighlightDisplayStyle,
       showTitle: row.showTitle,
+      showPromotionHint: row.showPromotionHint,
       images: parseImageItems(row.imageItemsJson),
     }))
     .filter((section) => section.images.length > 0);

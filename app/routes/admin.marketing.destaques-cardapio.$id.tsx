@@ -190,6 +190,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
       sortOrder: parseSortOrder(form.get("sortOrder")),
       displayStyle: displayStyle === "default" ? "default" : "polaroid",
       showTitle: form.get("showTitle") === "on",
+      showPromotionHint: form.get("showPromotionHint") === "on",
       imageItemsJson: imageItems,
       deletedAt: null,
     },
@@ -356,6 +357,13 @@ export default function AdminMarketingCardapioHighlightsDetail() {
             label="Mostrar título e subtítulo"
             description="Exibe o texto acima da imagem, no mobile."
             defaultChecked={section.showTitle ?? true}
+          />
+
+          <SwitchRow
+            name="showPromotionHint"
+            label='Mostrar "Toque para ver a promoção"'
+            description="Exibe a chamada abaixo da imagem no mobile e a versão equivalente no desktop."
+            defaultChecked={section.showPromotionHint ?? true}
           />
 
           <SwitchRow

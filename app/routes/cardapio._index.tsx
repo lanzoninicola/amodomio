@@ -393,7 +393,7 @@ function CardapioHighlightPromotionCarousel({
         </Carousel>
 
         <div className="pt-3 text-center md:py-1.5">
-          {!isExpanded ? (
+          {!isExpanded && section.showPromotionHint ? (
             <p className="mb-2 font-neue text-[11px] font-bold uppercase tracking-wide text-zinc-500">
               <span className="md:hidden">Toque para ver a promoção</span>
               <span className="hidden md:inline">
@@ -451,7 +451,7 @@ function CardapioHighlightPromotionCarousel({
           </div>
 
           <div
-            className={`m-auto w-full max-w-[430px] shadow-2xl ${
+            className={`relative m-auto w-full max-w-[430px] shadow-2xl ${
               section.displayStyle === "polaroid"
                 ? "bg-[#fffdf8] p-2 pb-5"
                 : "overflow-hidden rounded-2xl bg-white"
@@ -493,7 +493,7 @@ function CardapioHighlightPromotionCarousel({
             </Carousel>
 
             {hasMultipleImages ? (
-              <div className="flex items-center justify-center gap-1.5 pt-4">
+              <div className="absolute bottom-4 left-1/2 z-30 flex -translate-x-1/2 items-center justify-center gap-1.5 rounded-full bg-white/90 px-3 py-2 shadow-lg backdrop-blur-sm">
                 {images.map((image, index) => (
                   <button
                     key={`${image.imageUrl}-${index}`}

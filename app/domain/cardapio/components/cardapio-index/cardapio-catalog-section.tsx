@@ -1,12 +1,12 @@
 import type { Tag } from "@prisma/client";
 import { Link } from "@remix-run/react";
-import { track } from "@vercel/analytics/react";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { ArrowRight, ListFilter, X } from "lucide-react";
 import { LikeIt } from "~/domain/cardapio/components/cardapio-item-action-bar/cardapio-item-action-bar";
 import CardapioItemImageSingle from "~/domain/cardapio/components/cardapio-item-image-single/cardapio-item-image-single";
 import type { ThreadSectionProfile } from "~/domain/cardapio/components/section-thread-header/section-thread-header";
 import { getOrCreateMenuItemInterestClientId } from "~/domain/cardapio/menu-item-interest/menu-item-interest.client";
+import { trackCardapioNavigation } from "~/domain/cardapio/cardapio-interaction/cardapio-interaction.client";
 import { Separator } from "~/components/ui/separator";
 import { cn } from "~/lib/utils";
 import formatMoneyString from "~/utils/format-money-string";
@@ -41,7 +41,7 @@ function trackFilterClick(
   value: string,
   placement: "mobile_header" | "mobile_panel" | "desktop_nav" | "stories"
 ) {
-  track("cardapio_filter_click", {
+  trackCardapioNavigation({
     control,
     value,
     placement,

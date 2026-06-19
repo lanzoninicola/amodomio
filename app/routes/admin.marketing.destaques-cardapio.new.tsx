@@ -124,6 +124,7 @@ export async function action({ request }: ActionFunctionArgs) {
       sortOrder: parseSortOrder(form.get("sortOrder")),
       displayStyle: displayStyle === "default" ? "default" : "polaroid",
       showTitle: form.get("showTitle") === "on",
+      showPromotionHint: form.get("showPromotionHint") === "on",
       imageItemsJson: imageItems,
     },
     select: { id: true },
@@ -274,6 +275,13 @@ function HighlightSectionFields({
           name="showTitle"
           label="Mostrar título e subtítulo"
           description="Exibe o texto acima da imagem, no mobile."
+          defaultChecked
+        />
+
+        <SwitchRow
+          name="showPromotionHint"
+          label='Mostrar "Toque para ver a promoção"'
+          description="Exibe a chamada abaixo da imagem no mobile e a versão equivalente no desktop."
           defaultChecked
         />
 
