@@ -1,7 +1,7 @@
 # Tracking do cardápio
 
-Este documento descreve a infraestrutura nativa de tracking do cardápio e a
-fronteira entre interesse por item e interação com a interface.
+Este documento descreve o domínio nativo de tracking do cardápio e a fronteira
+entre interesse por item e interação com a interface.
 
 ## Visão geral
 
@@ -17,6 +17,33 @@ eventos customizados pagos da Vercel:
 Essa infraestrutura deve ser reutilizada como base para métricas de filtros,
 mas os eventos de interface não devem ser gravados nas tabelas de interesse por
 item.
+
+## Organização do domínio
+
+O tracking possui duas responsabilidades explícitas:
+
+```text
+interface do cardápio
+  -> coletor client
+  -> endpoint
+  -> registros em cardapio_interaction_events
+  -> leitores de registros
+  -> relatórios
+```
+
+Arquivos principais:
+
+- `tracking/cardapio-tracking-events.ts`: contratos e validação por família de
+  evento;
+- `tracking/cardapio-tracking.client.ts`: coleta assíncrona no navegador;
+- `tracking/cardapio-tracking-records.server.ts`: única camada que grava e lê
+  os registros de tracking;
+- `tracking/reports/*`: transforma registros coletados em relatórios;
+- `tracking/cardapio-visitor.client.ts`: identificação anônima compartilhada.
+
+As rotas de relatório não devem consultar `cardapio_interaction_events`
+diretamente. Elas chamam um leitor em `tracking/reports`, que por sua vez lê os
+registros pelo repositório `cardapio-tracking-records.server.ts`.
 
 ## Referência de eventos
 
@@ -122,7 +149,9 @@ O cliente deve enviar o evento em segundo plano:
 4. ignorar falhas de telemetria na experiência do usuário.
 
 O endpoint deve aceitar somente nomes e propriedades previamente permitidos,
-limitar o tamanho dos valores e não persistir payload JSON arbitrário.
+limitar o tamanho dos valores e não persistir payload JSON arbitrário. A
+validação é discriminada por família: controles e posições de destaques não são
+aceitos em eventos de navegação, e vice-versa.
 
 ## Dashboard
 
@@ -140,6 +169,22 @@ Indicadores:
 - interações médias por usuário;
 - comparação entre mês atual e mês anterior.
 
+## Destaques promocionais
+
+Os destaques do cardápio reutilizam `cardapio_interaction_events`, mas possuem
+eventos próprios:
+
+- `cardapio_highlight_impression`: pelo menos 50% do destaque ficou visível;
+- `cardapio_highlight_expand`: o visitante abriu a visualização ampliada;
+- `cardapio_highlight_slide_view`: uma imagem do carrossel foi exibida;
+- `cardapio_highlight_cta_click`: o link configurado na imagem foi acionado.
+
+O `value` guarda a `key` estável do destaque, `control` identifica a imagem e
+`placement` separa card/modal e mobile/desktop. Todo destaque publicado e
+renderizado entra automaticamente no tracking, sem configuração adicional. O relatório fica em
+`/admin/marketing/relatorios/destaques` e apresenta alcance único, taxa de
+ampliação, CTR, desempenho por destaque e distribuição por posição.
+
 ## Decisão arquitetural
 
 Reutilizar:
@@ -148,13 +193,14 @@ Reutilizar:
 - o padrão de endpoint Remix;
 - PostgreSQL e Prisma;
 - os filtros de período;
-- a página administrativa de tracking.
+- o repositório de registros coletados.
 
 Separar:
 
-- tabela de eventos de interface;
-- validação dos eventos;
-- consultas e componentes de relatório.
+- contratos de cada família de evento;
+- coleta e persistência;
+- leitura dos registros;
+- montagem de cada relatório.
 
 Essa separação mantém os indicadores atuais corretos e permite ampliar o
 tracking do cardápio sem depender da Vercel Analytics.
