@@ -6,7 +6,7 @@ import { LikeIt } from "~/domain/cardapio/components/cardapio-item-action-bar/ca
 import CardapioItemImageSingle from "~/domain/cardapio/components/cardapio-item-image-single/cardapio-item-image-single";
 import type { ThreadSectionProfile } from "~/domain/cardapio/components/section-thread-header/section-thread-header";
 import { getOrCreateMenuItemInterestClientId } from "~/domain/cardapio/menu-item-interest/menu-item-interest.client";
-import { trackCardapioNavigation } from "~/domain/cardapio/cardapio-interaction/cardapio-interaction.client";
+import { trackCardapioNavigation } from "~/domain/cardapio/tracking/cardapio-tracking.client";
 import { Separator } from "~/components/ui/separator";
 import { cn } from "~/lib/utils";
 import formatMoneyString from "~/utils/format-money-string";
@@ -802,6 +802,8 @@ function CardapioGridItem({
               cnIcon="h-5 w-5"
               color="red"
               filled
+              showCount
+              attentionAnimation
             >
               <span className="sr-only">Adorei</span>
             </LikeIt>
@@ -815,28 +817,31 @@ function CardapioGridItem({
         role={isDesktop ? undefined : "button"}
         aria-label={isDesktop ? undefined : `Alternar detalhes de ${item.name}`}
       >
-        {catalogLabel ? (
-          <span className="mb-1 block font-neue text-[11px] font-medium uppercase tracking-wide text-zinc-400 md:text-white/50">
-            {catalogLabel}
-          </span>
-        ) : null}
-
-        <div className="mb-2 flex items-start gap-2 md:mb-4">
-          <span className="min-w-0 flex-1 font-neue text-[17px] font-semibold leading-[1.08] text-zinc-950 md:text-lg md:uppercase md:leading-6 md:text-white">
-            {item.name}
-          </span>
+        <div className="mb-2 flex items-center gap-2 md:mb-4">
+          <div className="min-w-0 flex-1">
+            {catalogLabel ? (
+              <span className="mb-1 block font-neue text-[11px] font-medium uppercase tracking-wide text-zinc-400 md:text-white/50">
+                {catalogLabel}
+              </span>
+            ) : null}
+            <span className="block font-neue text-[17px] font-semibold leading-[1.08] text-zinc-950 md:text-lg md:uppercase md:leading-6 md:text-white">
+              {item.name}
+            </span>
+          </div>
           {likesEnabled ? (
             <div
-              className="-mr-1 -mt-1 shrink-0 md:hidden"
+              className="-mr-1 shrink-0 self-center md:hidden"
               onClick={(event) => event.stopPropagation()}
             >
               <LikeIt
                 item={item}
                 size={18}
-                cnContainer="!h-8 !w-8 bg-transparent !p-0 shadow-none hover:bg-transparent"
+                cnContainer="!h-10 !w-8 bg-transparent !p-0 shadow-none hover:bg-transparent"
                 cnIcon="h-5 w-5"
                 color="red"
                 filled
+                showCount
+                attentionAnimation
               >
                 <span className="sr-only">Adorei</span>
               </LikeIt>

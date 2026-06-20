@@ -29,6 +29,7 @@ import {
 import CardapioOrderCtaButton from "~/domain/cardapio/components/cardapio-order-cta-button";
 import CardapioDesktopSidebarHeader from "~/domain/cardapio/components/cardapio-desktop-sidebar-header";
 import { trackCardapioFacebookPixelTrigger } from "~/domain/cardapio/facebook-pixel.client";
+import { trackCardapioHighlight } from "~/domain/cardapio/tracking/cardapio-tracking.client";
 import {
   Carousel,
   CarouselContent,
@@ -257,18 +258,55 @@ function CardapioHighlightPromotionCarousel({
   const [currentSlide, setCurrentSlide] = useState(0);
   const [isExpanded, setIsExpanded] = useState(false);
   const [isMobileExpanded, setIsMobileExpanded] = useState(false);
+  const promotionRef = useRef<HTMLDivElement>(null);
+  const trackedSlidesRef = useRef(new Set<string>());
+
+  useEffect(() => {
+    const element = promotionRef.current;
+    if (!element || typeof IntersectionObserver === "undefined") return;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (!entry?.isIntersecting) return;
+        trackCardapioHighlight({
+          action: "impression",
+          sectionKey: section.key,
+          placement: getCardapioHighlightCardPlacement(),
+        });
+        observer.disconnect();
+      },
+      { threshold: 0.5 }
+    );
+
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [section.key]);
 
   useEffect(() => {
     if (!api) return;
 
-    const updateCurrentSlide = () => setCurrentSlide(api.selectedScrollSnap());
+    const updateCurrentSlide = () => {
+      const selectedSlide = api.selectedScrollSnap();
+      setCurrentSlide(selectedSlide);
+      const placement = getCardapioHighlightCardPlacement();
+      const trackingKey = `${placement}:${selectedSlide}`;
+      if (!trackedSlidesRef.current.has(trackingKey)) {
+        trackedSlidesRef.current.add(trackingKey);
+        trackCardapioHighlight({
+          action: "slide_view",
+          sectionKey: section.key,
+          imageIndex: selectedSlide,
+          placement,
+        });
+      }
+    };
     updateCurrentSlide();
     api.on("select", updateCurrentSlide);
 
     return () => {
       api.off("select", updateCurrentSlide);
     };
-  }, [api]);
+  }, [api, section.key]);
 
   useEffect(() => {
     if (!mobileExpandedApi) return;
@@ -315,6 +353,7 @@ function CardapioHighlightPromotionCarousel({
       ) : null}
 
       <div
+        ref={promotionRef}
         className={[
           "relative transition-[width] duration-300 ease-out md:fixed md:right-6 md:top-6 md:z-30 md:m-0 md:max-w-none md:rounded-2xl md:bg-white md:p-1.5 md:shadow-lg lg:right-8",
           isExpanded ? "md:z-[60] md:w-[440px]" : "md:w-[220px] lg:w-[260px]",
@@ -356,7 +395,15 @@ function CardapioHighlightPromotionCarousel({
                     <button
                       type="button"
                       className="absolute inset-0 flex cursor-zoom-in items-start justify-end bg-transparent p-2 md:hidden"
-                      onClick={() => setIsMobileExpanded(true)}
+                      onClick={() => {
+                        trackCardapioHighlight({
+                          action: "expand",
+                          sectionKey: section.key,
+                          imageIndex: index,
+                          placement: "mobile_card",
+                        });
+                        setIsMobileExpanded(true);
+                      }}
                       aria-label="Ampliar promoção"
                     >
                       <span className="rounded-full bg-black/65 p-2 text-white backdrop-blur-sm">
@@ -368,7 +415,15 @@ function CardapioHighlightPromotionCarousel({
                       <button
                         type="button"
                         className="absolute inset-0 hidden cursor-zoom-in items-start justify-end bg-transparent p-2 md:flex"
-                        onClick={() => setIsExpanded(true)}
+                        onClick={() => {
+                          trackCardapioHighlight({
+                            action: "expand",
+                            sectionKey: section.key,
+                            imageIndex: index,
+                            placement: "desktop_card",
+                          });
+                          setIsExpanded(true);
+                        }}
                         aria-label="Ampliar promoção"
                       >
                         <span className="rounded-full bg-black/65 p-2 text-white backdrop-blur-sm">
@@ -377,7 +432,12 @@ function CardapioHighlightPromotionCarousel({
                       </button>
                     ) : null}
 
-                    <PromotionLinkSticker image={image} />
+                    <PromotionLinkSticker
+                      image={image}
+                      sectionKey={section.key}
+                      imageIndex={index}
+                      placement={isExpanded ? "desktop_modal" : "card"}
+                    />
                   </div>
                 </CarouselItem>
               );
@@ -478,7 +538,12 @@ function CardapioHighlightPromotionCarousel({
                           }
                           decoding="async"
                         />
-                        <PromotionLinkSticker image={image} />
+                        <PromotionLinkSticker
+                          image={image}
+                          sectionKey={section.key}
+                          imageIndex={index}
+                          placement="mobile_modal"
+                        />
                       </div>
                     </CarouselItem>
                   );
@@ -518,8 +583,14 @@ function CardapioHighlightPromotionCarousel({
 
 function PromotionLinkSticker({
   image,
+  sectionKey,
+  imageIndex,
+  placement,
 }: {
   image: CardapioHighlightSection["images"][number];
+  sectionKey: string;
+  imageIndex: number;
+  placement: "card" | "mobile_modal" | "desktop_modal";
 }) {
   if (!image.linkUrl || !image.linkText) return null;
 
@@ -528,17 +599,34 @@ function PromotionLinkSticker({
       href={image.linkUrl}
       target="_blank"
       rel="noreferrer"
-      className="absolute left-1/2 top-5 z-20 inline-flex max-w-[88%] -translate-x-1/2 items-center gap-2 rounded-2xl px-4 py-2.5 font-neue text-base font-semibold leading-none shadow-xl transition hover:scale-[1.02] focus:outline-none focus:ring-2 focus:ring-black/30 md:top-6 md:text-sm"
+      className="absolute left-1/2 top-5 z-20 inline-flex max-w-[88%] -translate-x-1/2 items-center gap-2 rounded-2xl px-4 py-2.5 font-neue text-base leading-none shadow-xl transition hover:scale-[1.02] focus:outline-none focus:ring-2 focus:ring-black/30 md:top-6 md:text-sm"
       style={{
         backgroundColor: image.linkBackgroundColor || "#ffffff",
         color: image.linkTextColor || "#111111",
       }}
-      onClick={(event) => event.stopPropagation()}
+      onClick={(event) => {
+        event.stopPropagation();
+        trackCardapioHighlight({
+          action: "cta_click",
+          sectionKey,
+          imageIndex,
+          placement:
+            placement === "card"
+              ? getCardapioHighlightCardPlacement()
+              : placement,
+        });
+      }}
     >
       <LinkIcon className="h-5 w-5 shrink-0 md:h-4 md:w-4" />
       <span className="min-w-0 truncate">{image.linkText}</span>
     </a>
   );
+}
+
+function getCardapioHighlightCardPlacement() {
+  return window.matchMedia("(min-width: 768px)").matches
+    ? ("desktop_card" as const)
+    : ("mobile_card" as const);
 }
 
 function DesktopCardapioSidebar({

@@ -12,13 +12,25 @@ import {
   useNavigation,
 } from "@remix-run/react";
 import { ChevronLeft, LinkIcon, Trash2 } from "lucide-react";
+import { useEffect, useState } from "react";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { Textarea } from "~/components/ui/textarea";
 import { Switch } from "~/components/ui/switch";
 import { Badge } from "~/components/ui/badge";
-import { Separator } from "~/components/ui/separator";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "~/components/ui/alert-dialog";
 import {
   Select,
   SelectContent,
@@ -142,6 +154,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
   const id = String(params.id || "");
   const form = await request.formData();
   const intent = String(form.get("_intent") || "update");
+  const activeTab = String(form.get("_activeTab") || "content");
 
   if (intent === "delete") {
     await prismaClient.cardapioHighlightSection.update({
@@ -159,21 +172,33 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
   if (!title) {
     return json(
-      { ok: false, message: "Informe o título do destaque." },
+      {
+        ok: false,
+        message: "Informe o título do destaque.",
+        activeTab: "content",
+      },
       { status: 400 }
     );
   }
 
   if (!key) {
     return json(
-      { ok: false, message: "Informe a chave do destaque." },
+      {
+        ok: false,
+        message: "Informe a chave do destaque.",
+        activeTab: "content",
+      },
       { status: 400 }
     );
   }
 
   if (imageItems.length === 0) {
     return json(
-      { ok: false, message: "Informe pelo menos uma imagem." },
+      {
+        ok: false,
+        message: "Informe pelo menos uma imagem.",
+        activeTab: "images",
+      },
       { status: 400 }
     );
   }
@@ -197,7 +222,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
   });
 
   await invalidateCardapioIndexCache();
-  return json({ ok: true, message: "Destaque salvo." });
+  return json({ ok: true, message: "Destaque salvo.", activeTab });
 }
 
 function StatusBadge({
@@ -241,6 +266,13 @@ export default function AdminMarketingCardapioHighlightsDetail() {
   const navigation = useNavigation();
   const isSubmitting = navigation.state === "submitting";
   const images = section.images || [];
+  const [activeTab, setActiveTab] = useState("content");
+
+  useEffect(() => {
+    if (actionData?.activeTab) {
+      setActiveTab(actionData.activeTab);
+    }
+  }, [actionData]);
 
   return (
     <div className="flex max-w-2xl flex-col gap-6 pb-12">
@@ -252,14 +284,64 @@ export default function AdminMarketingCardapioHighlightsDetail() {
           <ChevronLeft size={14} />
           destaques
         </Link>
-        <div className="flex items-center gap-3">
-          <h2 className="text-2xl font-semibold tracking-tight text-slate-950">
-            {section.title}
-          </h2>
-          <StatusBadge
-            published={section.published}
-            deletedAt={section.deletedAt}
-          />
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-3">
+            <h2 className="text-2xl font-semibold tracking-tight text-slate-950">
+              {section.title}
+            </h2>
+            <StatusBadge
+              published={section.published}
+              deletedAt={section.deletedAt}
+            />
+          </div>
+
+          <div className="flex items-center gap-2">
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={isSubmitting}
+                  className="text-red-700 hover:bg-red-50 hover:text-red-800"
+                >
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Eliminar
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Eliminar destaque?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    O destaque será removido da lista e despublicado do
+                    cardápio. Esta ação não pode ser desfeita por esta tela.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                  <Form method="post">
+                    <input type="hidden" name="_intent" value="delete" />
+                    <AlertDialogAction asChild>
+                      <Button
+                        type="submit"
+                        variant="destructive"
+                        disabled={isSubmitting}
+                      >
+                        Eliminar destaque
+                      </Button>
+                    </AlertDialogAction>
+                  </Form>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+
+            <Button
+              type="submit"
+              form="highlight-edit-form"
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? "Salvando..." : "Salvar"}
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -275,262 +357,275 @@ export default function AdminMarketingCardapioHighlightsDetail() {
         </div>
       ) : null}
 
-      <Form method="post" className="flex flex-col gap-8">
+      <Form
+        id="highlight-edit-form"
+        method="post"
+        className="flex flex-col gap-6"
+      >
         <input type="hidden" name="_intent" value="update" />
+        <input type="hidden" name="_activeTab" value={activeTab} />
 
-        <SectionHeading
-          title="Conteúdo"
-          description="Texto e identificação da seção promocional."
-        />
-
-        <div className="grid gap-5">
-          <div className="grid gap-4 md:grid-cols-[1fr_140px]">
-            <div className="grid gap-2">
-              <Label htmlFor="title">Título</Label>
-              <Input
-                id="title"
-                name="title"
-                required
-                defaultValue={section.title}
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="sortOrder">Ordem</Label>
-              <Input
-                id="sortOrder"
-                name="sortOrder"
-                type="number"
-                defaultValue={section.sortOrder}
-              />
-            </div>
-          </div>
-
-          <div className="grid gap-2">
-            <Label htmlFor="subtitle">Subtítulo</Label>
-            <Input
-              id="subtitle"
-              name="subtitle"
-              defaultValue={section.subtitle || ""}
-            />
-          </div>
-
-          <div className="grid gap-2">
-            <Label htmlFor="key">Chave</Label>
-            <Input id="key" name="key" required defaultValue={section.key} />
-          </div>
-        </div>
-
-        <Separator />
-
-        <SectionHeading
-          title="Aparência e visibilidade"
-          description="Controla como o destaque aparece no cardápio público."
-        />
-
-        <div className="grid gap-4">
-          <div className="grid gap-2">
-            <Label htmlFor="displayStyle">Estilo visual</Label>
-            <Select
-              name="displayStyle"
-              defaultValue={section.displayStyle ?? "polaroid"}
-            >
-              <SelectTrigger id="displayStyle">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="polaroid">
-                  Foto instantânea (polaroid)
-                </SelectItem>
-                <SelectItem value="default">
-                  Padrão (sem estilo especial)
-                </SelectItem>
-              </SelectContent>
-            </Select>
-            <p className="text-xs text-slate-500">
-              Afeta apenas a versão mobile. No desktop o cartão segue sempre o
-              estilo padrão.
-            </p>
-          </div>
-
-          <SwitchRow
-            name="showTitle"
-            label="Mostrar título e subtítulo"
-            description="Exibe o texto acima da imagem, no mobile."
-            defaultChecked={section.showTitle ?? true}
-          />
-
-          <SwitchRow
-            name="showPromotionHint"
-            label='Mostrar "Toque para ver a promoção"'
-            description="Exibe a chamada abaixo da imagem no mobile e a versão equivalente no desktop."
-            defaultChecked={section.showPromotionHint ?? true}
-          />
-
-          <SwitchRow
-            name="published"
-            label="Publicado"
-            description="Quando desligado, o destaque fica em rascunho e não aparece no site."
-            defaultChecked={section.published}
-          />
-        </div>
-
-        <Separator />
-
-        <SectionHeading
-          title="Imagens"
-          description="Uma URL por linha. As imagens ampliadas são opcionais — use quando quiser uma versão em maior resolução para o modo expandido."
-        />
-
-        <div className="grid gap-5">
-          <div className="grid gap-2">
-            <Label htmlFor="imageUrls">Imagens públicas</Label>
-            <Textarea
-              id="imageUrls"
-              name="imageUrls"
-              rows={6}
-              required
-              defaultValue={imageUrlsText(images)}
-            />
-          </div>
-
-          <div className="grid gap-2">
-            <Label htmlFor="fullscreenImageUrls">Imagens ampliadas</Label>
-            <Textarea
-              id="fullscreenImageUrls"
-              name="fullscreenImageUrls"
-              rows={6}
-              defaultValue={fullscreenUrlsText(images)}
-            />
-          </div>
-
-          {images.length ? (
-            <div className="grid gap-3">
-              <div className="text-sm font-semibold text-slate-900">
-                Preview das imagens
-              </div>
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {images.map((image, index) => (
-                  <div
-                    key={`${image.imageUrl}-${index}`}
-                    className="overflow-hidden rounded-lg border border-slate-200 bg-slate-50"
-                  >
-                    <div className="relative">
-                      <img
-                        src={image.imageUrl}
-                        alt={image.alt || `${section.title} ${index + 1}`}
-                        className="aspect-[4/5] w-full object-cover"
-                        loading="lazy"
-                        decoding="async"
-                      />
-                      {image.linkUrl && image.linkText ? (
-                        <div
-                          className="absolute left-1/2 top-5 inline-flex max-w-[88%] -translate-x-1/2 items-center gap-2 rounded-2xl px-4 py-2 text-sm font-semibold shadow-lg"
-                          style={{
-                            backgroundColor:
-                              image.linkBackgroundColor ||
-                              DEFAULT_LINK_BACKGROUND_COLOR,
-                            color:
-                              image.linkTextColor || DEFAULT_LINK_TEXT_COLOR,
-                          }}
-                        >
-                          <LinkIcon className="h-4 w-4 shrink-0" />
-                          <span className="truncate">{image.linkText}</span>
-                        </div>
-                      ) : null}
-                    </div>
-                    <div className="grid gap-3 border-t border-slate-200 bg-white p-3">
-                      <div className="grid gap-2">
-                        <Label htmlFor={`linkUrl_${index}`}>
-                          Link da imagem {index + 1}
-                        </Label>
-                        <Input
-                          id={`linkUrl_${index}`}
-                          name={`linkUrl_${index}`}
-                          type="url"
-                          defaultValue={image.linkUrl || ""}
-                          placeholder="https://..."
-                        />
-                      </div>
-
-                      <div className="grid gap-2">
-                        <Label htmlFor={`linkText_${index}`}>
-                          Texto do link
-                        </Label>
-                        <Input
-                          id={`linkText_${index}`}
-                          name={`linkText_${index}`}
-                          defaultValue={image.linkText || ""}
-                          placeholder="Amodomio.com"
-                        />
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-3">
-                        <div className="grid gap-2">
-                          <Label htmlFor={`linkBackgroundColor_${index}`}>
-                            Fundo
-                          </Label>
-                          <Input
-                            id={`linkBackgroundColor_${index}`}
-                            name={`linkBackgroundColor_${index}`}
-                            type="color"
-                            defaultValue={
-                              image.linkBackgroundColor ||
-                              DEFAULT_LINK_BACKGROUND_COLOR
-                            }
-                          />
-                        </div>
-                        <div className="grid gap-2">
-                          <Label htmlFor={`linkTextColor_${index}`}>
-                            Texto
-                          </Label>
-                          <Input
-                            id={`linkTextColor_${index}`}
-                            name={`linkTextColor_${index}`}
-                            type="color"
-                            defaultValue={
-                              image.linkTextColor || DEFAULT_LINK_TEXT_COLOR
-                            }
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ) : null}
-        </div>
-
-        <div className="flex justify-end">
-          <Button type="submit" disabled={isSubmitting} size="lg">
-            {isSubmitting ? "Salvando..." : "Salvar destaque"}
-          </Button>
-        </div>
-      </Form>
-
-      <Separator />
-
-      <div className="flex items-center justify-between gap-4 rounded-xl border border-red-200 bg-red-50 p-5">
-        <div>
-          <div className="font-semibold text-red-900">Eliminar destaque</div>
-          <p className="text-sm text-red-700">
-            O destaque será removido da lista e despublicado do cardápio.
-          </p>
-        </div>
-        <Form
-          method="post"
-          onSubmit={(event) => {
-            if (!window.confirm("Eliminar este destaque?"))
-              event.preventDefault();
-          }}
+        <Tabs
+          value={activeTab}
+          onValueChange={setActiveTab}
+          className="space-y-6"
         >
-          <input type="hidden" name="_intent" value="delete" />
-          <Button type="submit" variant="destructive" disabled={isSubmitting}>
-            <Trash2 className="mr-2 h-4 w-4" />
-            Eliminar
-          </Button>
-        </Form>
-      </div>
+          <div className="overflow-x-auto border-b border-slate-100">
+            <TabsList className="flex h-auto min-w-max items-center justify-start gap-6 rounded-none bg-transparent p-0 text-sm">
+              <TabsTrigger
+                value="content"
+                className="rounded-none border-b-2 border-transparent bg-transparent px-0 pb-3 pt-0 font-medium text-slate-400 shadow-none transition hover:text-slate-700 data-[state=active]:border-slate-950 data-[state=active]:bg-transparent data-[state=active]:text-slate-950 data-[state=active]:shadow-none"
+              >
+                Conteúdo
+              </TabsTrigger>
+              <TabsTrigger
+                value="appearance"
+                className="rounded-none border-b-2 border-transparent bg-transparent px-0 pb-3 pt-0 font-medium text-slate-400 shadow-none transition hover:text-slate-700 data-[state=active]:border-slate-950 data-[state=active]:bg-transparent data-[state=active]:text-slate-950 data-[state=active]:shadow-none"
+              >
+                Aparência
+              </TabsTrigger>
+              <TabsTrigger
+                value="images"
+                className="rounded-none border-b-2 border-transparent bg-transparent px-0 pb-3 pt-0 font-medium text-slate-400 shadow-none transition hover:text-slate-700 data-[state=active]:border-slate-950 data-[state=active]:bg-transparent data-[state=active]:text-slate-950 data-[state=active]:shadow-none"
+              >
+                Imagens
+              </TabsTrigger>
+            </TabsList>
+          </div>
+
+          <TabsContent
+            value="content"
+            forceMount
+            className="mt-0 space-y-6 data-[state=inactive]:hidden"
+          >
+            <SectionHeading
+              title="Conteúdo"
+              description="Texto e identificação da seção promocional."
+            />
+
+            <div className="grid gap-5">
+              <div className="grid gap-4 md:grid-cols-[1fr_140px]">
+                <div className="grid gap-2">
+                  <Label htmlFor="title">Título</Label>
+                  <Input id="title" name="title" defaultValue={section.title} />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="sortOrder">Ordem</Label>
+                  <Input
+                    id="sortOrder"
+                    name="sortOrder"
+                    type="number"
+                    defaultValue={section.sortOrder}
+                  />
+                </div>
+              </div>
+
+              <div className="grid gap-2">
+                <Label htmlFor="subtitle">Subtítulo</Label>
+                <Input
+                  id="subtitle"
+                  name="subtitle"
+                  defaultValue={section.subtitle || ""}
+                />
+              </div>
+
+              <div className="grid gap-2">
+                <Label htmlFor="key">Chave</Label>
+                <Input id="key" name="key" defaultValue={section.key} />
+              </div>
+            </div>
+          </TabsContent>
+
+          <TabsContent
+            value="appearance"
+            forceMount
+            className="mt-0 space-y-6 data-[state=inactive]:hidden"
+          >
+            <SectionHeading
+              title="Aparência e visibilidade"
+              description="Controla como o destaque aparece no cardápio público."
+            />
+
+            <div className="grid gap-4">
+              <div className="grid gap-2">
+                <Label htmlFor="displayStyle">Estilo visual</Label>
+                <Select
+                  name="displayStyle"
+                  defaultValue={section.displayStyle ?? "polaroid"}
+                >
+                  <SelectTrigger id="displayStyle">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="polaroid">
+                      Foto instantânea (polaroid)
+                    </SelectItem>
+                    <SelectItem value="default">
+                      Padrão (sem estilo especial)
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-slate-500">
+                  Afeta apenas a versão mobile. No desktop o cartão segue sempre
+                  o estilo padrão.
+                </p>
+              </div>
+
+              <SwitchRow
+                name="showTitle"
+                label="Mostrar título e subtítulo"
+                description="Exibe o texto acima da imagem, no mobile."
+                defaultChecked={section.showTitle ?? true}
+              />
+
+              <SwitchRow
+                name="showPromotionHint"
+                label='Mostrar "Toque para ver a promoção"'
+                description="Exibe a chamada abaixo da imagem no mobile e a versão equivalente no desktop."
+                defaultChecked={section.showPromotionHint ?? true}
+              />
+
+              <SwitchRow
+                name="published"
+                label="Publicado"
+                description="Quando desligado, o destaque fica em rascunho e não aparece no site."
+                defaultChecked={section.published}
+              />
+            </div>
+          </TabsContent>
+
+          <TabsContent
+            value="images"
+            forceMount
+            className="mt-0 space-y-6 data-[state=inactive]:hidden"
+          >
+            <SectionHeading
+              title="Imagens"
+              description="Uma URL por linha. As imagens ampliadas são opcionais — use quando quiser uma versão em maior resolução para o modo expandido."
+            />
+
+            <div className="grid gap-5">
+              <div className="grid gap-2">
+                <Label htmlFor="imageUrls">Imagens públicas</Label>
+                <Textarea
+                  id="imageUrls"
+                  name="imageUrls"
+                  rows={6}
+                  defaultValue={imageUrlsText(images)}
+                />
+              </div>
+
+              <div className="grid gap-2">
+                <Label htmlFor="fullscreenImageUrls">Imagens ampliadas</Label>
+                <Textarea
+                  id="fullscreenImageUrls"
+                  name="fullscreenImageUrls"
+                  rows={6}
+                  defaultValue={fullscreenUrlsText(images)}
+                />
+              </div>
+
+              {images.length ? (
+                <div className="grid gap-3">
+                  <div className="text-sm font-semibold text-slate-900">
+                    Preview das imagens
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                    {images.map((image, index) => (
+                      <div
+                        key={`${image.imageUrl}-${index}`}
+                        className="overflow-hidden rounded-lg border border-slate-200 bg-slate-50"
+                      >
+                        <div className="relative">
+                          <img
+                            src={image.imageUrl}
+                            alt={image.alt || `${section.title} ${index + 1}`}
+                            className="aspect-[4/5] w-full object-cover"
+                            loading="lazy"
+                            decoding="async"
+                          />
+                          {image.linkUrl && image.linkText ? (
+                            <div
+                              className="absolute left-1/2 top-5 inline-flex max-w-[88%] -translate-x-1/2 items-center gap-2 rounded-2xl px-4 py-2 text-sm font-semibold shadow-lg"
+                              style={{
+                                backgroundColor:
+                                  image.linkBackgroundColor ||
+                                  DEFAULT_LINK_BACKGROUND_COLOR,
+                                color:
+                                  image.linkTextColor ||
+                                  DEFAULT_LINK_TEXT_COLOR,
+                              }}
+                            >
+                              <LinkIcon className="h-4 w-4 shrink-0" />
+                              <span className="truncate">{image.linkText}</span>
+                            </div>
+                          ) : null}
+                        </div>
+                        <div className="grid gap-3 border-t border-slate-200 bg-white p-3">
+                          <div className="grid gap-2">
+                            <Label htmlFor={`linkUrl_${index}`}>
+                              Link da imagem {index + 1}
+                            </Label>
+                            <Input
+                              id={`linkUrl_${index}`}
+                              name={`linkUrl_${index}`}
+                              type="url"
+                              defaultValue={image.linkUrl || ""}
+                              placeholder="https://..."
+                            />
+                          </div>
+
+                          <div className="grid gap-2">
+                            <Label htmlFor={`linkText_${index}`}>
+                              Texto do link
+                            </Label>
+                            <Input
+                              id={`linkText_${index}`}
+                              name={`linkText_${index}`}
+                              defaultValue={image.linkText || ""}
+                              placeholder="Amodomio.com"
+                            />
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-3">
+                            <div className="grid gap-2">
+                              <Label htmlFor={`linkBackgroundColor_${index}`}>
+                                Fundo
+                              </Label>
+                              <Input
+                                id={`linkBackgroundColor_${index}`}
+                                name={`linkBackgroundColor_${index}`}
+                                type="color"
+                                defaultValue={
+                                  image.linkBackgroundColor ||
+                                  DEFAULT_LINK_BACKGROUND_COLOR
+                                }
+                              />
+                            </div>
+                            <div className="grid gap-2">
+                              <Label htmlFor={`linkTextColor_${index}`}>
+                                Texto
+                              </Label>
+                              <Input
+                                id={`linkTextColor_${index}`}
+                                name={`linkTextColor_${index}`}
+                                type="color"
+                                defaultValue={
+                                  image.linkTextColor || DEFAULT_LINK_TEXT_COLOR
+                                }
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          </TabsContent>
+        </Tabs>
+      </Form>
     </div>
   );
 }

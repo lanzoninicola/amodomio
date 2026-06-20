@@ -1,9 +1,10 @@
 import {
-  json,
+  defer,
   type LoaderFunctionArgs,
   type MetaFunction,
 } from "@remix-run/node";
-import { useLoaderData, useSearchParams } from "@remix-run/react";
+import { Await, useLoaderData, useSearchParams } from "@remix-run/react";
+import { Suspense } from "react";
 import { Button } from "~/components/ui/button";
 import {
   Select,
@@ -12,8 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "~/components/ui/select";
-import { CARDAPIO_NAVIGATION_EVENT } from "~/domain/cardapio/cardapio-interaction/cardapio-interaction.shared";
-import prismaClient from "~/lib/prisma/client.server";
+import { readCardapioNavigationReport } from "~/domain/cardapio/tracking/reports/cardapio-navigation-report.server";
 
 export const meta: MetaFunction = () => [
   { title: "Navegação do cardápio" },
@@ -24,18 +24,6 @@ type MonthRange = {
   label: string;
   start: Date;
   end: Date;
-};
-
-type NavigationCountRow = {
-  control: string;
-  value: string;
-  placement: string;
-  _count?: { _all?: number } | number;
-};
-
-const getGroupCount = (row: { _count?: { _all?: number } | number }) => {
-  if (typeof row._count === "number") return row._count;
-  return row._count?._all ?? 0;
 };
 
 const resolveMonthRange = (monthParam: string | null): MonthRange => {
@@ -73,29 +61,6 @@ const buildMonthOptions = (base: MonthRange, total = 12) => {
   });
 };
 
-const buildNavigationRanking = (
-  currentRows: NavigationCountRow[],
-  previousRows: NavigationCountRow[]
-) => {
-  const keyOf = (row: NavigationCountRow) =>
-    `${row.control}:${row.value}:${row.placement}`;
-  const previousMap = new Map(
-    previousRows.map((row) => [keyOf(row), getGroupCount(row)])
-  );
-
-  return currentRows
-    .map((row) => ({
-      key: keyOf(row),
-      control: row.control,
-      value: row.value,
-      placement: row.placement,
-      current: getGroupCount(row),
-      previous: previousMap.get(keyOf(row)) ?? 0,
-    }))
-    .sort((a, b) => b.current - a.current)
-    .slice(0, 20);
-};
-
 export async function loader({ request }: LoaderFunctionArgs) {
   const url = new URL(request.url);
   const fallbackMonth = resolveMonthRange(null);
@@ -126,78 +91,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   );
   const previousEnd = currentStart;
 
-  const [
-    navigationCurrent,
-    navigationPrevious,
-    navigationUsersCurrent,
-    navigationUsersPrevious,
-    visitorsCurrent,
-    visitorsPrevious,
-  ] = await Promise.all([
-    prismaClient.cardapioInteractionEvent.groupBy({
-      by: ["control", "value", "placement"],
-      _count: { _all: true },
-      where: {
-        eventName: CARDAPIO_NAVIGATION_EVENT,
-        createdAt: { gte: currentStart, lt: currentEnd },
-      },
-    }),
-    prismaClient.cardapioInteractionEvent.groupBy({
-      by: ["control", "value", "placement"],
-      _count: { _all: true },
-      where: {
-        eventName: CARDAPIO_NAVIGATION_EVENT,
-        createdAt: { gte: previousStart, lt: previousEnd },
-      },
-    }),
-    prismaClient.cardapioInteractionEvent.findMany({
-      where: {
-        eventName: CARDAPIO_NAVIGATION_EVENT,
-        createdAt: { gte: currentStart, lt: currentEnd },
-        clientId: { not: null },
-      },
-      distinct: ["clientId"],
-      select: { clientId: true },
-    }),
-    prismaClient.cardapioInteractionEvent.findMany({
-      where: {
-        eventName: CARDAPIO_NAVIGATION_EVENT,
-        createdAt: { gte: previousStart, lt: previousEnd },
-        clientId: { not: null },
-      },
-      distinct: ["clientId"],
-      select: { clientId: true },
-    }),
-    prismaClient.itemInterestEvent.findMany({
-      where: {
-        type: "view_list",
-        createdAt: { gte: currentStart, lt: currentEnd },
-        clientId: { not: null },
-      },
-      distinct: ["clientId"],
-      select: { clientId: true },
-    }),
-    prismaClient.itemInterestEvent.findMany({
-      where: {
-        type: "view_list",
-        createdAt: { gte: previousStart, lt: previousEnd },
-        clientId: { not: null },
-      },
-      distinct: ["clientId"],
-      select: { clientId: true },
-    }),
-  ]);
-
-  const clicksCurrent = navigationCurrent.reduce(
-    (total, row) => total + getGroupCount(row),
-    0
-  );
-  const clicksPrevious = navigationPrevious.reduce(
-    (total, row) => total + getGroupCount(row),
-    0
-  );
-
-  return json({
+  return defer({
     fromMonth: orderedValues[0],
     toMonth: orderedValues[1],
     monthOptions,
@@ -205,32 +99,18 @@ export async function loader({ request }: LoaderFunctionArgs) {
       orderedValues[0] === orderedValues[1]
         ? orderedValues[0]
         : `${orderedValues[0]} a ${orderedValues[1]}`,
-    summary: {
-      clicksCurrent,
-      clicksPrevious,
-      usersCurrent: navigationUsersCurrent.length,
-      usersPrevious: navigationUsersPrevious.length,
-      visitorsCurrent: visitorsCurrent.length,
-      visitorsPrevious: visitorsPrevious.length,
-      adoptionCurrent:
-        visitorsCurrent.length > 0
-          ? navigationUsersCurrent.length / visitorsCurrent.length
-          : 0,
-      adoptionPrevious:
-        visitorsPrevious.length > 0
-          ? navigationUsersPrevious.length / visitorsPrevious.length
-          : 0,
-    },
-    ranking: buildNavigationRanking(navigationCurrent, navigationPrevious),
+    report: readCardapioNavigationReport({
+      currentPeriod: { start: currentStart, end: currentEnd },
+      previousPeriod: { start: previousStart, end: previousEnd },
+    }),
   });
 }
 
 export default function CardapioNavigationDashboard() {
-  const { fromMonth, toMonth, monthOptions, periodLabel, summary, ranking } =
-    useLoaderData<typeof loader>();
+  const data = useLoaderData<typeof loader>();
   const [searchParams] = useSearchParams();
-  const selectedFrom = searchParams.get("fromMonth") ?? fromMonth;
-  const selectedTo = searchParams.get("toMonth") ?? toMonth;
+  const selectedFrom = searchParams.get("fromMonth") ?? data.fromMonth;
+  const selectedTo = searchParams.get("toMonth") ?? data.toMonth;
 
   const pctDiff = (current?: number, previous?: number) => {
     const currentValue = Number(current ?? 0);
@@ -270,7 +150,7 @@ export default function CardapioNavigationDashboard() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {monthOptions.map((option) => (
+                {data.monthOptions.map((option) => (
                   <SelectItem
                     key={option.value}
                     value={option.value}
@@ -289,7 +169,7 @@ export default function CardapioNavigationDashboard() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {monthOptions.map((option) => (
+                {data.monthOptions.map((option) => (
                   <SelectItem
                     key={option.value}
                     value={option.value}
@@ -305,12 +185,43 @@ export default function CardapioNavigationDashboard() {
             </Button>
           </div>
           <span className="text-xs text-muted-foreground">
-            Período: {periodLabel}. Comparação com o intervalo anterior de mesma
-            duração.
+            Período: {data.periodLabel}. Comparação com o intervalo anterior de
+            mesma duração.
           </span>
         </form>
       </header>
 
+      <Suspense
+        fallback={
+          <div className="rounded-lg border border-muted bg-white p-6 text-sm text-muted-foreground">
+            Carregando relatório...
+          </div>
+        }
+      >
+        <Await resolve={data.report}>
+          {(report) => (
+            <NavigationReportContent report={report} pctDiff={pctDiff} />
+          )}
+        </Await>
+      </Suspense>
+    </section>
+  );
+}
+
+function NavigationReportContent({
+  report,
+  pctDiff,
+}: {
+  report: Awaited<ReturnType<typeof readCardapioNavigationReport>>;
+  pctDiff: (
+    current?: number,
+    previous?: number
+  ) => { text: string; cls: string };
+}) {
+  const { summary, ranking } = report;
+
+  return (
+    <>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Metric
           label="Adoção"
@@ -400,7 +311,7 @@ export default function CardapioNavigationDashboard() {
           </div>
         )}
       </div>
-    </section>
+    </>
   );
 }
 
