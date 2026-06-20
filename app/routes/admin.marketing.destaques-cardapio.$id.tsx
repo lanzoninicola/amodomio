@@ -505,6 +505,17 @@ export default function AdminMarketingCardapioHighlightsDetail() {
             />
 
             <div className="grid gap-5">
+              <div>
+                <a
+                  href="/admin/assets"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sm font-semibold text-blue-600 transition hover:text-blue-700 hover:underline"
+                >
+                  Abrir gerenciador de assets
+                </a>
+              </div>
+
               <div className="grid gap-2">
                 <Label htmlFor="imageUrls">Imagens públicas</Label>
                 <Textarea
