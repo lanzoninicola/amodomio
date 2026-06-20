@@ -328,7 +328,7 @@ function CardapioHighlightPromotionCarousel({
   }, [api, currentSlide, mobileExpandedApi]);
 
   useEffect(() => {
-    if (!api) return;
+    if (!api || !hasMultipleImages) return;
 
     if (isExpanded || isMobileExpanded) {
       autoplayPlugin.current.stop();
@@ -336,7 +336,7 @@ function CardapioHighlightPromotionCarousel({
     }
 
     autoplayPlugin.current.play();
-  }, [api, isExpanded, isMobileExpanded]);
+  }, [api, hasMultipleImages, isExpanded, isMobileExpanded]);
 
   return (
     <>

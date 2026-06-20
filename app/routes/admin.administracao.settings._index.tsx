@@ -84,7 +84,6 @@ import {
   CARDAPIO_REDIRECT_TO_SAIPOS_SETTING_NAME,
   DEFAULT_CARDAPIO_REDIRECT_TO_SAIPOS,
 } from "~/domain/cardapio/cardapio-contingency-settings";
-import { parseBooleanSetting } from "~/utils/parse-boolean-setting";
 
 const SETTING_TYPES = ["string", "boolean", "float", "int", "json"] as const;
 const REELS_SETTINGS_CONTEXT = "cardapio";
@@ -412,10 +411,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
       cardapioFilterViewSetting?.value === "stories"
         ? "stories"
         : DEFAULT_CARDAPIO_FILTER_VIEW_MODE,
-    cardapioRedirectToSaiposEnabled: parseBooleanSetting(
-      cardapioRedirectToSaiposSetting?.value,
-      DEFAULT_CARDAPIO_REDIRECT_TO_SAIPOS
-    ),
   });
 }
 
@@ -455,35 +450,6 @@ export async function action({ request }: ActionFunctionArgs) {
           });
         }
         await invalidateCardapioIndexCache();
-        return json({ ok: true });
-      }
-      case "save-cardapio-error-redirect": {
-        const value = str(formData.get("value")) === "true" ? "true" : "false";
-        const current = await prismaClient.setting.findFirst({
-          where: {
-            context: CARDAPIO_CONTINGENCY_SETTINGS_CONTEXT,
-            name: CARDAPIO_REDIRECT_TO_SAIPOS_SETTING_NAME,
-          },
-          orderBy: [{ createdAt: "desc" }],
-        });
-
-        if (current) {
-          await prismaClient.setting.update({
-            where: { id: current.id },
-            data: { value },
-          });
-        } else {
-          await prismaClient.setting.create({
-            data: {
-              context: CARDAPIO_CONTINGENCY_SETTINGS_CONTEXT,
-              name: CARDAPIO_REDIRECT_TO_SAIPOS_SETTING_NAME,
-              type: "boolean",
-              value,
-              createdAt: new Date(),
-            },
-          });
-        }
-
         return json({ ok: true });
       }
       case "create": {
@@ -606,14 +572,8 @@ export async function action({ request }: ActionFunctionArgs) {
 }
 
 export default function AdminSettingsPage() {
-  const {
-    settings,
-    q,
-    context,
-    contexts,
-    cardapioFilterViewMode,
-    cardapioRedirectToSaiposEnabled,
-  } = useLoaderData<typeof loader>();
+  const { settings, q, context, contexts, cardapioFilterViewMode } =
+    useLoaderData<typeof loader>();
   const submit = useSubmit();
   const actionData = useActionData<typeof action>();
 
@@ -639,69 +599,35 @@ export default function AdminSettingsPage() {
         </CardHeader>
         <Separator />
         <CardContent className="pt-6">
-          <div className="grid gap-6 lg:grid-cols-2">
-            <Form method="post" className="flex flex-col gap-3">
-              <input
-                type="hidden"
-                name="_action"
-                value="save-cardapio-filter-view"
-              />
-              <div className="grid gap-2">
-                <Label htmlFor="cardapio-filter-view">
-                  Visualização dos filtros
-                </Label>
-                <select
-                  id="cardapio-filter-view"
-                  name="value"
-                  defaultValue={cardapioFilterViewMode}
-                  className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
-                >
-                  <option value="chip">Chips</option>
-                  <option value="stories">Stories horizontais</option>
-                </select>
-                <p className="text-xs text-muted-foreground">
-                  Stories gera ilustrações SVG automaticamente com base no nome
-                  e na cor de cada tag pública.
-                </p>
-              </div>
-              <Button type="submit" className="self-start">
-                Salvar visualização
-              </Button>
-            </Form>
-
-            <Form method="post" className="flex flex-col gap-3">
-              <input
-                type="hidden"
-                name="_action"
-                value="save-cardapio-error-redirect"
-              />
-              <div className="grid gap-2">
-                <Label htmlFor="cardapio-error-redirect">
-                  Redirecionamento em caso de erro
-                </Label>
-                <select
-                  id="cardapio-error-redirect"
-                  name="value"
-                  defaultValue={String(cardapioRedirectToSaiposEnabled)}
-                  className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
-                >
-                  <option value="true">
-                    Habilitado — redirecionar para o Saipos
-                  </option>
-                  <option value="false">
-                    Desabilitado — manter a tela de erro
-                  </option>
-                </select>
-                <p className="text-xs text-muted-foreground">
-                  Desabilite temporariamente para investigar erros do cardápio
-                  em produção.
-                </p>
-              </div>
-              <Button type="submit" className="self-start">
-                Salvar redirecionamento
-              </Button>
-            </Form>
-          </div>
+          <Form
+            method="post"
+            className="flex flex-col gap-3 md:flex-row md:items-end"
+          >
+            <input
+              type="hidden"
+              name="_action"
+              value="save-cardapio-filter-view"
+            />
+            <div className="grid max-w-md flex-1 gap-2">
+              <Label htmlFor="cardapio-filter-view">
+                Visualização dos filtros
+              </Label>
+              <select
+                id="cardapio-filter-view"
+                name="value"
+                defaultValue={cardapioFilterViewMode}
+                className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
+              >
+                <option value="chip">Chips</option>
+                <option value="stories">Stories horizontais</option>
+              </select>
+              <p className="text-xs text-muted-foreground">
+                Stories gera ilustrações SVG automaticamente com base no nome e
+                na cor de cada tag pública.
+              </p>
+            </div>
+            <Button type="submit">Salvar visualização</Button>
+          </Form>
         </CardContent>
       </Card>
 
