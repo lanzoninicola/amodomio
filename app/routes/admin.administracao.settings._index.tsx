@@ -1,14 +1,41 @@
-import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
+import type {
+  ActionFunctionArgs,
+  LoaderFunctionArgs,
+  MetaFunction,
+} from "@remix-run/node";
 import { json, redirect } from "@remix-run/node";
-import { Form, useActionData, useFetcher, useLoaderData, useSubmit } from "@remix-run/react";
+import {
+  Form,
+  useActionData,
+  useFetcher,
+  useLoaderData,
+  useSubmit,
+} from "@remix-run/react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Table,
+  TableBody,
+  TableCaption,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import prismaClient from "~/lib/prisma/client.server";
 import {
@@ -52,6 +79,12 @@ import {
   CARDAPIO_FILTER_VIEW_SETTING_NAME,
   DEFAULT_CARDAPIO_FILTER_VIEW_MODE,
 } from "~/domain/cardapio/cardapio-index.server";
+import {
+  CARDAPIO_CONTINGENCY_SETTINGS_CONTEXT,
+  CARDAPIO_REDIRECT_TO_SAIPOS_SETTING_NAME,
+  DEFAULT_CARDAPIO_REDIRECT_TO_SAIPOS,
+} from "~/domain/cardapio/cardapio-contingency-settings";
+import { parseBooleanSetting } from "~/utils/parse-boolean-setting";
 
 const SETTING_TYPES = ["string", "boolean", "float", "int", "json"] as const;
 const REELS_SETTINGS_CONTEXT = "cardapio";
@@ -61,11 +94,13 @@ function shouldInvalidateCardapioCache(context: string) {
   return context.trim().toLowerCase() === "cardapio";
 }
 
-export const meta: MetaFunction = () => ([{ title: "Configurações globais" }]);
+export const meta: MetaFunction = () => [{ title: "Configurações globais" }];
 
 function isUUID(value?: string | null) {
   if (!value) return false;
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(value));
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    String(value)
+  );
 }
 
 function str(value: FormDataEntryValue | null) {
@@ -99,6 +134,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     sharesSetting,
     reelsEnabledSetting,
     cardapioFilterViewSetting,
+    cardapioRedirectToSaiposSetting,
     itemCostAverageWindowSetting,
     doughStockWhatsappRecipientsSetting,
     doughStockWhatsappTemplateSetting,
@@ -117,11 +153,24 @@ export async function loader({ request }: LoaderFunctionArgs) {
       orderBy: [{ createdAt: "desc" }],
     }),
     prismaClient.setting.findFirst({
-      where: { context: REELS_SETTINGS_CONTEXT, name: REELS_ENABLED_SETTING_NAME },
+      where: {
+        context: REELS_SETTINGS_CONTEXT,
+        name: REELS_ENABLED_SETTING_NAME,
+      },
       orderBy: [{ createdAt: "desc" }],
     }),
     prismaClient.setting.findFirst({
-      where: { context: REELS_SETTINGS_CONTEXT, name: CARDAPIO_FILTER_VIEW_SETTING_NAME },
+      where: {
+        context: REELS_SETTINGS_CONTEXT,
+        name: CARDAPIO_FILTER_VIEW_SETTING_NAME,
+      },
+      orderBy: [{ createdAt: "desc" }],
+    }),
+    prismaClient.setting.findFirst({
+      where: {
+        context: CARDAPIO_CONTINGENCY_SETTINGS_CONTEXT,
+        name: CARDAPIO_REDIRECT_TO_SAIPOS_SETTING_NAME,
+      },
       orderBy: [{ createdAt: "desc" }],
     }),
     prismaClient.setting.findFirst({
@@ -167,11 +216,17 @@ export async function loader({ request }: LoaderFunctionArgs) {
       orderBy: [{ createdAt: "desc" }],
     }),
     prismaClient.setting.findFirst({
-      where: { context: COST_REVIEW_NOTIFICATION_CONTEXT, name: COST_REVIEW_WHATSAPP_ENABLED_SETTING },
+      where: {
+        context: COST_REVIEW_NOTIFICATION_CONTEXT,
+        name: COST_REVIEW_WHATSAPP_ENABLED_SETTING,
+      },
       orderBy: [{ createdAt: "desc" }],
     }),
     prismaClient.setting.findFirst({
-      where: { context: COST_REVIEW_NOTIFICATION_CONTEXT, name: COST_REVIEW_WHATSAPP_PHONE_SETTING },
+      where: {
+        context: COST_REVIEW_NOTIFICATION_CONTEXT,
+        name: COST_REVIEW_WHATSAPP_PHONE_SETTING,
+      },
       orderBy: [{ createdAt: "desc" }],
     }),
   ]);
@@ -219,6 +274,18 @@ export async function loader({ request }: LoaderFunctionArgs) {
         name: CARDAPIO_FILTER_VIEW_SETTING_NAME,
         type: "string",
         value: DEFAULT_CARDAPIO_FILTER_VIEW_MODE,
+        createdAt: new Date(),
+      },
+    });
+  }
+
+  if (!cardapioRedirectToSaiposSetting) {
+    await prismaClient.setting.create({
+      data: {
+        context: CARDAPIO_CONTINGENCY_SETTINGS_CONTEXT,
+        name: CARDAPIO_REDIRECT_TO_SAIPOS_SETTING_NAME,
+        type: "boolean",
+        value: String(DEFAULT_CARDAPIO_REDIRECT_TO_SAIPOS),
         createdAt: new Date(),
       },
     });
@@ -345,6 +412,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
       cardapioFilterViewSetting?.value === "stories"
         ? "stories"
         : DEFAULT_CARDAPIO_FILTER_VIEW_MODE,
+    cardapioRedirectToSaiposEnabled: parseBooleanSetting(
+      cardapioRedirectToSaiposSetting?.value,
+      DEFAULT_CARDAPIO_REDIRECT_TO_SAIPOS
+    ),
   });
 }
 
@@ -355,14 +426,23 @@ export async function action({ request }: ActionFunctionArgs) {
   try {
     switch (action) {
       case "save-cardapio-filter-view": {
-        const value = str(formData.get("value")) === "stories" ? "stories" : DEFAULT_CARDAPIO_FILTER_VIEW_MODE;
+        const value =
+          str(formData.get("value")) === "stories"
+            ? "stories"
+            : DEFAULT_CARDAPIO_FILTER_VIEW_MODE;
         const current = await prismaClient.setting.findFirst({
-          where: { context: REELS_SETTINGS_CONTEXT, name: CARDAPIO_FILTER_VIEW_SETTING_NAME },
+          where: {
+            context: REELS_SETTINGS_CONTEXT,
+            name: CARDAPIO_FILTER_VIEW_SETTING_NAME,
+          },
           orderBy: [{ createdAt: "desc" }],
         });
 
         if (current) {
-          await prismaClient.setting.update({ where: { id: current.id }, data: { value } });
+          await prismaClient.setting.update({
+            where: { id: current.id },
+            data: { value },
+          });
         } else {
           await prismaClient.setting.create({
             data: {
@@ -375,6 +455,35 @@ export async function action({ request }: ActionFunctionArgs) {
           });
         }
         await invalidateCardapioIndexCache();
+        return json({ ok: true });
+      }
+      case "save-cardapio-error-redirect": {
+        const value = str(formData.get("value")) === "true" ? "true" : "false";
+        const current = await prismaClient.setting.findFirst({
+          where: {
+            context: CARDAPIO_CONTINGENCY_SETTINGS_CONTEXT,
+            name: CARDAPIO_REDIRECT_TO_SAIPOS_SETTING_NAME,
+          },
+          orderBy: [{ createdAt: "desc" }],
+        });
+
+        if (current) {
+          await prismaClient.setting.update({
+            where: { id: current.id },
+            data: { value },
+          });
+        } else {
+          await prismaClient.setting.create({
+            data: {
+              context: CARDAPIO_CONTINGENCY_SETTINGS_CONTEXT,
+              name: CARDAPIO_REDIRECT_TO_SAIPOS_SETTING_NAME,
+              type: "boolean",
+              value,
+              createdAt: new Date(),
+            },
+          });
+        }
+
         return json({ ok: true });
       }
       case "create": {
@@ -396,7 +505,14 @@ export async function action({ request }: ActionFunctionArgs) {
           where: { context, name },
         });
         if (exists) {
-          return json({ fieldError: { name: "Ja existe uma configuracao com esse contexto e nome" } }, { status: 400 });
+          return json(
+            {
+              fieldError: {
+                name: "Ja existe uma configuracao com esse contexto e nome",
+              },
+            },
+            { status: 400 }
+          );
         }
 
         await prismaClient.setting.create({
@@ -441,7 +557,14 @@ export async function action({ request }: ActionFunctionArgs) {
           },
         });
         if (duplicate) {
-          return json({ fieldError: { name: "Outro registro ja usa esse contexto e nome" } }, { status: 400 });
+          return json(
+            {
+              fieldError: {
+                name: "Outro registro ja usa esse contexto e nome",
+              },
+            },
+            { status: 400 }
+          );
         }
 
         await prismaClient.setting.update({
@@ -458,13 +581,17 @@ export async function action({ request }: ActionFunctionArgs) {
 
       case "delete": {
         const id = str(formData.get("id"));
-        if (!isUUID(id)) return json({ fieldError: { id: "ID invalido" } }, { status: 400 });
+        if (!isUUID(id))
+          return json({ fieldError: { id: "ID invalido" } }, { status: 400 });
         const setting = await prismaClient.setting.findUnique({
           where: { id },
           select: { context: true },
         });
         await prismaClient.setting.delete({ where: { id } });
-        if (setting?.context && shouldInvalidateCardapioCache(setting.context)) {
+        if (
+          setting?.context &&
+          shouldInvalidateCardapioCache(setting.context)
+        ) {
           await invalidateCardapioIndexCache();
         }
         return json({ ok: true });
@@ -479,7 +606,14 @@ export async function action({ request }: ActionFunctionArgs) {
 }
 
 export default function AdminSettingsPage() {
-  const { settings, q, context, contexts, cardapioFilterViewMode } = useLoaderData<typeof loader>();
+  const {
+    settings,
+    q,
+    context,
+    contexts,
+    cardapioFilterViewMode,
+    cardapioRedirectToSaiposEnabled,
+  } = useLoaderData<typeof loader>();
   const submit = useSubmit();
   const actionData = useActionData<typeof action>();
 
@@ -487,9 +621,12 @@ export default function AdminSettingsPage() {
     <div className="space-y-6 p-4 md:p-8">
       <div className="flex items-center justify-between gap-2">
         <div className="space-y-1">
-          <h1 className="text-2xl font-semibold tracking-tight">Configuracoes globais</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">
+            Configuracoes globais
+          </h1>
           <p className="text-sm text-muted-foreground">
-            Gerencie as configuracoes globais da aplicacao (contexto, nome, tipo e valor).
+            Gerencie as configuracoes globais da aplicacao (contexto, nome, tipo
+            e valor).
           </p>
         </div>
 
@@ -502,38 +639,96 @@ export default function AdminSettingsPage() {
         </CardHeader>
         <Separator />
         <CardContent className="pt-6">
-          <Form method="post" className="flex flex-col gap-3 md:flex-row md:items-end">
-            <input type="hidden" name="_action" value="save-cardapio-filter-view" />
-            <div className="grid max-w-md flex-1 gap-2">
-              <Label htmlFor="cardapio-filter-view">Visualização dos filtros</Label>
-              <select
-                id="cardapio-filter-view"
-                name="value"
-                defaultValue={cardapioFilterViewMode}
-                className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
-              >
-                <option value="chip">Chips</option>
-                <option value="stories">Stories horizontais</option>
-              </select>
-              <p className="text-xs text-muted-foreground">
-                Stories gera ilustrações SVG automaticamente com base no nome e na cor de cada tag pública.
-              </p>
-            </div>
-            <Button type="submit">Salvar visualização</Button>
-          </Form>
+          <div className="grid gap-6 lg:grid-cols-2">
+            <Form method="post" className="flex flex-col gap-3">
+              <input
+                type="hidden"
+                name="_action"
+                value="save-cardapio-filter-view"
+              />
+              <div className="grid gap-2">
+                <Label htmlFor="cardapio-filter-view">
+                  Visualização dos filtros
+                </Label>
+                <select
+                  id="cardapio-filter-view"
+                  name="value"
+                  defaultValue={cardapioFilterViewMode}
+                  className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
+                >
+                  <option value="chip">Chips</option>
+                  <option value="stories">Stories horizontais</option>
+                </select>
+                <p className="text-xs text-muted-foreground">
+                  Stories gera ilustrações SVG automaticamente com base no nome
+                  e na cor de cada tag pública.
+                </p>
+              </div>
+              <Button type="submit" className="self-start">
+                Salvar visualização
+              </Button>
+            </Form>
+
+            <Form method="post" className="flex flex-col gap-3">
+              <input
+                type="hidden"
+                name="_action"
+                value="save-cardapio-error-redirect"
+              />
+              <div className="grid gap-2">
+                <Label htmlFor="cardapio-error-redirect">
+                  Redirecionamento em caso de erro
+                </Label>
+                <select
+                  id="cardapio-error-redirect"
+                  name="value"
+                  defaultValue={String(cardapioRedirectToSaiposEnabled)}
+                  className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
+                >
+                  <option value="true">
+                    Habilitado — redirecionar para o Saipos
+                  </option>
+                  <option value="false">
+                    Desabilitado — manter a tela de erro
+                  </option>
+                </select>
+                <p className="text-xs text-muted-foreground">
+                  Desabilite temporariamente para investigar erros do cardápio
+                  em produção.
+                </p>
+              </div>
+              <Button type="submit" className="self-start">
+                Salvar redirecionamento
+              </Button>
+            </Form>
+          </div>
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader className="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
           <CardTitle className="text-lg">Lista</CardTitle>
-          <Form method="get" className="flex flex-col md:flex-row items-stretch md:items-center gap-2 w-full md:w-auto" onChange={(e) => submit(e.currentTarget)}>
+          <Form
+            method="get"
+            className="flex flex-col md:flex-row items-stretch md:items-center gap-2 w-full md:w-auto"
+            onChange={(e) => submit(e.currentTarget)}
+          >
             <div className="grid gap-2 w-full md:w-auto">
-              <Label htmlFor="q" className="sr-only">Buscar</Label>
-              <Input id="q" name="q" placeholder="Buscar por contexto, nome, tipo ou valor" defaultValue={q ?? ""} className="w-full md:w-72" />
+              <Label htmlFor="q" className="sr-only">
+                Buscar
+              </Label>
+              <Input
+                id="q"
+                name="q"
+                placeholder="Buscar por contexto, nome, tipo ou valor"
+                defaultValue={q ?? ""}
+                className="w-full md:w-72"
+              />
             </div>
             <div className="grid gap-2 w-full md:w-auto">
-              <Label htmlFor="context-filter" className="sr-only">Contexto</Label>
+              <Label htmlFor="context-filter" className="sr-only">
+                Contexto
+              </Label>
               <select
                 id="context-filter"
                 name="context"
@@ -542,11 +737,15 @@ export default function AdminSettingsPage() {
               >
                 <option value="">Todos os contextos</option>
                 {contexts.map((item) => (
-                  <option key={item} value={item}>{item}</option>
+                  <option key={item} value={item}>
+                    {item}
+                  </option>
                 ))}
               </select>
             </div>
-            <Button type="submit" variant="secondary">Buscar</Button>
+            <Button type="submit" variant="secondary">
+              Buscar
+            </Button>
           </Form>
         </CardHeader>
         <Separator />
@@ -554,7 +753,9 @@ export default function AdminSettingsPage() {
           <Table>
             <TableCaption>
               {settings.length === 0 ? (
-                <span className="text-muted-foreground">Nenhum registro encontrado</span>
+                <span className="text-muted-foreground">
+                  Nenhum registro encontrado
+                </span>
               ) : (
                 <span>{settings.length} registro(s)</span>
               )}
@@ -571,7 +772,11 @@ export default function AdminSettingsPage() {
             </TableHeader>
             <TableBody>
               {settings.map((setting) => (
-                <RowItem key={setting.id} setting={setting} contexts={contexts} />
+                <RowItem
+                  key={setting.id}
+                  setting={setting}
+                  contexts={contexts}
+                />
               ))}
             </TableBody>
           </Table>
@@ -581,19 +786,29 @@ export default function AdminSettingsPage() {
   );
 }
 
-function CreateDialog({ contexts, defaultError }: { contexts: string[]; defaultError?: any }) {
+function CreateDialog({
+  contexts,
+  defaultError,
+}: {
+  contexts: string[];
+  defaultError?: any;
+}) {
   const fetcher = useFetcher<typeof action>();
   const isBusy = fetcher.state !== "idle";
 
   return (
     <Dialog>
       <DialogTrigger asChild>
-        <Button className="text-sm uppercase tracking-wide">Nova configuracao</Button>
+        <Button className="text-sm uppercase tracking-wide">
+          Nova configuracao
+        </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-[560px]">
         <DialogHeader>
           <DialogTitle>Criar configuracao</DialogTitle>
-          <DialogDescription>Crie uma configuracao global com contexto, nome, tipo e valor.</DialogDescription>
+          <DialogDescription>
+            Crie uma configuracao global com contexto, nome, tipo e valor.
+          </DialogDescription>
         </DialogHeader>
 
         <fetcher.Form method="post" className="space-y-4">
@@ -601,25 +816,44 @@ function CreateDialog({ contexts, defaultError }: { contexts: string[]; defaultE
 
           <div className="grid gap-2">
             <Label htmlFor="context">Contexto</Label>
-            <Input id="context" name="context" list="context-options" required placeholder="ex.: store-opening" />
+            <Input
+              id="context"
+              name="context"
+              list="context-options"
+              required
+              placeholder="ex.: store-opening"
+            />
             <datalist id="context-options">
               {contexts.map((item) => (
                 <option key={item} value={item} />
               ))}
             </datalist>
-            {((defaultError as any)?.fieldError?.context || (fetcher.data as any)?.fieldError?.context) && (
+            {((defaultError as any)?.fieldError?.context ||
+              (fetcher.data as any)?.fieldError?.context) && (
               <p className="text-xs text-destructive">
-                {((defaultError as any)?.fieldError?.context || (fetcher.data as any)?.fieldError?.context) as string}
+                {
+                  ((defaultError as any)?.fieldError?.context ||
+                    (fetcher.data as any)?.fieldError?.context) as string
+                }
               </p>
             )}
           </div>
 
           <div className="grid gap-2">
             <Label htmlFor="name">Nome</Label>
-            <Input id="name" name="name" required placeholder="ex.: maxTimeDeliveryMinutes" />
-            {((defaultError as any)?.fieldError?.name || (fetcher.data as any)?.fieldError?.name) && (
+            <Input
+              id="name"
+              name="name"
+              required
+              placeholder="ex.: maxTimeDeliveryMinutes"
+            />
+            {((defaultError as any)?.fieldError?.name ||
+              (fetcher.data as any)?.fieldError?.name) && (
               <p className="text-xs text-destructive">
-                {((defaultError as any)?.fieldError?.name || (fetcher.data as any)?.fieldError?.name) as string}
+                {
+                  ((defaultError as any)?.fieldError?.name ||
+                    (fetcher.data as any)?.fieldError?.name) as string
+                }
               </p>
             )}
           </div>
@@ -633,28 +867,44 @@ function CreateDialog({ contexts, defaultError }: { contexts: string[]; defaultE
               className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
               required
             >
-              <option value="" disabled>Selecione um tipo</option>
+              <option value="" disabled>
+                Selecione um tipo
+              </option>
               {SETTING_TYPES.map((item) => (
-                <option key={item} value={item}>{item}</option>
+                <option key={item} value={item}>
+                  {item}
+                </option>
               ))}
             </select>
-            {((defaultError as any)?.fieldError?.type || (fetcher.data as any)?.fieldError?.type) && (
+            {((defaultError as any)?.fieldError?.type ||
+              (fetcher.data as any)?.fieldError?.type) && (
               <p className="text-xs text-destructive">
-                {((defaultError as any)?.fieldError?.type || (fetcher.data as any)?.fieldError?.type) as string}
+                {
+                  ((defaultError as any)?.fieldError?.type ||
+                    (fetcher.data as any)?.fieldError?.type) as string
+                }
               </p>
             )}
           </div>
 
           <div className="grid gap-2">
             <Label htmlFor="value">Valor</Label>
-            <Textarea id="value" name="value" placeholder='ex.: true, 120, {"foo": "bar"}' />
+            <Textarea
+              id="value"
+              name="value"
+              placeholder='ex.: true, 120, {"foo": "bar"}'
+            />
           </div>
 
           <DialogFooter className="gap-2">
             <DialogClose asChild>
-              <Button type="button" variant="outline">Cancelar</Button>
+              <Button type="button" variant="outline">
+                Cancelar
+              </Button>
             </DialogClose>
-            <Button type="submit" disabled={isBusy}>{isBusy ? "Salvando..." : "Salvar"}</Button>
+            <Button type="submit" disabled={isBusy}>
+              {isBusy ? "Salvando..." : "Salvar"}
+            </Button>
           </DialogFooter>
         </fetcher.Form>
       </DialogContent>
@@ -678,7 +928,9 @@ function RowItem({ setting, contexts }: { setting: any; contexts: string[] }) {
         <div className="text-sm">{setting.type}</div>
       </TableCell>
       <TableCell>
-        <pre className="whitespace-pre-wrap text-sm max-w-[60ch] break-words font-sans">{setting.value}</pre>
+        <pre className="whitespace-pre-wrap text-sm max-w-[60ch] break-words font-sans">
+          {setting.value}
+        </pre>
       </TableCell>
       <TableCell>
         <span>{new Date(setting.createdAt).toLocaleString()}</span>
@@ -696,7 +948,8 @@ function RowItem({ setting, contexts }: { setting: any; contexts: string[] }) {
               size="sm"
               disabled={isBusy}
               onClick={(event) => {
-                if (!confirm(`Excluir "${setting.name}"?`)) event.preventDefault();
+                if (!confirm(`Excluir "${setting.name}"?`))
+                  event.preventDefault();
               }}
             >
               Excluir
@@ -708,19 +961,29 @@ function RowItem({ setting, contexts }: { setting: any; contexts: string[] }) {
   );
 }
 
-function EditDialog({ setting, contexts }: { setting: any; contexts: string[] }) {
+function EditDialog({
+  setting,
+  contexts,
+}: {
+  setting: any;
+  contexts: string[];
+}) {
   const fetcher = useFetcher<typeof action>();
   const isBusy = fetcher.state !== "idle";
 
   return (
     <Dialog>
       <DialogTrigger asChild>
-        <Button variant="outline" size="sm">Editar</Button>
+        <Button variant="outline" size="sm">
+          Editar
+        </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-[560px]">
         <DialogHeader>
           <DialogTitle>Editar configuracao</DialogTitle>
-          <DialogDescription>Atualize os campos abaixo e salve.</DialogDescription>
+          <DialogDescription>
+            Atualize os campos abaixo e salve.
+          </DialogDescription>
         </DialogHeader>
 
         <fetcher.Form method="post" className="space-y-4">
@@ -729,22 +992,37 @@ function EditDialog({ setting, contexts }: { setting: any; contexts: string[] })
 
           <div className="grid gap-2">
             <Label htmlFor={`context-${setting.id}`}>Contexto</Label>
-            <Input id={`context-${setting.id}`} name="context" list={`context-options-${setting.id}`} required defaultValue={setting.context} />
+            <Input
+              id={`context-${setting.id}`}
+              name="context"
+              list={`context-options-${setting.id}`}
+              required
+              defaultValue={setting.context}
+            />
             <datalist id={`context-options-${setting.id}`}>
               {contexts.map((item) => (
                 <option key={item} value={item} />
               ))}
             </datalist>
             {(fetcher.data as any)?.fieldError?.context && (
-              <p className="text-xs text-destructive">{(fetcher.data as any)?.fieldError?.context as string}</p>
+              <p className="text-xs text-destructive">
+                {(fetcher.data as any)?.fieldError?.context as string}
+              </p>
             )}
           </div>
 
           <div className="grid gap-2">
             <Label htmlFor={`name-${setting.id}`}>Nome</Label>
-            <Input id={`name-${setting.id}`} name="name" required defaultValue={setting.name} />
+            <Input
+              id={`name-${setting.id}`}
+              name="name"
+              required
+              defaultValue={setting.name}
+            />
             {(fetcher.data as any)?.fieldError?.name && (
-              <p className="text-xs text-destructive">{(fetcher.data as any)?.fieldError?.name as string}</p>
+              <p className="text-xs text-destructive">
+                {(fetcher.data as any)?.fieldError?.name as string}
+              </p>
             )}
           </div>
 
@@ -757,26 +1035,40 @@ function EditDialog({ setting, contexts }: { setting: any; contexts: string[] })
               className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
               required
             >
-              <option value="" disabled>Selecione um tipo</option>
+              <option value="" disabled>
+                Selecione um tipo
+              </option>
               {SETTING_TYPES.map((item) => (
-                <option key={item} value={item}>{item}</option>
+                <option key={item} value={item}>
+                  {item}
+                </option>
               ))}
             </select>
             {(fetcher.data as any)?.fieldError?.type && (
-              <p className="text-xs text-destructive">{(fetcher.data as any)?.fieldError?.type as string}</p>
+              <p className="text-xs text-destructive">
+                {(fetcher.data as any)?.fieldError?.type as string}
+              </p>
             )}
           </div>
 
           <div className="grid gap-2">
             <Label htmlFor={`value-${setting.id}`}>Valor</Label>
-            <Textarea id={`value-${setting.id}`} name="value" defaultValue={setting.value ?? ""} />
+            <Textarea
+              id={`value-${setting.id}`}
+              name="value"
+              defaultValue={setting.value ?? ""}
+            />
           </div>
 
           <DialogFooter className="gap-2">
             <DialogClose asChild>
-              <Button type="button" variant="outline">Cancelar</Button>
+              <Button type="button" variant="outline">
+                Cancelar
+              </Button>
             </DialogClose>
-            <Button type="submit" disabled={isBusy}>{isBusy ? "Salvando..." : "Salvar"}</Button>
+            <Button type="submit" disabled={isBusy}>
+              {isBusy ? "Salvando..." : "Salvar"}
+            </Button>
           </DialogFooter>
         </fetcher.Form>
       </DialogContent>

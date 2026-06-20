@@ -50,6 +50,7 @@ import type {
   GroupedItems,
 } from "~/domain/cardapio/cardapio-index.shared";
 import type { loader as cardapioLayoutLoader } from "./cardapio";
+import { DEFAULT_CARDAPIO_REDIRECT_TO_SAIPOS } from "~/domain/cardapio/cardapio-contingency-settings";
 
 export const headers: HeadersFunction = () => ({
   "Cache-Control": "s-maxage=1, stale-while-revalidate=59",
@@ -686,6 +687,8 @@ function DesktopFloatingOrderButton() {
 
 export function ErrorBoundary() {
   const error = useRouteError();
+  const cardapioLayoutData =
+    useRouteLoaderData<typeof cardapioLayoutLoader>("routes/cardapio");
   const saiposHref = WEBSITE_LINKS.saiposCardapio.href;
 
   console.error("[cardapio._index] route error boundary", error);
@@ -694,5 +697,13 @@ export function ErrorBoundary() {
     return <CardapioDatabaseUnavailable error={error} />;
   }
 
-  return <CardapioErrorRedirect redirectHref={saiposHref} />;
+  return (
+    <CardapioErrorRedirect
+      redirectHref={saiposHref}
+      autoRedirectEnabled={
+        cardapioLayoutData?.redirectToSaiposOnErrorEnabled ??
+        DEFAULT_CARDAPIO_REDIRECT_TO_SAIPOS
+      }
+    />
+  );
 }

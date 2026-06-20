@@ -12,6 +12,7 @@ import {
   useLoaderData,
   useLocation,
   useRouteError,
+  useRouteLoaderData,
 } from "@remix-run/react";
 import {
   Bell,
@@ -61,6 +62,10 @@ import RouteProgressBar from "~/components/route-progress-bar/route-progress-bar
 import { isDatabaseConnectivityError } from "~/lib/errors/connectivity";
 import CardapioFacebookPixel from "~/domain/cardapio/components/cardapio-facebook-pixel";
 import { trackCardapioFacebookPixelTrigger } from "~/domain/cardapio/facebook-pixel.client";
+import {
+  CARDAPIO_REDIRECT_TO_SAIPOS_SETTING_NAME,
+  DEFAULT_CARDAPIO_REDIRECT_TO_SAIPOS,
+} from "~/domain/cardapio/cardapio-contingency-settings";
 
 /**
  * TODO:
@@ -159,12 +164,14 @@ export async function loader({ request }: LoaderFunctionArgs) {
     "fazer_pedido.public.url",
     "aviso_loja_fechada.yesno",
     "notificacoes.enabled",
+    CARDAPIO_REDIRECT_TO_SAIPOS_SETTING_NAME,
   ] as const;
 
   const defaults = {
     fazerPedidoPublicURL: WEBSITE_LINKS.cardapioFallbackURL.href,
     showLojaFechadaMessage: false,
     notificationsEnabled: false,
+    redirectToSaiposOnErrorEnabled: DEFAULT_CARDAPIO_REDIRECT_TO_SAIPOS,
   };
 
   let settingsMap: Record<string, string | null> = {};
@@ -203,6 +210,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
     settingsMap[requestedKeys[2]],
     defaults.notificationsEnabled
   );
+  const redirectToSaiposOnErrorEnabled = parseBooleanSetting(
+    settingsMap[CARDAPIO_REDIRECT_TO_SAIPOS_SETTING_NAME],
+    defaults.redirectToSaiposOnErrorEnabled
+  );
 
   if (simulateErrorByQuery) {
     throw new Error("SIMULACAO_ERRO_CARDAPIO_LAYOUT");
@@ -219,6 +230,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     fazerPedidoPublicURL: fPUrl,
     showLojaFechadaMessage,
     notificationsEnabled,
+    redirectToSaiposOnErrorEnabled,
     vapidPublicKey: process.env.VAPID_PUBLIC_KEY ?? null,
     facebookPixel,
   });
@@ -259,6 +271,7 @@ export default function CardapioWeb() {
 
 export function ErrorBoundary() {
   const error = useRouteError();
+  const routeData = useRouteLoaderData<typeof loader>("routes/cardapio");
   const saiposHref = WEBSITE_LINKS.saiposCardapio.href;
 
   console.error("[cardapio] route error boundary", error);
@@ -267,7 +280,15 @@ export function ErrorBoundary() {
     return <CardapioDatabaseUnavailable error={error} />;
   }
 
-  return <CardapioErrorRedirect redirectHref={saiposHref} />;
+  return (
+    <CardapioErrorRedirect
+      redirectHref={saiposHref}
+      autoRedirectEnabled={
+        routeData?.redirectToSaiposOnErrorEnabled ??
+        DEFAULT_CARDAPIO_REDIRECT_TO_SAIPOS
+      }
+    />
+  );
 }
 
 function shouldShowBanner(date: Date = new Date()) {
