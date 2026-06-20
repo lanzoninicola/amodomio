@@ -625,7 +625,6 @@ export default function AdminMarketingCardapioHighlightsDetail() {
             </div>
           </TabsContent>
         </Tabs>
-
       </Form>
     </div>
   );
