@@ -107,3 +107,18 @@ Evite:
 - validacoes globais repetitivas
 - verificacoes pesadas sem necessidade
 - processos redundantes
+
+## Settings
+
+Novos registros da tabela `settings` devem ser exibidos e gerenciados junto aos
+demais em `/admin/administracao/settings`.
+
+Regras:
+
+- use a lista e o editor generico existentes para settings adicionais
+- nao crie cards, formularios ou secoes visuais isoladas para um setting novo
+- controles especializados existentes podem permanecer quando oferecem uma
+  experiencia de negocio propria, mas nao devem ser usados como precedente para
+  settings adicionais
+- garanta que o setting seja criado com contexto, nome, tipo e valor padrao para
+  aparecer na lista geral
