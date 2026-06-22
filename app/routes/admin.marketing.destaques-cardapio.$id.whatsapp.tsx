@@ -88,7 +88,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
     }
   }
 
-  return json({ ok: true, message: "Configuração do WhatsApp salva." });
+  return json({ ok: true, message: "Configuração do WhatsApp salva!" });
 }
 
 export default function CardapioHighlightWhatsappPage() {
