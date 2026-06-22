@@ -19,7 +19,9 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   );
 
   if (selection.length === 0) {
-    return redirect(`/admin/mobile/pedido-fornecedor/${supplierId}/produtos`);
+    return redirect(
+      `/admin/mobile/pedido-compra/por-fornecedor/${supplierId}/produtos`
+    );
   }
 
   const [draft, testPhoneSetting] = await Promise.all([
@@ -28,7 +30,9 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   ]);
 
   if (draft.items.length === 0) {
-    return redirect(`/admin/mobile/pedido-fornecedor/${supplierId}/produtos`);
+    return redirect(
+      `/admin/mobile/pedido-compra/por-fornecedor/${supplierId}/produtos`
+    );
   }
 
   const orderMessage = buildSupplierOrderMessage(
@@ -55,7 +59,7 @@ export default function AdminMobilePedidoFornecedorResumo() {
 
   const isSending = fetcher.state !== "idle";
   const sendResult = fetcher.data;
-  const productsUrl = `/admin/mobile/pedido-fornecedor/${supplierId}/produtos${location.search}`;
+  const productsUrl = `/admin/mobile/pedido-compra/por-fornecedor/${supplierId}/produtos${location.search}`;
 
   function orderUrlWithout(itemId: string) {
     const searchParams = new URLSearchParams(location.search);
@@ -70,8 +74,8 @@ export default function AdminMobilePedidoFornecedorResumo() {
       next.append("supplierItemName", item.supplierItemName || "");
     }
     return selection.length > 0
-      ? `/admin/mobile/pedido-fornecedor/${supplierId}/resumo?${next.toString()}`
-      : `/admin/mobile/pedido-fornecedor/${supplierId}/produtos`;
+      ? `/admin/mobile/pedido-compra/por-fornecedor/${supplierId}/resumo?${next.toString()}`
+      : `/admin/mobile/pedido-compra/por-fornecedor/${supplierId}/produtos`;
   }
 
   function copyMessage() {
@@ -88,7 +92,7 @@ export default function AdminMobilePedidoFornecedorResumo() {
     formData.set("message", orderMessage);
     fetcher.submit(formData, {
       method: "post",
-      action: "/admin/mobile/pedido-fornecedor",
+      action: "/admin/mobile/pedido-compra/por-fornecedor",
     });
   }
 

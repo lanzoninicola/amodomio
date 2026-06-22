@@ -140,7 +140,7 @@ export default function AdminMarketingCardapioHighlightsNew() {
   const isSubmitting = navigation.state === "submitting";
 
   return (
-    <div className="flex max-w-2xl flex-col gap-6 pb-12">
+    <div className="flex min-w-0 max-w-2xl flex-col gap-5 pb-12 sm:gap-6">
       <div className="space-y-4">
         <Link
           to="/admin/marketing/destaques-cardapio"
@@ -150,7 +150,7 @@ export default function AdminMarketingCardapioHighlightsNew() {
           destaques
         </Link>
         <div>
-          <h2 className="text-2xl font-semibold tracking-tight text-slate-950">
+          <h2 className="text-xl font-semibold tracking-tight text-slate-950 sm:text-2xl">
             Novo destaque
           </h2>
           <p className="text-sm text-slate-500">
@@ -169,7 +169,12 @@ export default function AdminMarketingCardapioHighlightsNew() {
         <HighlightSectionFields />
 
         <div className="flex justify-end">
-          <Button type="submit" disabled={isSubmitting} size="lg">
+          <Button
+            type="submit"
+            disabled={isSubmitting}
+            size="lg"
+            className="w-full sm:w-auto"
+          >
             {isSubmitting ? "Salvando..." : "Criar destaque"}
           </Button>
         </div>
@@ -389,8 +394,8 @@ function SwitchRow({
   defaultChecked?: boolean;
 }) {
   return (
-    <div className="flex items-center justify-between gap-4 rounded-lg border border-slate-200 px-4 py-3">
-      <div className="space-y-0.5">
+    <div className="flex min-h-16 items-center justify-between gap-4 rounded-lg border border-slate-200 px-4 py-3">
+      <div className="min-w-0 space-y-0.5">
         <Label htmlFor={name} className="text-sm font-medium text-slate-900">
           {label}
         </Label>
@@ -398,7 +403,12 @@ function SwitchRow({
           <p className="text-xs text-slate-500">{description}</p>
         ) : null}
       </div>
-      <Switch id={name} name={name} defaultChecked={defaultChecked} />
+      <Switch
+        id={name}
+        name={name}
+        defaultChecked={defaultChecked}
+        className="shrink-0"
+      />
     </div>
   );
 }
