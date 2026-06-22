@@ -46,6 +46,19 @@ Gerencia posts que serão enviados para o Status do WhatsApp via Z-API.
   da mensagem falhar, o erro fica registrado nos campos de notificação da
   execução.
 
+## Grupos reutilizáveis de publicação
+
+- Um grupo associa posts a uma origem externa por `sourceType`, `sourceId` e
+  `sourceItemKey`, sem chave estrangeira para o domínio de origem.
+- O domínio de origem fornece os itens de texto, imagem ou vídeo e chama
+  `syncStatusPublicationGroup`.
+- A publicação do grupo usa
+  `POST /api/whatsapp-status/groups/:sourceType/:sourceId/publish`.
+- Excluir ou desativar a origem não altera automaticamente os posts do
+  WhatsApp. O ciclo de vida deles pertence a este domínio.
+- Telas de seleção de imagens devem reutilizar
+  `StatusPublicationMediaForm`.
+
 ## Fontes
 
 - WhatsApp Help Center: `https://faq.whatsapp.com/454876960047011/?locale=pt_BR&cms_platform=kaios`

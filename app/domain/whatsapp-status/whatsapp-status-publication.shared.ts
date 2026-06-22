@@ -128,6 +128,19 @@ export function buildStatusPublishEndpoint(origin: string, id: string) {
   return new URL(`/api/whatsapp-status/${id}/publish`, origin).toString();
 }
 
+export function buildStatusGroupPublishEndpoint(
+  origin: string,
+  sourceType: string,
+  sourceId: string
+) {
+  return new URL(
+    `/api/whatsapp-status/groups/${encodeURIComponent(
+      sourceType
+    )}/${encodeURIComponent(sourceId)}/publish`,
+    origin
+  ).toString();
+}
+
 export function buildDokployPublishScript(publishEndpoint: string) {
   return `set -euo pipefail
 

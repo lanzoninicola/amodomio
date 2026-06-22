@@ -36,7 +36,9 @@ export async function action({ request }: ActionFunctionArgs) {
           },
           { status: 400 }
         );
-      return redirect(`/admin/mobile/pedido-fornecedor/pedidos/${order.id}`);
+      return redirect(
+        `/admin/mobile/pedido-compra/por-fornecedor/pedidos/${order.id}`
+      );
     }
 
     if (intent === "send-order" || intent === "send-test") {

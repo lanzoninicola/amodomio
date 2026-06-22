@@ -952,6 +952,13 @@ const ADMIN_NAVIGATION_LINKS: WebsiteNavigationConfig = {
           tags: ["whatsapp", "status", "marketing", "story", "divulgacao"],
         },
         {
+          title: "Instagram",
+          href: "/admin/marketing/instagram",
+          items: [],
+          disabled: false,
+          tags: ["instagram", "story", "meta", "marketing", "publicacao"],
+        },
+        {
           title: "Relatórios",
           href: "",
           items: [

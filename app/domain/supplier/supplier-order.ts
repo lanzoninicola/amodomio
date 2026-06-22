@@ -5,7 +5,7 @@ const BRL = new Intl.NumberFormat("pt-BR", {
 });
 
 export type SupplierOrderItem = {
-  itemId: string;
+  itemId: string | null;
   itemName: string;
   supplierItemName?: string | null;
   unit: string | null;
@@ -43,18 +43,18 @@ export function buildSupplierOrderMessage(
 }
 
 export function parseSupplierOrderSelection(searchParams: URLSearchParams) {
-  const itemIds = searchParams
-    .getAll("itemId")
-    .map((value) => value.trim())
-    .filter(Boolean);
+  const itemIds = searchParams.getAll("itemId");
+  const freeItemNames = searchParams.getAll("freeItemName");
   const qtyValues = searchParams.getAll("qty");
   const unitValues = searchParams.getAll("unit");
   const supplierItemNameValues = searchParams.getAll("supplierItemName");
+  const itemCount = Math.max(itemIds.length, freeItemNames.length);
 
-  return itemIds.map((itemId, index) => ({
-    itemId,
+  return Array.from({ length: itemCount }, (_, index) => ({
+    itemId: String(itemIds[index] || "").trim() || null,
+    freeItemName: String(freeItemNames[index] || "").trim() || null,
     qty: String(qtyValues[index] || "").trim(),
     unit: String(unitValues[index] || "").trim() || null,
     supplierItemName: String(supplierItemNameValues[index] || "").trim(),
-  }));
+  })).filter((item) => item.itemId || item.freeItemName);
 }

@@ -202,7 +202,8 @@ export async function listSupplierOrderProducts(supplierId: string): Promise<{
 export async function getSupplierOrderDraftItems(
   supplierId: string,
   selection: {
-    itemId: string;
+    itemId: string | null;
+    freeItemName?: string | null;
     qty?: string | null;
     unit?: string | null;
     supplierItemName?: string | null;
@@ -218,6 +219,22 @@ export async function getSupplierOrderDraftItems(
 
   const items = selection
     .map((entry) => {
+      const freeItemName = String(entry.freeItemName || "").trim();
+      if (!entry.itemId && freeItemName) {
+        const requestedUnit = normalizeSupplierOrderUnit(entry.unit);
+        return {
+          itemId: null,
+          itemName: freeItemName,
+          supplierItemName: freeItemName,
+          unit: globalUnitOptions.includes(requestedUnit)
+            ? requestedUnit
+            : globalUnitOptions[0] || null,
+          unitOptions: globalUnitOptions,
+          qty: entry.qty || "",
+        };
+      }
+
+      if (!entry.itemId) return null;
       const row = rowsById.get(entry.itemId);
       if (!row) return null;
 
@@ -318,7 +335,8 @@ export async function removeOpenSupplierPurchaseOrder(orderId: string) {
 export async function saveSupplierPurchaseOrder(
   supplierId: string,
   selection: {
-    itemId: string;
+    itemId: string | null;
+    freeItemName?: string | null;
     qty?: string | null;
     unit?: string | null;
     supplierItemName?: string | null;
@@ -351,11 +369,16 @@ export async function saveSupplierPurchaseOrder(
         })
       : await tx.supplierPurchaseOrder.create({ data: { supplierId } });
 
-    const itemIds = validItems.map((item) => item.itemId);
+    const catalogItems = validItems.filter((item) => item.itemId);
+    const freeItems = validItems.filter((item) => !item.itemId);
+    const itemIds = catalogItems.map((item) => item.itemId);
     await tx.supplierPurchaseOrderItem.deleteMany({
-      where: { orderId: order.id, itemId: { notIn: itemIds } },
+      where: {
+        orderId: order.id,
+        OR: [{ itemId: null }, { itemId: { notIn: itemIds } }],
+      },
     });
-    for (const item of validItems) {
+    for (const item of catalogItems) {
       await tx.supplierPurchaseOrderItem.upsert({
         where: { orderId_itemId: { orderId: order.id, itemId: item.itemId } },
         create: {
@@ -370,6 +393,18 @@ export async function saveSupplierPurchaseOrder(
           quantity: item.quantity,
           unit: item.unit,
         },
+      });
+    }
+    if (freeItems.length > 0) {
+      await tx.supplierPurchaseOrderItem.createMany({
+        data: freeItems.map((item) => ({
+          orderId: order.id,
+          itemId: null,
+          freeItemName: item.itemName,
+          supplierItemName: item.itemName,
+          quantity: item.quantity,
+          unit: item.unit,
+        })),
       });
     }
 

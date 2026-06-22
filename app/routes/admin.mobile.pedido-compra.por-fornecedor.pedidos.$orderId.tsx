@@ -14,14 +14,15 @@ import { ok } from "~/utils/http-response.server";
 export async function loader({ params }: LoaderFunctionArgs) {
   const orderId = String(params.orderId || "");
   const order = await getSupplierPurchaseOrder(orderId);
-  if (!order) return redirect("/admin/mobile/pedido-fornecedor");
+  if (!order) return redirect("/admin/mobile/pedido-compra/por-fornecedor");
 
   const orderMessage = buildSupplierOrderMessage(
     order.Supplier.name,
     order.Items.map((item: any) => ({
       itemId: item.itemId,
-      itemName: item.Item.name,
-      supplierItemName: item.supplierItemName || item.Item.name,
+      itemName: item.Item?.name || item.freeItemName,
+      supplierItemName:
+        item.supplierItemName || item.Item?.name || item.freeItemName,
       qty: String(item.quantity),
       unit: item.unit,
     }))
@@ -39,7 +40,9 @@ export async function action({ request, params }: ActionFunctionArgs) {
     await toggleSupplierPurchaseOrderItemChecked(orderId, orderItemId);
   if (intent === "remove-item")
     await removeSupplierPurchaseOrderItem(orderId, orderItemId);
-  return redirect(`/admin/mobile/pedido-fornecedor/pedidos/${orderId}`);
+  return redirect(
+    `/admin/mobile/pedido-compra/por-fornecedor/pedidos/${orderId}`
+  );
 }
 
 export default function AdminMobilePedidoFornecedorPedido() {
@@ -86,7 +89,7 @@ export default function AdminMobilePedidoFornecedorPedido() {
       </div>
 
       <Link
-        to={`/admin/mobile/pedido-fornecedor/${order.supplierId}/produtos?orderId=${order.id}`}
+        to={`/admin/mobile/pedido-compra/por-fornecedor/${order.supplierId}/produtos?orderId=${order.id}`}
         className="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white py-3 text-sm font-semibold text-slate-800"
       >
         <Plus className="h-4 w-4" />
@@ -123,10 +126,13 @@ export default function AdminMobilePedidoFornecedorPedido() {
                   {item.checked ? <Check className="h-4 w-4" /> : null}
                 </span>
                 <span className="min-w-0">
-                  <span className="block truncate text-sm font-semibold text-slate-900">
-                    {item.supplierItemName || item.Item.name}
+                  <span className="block truncate text-base font-semibold text-slate-900">
+                    {item.supplierItemName ||
+                      item.Item?.name ||
+                      item.freeItemName}
                   </span>
-                  {item.supplierItemName &&
+                  {item.Item &&
+                  item.supplierItemName &&
                   item.supplierItemName !== item.Item.name ? (
                     <span className="block truncate text-[11px] text-slate-400">
                       Cadastro: {item.Item.name}
@@ -144,7 +150,9 @@ export default function AdminMobilePedidoFornecedorPedido() {
               <button
                 type="submit"
                 className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-red-200 text-red-600"
-                aria-label={`Remover ${item.Item.name}`}
+                aria-label={`Remover ${
+                  item.Item?.name || item.freeItemName || "item"
+                }`}
               >
                 <Trash2 className="h-4 w-4" />
               </button>

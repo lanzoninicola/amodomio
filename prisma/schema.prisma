@@ -167,6 +167,42 @@ model GroceryListItem {
   @@map("grocery_list_items")
 }
 
+model PurchaseShoppingList {
+  id          String    @id @default(uuid())
+  name        String
+  status      String    @default("open")
+  completedAt DateTime? @map("completed_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @default(now()) @updatedAt @map("updated_at")
+
+  Items PurchaseShoppingListItem[]
+
+  @@index([status, createdAt], map: "purchase_shopping_lists_status_created_idx")
+  @@map("purchase_shopping_lists")
+}
+
+model PurchaseShoppingListItem {
+  id          String    @id @default(uuid())
+  listId      String    @map("list_id")
+  itemId      String    @map("item_id")
+  supplierId  String?   @map("supplier_id")
+  quantity    Float
+  unit        String
+  purchased   Boolean   @default(false)
+  purchasedAt DateTime? @map("purchased_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @default(now()) @updatedAt @map("updated_at")
+
+  List     PurchaseShoppingList @relation(fields: [listId], references: [id], onDelete: Cascade)
+  Item     Item                 @relation(fields: [itemId], references: [id], onDelete: Restrict)
+  Supplier Supplier?            @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+
+  @@unique([listId, itemId], map: "purchase_shopping_list_items_list_item_unique")
+  @@index([itemId], map: "purchase_shopping_list_items_item_idx")
+  @@index([supplierId], map: "purchase_shopping_list_items_supplier_idx")
+  @@map("purchase_shopping_list_items")
+}
+
 model Item {
   id                          String   @id @default(uuid())
   name                        String
@@ -206,6 +242,7 @@ model Item {
   ItemShare                    ItemShare[]
   ItemInterestEvent            ItemInterestEvent[]
   SupplierPurchaseOrderItem    SupplierPurchaseOrderItem[]
+  PurchaseShoppingListItem     PurchaseShoppingListItem[]
 
   @@index([categoryId], map: "items_category_id_idx")
   @@index([classification], map: "items_classification_idx")
@@ -476,6 +513,7 @@ model Supplier {
   StockMovementImportBatchLine StockMovementImportBatchLine[]
   StockMovement                StockMovement[]
   PurchaseOrder                SupplierPurchaseOrder[]
+  PurchaseShoppingListItem     PurchaseShoppingListItem[]
 
   @@index([cnpj], map: "suppliers_cnpj_idx")
   @@index([name], map: "suppliers_name_idx")
@@ -518,7 +556,8 @@ model SupplierPurchaseOrder {
 model SupplierPurchaseOrderItem {
   id               String    @id @default(uuid())
   orderId          String    @map("order_id")
-  itemId           String    @map("item_id")
+  itemId           String?   @map("item_id")
+  freeItemName     String?   @map("free_item_name")
   supplierItemName String?   @map("supplier_item_name")
   quantity         Float
   unit             String
@@ -528,7 +567,7 @@ model SupplierPurchaseOrderItem {
   updatedAt        DateTime  @default(now()) @updatedAt @map("updated_at")
 
   Order SupplierPurchaseOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  Item  Item                  @relation(fields: [itemId], references: [id], onDelete: Restrict)
+  Item  Item?                 @relation(fields: [itemId], references: [id], onDelete: Restrict)
 
   @@unique([orderId, itemId], map: "supplier_purchase_order_items_order_item_unique")
   @@index([itemId], map: "supplier_purchase_order_items_item_idx")
@@ -2160,19 +2199,19 @@ model MarketingPizzaReservation {
 }
 
 model CardapioHighlightSection {
-  id             String    @id @default(uuid())
-  key            String    @unique
-  title          String
-  subtitle       String?
-  published      Boolean   @default(false)
-  sortOrder      Int       @default(0) @map("sort_order")
-  displayStyle   String    @default("polaroid") @map("display_style")
-  showTitle      Boolean   @default(true) @map("show_title")
-  showPromotionHint Boolean @default(true) @map("show_promotion_hint")
-  imageItemsJson Json?     @map("image_items_json")
-  createdAt      DateTime  @default(now()) @map("created_at")
-  updatedAt      DateTime  @default(now()) @updatedAt @map("updated_at")
-  deletedAt      DateTime? @map("deleted_at")
+  id                String    @id @default(uuid())
+  key               String    @unique
+  title             String
+  subtitle          String?
+  published         Boolean   @default(false)
+  sortOrder         Int       @default(0) @map("sort_order")
+  displayStyle      String    @default("polaroid") @map("display_style")
+  showTitle         Boolean   @default(true) @map("show_title")
+  showPromotionHint Boolean   @default(true) @map("show_promotion_hint")
+  imageItemsJson    Json?     @map("image_items_json")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @default(now()) @updatedAt @map("updated_at")
+  deletedAt         DateTime? @map("deleted_at")
 
   @@index([published, sortOrder], map: "cardapio_highlight_sections_published_sort_idx")
   @@index([deletedAt], map: "cardapio_highlight_sections_deleted_at_idx")
@@ -2864,14 +2903,19 @@ model WhatsappStatusPublication {
   lastPublishError    String?   @map("last_publish_error") @db.Text
   deactivatedAt       DateTime? @map("deactivated_at")
   deletedAt           DateTime? @map("deleted_at")
+  sourceType          String?   @map("source_type")
+  sourceId            String?   @map("source_id")
+  sourceItemKey       String?   @map("source_item_key")
   createdAt           DateTime  @default(now()) @map("created_at")
   updatedAt           DateTime  @default(now()) @updatedAt @map("updated_at")
 
   Executions WhatsappStatusPublicationExecution[]
 
+  @@unique([sourceType, sourceId, sourceItemKey], map: "whatsapp_status_publications_source_item_key")
   @@index([active, updatedAt], map: "whatsapp_status_publications_active_updated_idx")
   @@index([deletedAt], map: "whatsapp_status_publications_deleted_at_idx")
   @@index([kind], map: "whatsapp_status_publications_kind_idx")
+  @@index([sourceType, sourceId], map: "whatsapp_status_publications_source_idx")
   @@map("whatsapp_status_publications")
 }
 
@@ -2969,4 +3013,22 @@ model CompetitorMenuSnapshot {
   @@unique([city, collectedAt], map: "competitor_menu_snapshots_city_collected_at_key")
   @@index([collectedAt], map: "competitor_menu_snapshots_collected_at_idx")
   @@map("competitor_menu_snapshots")
+}
+
+model InstagramConnection {
+  id                   String    @id @default(uuid())
+  provider             String    @unique @default("facebook")
+  facebookPageId       String    @map("facebook_page_id")
+  facebookPageName     String    @map("facebook_page_name")
+  instagramAccountId   String    @unique @map("instagram_account_id")
+  instagramUsername    String?   @map("instagram_username")
+  encryptedAccessToken String    @map("encrypted_access_token") @db.Text
+  tokenExpiresAt       DateTime? @map("token_expires_at")
+  status               String    @default("connected")
+  lastVerifiedAt       DateTime? @map("last_verified_at")
+  lastError            String?   @map("last_error") @db.Text
+  createdAt            DateTime  @default(now()) @map("created_at")
+  updatedAt            DateTime  @default(now()) @updatedAt @map("updated_at")
+
+  @@map("instagram_connections")
 }

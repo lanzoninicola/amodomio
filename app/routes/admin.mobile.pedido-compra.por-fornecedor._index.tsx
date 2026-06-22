@@ -62,7 +62,7 @@ export default function AdminMobilePedidoFornecedorIndex() {
     <div className="space-y-4 pb-8">
       {openOrdersCount > 0 ? (
         <Link
-          to="/admin/mobile/pedido-fornecedor/pedidos-abertos"
+          to="/admin/mobile/pedido-compra/por-fornecedor/pedidos-abertos"
           className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-amber-600 px-3 py-3 text-sm font-semibold text-white"
         >
           Ver pedidos em aberto ({openOrdersCount})
@@ -105,7 +105,7 @@ export default function AdminMobilePedidoFornecedorIndex() {
                 {group.suppliers.map((supplier) => (
                   <Link
                     key={supplier.id}
-                    to={`${supplier.id}/produtos`}
+                    to={`/admin/mobile/pedido-compra/por-fornecedor/${supplier.id}/produtos`}
                     className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-3"
                   >
                     <span>

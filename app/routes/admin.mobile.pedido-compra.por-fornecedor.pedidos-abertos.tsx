@@ -22,7 +22,7 @@ export async function action({ request }: ActionFunctionArgs) {
     await removeOpenSupplierPurchaseOrder(orderId);
   }
 
-  return redirect("/admin/mobile/pedido-fornecedor/pedidos-abertos");
+  return redirect("/admin/mobile/pedido-compra/por-fornecedor/pedidos-abertos");
 }
 
 export default function AdminMobilePedidoFornecedorPedidosAbertos() {
@@ -32,7 +32,7 @@ export default function AdminMobilePedidoFornecedorPedidosAbertos() {
   return (
     <div className="space-y-4 pb-8">
       <Link
-        to="/admin/mobile/pedido-fornecedor"
+        to="/admin/mobile/pedido-compra/por-fornecedor"
         className="inline-flex items-center gap-2 text-sm font-semibold text-slate-700"
       >
         <ArrowLeft className="h-4 w-4" />
@@ -57,7 +57,7 @@ export default function AdminMobilePedidoFornecedorPedidosAbertos() {
                   className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3"
                 >
                   <Link
-                    to={`/admin/mobile/pedido-fornecedor/pedidos/${order.id}`}
+                    to={`/admin/mobile/pedido-compra/por-fornecedor/pedidos/${order.id}`}
                     className="flex min-w-0 flex-1 items-center justify-between gap-3"
                   >
                     <span className="min-w-0">

@@ -12,12 +12,16 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const selection = parseSupplierOrderSelection(url.searchParams);
 
   if (selection.length === 0) {
-    return redirect(`/admin/mobile/pedido-fornecedor/${supplierId}/produtos`);
+    return redirect(
+      `/admin/mobile/pedido-compra/por-fornecedor/${supplierId}/produtos`
+    );
   }
 
   const result = await getSupplierOrderDraftItems(supplierId, selection);
   if (result.items.length === 0) {
-    return redirect(`/admin/mobile/pedido-fornecedor/${supplierId}/produtos`);
+    return redirect(
+      `/admin/mobile/pedido-compra/por-fornecedor/${supplierId}/produtos`
+    );
   }
 
   return ok({ supplierId, ...result });
@@ -39,7 +43,7 @@ export default function AdminMobilePedidoFornecedorQuantidades() {
           </p>
         </div>
         <Link
-          to={`/admin/mobile/pedido-fornecedor/${supplierId}/produtos`}
+          to={`/admin/mobile/pedido-compra/por-fornecedor/${supplierId}/produtos`}
           className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700"
         >
           <ArrowLeft className="h-3.5 w-3.5" />
@@ -49,7 +53,7 @@ export default function AdminMobilePedidoFornecedorQuantidades() {
 
       <Form
         method="get"
-        action={`/admin/mobile/pedido-fornecedor/${supplierId}/resumo`}
+        action={`/admin/mobile/pedido-compra/por-fornecedor/${supplierId}/resumo`}
         className="space-y-3"
       >
         {items.map((item: any, index: number) => (

@@ -36,8 +36,12 @@ export default function AdminMobileLayout() {
   const isImportStockSupplierReconciliation = pathname.includes(
     "/supplier-reconciliation"
   );
-  const isPedidoFornecedor = pathname.startsWith(
-    "/admin/mobile/pedido-fornecedor"
+  const isPurchaseOrder = pathname.startsWith("/admin/mobile/pedido-compra");
+  const isPurchaseOrderBySupplier = pathname.startsWith(
+    "/admin/mobile/pedido-compra/por-fornecedor"
+  );
+  const isPurchaseOrderByProducts = pathname.startsWith(
+    "/admin/mobile/pedido-compra/por-produtos"
   );
   const pageTitle = isEstoque
     ? "Estoque de massa"
@@ -57,9 +61,17 @@ export default function AdminMobileLayout() {
     ? "Custos por fornecedor"
     : isCosts
     ? "Consulta de custos"
-    : isPedidoFornecedor
+    : isPurchaseOrderBySupplier
     ? "Pedido por fornecedor"
+    : isPurchaseOrderByProducts
+    ? "Lista de compras"
+    : isPurchaseOrder
+    ? "Pedido de compra"
     : "Atalhos";
+  const backUrl =
+    isPurchaseOrder && pathname !== "/admin/mobile/pedido-compra"
+      ? "/admin/mobile/pedido-compra"
+      : "/admin/mobile";
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -88,7 +100,7 @@ export default function AdminMobileLayout() {
                 {pageTitle}
               </h1>
               <Link
-                to="/admin/mobile"
+                to={backUrl}
                 className="inline-flex items-center rounded-md border border-slate-300 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700"
               >
                 Voltar
@@ -236,7 +248,7 @@ export default function AdminMobileLayout() {
             </Link>
 
             <Link
-              to="/admin/mobile/pedido-fornecedor"
+              to="/admin/mobile/pedido-compra"
               className="grid grid-cols-[auto_1fr] items-center gap-x-2 gap-y-1.5 rounded-xl border border-slate-200 bg-white p-3 shadow-sm"
             >
               <span className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-green-100 text-green-700">
@@ -244,10 +256,10 @@ export default function AdminMobileLayout() {
               </span>
               <span className="contents">
                 <span className="text-xs font-semibold leading-tight text-slate-900">
-                  Pedido por fornecedor
+                  Pedido de compra
                 </span>
                 <span className="col-span-2 text-[11px] leading-snug text-slate-600">
-                  Ver itens e anotar quantidades do pedido
+                  Criar por fornecedor ou montar uma lista de compras
                 </span>
               </span>
             </Link>
