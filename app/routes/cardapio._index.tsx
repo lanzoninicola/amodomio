@@ -20,7 +20,7 @@ import { isDatabaseConnectivityError } from "~/lib/errors/connectivity";
 import { prismaIt } from "~/lib/prisma/prisma-it.server";
 import { badRequest, ok } from "~/utils/http-response.server";
 import { loadCardapioIndexData } from "~/domain/cardapio/cardapio-index.server";
-import type { CardapioHighlightSection } from "~/domain/cardapio/cardapio-highlight-sections.server";
+import type { CardapioFeatured } from "~/domain/cardapio/cardapio-featured.server";
 import {
   CardapioCatalogSection,
   CardapioHighlightsSection,
@@ -29,7 +29,7 @@ import {
 import CardapioOrderCtaButton from "~/domain/cardapio/components/cardapio-order-cta-button";
 import CardapioDesktopSidebarHeader from "~/domain/cardapio/components/cardapio-desktop-sidebar-header";
 import { trackCardapioFacebookPixelTrigger } from "~/domain/cardapio/facebook-pixel.client";
-import { trackCardapioHighlight } from "~/domain/cardapio/tracking/cardapio-tracking.client";
+import { trackCardapioFeatured } from "~/domain/cardapio/tracking/cardapio-tracking.client";
 import {
   Carousel,
   CarouselContent,
@@ -136,7 +136,7 @@ export default function CardapioWebIndex() {
     menuItemInterestEnabled,
     likesEnabled,
     filterViewMode,
-    highlightSections = [],
+    featuredSections = [],
   } = useLoaderData<typeof loader>();
   const [showLikeCelebration, setShowLikeCelebration] = useState(false);
   const [likeCelebrationSeed, setLikeCelebrationSeed] = useState(1);
@@ -213,9 +213,9 @@ export default function CardapioWebIndex() {
                   />
                 </aside>
 
-                {highlightSections[0] ? (
-                  <CardapioHighlightPromotionCarousel
-                    section={highlightSections[0]}
+                {featuredSections[0] ? (
+                  <CardapioFeaturedPromotionCarousel
+                    section={featuredSections[0]}
                   />
                 ) : null}
 
@@ -240,10 +240,10 @@ export default function CardapioWebIndex() {
   );
 }
 
-function CardapioHighlightPromotionCarousel({
+function CardapioFeaturedPromotionCarousel({
   section,
 }: {
-  section: CardapioHighlightSection;
+  section: CardapioFeatured;
 }) {
   const images = section.images;
   const hasMultipleImages = images.length > 1;
@@ -269,10 +269,10 @@ function CardapioHighlightPromotionCarousel({
     const observer = new IntersectionObserver(
       ([entry]) => {
         if (!entry?.isIntersecting) return;
-        trackCardapioHighlight({
+        trackCardapioFeatured({
           action: "impression",
           sectionKey: section.key,
-          placement: getCardapioHighlightCardPlacement(),
+          placement: getCardapioFeaturedCardPlacement(),
         });
         observer.disconnect();
       },
@@ -289,11 +289,11 @@ function CardapioHighlightPromotionCarousel({
     const updateCurrentSlide = () => {
       const selectedSlide = api.selectedScrollSnap();
       setCurrentSlide(selectedSlide);
-      const placement = getCardapioHighlightCardPlacement();
+      const placement = getCardapioFeaturedCardPlacement();
       const trackingKey = `${placement}:${selectedSlide}`;
       if (!trackedSlidesRef.current.has(trackingKey)) {
         trackedSlidesRef.current.add(trackingKey);
-        trackCardapioHighlight({
+        trackCardapioFeatured({
           action: "slide_view",
           sectionKey: section.key,
           imageIndex: selectedSlide,
@@ -397,7 +397,7 @@ function CardapioHighlightPromotionCarousel({
                       type="button"
                       className="absolute inset-0 flex cursor-zoom-in items-start justify-end bg-transparent p-2 md:hidden"
                       onClick={() => {
-                        trackCardapioHighlight({
+                        trackCardapioFeatured({
                           action: "expand",
                           sectionKey: section.key,
                           imageIndex: index,
@@ -417,7 +417,7 @@ function CardapioHighlightPromotionCarousel({
                         type="button"
                         className="absolute inset-0 hidden cursor-zoom-in items-start justify-end bg-transparent p-2 md:flex"
                         onClick={() => {
-                          trackCardapioHighlight({
+                          trackCardapioFeatured({
                             action: "expand",
                             sectionKey: section.key,
                             imageIndex: index,
@@ -588,7 +588,7 @@ function PromotionLinkSticker({
   imageIndex,
   placement,
 }: {
-  image: CardapioHighlightSection["images"][number];
+  image: CardapioFeatured["images"][number];
   sectionKey: string;
   imageIndex: number;
   placement: "card" | "mobile_modal" | "desktop_modal";
@@ -607,13 +607,13 @@ function PromotionLinkSticker({
       }}
       onClick={(event) => {
         event.stopPropagation();
-        trackCardapioHighlight({
+        trackCardapioFeatured({
           action: "cta_click",
           sectionKey,
           imageIndex,
           placement:
             placement === "card"
-              ? getCardapioHighlightCardPlacement()
+              ? getCardapioFeaturedCardPlacement()
               : placement,
         });
       }}
@@ -624,7 +624,7 @@ function PromotionLinkSticker({
   );
 }
 
-function getCardapioHighlightCardPlacement() {
+function getCardapioFeaturedCardPlacement() {
   return window.matchMedia("(min-width: 768px)").matches
     ? ("desktop_card" as const)
     : ("mobile_card" as const);

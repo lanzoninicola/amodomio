@@ -1,11 +1,11 @@
 export const CARDAPIO_TRACKING_ENDPOINT = "/api/cardapio-interaction";
 
 export const CARDAPIO_NAVIGATION_EVENT = "cardapio_navigation_click";
-export const CARDAPIO_HIGHLIGHT_IMPRESSION_EVENT =
+export const CARDAPIO_FEATURED_IMPRESSION_EVENT =
   "cardapio_highlight_impression";
-export const CARDAPIO_HIGHLIGHT_EXPAND_EVENT = "cardapio_highlight_expand";
-export const CARDAPIO_HIGHLIGHT_SLIDE_EVENT = "cardapio_highlight_slide_view";
-export const CARDAPIO_HIGHLIGHT_CTA_EVENT = "cardapio_highlight_cta_click";
+export const CARDAPIO_FEATURED_EXPAND_EVENT = "cardapio_highlight_expand";
+export const CARDAPIO_FEATURED_SLIDE_EVENT = "cardapio_highlight_slide_view";
+export const CARDAPIO_FEATURED_CTA_EVENT = "cardapio_highlight_cta_click";
 
 export const CARDAPIO_NAVIGATION_CONTROLS = [
   "group",
@@ -20,7 +20,7 @@ export const CARDAPIO_NAVIGATION_PLACEMENTS = [
   "stories",
 ] as const;
 
-export const CARDAPIO_HIGHLIGHT_CONTROLS = [
+export const CARDAPIO_FEATURED_CONTROLS = [
   "section",
   "image_1",
   "image_2",
@@ -34,30 +34,30 @@ export const CARDAPIO_HIGHLIGHT_CONTROLS = [
   "image_10",
 ] as const;
 
-export const CARDAPIO_HIGHLIGHT_PLACEMENTS = [
+export const CARDAPIO_FEATURED_PLACEMENTS = [
   "mobile_card",
   "mobile_modal",
   "desktop_card",
   "desktop_modal",
 ] as const;
 
-export const CARDAPIO_HIGHLIGHT_EVENTS = [
-  CARDAPIO_HIGHLIGHT_IMPRESSION_EVENT,
-  CARDAPIO_HIGHLIGHT_EXPAND_EVENT,
-  CARDAPIO_HIGHLIGHT_SLIDE_EVENT,
-  CARDAPIO_HIGHLIGHT_CTA_EVENT,
+export const CARDAPIO_FEATURED_EVENTS = [
+  CARDAPIO_FEATURED_IMPRESSION_EVENT,
+  CARDAPIO_FEATURED_EXPAND_EVENT,
+  CARDAPIO_FEATURED_SLIDE_EVENT,
+  CARDAPIO_FEATURED_CTA_EVENT,
 ] as const;
 
 export type CardapioNavigationControl =
   (typeof CARDAPIO_NAVIGATION_CONTROLS)[number];
 export type CardapioNavigationPlacement =
   (typeof CARDAPIO_NAVIGATION_PLACEMENTS)[number];
-export type CardapioHighlightControl =
-  (typeof CARDAPIO_HIGHLIGHT_CONTROLS)[number];
-export type CardapioHighlightPlacement =
-  (typeof CARDAPIO_HIGHLIGHT_PLACEMENTS)[number];
-export type CardapioHighlightEventName =
-  (typeof CARDAPIO_HIGHLIGHT_EVENTS)[number];
+export type CardapioFeaturedControl =
+  (typeof CARDAPIO_FEATURED_CONTROLS)[number];
+export type CardapioFeaturedPlacement =
+  (typeof CARDAPIO_FEATURED_PLACEMENTS)[number];
+export type CardapioFeaturedEventName =
+  (typeof CARDAPIO_FEATURED_EVENTS)[number];
 
 export type CardapioNavigationTrackingRecord = {
   eventName: typeof CARDAPIO_NAVIGATION_EVENT;
@@ -66,22 +66,22 @@ export type CardapioNavigationTrackingRecord = {
   placement: CardapioNavigationPlacement;
 };
 
-export type CardapioHighlightTrackingRecord = {
-  eventName: CardapioHighlightEventName;
-  control: CardapioHighlightControl;
+export type CardapioFeaturedTrackingRecord = {
+  eventName: CardapioFeaturedEventName;
+  control: CardapioFeaturedControl;
   value: string;
-  placement: CardapioHighlightPlacement;
+  placement: CardapioFeaturedPlacement;
 };
 
 export type CardapioTrackingRecord =
   | CardapioNavigationTrackingRecord
-  | CardapioHighlightTrackingRecord;
+  | CardapioFeaturedTrackingRecord;
 
 const navigationControls = new Set<string>(CARDAPIO_NAVIGATION_CONTROLS);
 const navigationPlacements = new Set<string>(CARDAPIO_NAVIGATION_PLACEMENTS);
-const highlightEvents = new Set<string>(CARDAPIO_HIGHLIGHT_EVENTS);
-const highlightControls = new Set<string>(CARDAPIO_HIGHLIGHT_CONTROLS);
-const highlightPlacements = new Set<string>(CARDAPIO_HIGHLIGHT_PLACEMENTS);
+const featuredEvents = new Set<string>(CARDAPIO_FEATURED_EVENTS);
+const featuredControls = new Set<string>(CARDAPIO_FEATURED_CONTROLS);
+const featuredPlacements = new Set<string>(CARDAPIO_FEATURED_PLACEMENTS);
 
 const normalizeString = (value: unknown, maxLength: number) =>
   typeof value === "string" ? value.trim().slice(0, maxLength) : "";
@@ -113,17 +113,31 @@ export function parseCardapioTrackingRecord(
   }
 
   if (
-    highlightEvents.has(eventName) &&
-    highlightControls.has(control) &&
-    highlightPlacements.has(placement)
+    featuredEvents.has(eventName) &&
+    featuredControls.has(control) &&
+    featuredPlacements.has(placement)
   ) {
     return {
-      eventName: eventName as CardapioHighlightEventName,
-      control: control as CardapioHighlightControl,
+      eventName: eventName as CardapioFeaturedEventName,
+      control: control as CardapioFeaturedControl,
       value,
-      placement: placement as CardapioHighlightPlacement,
+      placement: placement as CardapioFeaturedPlacement,
     };
   }
 
   return null;
 }
+
+// Compatibilidade com integrações que ainda importam os nomes anteriores.
+export const CARDAPIO_HIGHLIGHT_IMPRESSION_EVENT =
+  CARDAPIO_FEATURED_IMPRESSION_EVENT;
+export const CARDAPIO_HIGHLIGHT_EXPAND_EVENT = CARDAPIO_FEATURED_EXPAND_EVENT;
+export const CARDAPIO_HIGHLIGHT_SLIDE_EVENT = CARDAPIO_FEATURED_SLIDE_EVENT;
+export const CARDAPIO_HIGHLIGHT_CTA_EVENT = CARDAPIO_FEATURED_CTA_EVENT;
+export const CARDAPIO_HIGHLIGHT_CONTROLS = CARDAPIO_FEATURED_CONTROLS;
+export const CARDAPIO_HIGHLIGHT_PLACEMENTS = CARDAPIO_FEATURED_PLACEMENTS;
+export const CARDAPIO_HIGHLIGHT_EVENTS = CARDAPIO_FEATURED_EVENTS;
+export type CardapioHighlightControl = CardapioFeaturedControl;
+export type CardapioHighlightPlacement = CardapioFeaturedPlacement;
+export type CardapioHighlightEventName = CardapioFeaturedEventName;
+export type CardapioHighlightTrackingRecord = CardapioFeaturedTrackingRecord;

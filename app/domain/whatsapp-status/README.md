@@ -59,6 +59,20 @@ Gerencia posts que serão enviados para o Status do WhatsApp via Z-API.
 - Telas de seleção de imagens devem reutilizar
   `StatusPublicationMediaForm`.
 
+## Integração com ContentPost
+
+Publicações editoriais usam `sourceType = content-post-target`, o ID do alvo
+`whatsapp-status` como `sourceId` e o ID da mídia como `sourceItemKey`.
+
+Schedulers devem preferir o endpoint unificado:
+
+```text
+POST /api/content-publication-targets/:targetId/publish
+```
+
+O CRUD independente em `Marketing > Whatsapp Status` continua disponível para
+posts operacionais que não pertencem a um `ContentPost`.
+
 ## Fontes
 
 - WhatsApp Help Center: `https://faq.whatsapp.com/454876960047011/?locale=pt_BR&cms_platform=kaios`

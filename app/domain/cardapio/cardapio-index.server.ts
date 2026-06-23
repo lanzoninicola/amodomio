@@ -5,9 +5,9 @@ import { CARDAPIO_INDEX_CACHE_KEY } from "~/domain/cardapio/cardapio-cache.serve
 import { notifyCardapioContingencyByWhatsapp } from "~/domain/cardapio/cardapio-contingency-alert.server";
 import { findAllCardapioItemsGroupedByGroupLight } from "~/domain/cardapio/cardapio-items-source.server";
 import {
-  findPublishedCardapioHighlightSections,
-  type CardapioHighlightSection,
-} from "~/domain/cardapio/cardapio-highlight-sections.server";
+  findPublishedCardapioFeatured,
+  type CardapioFeatured,
+} from "~/domain/cardapio/cardapio-featured.server";
 import { getEngagementSettings } from "~/domain/cardapio/engagement-settings.server";
 import { tagPrismaEntity } from "~/domain/tags/tag.prisma.entity.server";
 import { isDatabaseConnectivityError } from "~/lib/errors/connectivity";
@@ -35,7 +35,7 @@ export type CardapioIndexLoaderData = {
   likesEnabled: boolean;
   sharesEnabled: boolean;
   filterViewMode: "chip" | "stories";
-  highlightSections: CardapioHighlightSection[];
+  featuredSections: CardapioFeatured[];
 };
 
 export async function loadCardapioIndexData(
@@ -48,8 +48,18 @@ export async function loadCardapioIndexData(
   const cachedPayloadRaw = await redisGetJson<Partial<CardapioIndexLoaderData>>(
     CARDAPIO_INDEX_CACHE_KEY
   );
-  const cachedPayload = Array.isArray(cachedPayloadRaw?.highlightSections)
+  const legacyCachedFeatured = Array.isArray(
+    (cachedPayloadRaw as any)?.highlightSections
+  )
+    ? ((cachedPayloadRaw as any).highlightSections as CardapioFeatured[])
+    : null;
+  const cachedPayload = Array.isArray(cachedPayloadRaw?.featuredSections)
     ? (cachedPayloadRaw as CardapioIndexLoaderData)
+    : legacyCachedFeatured
+    ? ({
+        ...cachedPayloadRaw,
+        featuredSections: legacyCachedFeatured,
+      } as CardapioIndexLoaderData)
     : null;
   let simulateErrorBySetting = false;
 
@@ -94,14 +104,14 @@ export async function loadCardapioIndexData(
       orderBy: [{ createdAt: "desc" }],
     });
     const reelsEnabled = parseBooleanSetting(reelsEnabledSetting?.value, true);
-    const highlightSections = await findPublishedCardapioHighlightSections();
+    const featuredSections = await findPublishedCardapioFeatured();
 
     if (cachedPayload) {
       return {
         ...cachedPayload,
         reelsEnabled,
         reelUrls: reelsEnabled ? cachedPayload.reelUrls : [],
-        highlightSections,
+        featuredSections,
       };
     }
 
@@ -168,7 +178,7 @@ export async function loadCardapioIndexData(
       likesEnabled,
       sharesEnabled,
       filterViewMode,
-      highlightSections,
+      featuredSections,
     };
 
     await redisSetJson(
