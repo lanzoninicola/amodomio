@@ -2198,24 +2198,98 @@ model MarketingPizzaReservation {
   @@map("marketing_pizza_reservations")
 }
 
-model CardapioHighlightSection {
-  id                String    @id @default(uuid())
-  key               String    @unique
-  title             String
-  subtitle          String?
-  published         Boolean   @default(false)
-  sortOrder         Int       @default(0) @map("sort_order")
-  displayStyle      String    @default("polaroid") @map("display_style")
-  showTitle         Boolean   @default(true) @map("show_title")
-  showPromotionHint Boolean   @default(true) @map("show_promotion_hint")
-  imageItemsJson    Json?     @map("image_items_json")
-  createdAt         DateTime  @default(now()) @map("created_at")
-  updatedAt         DateTime  @default(now()) @updatedAt @map("updated_at")
-  deletedAt         DateTime? @map("deleted_at")
+model ContentPost {
+  id           String    @id @default(uuid())
+  key          String    @unique
+  title        String
+  subtitle     String?
+  caption      String?   @db.Text
+  status       String    @default("draft")
+  publishFrom  DateTime? @map("publish_from")
+  publishUntil DateTime? @map("publish_until")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @default(now()) @updatedAt @map("updated_at")
+  archivedAt   DateTime? @map("archived_at")
+  deletedAt    DateTime? @map("deleted_at")
 
-  @@index([published, sortOrder], map: "cardapio_highlight_sections_published_sort_idx")
-  @@index([deletedAt], map: "cardapio_highlight_sections_deleted_at_idx")
-  @@map("cardapio_highlight_sections")
+  Media   ContentPostMedia[]
+  Targets ContentPublicationTarget[]
+
+  @@index([status, publishFrom, publishUntil], map: "content_posts_status_window_idx")
+  @@index([deletedAt], map: "content_posts_deleted_at_idx")
+  @@map("content_posts")
+}
+
+model ContentPostMedia {
+  id                  String    @id @default(uuid())
+  contentPostId       String    @map("content_post_id")
+  key                 String
+  title               String
+  kind                String    @default("image")
+  mediaUrl            String    @map("media_url") @db.Text
+  fullscreenMediaUrl  String?   @map("fullscreen_media_url") @db.Text
+  alt                 String?   @db.Text
+  linkUrl             String?   @map("link_url") @db.Text
+  linkText            String?   @map("link_text")
+  linkBackgroundColor String?   @map("link_background_color")
+  linkTextColor       String?   @map("link_text_color")
+  sortOrder           Int       @default(0) @map("sort_order")
+  active              Boolean   @default(true)
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @default(now()) @updatedAt @map("updated_at")
+  deletedAt           DateTime? @map("deleted_at")
+
+  ContentPost ContentPost @relation(fields: [contentPostId], references: [id], onDelete: Cascade)
+
+  @@unique([contentPostId, key], map: "content_post_media_post_key")
+  @@index([contentPostId, active, sortOrder], map: "content_post_media_active_sort_idx")
+  @@map("content_post_media")
+}
+
+model ContentPublicationTarget {
+  id                 String    @id @default(uuid())
+  contentPostId      String    @map("content_post_id")
+  channel            String
+  enabled            Boolean   @default(false)
+  status             String    @default("draft")
+  sortOrder          Int       @default(0) @map("sort_order")
+  config             Json?
+  lastPublishedAt    DateTime? @map("last_published_at")
+  removalRequestedAt DateTime? @map("removal_requested_at")
+  removedAt          DateTime? @map("removed_at")
+  lastError          String?   @map("last_error") @db.Text
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @default(now()) @updatedAt @map("updated_at")
+  deletedAt          DateTime? @map("deleted_at")
+
+  ContentPost ContentPost                   @relation(fields: [contentPostId], references: [id], onDelete: Cascade)
+  Executions  ContentPublicationExecution[]
+
+  @@unique([contentPostId, channel], map: "content_publication_targets_post_channel")
+  @@index([channel, enabled, status, sortOrder], map: "content_publication_targets_channel_status_idx")
+  @@index([deletedAt], map: "content_publication_targets_deleted_at_idx")
+  @@map("content_publication_targets")
+}
+
+model ContentPublicationExecution {
+  id         String    @id @default(uuid())
+  targetId   String    @map("target_id")
+  operation  String
+  source     String    @default("manual")
+  status     String
+  externalId String?   @map("external_id")
+  startedAt  DateTime  @default(now()) @map("started_at")
+  finishedAt DateTime? @map("finished_at")
+  durationMs Int?      @map("duration_ms")
+  response   Json?
+  error      String?   @db.Text
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  Target ContentPublicationTarget @relation(fields: [targetId], references: [id], onDelete: Cascade)
+
+  @@index([targetId, startedAt], map: "content_publication_executions_target_started_idx")
+  @@index([status], map: "content_publication_executions_status_idx")
+  @@map("content_publication_executions")
 }
 
 model CompanyLocation {
@@ -3031,4 +3105,59 @@ model InstagramConnection {
   updatedAt            DateTime  @default(now()) @updatedAt @map("updated_at")
 
   @@map("instagram_connections")
+}
+
+model InstagramStoryPublication {
+  id                   String    @id @default(uuid())
+  title                String
+  kind                 String
+  mediaUrl             String    @map("media_url") @db.Text
+  active               Boolean   @default(false)
+  sourceType           String?   @map("source_type")
+  sourceId             String?   @map("source_id")
+  sourceItemKey        String?   @map("source_item_key")
+  lastContainerId      String?   @map("last_container_id")
+  lastInstagramMediaId String?   @map("last_instagram_media_id")
+  lastPublishedAt      DateTime? @map("last_published_at")
+  lastPublishStatus    String?   @map("last_publish_status")
+  lastPublishResponse  Json?     @map("last_publish_response")
+  lastPublishError     String?   @map("last_publish_error") @db.Text
+  deactivatedAt        DateTime? @map("deactivated_at")
+  deletedAt            DateTime? @map("deleted_at")
+  createdAt            DateTime  @default(now()) @map("created_at")
+  updatedAt            DateTime  @default(now()) @updatedAt @map("updated_at")
+
+  Executions InstagramStoryPublicationExecution[]
+
+  @@unique([sourceType, sourceId, sourceItemKey], map: "instagram_story_publications_source_item_key")
+  @@index([active, updatedAt], map: "instagram_story_publications_active_updated_idx")
+  @@index([sourceType, sourceId], map: "instagram_story_publications_source_idx")
+  @@index([lastPublishStatus], map: "instagram_story_publications_status_idx")
+  @@map("instagram_story_publications")
+}
+
+model InstagramStoryPublicationExecution {
+  id               String    @id @default(uuid())
+  publicationId    String    @map("publication_id")
+  source           String    @default("api")
+  scheduleName     String?   @map("schedule_name")
+  status           String
+  containerId      String?   @map("container_id")
+  instagramMediaId String?   @map("instagram_media_id")
+  startedAt        DateTime  @default(now()) @map("started_at")
+  finishedAt       DateTime? @map("finished_at")
+  durationMs       Int?      @map("duration_ms")
+  response         Json?
+  error            String?   @db.Text
+  requestBody      Json?     @map("request_body")
+  userAgent        String?   @map("user_agent") @db.Text
+  ipAddress        String?   @map("ip_address")
+  createdAt        DateTime  @default(now()) @map("created_at")
+
+  Publication InstagramStoryPublication @relation(fields: [publicationId], references: [id], onDelete: Cascade)
+
+  @@index([publicationId, startedAt], map: "instagram_story_executions_publication_started_idx")
+  @@index([source], map: "instagram_story_executions_source_idx")
+  @@index([status], map: "instagram_story_executions_status_idx")
+  @@map("instagram_story_publication_executions")
 }

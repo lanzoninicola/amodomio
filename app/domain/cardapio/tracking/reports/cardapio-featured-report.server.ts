@@ -1,16 +1,17 @@
 import prismaClient from "~/lib/prisma/client.server";
 import {
-  CARDAPIO_HIGHLIGHT_CTA_EVENT,
-  CARDAPIO_HIGHLIGHT_EVENTS,
-  CARDAPIO_HIGHLIGHT_EXPAND_EVENT,
-  CARDAPIO_HIGHLIGHT_IMPRESSION_EVENT,
-  CARDAPIO_HIGHLIGHT_SLIDE_EVENT,
-  type CardapioHighlightEventName,
+  CARDAPIO_FEATURED_CTA_EVENT,
+  CARDAPIO_FEATURED_EVENTS,
+  CARDAPIO_FEATURED_EXPAND_EVENT,
+  CARDAPIO_FEATURED_IMPRESSION_EVENT,
+  CARDAPIO_FEATURED_SLIDE_EVENT,
+  type CardapioFeaturedEventName,
 } from "../cardapio-tracking-events";
 import {
   readCardapioTrackingCounts,
   readCardapioTrackingVisitors,
 } from "../cardapio-tracking-records.server";
+import { CONTENT_POST_CHANNELS } from "~/domain/content-post/content-post.shared";
 
 type Period = {
   start: Date;
@@ -20,7 +21,7 @@ type Period = {
 const percentage = (part: number, total: number) =>
   total > 0 ? (part / total) * 100 : 0;
 
-export async function readCardapioHighlightReport({
+export async function readCardapioFeaturedReport({
   currentPeriod,
   previousPeriod,
   sectionKey,
@@ -36,29 +37,40 @@ export async function readCardapioHighlightReport({
     currentVisitors,
     previousVisitors,
   ] = await Promise.all([
-    prismaClient.cardapioHighlightSection.findMany({
-      where: { deletedAt: null },
-      select: { id: true, title: true, key: true, published: true },
-      orderBy: [{ sortOrder: "asc" }, { title: "asc" }],
+    prismaClient.contentPublicationTarget.findMany({
+      where: {
+        channel: CONTENT_POST_CHANNELS.CARDAPIO_FEATURED,
+        deletedAt: null,
+        ContentPost: { deletedAt: null },
+      },
+      select: {
+        id: true,
+        enabled: true,
+        status: true,
+        ContentPost: {
+          select: { title: true, key: true },
+        },
+      },
+      orderBy: [{ sortOrder: "asc" }, { ContentPost: { title: "asc" } }],
     }),
     readCardapioTrackingCounts({
-      eventNames: [...CARDAPIO_HIGHLIGHT_EVENTS],
+      eventNames: [...CARDAPIO_FEATURED_EVENTS],
       period: currentPeriod,
       value: sectionKey,
     }),
     readCardapioTrackingCounts({
-      eventNames: [...CARDAPIO_HIGHLIGHT_EVENTS],
+      eventNames: [...CARDAPIO_FEATURED_EVENTS],
       period: previousPeriod,
       value: sectionKey,
     }),
     readCardapioTrackingVisitors({
-      eventName: CARDAPIO_HIGHLIGHT_IMPRESSION_EVENT,
+      eventName: CARDAPIO_FEATURED_IMPRESSION_EVENT,
       period: currentPeriod,
       value: sectionKey,
       distinguishValue: true,
     }),
     readCardapioTrackingVisitors({
-      eventName: CARDAPIO_HIGHLIGHT_IMPRESSION_EVENT,
+      eventName: CARDAPIO_FEATURED_IMPRESSION_EVENT,
       period: previousPeriod,
       value: sectionKey,
     }),
@@ -66,29 +78,37 @@ export async function readCardapioHighlightReport({
 
   const totalByEvent = (
     rows: typeof currentRows,
-    eventName: CardapioHighlightEventName
+    eventName: CardapioFeaturedEventName
   ) =>
     rows
       .filter((row) => row.eventName === eventName)
       .reduce((sum, row) => sum + row._count._all, 0);
-  const previousByEvent = (eventName: CardapioHighlightEventName) =>
+  const previousByEvent = (eventName: CardapioFeaturedEventName) =>
     previousRows.find((row) => row.eventName === eventName)?._count._all ?? 0;
 
   const impressions = totalByEvent(
     currentRows,
-    CARDAPIO_HIGHLIGHT_IMPRESSION_EVENT
+    CARDAPIO_FEATURED_IMPRESSION_EVENT
   );
-  const expands = totalByEvent(currentRows, CARDAPIO_HIGHLIGHT_EXPAND_EVENT);
-  const slideViews = totalByEvent(currentRows, CARDAPIO_HIGHLIGHT_SLIDE_EVENT);
-  const ctaClicks = totalByEvent(currentRows, CARDAPIO_HIGHLIGHT_CTA_EVENT);
+  const expands = totalByEvent(currentRows, CARDAPIO_FEATURED_EXPAND_EVENT);
+  const slideViews = totalByEvent(currentRows, CARDAPIO_FEATURED_SLIDE_EVENT);
+  const ctaClicks = totalByEvent(currentRows, CARDAPIO_FEATURED_CTA_EVENT);
   const previousImpressions = previousByEvent(
-    CARDAPIO_HIGHLIGHT_IMPRESSION_EVENT
+    CARDAPIO_FEATURED_IMPRESSION_EVENT
   );
-  const previousCtaClicks = previousByEvent(CARDAPIO_HIGHLIGHT_CTA_EVENT);
+  const previousCtaClicks = previousByEvent(CARDAPIO_FEATURED_CTA_EVENT);
 
-  const sectionMap = new Map(sections.map((section) => [section.key, section]));
+  const normalizedSections = sections.map((section) => ({
+    id: section.id,
+    title: section.ContentPost.title,
+    key: section.ContentPost.key,
+    published: section.enabled && section.status === "active",
+  }));
+  const sectionMap = new Map(
+    normalizedSections.map((section) => [section.key, section])
+  );
   const sectionKeys = new Set([
-    ...sections
+    ...normalizedSections
       .filter((section) =>
         sectionKey ? section.key === sectionKey : section.published
       )
@@ -101,13 +121,10 @@ export async function readCardapioHighlightReport({
       const rows = currentRows.filter((row) => row.value === key);
       const sectionImpressions = totalByEvent(
         rows,
-        CARDAPIO_HIGHLIGHT_IMPRESSION_EVENT
+        CARDAPIO_FEATURED_IMPRESSION_EVENT
       );
-      const sectionExpands = totalByEvent(
-        rows,
-        CARDAPIO_HIGHLIGHT_EXPAND_EVENT
-      );
-      const sectionCtaClicks = totalByEvent(rows, CARDAPIO_HIGHLIGHT_CTA_EVENT);
+      const sectionExpands = totalByEvent(rows, CARDAPIO_FEATURED_EXPAND_EVENT);
+      const sectionCtaClicks = totalByEvent(rows, CARDAPIO_FEATURED_CTA_EVENT);
 
       return {
         key,
@@ -138,14 +155,14 @@ export async function readCardapioHighlightReport({
         .filter(
           (row) =>
             row.placement === placement &&
-            row.eventName === CARDAPIO_HIGHLIGHT_CTA_EVENT
+            row.eventName === CARDAPIO_FEATURED_CTA_EVENT
         )
         .reduce((sum, row) => sum + row._count._all, 0),
     }))
     .filter((row) => row.total > 0);
 
   return {
-    sections,
+    sections: normalizedSections,
     metrics: {
       impressions,
       visitors: new Set(currentVisitors.map((row) => row.clientId)).size,

@@ -12,7 +12,15 @@ import {
   useNavigation,
   useSearchParams,
 } from "@remix-run/react";
-import { CheckCircle2, ExternalLink, Instagram, RefreshCw } from "lucide-react";
+import {
+  CheckCircle2,
+  CircleHelp,
+  ExternalLink,
+  Instagram,
+  RefreshCw,
+  Save,
+} from "lucide-react";
+import { useMemo, useRef, useState } from "react";
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
@@ -23,6 +31,17 @@ import {
   CardHeader,
   CardTitle,
 } from "~/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "~/components/ui/dialog";
+import { Input } from "~/components/ui/input";
+import { Label } from "~/components/ui/label";
+import { Separator } from "~/components/ui/separator";
 import { authenticator } from "~/domain/auth/google.server";
 import {
   disconnectInstagram,
@@ -30,10 +49,16 @@ import {
   getInstagramFacebookConfig,
   verifyInstagramConnection,
 } from "~/domain/instagram/instagram-facebook-login.server";
+import { saveInstagramSettings } from "~/domain/instagram/instagram-settings.server";
 
 type ActionData =
   | { ok: true; message: string }
   | { ok: false; message: string };
+
+const DEFAULT_CALLBACK_URL =
+  "https://amodomio.com.br/auth/facebook-business/callback";
+const TUNNEL_COMMAND = "cloudflared tunnel --url http://localhost:3000";
+const FACEBOOK_BUSINESS_CALLBACK_PATH = "/auth/facebook-business/callback";
 
 export const meta: MetaFunction = () => [{ title: "Instagram | Marketing" }];
 
@@ -42,12 +67,16 @@ function formatDate(value?: string | Date | null) {
   return new Date(value).toLocaleString("pt-BR");
 }
 
+function str(form: FormData, key: string) {
+  return String(form.get(key) || "").trim();
+}
+
 export async function loader({ request }: LoaderFunctionArgs) {
   const user = await authenticator.isAuthenticated(request);
   if (!user) throw redirect("/login");
 
   return json({
-    config: getInstagramFacebookConfig(),
+    config: await getInstagramFacebookConfig(),
     connection: await getInstagramConnection(),
   });
 }
@@ -60,6 +89,21 @@ export async function action({ request }: ActionFunctionArgs) {
   const intent = String(form.get("_intent") || "");
 
   try {
+    if (intent === "save-settings") {
+      await saveInstagramSettings({
+        appId: str(form, "appId"),
+        callbackUrl: str(form, "callbackUrl"),
+        configId: str(form, "configId"),
+        facebookPageId: str(form, "facebookPageId"),
+        graphApiVersion: str(form, "graphApiVersion"),
+        storyStatusMaxAttempts: str(form, "storyStatusMaxAttempts"),
+        storyStatusIntervalMs: str(form, "storyStatusIntervalMs"),
+      });
+      return json<ActionData>({
+        ok: true,
+        message: "Configurações do Instagram salvas.",
+      });
+    }
     if (intent === "verify") {
       await verifyInstagramConnection();
       return json<ActionData>({
@@ -96,6 +140,7 @@ export default function AdminMarketingInstagramPage() {
   const { config, connection } = useLoaderData<typeof loader>();
   const actionData = useActionData<ActionData>();
   const navigation = useNavigation();
+  const callbackInputRef = useRef<HTMLInputElement>(null);
   const [searchParams] = useSearchParams();
   const callbackStatus = searchParams.get("status");
   const callbackMessage = searchParams.get("message");
@@ -142,39 +187,123 @@ export default function AdminMarketingInstagramPage() {
         </Alert>
       ) : null}
 
-      <Card>
-        <CardHeader>
+      <Card className="border-0 shadow-none">
+        <CardHeader className="p-0">
           <CardTitle>Configuração do aplicativo Meta</CardTitle>
           <CardDescription>
-            Estes valores devem ser configurados como secrets no ambiente do
-            servidor.
+            Estes valores operacionais ficam no banco e podem ser alterados sem
+            mexer no ambiente do servidor.
           </CardDescription>
         </CardHeader>
-        <CardContent className="grid gap-3 text-sm sm:grid-cols-2">
-          <ConfigRow label="App ID" ready={Boolean(config.appId)} />
+        <CardContent className="p-0">
+          <Form method="post" className="space-y-5">
+            <input type="hidden" name="_intent" value="save-settings" />
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="App ID" name="appId" defaultValue={config.appId} />
+              <Field
+                label="ID da configuração de login"
+                name="configId"
+                defaultValue={config.configId}
+                placeholder="Opcional"
+              />
+              <Field
+                label="ID da Página Facebook"
+                name="facebookPageId"
+                defaultValue={config.facebookPageId}
+                placeholder="Recomendado"
+              />
+              <Field
+                label="Versão Graph API"
+                name="graphApiVersion"
+                defaultValue={config.graphApiVersion}
+              />
+              <Field
+                label="Tentativas de status do Story"
+                name="storyStatusMaxAttempts"
+                defaultValue={String(config.storyStatusMaxAttempts)}
+                type="number"
+                min="1"
+              />
+              <Field
+                label="Intervalo entre tentativas (ms)"
+                name="storyStatusIntervalMs"
+                defaultValue={String(config.storyStatusIntervalMs)}
+                type="number"
+                min="250"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <Label htmlFor="callbackUrl">Callback OAuth</Label>
+                  <TunnelHelpDialog />
+                </div>
+                <Button
+                  type="button"
+                  variant="link"
+                  className="h-auto p-0 text-xs"
+                  onClick={() => {
+                    if (callbackInputRef.current) {
+                      callbackInputRef.current.value = DEFAULT_CALLBACK_URL;
+                    }
+                  }}
+                >
+                  Default
+                </Button>
+              </div>
+              <Input
+                ref={callbackInputRef}
+                id="callbackUrl"
+                name="callbackUrl"
+                defaultValue={config.callbackUrl}
+                placeholder="http://localhost:3000/auth/facebook-business/callback"
+              />
+              <p className="text-xs text-muted-foreground">
+                Cadastre exatamente esta URL no app da Meta. Para túnel local,
+                substitua o domínio pelo endereço público do túnel.
+              </p>
+            </div>
+
+            <div className="flex justify-end">
+              <Button type="submit" disabled={isSubmitting}>
+                <Save className="mr-2 h-4 w-4" />
+                Salvar configurações
+              </Button>
+            </div>
+          </Form>
+        </CardContent>
+      </Card>
+
+      <Separator />
+
+      <Card className="border-0 shadow-none">
+        <CardHeader className="p-0">
+          <CardTitle>Secrets do ambiente</CardTitle>
+          <CardDescription>
+            Permanecem no env porque protegem o app, o cookie temporário e os
+            tokens gravados.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-0 p-0 text-sm">
           <ConfigRow label="App Secret" ready={config.appSecretConfigured} />
+          <Separator />
           <ConfigRow
             label="Chave de criptografia"
             ready={config.encryptionConfigured}
           />
+          <Separator />
           <ConfigRow
-            label="Callback OAuth"
-            ready={Boolean(config.callbackUrl)}
+            label="Cookie OAuth"
+            ready={config.oauthCookieSecretConfigured}
           />
-          <div className="sm:col-span-2">
-            <div className="text-xs font-medium uppercase tracking-wide text-slate-500">
-              URI para cadastrar na Meta
-            </div>
-            <code className="mt-1 block break-all rounded bg-slate-100 p-2 text-xs">
-              {config.callbackUrl ||
-                "META_FACEBOOK_CALLBACK_URL ainda não configurada"}
-            </code>
-          </div>
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
+      <Separator />
+
+      <Card className="border-0 shadow-none">
+        <CardHeader className="p-0">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <CardTitle>Conta conectada</CardTitle>
@@ -187,7 +316,7 @@ export default function AdminMarketingInstagramPage() {
             </Badge>
           </div>
         </CardHeader>
-        <CardContent className="space-y-5">
+        <CardContent className="space-y-5 p-0">
           {connection ? (
             <dl className="grid gap-4 text-sm sm:grid-cols-2">
               <Detail
@@ -268,7 +397,8 @@ export default function AdminMarketingInstagramPage() {
 
           {!config.ready ? (
             <p className="text-xs text-amber-700">
-              Configure os secrets indicados acima antes de iniciar o login.
+              Configure os campos do app Meta e os secrets do ambiente antes de
+              iniciar o login.
             </p>
           ) : null}
         </CardContent>
@@ -279,12 +409,130 @@ export default function AdminMarketingInstagramPage() {
 
 function ConfigRow({ label, ready }: { label: string; ready: boolean }) {
   return (
-    <div className="flex items-center justify-between rounded border p-3">
+    <div className="flex items-center justify-between gap-4 py-4">
       <span>{label}</span>
       <Badge variant={ready ? "default" : "outline"}>
         {ready ? "Configurado" : "Pendente"}
       </Badge>
     </div>
+  );
+}
+
+function Field({
+  label,
+  name,
+  defaultValue,
+  placeholder,
+  type = "text",
+  min,
+}: {
+  label: string;
+  name: string;
+  defaultValue: string;
+  placeholder?: string;
+  type?: string;
+  min?: string;
+}) {
+  return (
+    <div className="space-y-2">
+      <Label htmlFor={name}>{label}</Label>
+      <Input
+        id={name}
+        name={name}
+        type={type}
+        min={min}
+        defaultValue={defaultValue}
+        placeholder={placeholder}
+      />
+    </div>
+  );
+}
+
+function TunnelHelpDialog() {
+  const [tunnelUrl, setTunnelUrl] = useState("");
+  const normalizedTunnelUrl = tunnelUrl.trim().replace(/\/+$/g, "");
+  const callbackUrl = useMemo(() => {
+    if (!normalizedTunnelUrl) {
+      return `https://URL-DO-TUNEL${FACEBOOK_BUSINESS_CALLBACK_PATH}`;
+    }
+    return `${normalizedTunnelUrl}${FACEBOOK_BUSINESS_CALLBACK_PATH}`;
+  }, [normalizedTunnelUrl]);
+  const copyText = (value: string) => {
+    void navigator.clipboard?.writeText(value);
+  };
+
+  return (
+    <Dialog>
+      <DialogTrigger asChild>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="h-7 w-7"
+          aria-label="Ajuda para ativar túnel local"
+        >
+          <CircleHelp className="h-4 w-4" />
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>Callback com túnel local</DialogTitle>
+          <DialogDescription>
+            Use isto quando a Meta precisar chamar seu ambiente local durante o
+            teste de login.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4 text-sm">
+          <div className="rounded border bg-slate-50 p-3">
+            <div className="mb-2 flex items-center justify-between gap-3">
+              <div className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                Comando
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => copyText(TUNNEL_COMMAND)}
+              >
+                Copiar
+              </Button>
+            </div>
+            <code className="block break-all text-xs">{TUNNEL_COMMAND}</code>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="tunnelUrl">URL escolhida/gerada pelo túnel</Label>
+            <Input
+              id="tunnelUrl"
+              value={tunnelUrl}
+              onChange={(event) => setTunnelUrl(event.target.value)}
+              placeholder="https://exemplo.trycloudflare.com"
+            />
+          </div>
+
+          <div className="rounded bg-slate-100 p-3">
+            <div className="mb-2 flex items-center justify-between gap-3">
+              <div className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                Callback montado
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => copyText(callbackUrl)}
+              >
+                Copiar
+              </Button>
+            </div>
+            <code className="block break-all text-xs">{callbackUrl}</code>
+          </div>
+          <p className="text-slate-700">
+            Essa mesma URL precisa estar cadastrada no app da Meta como redirect
+            OAuth válido.
+          </p>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 

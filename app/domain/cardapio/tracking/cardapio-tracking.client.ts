@@ -1,12 +1,12 @@
 import {
-  CARDAPIO_HIGHLIGHT_CTA_EVENT,
-  CARDAPIO_HIGHLIGHT_EXPAND_EVENT,
-  CARDAPIO_HIGHLIGHT_IMPRESSION_EVENT,
-  CARDAPIO_HIGHLIGHT_SLIDE_EVENT,
+  CARDAPIO_FEATURED_CTA_EVENT,
+  CARDAPIO_FEATURED_EXPAND_EVENT,
+  CARDAPIO_FEATURED_IMPRESSION_EVENT,
+  CARDAPIO_FEATURED_SLIDE_EVENT,
   CARDAPIO_NAVIGATION_EVENT,
   CARDAPIO_TRACKING_ENDPOINT,
-  type CardapioHighlightControl,
-  type CardapioHighlightPlacement,
+  type CardapioFeaturedControl,
+  type CardapioFeaturedPlacement,
   type CardapioNavigationControl,
   type CardapioNavigationPlacement,
   type CardapioTrackingRecord,
@@ -57,7 +57,7 @@ export function trackCardapioNavigation({
   });
 }
 
-export function trackCardapioHighlight({
+export function trackCardapioFeatured({
   action,
   sectionKey,
   imageIndex,
@@ -66,13 +66,13 @@ export function trackCardapioHighlight({
   action: "impression" | "expand" | "slide_view" | "cta_click";
   sectionKey: string;
   imageIndex?: number;
-  placement: CardapioHighlightPlacement;
+  placement: CardapioFeaturedPlacement;
 }) {
   const eventNames = {
-    impression: CARDAPIO_HIGHLIGHT_IMPRESSION_EVENT,
-    expand: CARDAPIO_HIGHLIGHT_EXPAND_EVENT,
-    slide_view: CARDAPIO_HIGHLIGHT_SLIDE_EVENT,
-    cta_click: CARDAPIO_HIGHLIGHT_CTA_EVENT,
+    impression: CARDAPIO_FEATURED_IMPRESSION_EVENT,
+    expand: CARDAPIO_FEATURED_EXPAND_EVENT,
+    slide_view: CARDAPIO_FEATURED_SLIDE_EVENT,
+    cta_click: CARDAPIO_FEATURED_CTA_EVENT,
   } as const;
   const safeImageIndex = Math.max(0, Math.min(imageIndex ?? -1, 9));
 
@@ -80,9 +80,11 @@ export function trackCardapioHighlight({
     eventName: eventNames[action],
     control:
       safeImageIndex >= 0
-        ? (`image_${safeImageIndex + 1}` as CardapioHighlightControl)
+        ? (`image_${safeImageIndex + 1}` as CardapioFeaturedControl)
         : "section",
     value: sectionKey,
     placement,
   });
 }
+
+export const trackCardapioHighlight = trackCardapioFeatured;

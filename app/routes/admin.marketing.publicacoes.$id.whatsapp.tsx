@@ -1,0 +1,131 @@
+import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
+import { json } from "@remix-run/node";
+import {
+  Form,
+  useActionData,
+  useLoaderData,
+  useNavigation,
+} from "@remix-run/react";
+import { StatusPublicationMediaForm } from "~/domain/whatsapp-status/components/status-publication-media-form";
+import {
+  getStatusPublicationGroup,
+  publishStatusPublicationGroup,
+  syncStatusPublicationGroup,
+} from "~/domain/whatsapp-status/whatsapp-status-publication-group.server";
+import {
+  contentPostSocialSource,
+  getContentPost,
+  markContentTargetSynced,
+  runContentTargetOperation,
+} from "~/domain/content-post/content-post.server";
+import { CONTENT_POST_CHANNELS } from "~/domain/content-post/content-post.shared";
+import { buildContentTargetPublishEndpoint } from "~/domain/content-post/content-post.shared";
+
+export async function loader({ request, params }: LoaderFunctionArgs) {
+  const post = await getContentPost(String(params.id || ""));
+  const target = post.Targets.find(
+    (item) => item.channel === CONTENT_POST_CHANNELS.WHATSAPP_STATUS
+  );
+  if (!target) throw new Response("Canal não encontrado", { status: 404 });
+  const source = contentPostSocialSource(target.id);
+  return json({
+    post,
+    target,
+    whatsapp: await getStatusPublicationGroup(source),
+    publishEndpoint: buildContentTargetPublishEndpoint(
+      new URL(request.url).origin,
+      target.id
+    ),
+  });
+}
+
+export async function action({ request, params }: ActionFunctionArgs) {
+  const post = await getContentPost(String(params.id || ""));
+  const target = post.Targets.find(
+    (item) => item.channel === CONTENT_POST_CHANNELS.WHATSAPP_STATUS
+  );
+  if (!target) throw new Response("Canal não encontrado", { status: 404 });
+  if (!target.enabled || post.status !== "active") {
+    return json(
+      { ok: false, message: "Ative o conteúdo e o canal WhatsApp primeiro." },
+      { status: 409 }
+    );
+  }
+
+  const form = await request.formData();
+  const source = contentPostSocialSource(target.id);
+  await syncStatusPublicationGroup({
+    source,
+    caption: String(form.get("statusPublicationCaption") || post.caption || ""),
+    selectedKeys: form
+      .getAll("statusPublicationItemKey")
+      .map((value) => String(value)),
+    items: post.Media.map((media) => ({
+      key: media.id,
+      title: media.title,
+      kind: media.kind === "video" ? ("video" as const) : ("image" as const),
+      imageUrl: media.kind === "image" ? media.mediaUrl : null,
+      videoUrl: media.kind === "video" ? media.mediaUrl : null,
+    })),
+  });
+  await markContentTargetSynced(target.id);
+
+  if (String(form.get("_intent") || "") === "publish") {
+    try {
+      const result = await runContentTargetOperation({
+        targetId: target.id,
+        operation: "publish",
+        execute: () =>
+          publishStatusPublicationGroup(source, { source: "manual" }),
+        response: (value) => ({
+          publications: value.publications.map((item) => item.publication.id),
+        }),
+      });
+      return json({
+        ok: true,
+        message: `${result.publications.length} mídia(s) publicada(s).`,
+      });
+    } catch (error: any) {
+      return json(
+        { ok: false, message: error?.message || "Erro ao publicar." },
+        { status: Number(error?.status) || 500 }
+      );
+    }
+  }
+
+  return json({ ok: true, message: "Configuração do WhatsApp salva." });
+}
+
+export default function ContentPostWhatsappPage() {
+  const { post, target, whatsapp, publishEndpoint } =
+    useLoaderData<typeof loader>();
+  const actionData = useActionData<typeof action>();
+  const navigation = useNavigation();
+
+  return (
+    <Form method="post" className="grid gap-6">
+      {!target.enabled ? (
+        <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+          Habilite WhatsApp Status na aba Canais.
+        </div>
+      ) : null}
+      <StatusPublicationMediaForm
+        caption={whatsapp.caption || post.caption || ""}
+        captionPlaceholder={post.caption || post.title}
+        mediaItems={post.Media.filter((media) => media.kind === "image").map(
+          (media) => ({
+            key: media.id,
+            imageUrl: media.mediaUrl,
+            alt: media.alt,
+            label: media.title,
+          })
+        )}
+        publications={whatsapp.publications}
+        selectedKeys={whatsapp.selectedKeys}
+        publishEndpoint={publishEndpoint}
+        feedback={actionData || null}
+        submitting={navigation.state === "submitting"}
+      />
+    </Form>
+  );
+}

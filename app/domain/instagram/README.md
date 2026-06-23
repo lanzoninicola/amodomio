@@ -1,10 +1,15 @@
 # Integração Instagram Stories
 
 Esta integração conecta a conta profissional do Instagram da A Modo Mio ao
-admin usando a Instagram Graph API com Login do Facebook para Empresas.
+admin usando a Instagram Graph API com Login do Facebook para Empresas e
+oferece publicação reutilizável de Stories.
 
-O objetivo final é publicar nos Stories as imagens configuradas em
-`/admin/marketing/destaques-cardapio`.
+O domínio do Instagram é um adaptador do sistema de `ContentPost`. As
+publicações são agrupadas pelo alvo `instagram-story`, sem relação direta com o
+canal `cardapio-featured`.
+
+Integrações consumidoras identificam seus grupos com os metadados genéricos
+`sourceType`, `sourceId` e `sourceItemKey`.
 
 ## Estado atual
 
@@ -17,24 +22,37 @@ Já estão implementados:
 - troca do token curto por token de longa duração;
 - armazenamento criptografado do token;
 - verificação e desconexão da conta;
-- modelo Prisma `InstagramConnection`.
-
-Ainda falta implementar:
-
-- aba `Instagram` dentro de cada destaque;
+- modelo Prisma `InstagramConnection`;
 - criação do container de mídia com `media_type=STORIES`;
 - consulta do processamento do container;
 - publicação pelo endpoint `media_publish`;
 - histórico de publicações e execuções;
-- endpoint protegido para agendamento.
+- endpoints protegidos para publicação individual e de grupos;
+- aba `Instagram` dentro de cada publicação;
+- sincronização genérica de mídias por origem, sem FK com o domínio consumidor.
+
+Ainda falta validar com uma conta Meta real:
+
+- criação e publicação real de container de imagem;
+- comportamento do tempo de processamento na Vercel;
+- publicação de vídeo;
+- limites e mensagens reais de erro do app Meta da A Modo Mio.
 
 ## Arquivos principais
 
 - `app/domain/instagram/instagram-facebook-login.server.ts`
+- `app/domain/instagram/instagram-story-publication.server.ts`
+- `app/domain/instagram/instagram-story-publication-group.server.ts`
+- `app/domain/instagram/instagram-story-publication.shared.ts`
+- `app/domain/instagram/components/instagram-story-media-form.tsx`
 - `app/routes/admin.marketing.instagram.tsx`
+- `app/routes/admin.marketing.publicacoes.$id.instagram.tsx`
 - `app/routes/auth.facebook-business.tsx`
 - `app/routes/auth.facebook-business_.callback.tsx`
+- `app/routes/api.instagram-stories.$id.publish.tsx`
+- `app/routes/api.instagram-stories.groups.$sourceType.$sourceId.publish.tsx`
 - `prisma/migrations/20260800000023_instagram_connections/migration.sql`
+- `prisma/migrations/20260800000024_instagram_story_publications/migration.sql`
 
 O nome do arquivo de callback contém `_` antes de `.callback` para que a rota
 seja irmã da rota inicial no Remix. Os caminhos públicos continuam sendo:
@@ -97,6 +115,8 @@ META_FACEBOOK_PAGE_ID=
 META_GRAPH_API_VERSION=v25.0
 META_TOKEN_ENCRYPTION_SECRET=
 META_OAUTH_COOKIE_SECRET=
+META_STORY_STATUS_MAX_ATTEMPTS=12
+META_STORY_STATUS_INTERVAL_MS=1000
 ```
 
 ### Origem de cada valor
@@ -139,6 +159,15 @@ possui Instagram, mas recomendado para evitar selecionar a Página errada.
 : Chave exclusiva para assinar o cookie temporário usado na validação de
 `state` do OAuth.
 
+`META_STORY_STATUS_MAX_ATTEMPTS`
+
+: Quantidade máxima de consultas ao processamento do container antes de
+interromper a execução. O padrão é `12`.
+
+`META_STORY_STATUS_INTERVAL_MS`
+
+: Intervalo entre consultas ao container. O padrão é `1000` ms.
+
 Gere as duas chaves locais com comandos separados:
 
 ```bash
@@ -171,10 +200,12 @@ conversas.
 
 ## Banco de dados
 
-A integração depende da tabela `instagram_connections`, criada por:
+A integração depende das tabelas de conexão, publicações e execuções, criadas
+por:
 
 ```text
 prisma/migrations/20260800000023_instagram_connections/migration.sql
+prisma/migrations/20260800000024_instagram_story_publications/migration.sql
 ```
 
 Antes de testar a conexão em um ambiente, confirme que essa migração foi
@@ -256,6 +287,106 @@ URLs gratuitas de túnel normalmente mudam ao reiniciar o processo.
 
 O token nunca é retornado ao navegador nem exibido no admin.
 
+## Arquitetura reutilizável de Stories
+
+`InstagramStoryPublication`
+
+: Representa uma mídia configurada para Story. Guarda URL, tipo, estado e
+resultado da última publicação.
+
+`InstagramStoryPublicationExecution`
+
+: Representa cada tentativa de publicação, manual ou agendada. Guarda início,
+fim, duração, container, mídia publicada, resposta e erro.
+
+Os modelos não possuem vínculo específico com destaques. Para um consumidor
+sincronizar suas mídias, ele chama `syncInstagramStoryGroup` com:
+
+```ts
+{
+  source: {
+    sourceType: "nome-do-dominio",
+    sourceId: "id-local"
+  },
+  selectedKeys: ["0", "1"],
+  items: [
+    {
+      key: "0",
+      title: "Nome operacional",
+      kind: "image",
+      mediaUrl: "https://..."
+    }
+  ]
+}
+```
+
+Excluir ou alterar o domínio consumidor não causa cascade no Instagram. O
+ciclo de vida pertence ao domínio de publicações.
+
+### Fluxo de publicação
+
+1. O serviço cria um container em `/{IG_ID}/media`.
+2. Envia `media_type=STORIES` e `image_url` ou `video_url`.
+3. Consulta `/{CONTAINER_ID}?fields=id,status_code,status`.
+4. Aguarda `FINISHED`.
+5. Publica em `/{IG_ID}/media_publish` usando `creation_id`.
+6. Grava o Instagram Media ID e finaliza a execução.
+
+Estados de processamento tratados:
+
+- `IN_PROGRESS`;
+- `FINISHED`;
+- `ERROR`;
+- `EXPIRED`.
+
+### Endpoints protegidos
+
+Publicação individual:
+
+```text
+POST /api/instagram-stories/:publicationId/publish
+```
+
+Publicação de grupo:
+
+```text
+POST /api/instagram-stories/groups/:sourceType/:sourceId/publish
+```
+
+Ambos exigem:
+
+```text
+x-api-key: VITE_REST_API_SECRET_KEY
+```
+
+O corpo opcional identifica a execução:
+
+```json
+{
+  "source": "scheduler",
+  "scheduleName": "story-promocao-sexta"
+}
+```
+
+## Integração com ContentPost
+
+A rota:
+
+```text
+/admin/marketing/publicacoes/:id/instagram
+```
+
+atua como adaptador:
+
+1. lê as mídias do `ContentPost`;
+2. usa `sourceType = content-post-target`;
+3. usa o ID do alvo `instagram-story` como `sourceId`;
+4. usa o ID estável da mídia como `sourceItemKey`;
+5. chama o domínio genérico para salvar ou publicar.
+
+O endpoint recomendado para agendamento é
+`POST /api/content-publication-targets/:targetId/publish`.
+
 ## Diagnóstico
 
 ### Colisão de rota no Vite
@@ -329,15 +460,9 @@ Ao voltar a esta integração:
 3. Confira a validade do token e use **Verificar conexão**.
 4. Confira `npx prisma migrate status`.
 5. Não altere a chave de criptografia já usada.
-6. Para implementar Stories, comece em
-   `app/domain/instagram/instagram-facebook-login.server.ts` e extraia um
-   cliente Graph API reutilizável.
-7. Crie a publicação em um módulo separado, por exemplo:
-
-```text
-app/domain/instagram/instagram-story-publication.server.ts
-```
-
-8. Mantenha histórico e execução separados do WhatsApp.
-9. Depois de modificar rotas ou domínio, execute validações localizadas e
+6. Para integrar outro módulo, use
+   `syncInstagramStoryGroup` e `publishInstagramStoryGroup`; não adicione FK
+   específica no schema.
+7. Mantenha histórico e execução separados do WhatsApp.
+8. Depois de modificar rotas ou domínio, execute validações localizadas e
    atualize Graphify/wiki conforme `AGENTS.md`.

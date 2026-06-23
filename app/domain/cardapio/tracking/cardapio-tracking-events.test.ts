@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  CARDAPIO_HIGHLIGHT_CTA_EVENT,
+  CARDAPIO_FEATURED_CTA_EVENT,
   CARDAPIO_NAVIGATION_EVENT,
   parseCardapioTrackingRecord,
 } from "./cardapio-tracking-events";
@@ -22,16 +22,16 @@ describe("parseCardapioTrackingRecord", () => {
     });
   });
 
-  it("accepts a highlight record with highlight dimensions", () => {
+  it("accepts a featured record with featured dimensions", () => {
     expect(
       parseCardapioTrackingRecord({
-        eventName: CARDAPIO_HIGHLIGHT_CTA_EVENT,
+        eventName: CARDAPIO_FEATURED_CTA_EVENT,
         control: "image_2",
         value: "promocao-junina",
         placement: "desktop_card",
       })
     ).toEqual({
-      eventName: CARDAPIO_HIGHLIGHT_CTA_EVENT,
+      eventName: CARDAPIO_FEATURED_CTA_EVENT,
       control: "image_2",
       value: "promocao-junina",
       placement: "desktop_card",

@@ -924,11 +924,19 @@ const ADMIN_NAVIGATION_LINKS: WebsiteNavigationConfig = {
           tags: ["reserva", "pizza", "campanha", "marketing", "bairro"],
         },
         {
-          title: "Destaques do cardápio",
-          href: "/admin/marketing/destaques-cardapio",
+          title: "Publicações",
+          href: "/admin/marketing/publicacoes",
           items: [],
           disabled: false,
-          tags: ["cardapio", "destaque", "promocao", "marketing", "banner"],
+          tags: [
+            "conteudo",
+            "publicacao",
+            "cardapio",
+            "destaque",
+            "whatsapp",
+            "instagram",
+            "marketing",
+          ],
         },
         {
           title: "Notificações (Push)",
@@ -938,13 +946,6 @@ const ADMIN_NAVIGATION_LINKS: WebsiteNavigationConfig = {
           tags: ["push", "notificacao", "mobile", "app", "alerta"],
         },
         {
-          title: "Pixel Facebook",
-          href: "/admin/marketing/facebook-pixel",
-          items: [],
-          disabled: false,
-          tags: ["pixel", "facebook", "ads", "tracking", "meta"],
-        },
-        {
           title: "Whatsapp Status",
           href: "/admin/marketing/whatsapp-status",
           items: [],
@@ -952,11 +953,26 @@ const ADMIN_NAVIGATION_LINKS: WebsiteNavigationConfig = {
           tags: ["whatsapp", "status", "marketing", "story", "divulgacao"],
         },
         {
-          title: "Instagram",
-          href: "/admin/marketing/instagram",
-          items: [],
+          title: "Configurações",
+          href: "",
+          items: [
+            {
+              title: "Pixel Facebook",
+              href: "/admin/marketing/facebook-pixel",
+              items: [],
+              disabled: false,
+              tags: ["pixel", "facebook", "ads", "tracking", "meta"],
+            },
+            {
+              title: "Instagram",
+              href: "/admin/marketing/instagram",
+              items: [],
+              disabled: false,
+              tags: ["instagram", "story", "meta", "marketing", "publicacao"],
+            },
+          ],
           disabled: false,
-          tags: ["instagram", "story", "meta", "marketing", "publicacao"],
+          tags: ["configuracao", "integracao", "meta", "marketing"],
         },
         {
           title: "Relatórios",
@@ -964,7 +980,7 @@ const ADMIN_NAVIGATION_LINKS: WebsiteNavigationConfig = {
           items: [
             {
               title: "Desempenho dos destaques",
-              href: "/admin/marketing/relatorios/destaques",
+              href: "/admin/marketing/relatorios/cardapio-featured",
               items: [],
               disabled: false,
               tags: [

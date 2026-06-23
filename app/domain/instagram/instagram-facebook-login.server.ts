@@ -7,9 +7,12 @@ import {
 } from "node:crypto";
 import { createCookieSessionStorage } from "@remix-run/node";
 import { AUTH_COOKIE_SECRET } from "~/domain/auth/constants.server";
+import {
+  DEFAULT_INSTAGRAM_GRAPH_API_VERSION,
+  getInstagramSettings,
+} from "~/domain/instagram/instagram-settings.server";
 import prismaClient from "~/lib/prisma/client.server";
 
-const DEFAULT_GRAPH_API_VERSION = "v25.0";
 const OAUTH_STATE_KEY = "state";
 const TOKEN_ALGORITHM = "aes-256-gcm";
 
@@ -42,14 +45,21 @@ function requiredEnv(name: string) {
   return value;
 }
 
-function graphApiVersion() {
-  return String(process.env.META_GRAPH_API_VERSION || DEFAULT_GRAPH_API_VERSION)
+function requiredSetting(value: string, name: string) {
+  const normalized = value.trim();
+  if (!normalized) throw new Error(`Configuração obrigatória ausente: ${name}`);
+  return normalized;
+}
+
+async function graphApiVersion() {
+  const settings = await getInstagramSettings();
+  return String(settings.graphApiVersion || DEFAULT_INSTAGRAM_GRAPH_API_VERSION)
     .trim()
     .replace(/^\/+|\/+$/g, "");
 }
 
-function graphUrl(pathname: string) {
-  return `https://graph.facebook.com/${graphApiVersion()}/${pathname.replace(
+async function graphUrl(pathname: string) {
+  return `https://graph.facebook.com/${await graphApiVersion()}/${pathname.replace(
     /^\/+/,
     ""
   )}`;
@@ -92,6 +102,29 @@ function decryptToken(payload: string) {
   ]).toString("utf8");
 }
 
+export async function getInstagramPublishingCredentials() {
+  const connection = await prismaClient.instagramConnection.findUnique({
+    where: { provider: "facebook" },
+  });
+  if (!connection) throw new Error("Instagram ainda não está conectado.");
+  if (connection.status !== "connected") {
+    throw new Error(
+      connection.lastError || "A conexão com o Instagram precisa ser validada."
+    );
+  }
+  if (
+    connection.tokenExpiresAt &&
+    connection.tokenExpiresAt.getTime() <= Date.now()
+  ) {
+    throw new Error("O token do Instagram expirou. Reconecte a conta.");
+  }
+
+  return {
+    instagramAccountId: connection.instagramAccountId,
+    accessToken: decryptToken(connection.encryptedAccessToken),
+  };
+}
+
 const oauthSessionStorage = createCookieSessionStorage({
   cookie: {
     name: "meta_oauth_state",
@@ -122,14 +155,13 @@ async function readGraphJson<T>(response: Response): Promise<T> {
   return payload as T;
 }
 
-export function getInstagramFacebookConfig() {
-  const appId = String(process.env.META_APP_ID || "").trim();
+export async function getInstagramFacebookConfig() {
+  const settings = await getInstagramSettings();
+  const appId = settings.appId;
   const appSecretConfigured = Boolean(
     String(process.env.META_APP_SECRET || "").trim()
   );
-  const callbackUrl = String(
-    process.env.META_FACEBOOK_CALLBACK_URL || ""
-  ).trim();
+  const callbackUrl = settings.callbackUrl;
   const encryptionConfigured = Boolean(
     String(process.env.META_TOKEN_ENCRYPTION_SECRET || "").trim()
   );
@@ -139,9 +171,19 @@ export function getInstagramFacebookConfig() {
     appSecretConfigured,
     callbackUrl,
     encryptionConfigured,
-    configId: String(process.env.META_FACEBOOK_LOGIN_CONFIG_ID || "").trim(),
-    facebookPageId: String(process.env.META_FACEBOOK_PAGE_ID || "").trim(),
-    graphApiVersion: graphApiVersion(),
+    oauthCookieSecretConfigured: Boolean(
+      String(
+        process.env.META_OAUTH_COOKIE_SECRET ||
+          AUTH_COOKIE_SECRET ||
+          process.env.META_TOKEN_ENCRYPTION_SECRET ||
+          ""
+      ).trim()
+    ),
+    configId: settings.configId,
+    facebookPageId: settings.facebookPageId,
+    graphApiVersion: settings.graphApiVersion,
+    storyStatusMaxAttempts: settings.storyStatusMaxAttempts,
+    storyStatusIntervalMs: settings.storyStatusIntervalMs,
     ready:
       Boolean(appId) &&
       appSecretConfigured &&
@@ -151,8 +193,12 @@ export function getInstagramFacebookConfig() {
 }
 
 export async function createInstagramFacebookLogin(request: Request) {
-  const appId = requiredEnv("META_APP_ID");
-  const callbackUrl = requiredEnv("META_FACEBOOK_CALLBACK_URL");
+  const settings = await getInstagramSettings();
+  const appId = requiredSetting(settings.appId, "meta.app.id");
+  const callbackUrl = requiredSetting(
+    settings.callbackUrl,
+    "meta.facebook.callback.url"
+  );
   requiredEnv("META_APP_SECRET");
   requiredEnv("META_TOKEN_ENCRYPTION_SECRET");
 
@@ -163,7 +209,7 @@ export async function createInstagramFacebookLogin(request: Request) {
   session.set(OAUTH_STATE_KEY, state);
 
   const authorizationUrl = new URL(
-    `https://www.facebook.com/${graphApiVersion()}/dialog/oauth`
+    `https://www.facebook.com/${await graphApiVersion()}/dialog/oauth`
   );
   authorizationUrl.searchParams.set("client_id", appId);
   authorizationUrl.searchParams.set("redirect_uri", callbackUrl);
@@ -180,9 +226,7 @@ export async function createInstagramFacebookLogin(request: Request) {
     ].join(",")
   );
 
-  const configId = String(
-    process.env.META_FACEBOOK_LOGIN_CONFIG_ID || ""
-  ).trim();
+  const configId = settings.configId;
   if (configId) {
     authorizationUrl.searchParams.set("config_id", configId);
     authorizationUrl.searchParams.set("override_default_response_type", "true");
@@ -215,14 +259,20 @@ export async function validateInstagramFacebookState(
 }
 
 async function exchangeAuthorizationCode(code: string) {
+  const settings = await getInstagramSettings();
+  const appId = requiredSetting(settings.appId, "meta.app.id");
+  const callbackUrl = requiredSetting(
+    settings.callbackUrl,
+    "meta.facebook.callback.url"
+  );
   const params = new URLSearchParams({
-    client_id: requiredEnv("META_APP_ID"),
+    client_id: appId,
     client_secret: requiredEnv("META_APP_SECRET"),
-    redirect_uri: requiredEnv("META_FACEBOOK_CALLBACK_URL"),
+    redirect_uri: callbackUrl,
     code,
   });
   const shortResponse = await fetch(
-    `${graphUrl("oauth/access_token")}?${params.toString()}`
+    `${await graphUrl("oauth/access_token")}?${params.toString()}`
   );
   const shortToken = await readGraphJson<{
     access_token: string;
@@ -232,12 +282,12 @@ async function exchangeAuthorizationCode(code: string) {
 
   const longParams = new URLSearchParams({
     grant_type: "fb_exchange_token",
-    client_id: requiredEnv("META_APP_ID"),
+    client_id: appId,
     client_secret: requiredEnv("META_APP_SECRET"),
     fb_exchange_token: shortToken.access_token,
   });
   const longResponse = await fetch(
-    `${graphUrl("oauth/access_token")}?${longParams.toString()}`
+    `${await graphUrl("oauth/access_token")}?${longParams.toString()}`
   );
   return readGraphJson<{
     access_token: string;
@@ -254,7 +304,7 @@ async function listInstagramPages(accessToken: string) {
     access_token: accessToken,
   });
   const response = await fetch(
-    `${graphUrl("me/accounts")}?${params.toString()}`
+    `${await graphUrl("me/accounts")}?${params.toString()}`
   );
   const payload = await readGraphJson<GraphListResponse<FacebookPage>>(
     response
@@ -267,9 +317,8 @@ async function listInstagramPages(accessToken: string) {
 export async function connectInstagramFromAuthorizationCode(code: string) {
   const token = await exchangeAuthorizationCode(code);
   const pages = await listInstagramPages(token.access_token);
-  const configuredPageId = String(
-    process.env.META_FACEBOOK_PAGE_ID || ""
-  ).trim();
+  const settings = await getInstagramSettings();
+  const configuredPageId = settings.facebookPageId;
   const selectedPages = configuredPageId
     ? pages.filter((page) => page.id === configuredPageId)
     : pages;
@@ -277,13 +326,13 @@ export async function connectInstagramFromAuthorizationCode(code: string) {
   if (selectedPages.length === 0) {
     throw new Error(
       configuredPageId
-        ? "A Página configurada em META_FACEBOOK_PAGE_ID não foi autorizada ou não possui Instagram profissional vinculado."
+        ? "A Página configurada em meta.facebook.page.id não foi autorizada ou não possui Instagram profissional vinculado."
         : "Nenhuma Página com conta profissional do Instagram vinculada foi encontrada."
     );
   }
   if (selectedPages.length > 1) {
     throw new Error(
-      "Mais de uma Página com Instagram foi encontrada. Configure META_FACEBOOK_PAGE_ID com a Página da A Modo Mio e tente novamente."
+      "Mais de uma Página com Instagram foi encontrada. Configure meta.facebook.page.id com a Página da A Modo Mio e tente novamente."
     );
   }
 
@@ -354,7 +403,7 @@ export async function verifyInstagramConnection() {
       access_token: token,
     });
     const response = await fetch(
-      `${graphUrl(connection.instagramAccountId)}?${params.toString()}`
+      `${await graphUrl(connection.instagramAccountId)}?${params.toString()}`
     );
     const account = await readGraphJson<InstagramAccount>(response);
 

@@ -169,21 +169,23 @@ Indicadores:
 - interações médias por usuário;
 - comparação entre mês atual e mês anterior.
 
-## Destaques promocionais
+## Cardapio featured
 
-Os destaques do cardápio reutilizam `cardapio_interaction_events`, mas possuem
-eventos próprios:
+O canal `cardapio-featured` reutiliza `cardapio_interaction_events`, mas possui
+eventos próprios. Os valores persistidos mantêm o prefixo histórico
+`cardapio_highlight_*` para não quebrar a série existente:
 
 - `cardapio_highlight_impression`: pelo menos 50% do destaque ficou visível;
 - `cardapio_highlight_expand`: o visitante abriu a visualização ampliada;
 - `cardapio_highlight_slide_view`: uma imagem do carrossel foi exibida;
 - `cardapio_highlight_cta_click`: o link configurado na imagem foi acionado.
 
-O `value` guarda a `key` estável do destaque, `control` identifica a imagem e
-`placement` separa card/modal e mobile/desktop. Todo destaque publicado e
-renderizado entra automaticamente no tracking, sem configuração adicional. O relatório fica em
-`/admin/marketing/relatorios/destaques` e apresenta alcance único, taxa de
-ampliação, CTR, desempenho por destaque e distribuição por posição.
+O `value` guarda a `key` estável do `ContentPost`, `control` identifica a mídia
+e `placement` separa card/modal e mobile/desktop. Todo alvo
+`cardapio-featured` ativo e renderizado entra automaticamente no tracking, sem
+configuração adicional. O relatório fica em
+`/admin/marketing/relatorios/cardapio-featured` e apresenta alcance único, taxa
+de ampliação, CTR, desempenho por publicação e distribuição por posição.
 
 ## Decisão arquitetural
 
