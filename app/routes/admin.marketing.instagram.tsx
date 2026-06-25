@@ -56,7 +56,7 @@ type ActionData =
   | { ok: false; message: string };
 
 const DEFAULT_CALLBACK_URL =
-  "https://amodomio.com.br/auth/facebook-business/callback";
+  "https://www.amodomio.com.br/auth/facebook-business/callback";
 const TUNNEL_COMMAND = "cloudflared tunnel --url http://localhost:3000";
 const FACEBOOK_BUSINESS_CALLBACK_PATH = "/auth/facebook-business/callback";
 
@@ -71,13 +71,27 @@ function str(form: FormData, key: string) {
   return String(form.get(key) || "").trim();
 }
 
+function getCallbackDomain(callbackUrl: string) {
+  try {
+    return new URL(callbackUrl).hostname;
+  } catch {
+    return "";
+  }
+}
+
 export async function loader({ request }: LoaderFunctionArgs) {
   const user = await authenticator.isAuthenticated(request);
   if (!user) throw redirect("/login");
 
+  const config = await getInstagramFacebookConfig();
+  const requestUrl = new URL(request.url);
+  const currentOriginCallbackUrl = `${requestUrl.origin}${FACEBOOK_BUSINESS_CALLBACK_PATH}`;
+
   return json({
-    config: await getInstagramFacebookConfig(),
+    config,
     connection: await getInstagramConnection(),
+    currentOriginCallbackUrl,
+    callbackDomain: getCallbackDomain(config.callbackUrl),
   });
 }
 
@@ -137,7 +151,8 @@ export async function action({ request }: ActionFunctionArgs) {
 }
 
 export default function AdminMarketingInstagramPage() {
-  const { config, connection } = useLoaderData<typeof loader>();
+  const { config, connection, currentOriginCallbackUrl, callbackDomain } =
+    useLoaderData<typeof loader>();
   const actionData = useActionData<ActionData>();
   const navigation = useNavigation();
   const callbackInputRef = useRef<HTMLInputElement>(null);
@@ -145,6 +160,7 @@ export default function AdminMarketingInstagramPage() {
   const callbackStatus = searchParams.get("status");
   const callbackMessage = searchParams.get("message");
   const isSubmitting = navigation.state === "submitting";
+  const showApexDomainWarning = callbackDomain === "amodomio.com.br";
 
   return (
     <div className="max-w-4xl space-y-6 p-4 md:p-8">
@@ -263,6 +279,34 @@ export default function AdminMarketingInstagramPage() {
                 Cadastre exatamente esta URL no app da Meta. Para túnel local,
                 substitua o domínio pelo endereço público do túnel.
               </p>
+              <div className="rounded border bg-slate-50 p-3 text-xs text-slate-700">
+                <div className="font-medium text-slate-900">
+                  Valores que a Meta vai validar
+                </div>
+                <dl className="mt-2 space-y-1">
+                  <div>
+                    <dt className="inline font-medium">App Domains: </dt>
+                    <dd className="inline">
+                      {callbackDomain || "preencha uma URL absoluta"}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="inline font-medium">
+                      URI de redirecionamento OAuth valida:{" "}
+                    </dt>
+                    <dd className="inline break-all">
+                      {config.callbackUrl || currentOriginCallbackUrl}
+                    </dd>
+                  </div>
+                </dl>
+                {showApexDomainWarning ? (
+                  <p className="mt-2 text-amber-700">
+                    Este callback usa o domínio sem www. Se o app da Meta está
+                    configurado com www.amodomio.com.br, clique em Default,
+                    salve e tente conectar novamente.
+                  </p>
+                ) : null}
+              </div>
             </div>
 
             <div className="flex justify-end">
