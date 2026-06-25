@@ -6,24 +6,43 @@ import {
   listItemAssetsAdmin,
 } from "~/domain/item/item-assets.server";
 import { getItemMediaFolderPath } from "~/domain/menu-item-assets/menu-item-assets.shared";
-import { registerMediaAssetInLibrary, uploadFileToMediaApi } from "~/domain/media/media.service.server";
-import { normalizeStorageKey, type UploadKind } from "~/domain/media/media.shared";
+import {
+  registerMediaAssetInLibrary,
+  uploadFileToMediaApi,
+} from "~/domain/media/media.service.server";
+import { normalizeStorageKey } from "~/domain/media/media.shared";
 
-function parseBooleanValue(value: FormDataEntryValue | string | null | undefined, fallback: boolean) {
+type VisualUploadKind = "image" | "video";
+
+function parseBooleanValue(
+  value: FormDataEntryValue | string | null | undefined,
+  fallback: boolean
+) {
   if (typeof value === "boolean") return value;
   if (typeof value !== "string") return fallback;
   const normalized = value.trim().toLowerCase();
   if (!normalized) return fallback;
-  return normalized === "1" || normalized === "true" || normalized === "on" || normalized === "yes";
+  return (
+    normalized === "1" ||
+    normalized === "true" ||
+    normalized === "on" ||
+    normalized === "yes"
+  );
 }
 
 function isMultipartFile(value: FormDataEntryValue | null): value is File {
   if (!value) return false;
   if (typeof File !== "undefined" && value instanceof File) return true;
-  return value instanceof Blob && typeof (value as { name?: unknown }).name === "string";
+  return (
+    value instanceof Blob &&
+    typeof (value as { name?: unknown }).name === "string"
+  );
 }
 
-function inferKindFromMimeOrUrl(input: { mimeType?: string | null; url?: string | null }): UploadKind {
+function inferKindFromMimeOrUrl(input: {
+  mimeType?: string | null;
+  url?: string | null;
+}): VisualUploadKind {
   const mime = String(input.mimeType || "").toLowerCase();
   if (mime.startsWith("video/")) return "video";
   if (mime.startsWith("image/")) return "image";
@@ -60,7 +79,9 @@ function getFileExtension(fileName: string) {
 function buildAssetFileName(originalFileName: string) {
   const normalizedBase = normalizeStorageKey(getBaseName(originalFileName));
   const extension = getFileExtension(originalFileName);
-  const baseName = normalizedBase ? `asset-${normalizedBase}` : `asset-${Date.now()}`;
+  const baseName = normalizedBase
+    ? `asset-${normalizedBase}`
+    : `asset-${Date.now()}`;
   return extension ? `${baseName}.${extension}` : baseName;
 }
 
@@ -76,9 +97,7 @@ function pickDetailMessage(details: unknown): string | null {
   if (directMessage) return directMessage.trim();
 
   return (
-    pickDetailMessage(raw.details) ||
-    pickDetailMessage(raw.health) ||
-    null
+    pickDetailMessage(raw.details) || pickDetailMessage(raw.health) || null
   );
 }
 
@@ -138,7 +157,10 @@ export async function action({ request, params }: ActionFunctionArgs) {
     const mediaApiKey = process.env.MEDIA_UPLOAD_API_KEY;
     if (!mediaApiKey) {
       return json(
-        { error: "missing_media_upload_api_key", message: "Configure MEDIA_UPLOAD_API_KEY no servidor." },
+        {
+          error: "missing_media_upload_api_key",
+          message: "Configure MEDIA_UPLOAD_API_KEY no servidor.",
+        },
         { status: 500 }
       );
     }
@@ -146,7 +168,8 @@ export async function action({ request, params }: ActionFunctionArgs) {
     const fileKind = inferKindFromMimeOrUrl({ mimeType: file.type });
     const assetFileName = buildAssetFileName(file.name);
     const folderPath = getItemMediaFolderPath(itemId);
-    const assetKey = normalizeStorageKey(getBaseName(assetFileName)) || `asset-${Date.now()}`;
+    const assetKey =
+      normalizeStorageKey(getBaseName(assetFileName)) || `asset-${Date.now()}`;
 
     let uploadResult: Awaited<ReturnType<typeof uploadFileToMediaApi>>;
     try {
@@ -206,7 +229,8 @@ export async function action({ request, params }: ActionFunctionArgs) {
       kind: fileKind,
       visible,
       isPrimary,
-      assetId: typeof uploadRaw?.asset_id === "string" ? uploadRaw.asset_id : null,
+      assetId:
+        typeof uploadRaw?.asset_id === "string" ? uploadRaw.asset_id : null,
       mediaAssetId: savedAsset.id,
       assetFolder: savedAsset.folderPath,
       originalFileName: file.name,
@@ -214,14 +238,18 @@ export async function action({ request, params }: ActionFunctionArgs) {
       format: getFormatFromFileName(assetFileName),
       width: typeof uploadRaw?.width === "number" ? uploadRaw.width : null,
       height: typeof uploadRaw?.height === "number" ? uploadRaw.height : null,
-      thumbnailUrl: typeof uploadRaw?.thumbnail_url === "string" ? uploadRaw.thumbnail_url : null,
+      thumbnailUrl:
+        typeof uploadRaw?.thumbnail_url === "string"
+          ? uploadRaw.thumbnail_url
+          : null,
       variantsJson:
         uploadRaw?.variants &&
         typeof uploadRaw.variants === "object" &&
         !Array.isArray(uploadRaw.variants)
           ? (uploadRaw.variants as Record<string, string>)
           : null,
-      publicId: typeof uploadRaw?.public_id === "string" ? uploadRaw.public_id : null,
+      publicId:
+        typeof uploadRaw?.public_id === "string" ? uploadRaw.public_id : null,
     });
 
     return json(created, { status: 201 });
@@ -231,7 +259,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
     url?: string;
     visible?: boolean;
     isPrimary?: boolean;
-    kind?: UploadKind;
+    kind?: VisualUploadKind;
   } = {};
 
   try {

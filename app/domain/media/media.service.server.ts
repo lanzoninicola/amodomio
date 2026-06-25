@@ -27,11 +27,15 @@ function buildUploadV2Url(input: {
 }
 
 export function getMediaApiBaseUrl() {
-  return (process.env.MEDIA_API_BASE_URL || "https://media-api.amodomio.com.br").replace(/\/+$/, "");
+  return (
+    process.env.MEDIA_API_BASE_URL || "https://media-api.amodomio.com.br"
+  ).replace(/\/+$/, "");
 }
 
 export function getMediaBaseUrl() {
-  return (process.env.MEDIA_BASE_URL || "https://media.amodomio.com.br").replace(/\/+$/, "");
+  return (
+    process.env.MEDIA_BASE_URL || "https://media.amodomio.com.br"
+  ).replace(/\/+$/, "");
 }
 
 export function isMissingRelationError(error: unknown) {
@@ -80,7 +84,9 @@ export async function checkMediaApiHealth() {
       ok: false,
       endpoint: "/healthcheck",
       status: null,
-      details: String((error as Error)?.message || "healthcheck_request_failed"),
+      details: String(
+        (error as Error)?.message || "healthcheck_request_failed"
+      ),
     };
   }
 
@@ -122,18 +128,20 @@ export type MediaApiUploadFailure = {
   details: unknown;
 };
 
-export type MediaApiUploadResult = {
-  ok: true;
-  status: number;
-  endpoint: "v2";
-  data: {
-    url: string;
-    kind: UploadKind;
-    folderPath: string;
-    assetKey: string;
-  };
-  rawPayload: unknown;
-} | MediaApiUploadFailure;
+export type MediaApiUploadResult =
+  | {
+      ok: true;
+      status: number;
+      endpoint: "v2";
+      data: {
+        url: string;
+        kind: UploadKind;
+        folderPath: string;
+        assetKey: string;
+      };
+      rawPayload: unknown;
+    }
+  | MediaApiUploadFailure;
 
 async function postToMediaUploadEndpoint(input: {
   endpoint: "v2";
@@ -146,7 +154,11 @@ async function postToMediaUploadEndpoint(input: {
   assetKey: string;
 }) {
   const uploadBody = new FormData();
-  uploadBody.append("file", input.file, input.uploadFileName || input.file.name || "asset");
+  uploadBody.append(
+    "file",
+    input.file,
+    input.uploadFileName || input.file.name || "asset"
+  );
 
   const response = await fetch(input.url, {
     method: "POST",
@@ -195,7 +207,8 @@ export async function uploadFileToMediaApi(input: {
   }
 
   const normalizedFolderPath = normalizePath(input.folderPath);
-  const requestedAssetKey = normalizeStorageKey(input.assetKey) || `asset-${Date.now()}`;
+  const requestedAssetKey =
+    normalizeStorageKey(input.assetKey) || `asset-${Date.now()}`;
 
   return postToMediaUploadEndpoint({
     endpoint: "v2",
@@ -216,29 +229,33 @@ export async function uploadFileToMediaApi(input: {
 
 export async function readLibraryFromDb(): Promise<LibraryPayload> {
   try {
-    const folders = await prismaClient.$queryRaw<Array<{
-      id: string;
-      path: string;
-      name: string;
-      parent_path: string | null;
-      created_at: Date;
-      updated_at: Date;
-    }>>`
+    const folders = await prismaClient.$queryRaw<
+      Array<{
+        id: string;
+        path: string;
+        name: string;
+        parent_path: string | null;
+        created_at: Date;
+        updated_at: Date;
+      }>
+    >`
       SELECT id, path, name, parent_path, created_at, updated_at
       FROM media_folders
       ORDER BY path ASC
     `;
 
-    const assets = await prismaClient.$queryRaw<Array<{
-      id: string;
-      kind: string;
-      url: string;
-      folder_path: string;
-      file_name: string;
-      storage_key: string | null;
-      size_bytes: bigint | number | null;
-      created_at: Date;
-    }>>`
+    const assets = await prismaClient.$queryRaw<
+      Array<{
+        id: string;
+        kind: string;
+        url: string;
+        folder_path: string;
+        file_name: string;
+        storage_key: string | null;
+        size_bytes: bigint | number | null;
+        created_at: Date;
+      }>
+    >`
       SELECT id, kind, url, folder_path, file_name, storage_key, size_bytes, created_at
       FROM media_assets
       ORDER BY created_at DESC
@@ -293,7 +310,9 @@ export async function createFolderByPath(path: string) {
 }
 
 export async function renameFolderPath(oldPath: string, newPath: string) {
-  const folders = await prismaClient.$queryRaw<Array<{ id: string; path: string }>>`
+  const folders = await prismaClient.$queryRaw<
+    Array<{ id: string; path: string }>
+  >`
     SELECT id, path
     FROM media_folders
     WHERE path = ${oldPath} OR path LIKE ${`${oldPath}/%`}
@@ -381,11 +400,18 @@ export async function uploadFilesToExternalService(input: {
   await ensureFolderLineage(normalizedPath);
 
   const failedFiles: string[] = [];
+  const failureDetails: Array<{
+    fileName: string;
+    status: number;
+    endpoint: "v2";
+    details: unknown;
+  }> = [];
   let successCount = 0;
 
   for (let index = 0; index < input.files.length; index++) {
     const file = input.files[index];
-    const assetKey = normalizeStorageKey(file.name) || `asset-${Date.now()}-${index + 1}`;
+    const assetKey =
+      normalizeStorageKey(file.name) || `asset-${Date.now()}-${index + 1}`;
     const uploadResult = await uploadFileToMediaApi({
       file,
       kind: input.kind,
@@ -395,6 +421,12 @@ export async function uploadFilesToExternalService(input: {
 
     if (!uploadResult.ok) {
       failedFiles.push(file.name);
+      failureDetails.push({
+        fileName: file.name,
+        status: uploadResult.status,
+        endpoint: uploadResult.endpoint,
+        details: uploadResult.details,
+      });
       continue;
     }
 
@@ -408,6 +440,7 @@ export async function uploadFilesToExternalService(input: {
   return {
     successCount,
     failedFiles,
+    failureDetails,
     payload: await readLibraryFromDb(),
   };
 }
@@ -424,7 +457,12 @@ export async function registerMediaAssetInLibrary(input: {
   await ensureFolderLineage(normalizedPath);
 
   const existing = await prismaClient.$queryRaw<
-    Array<{ id: string; folder_path: string; storage_key: string | null; size_bytes: bigint | number | null }>
+    Array<{
+      id: string;
+      folder_path: string;
+      storage_key: string | null;
+      size_bytes: bigint | number | null;
+    }>
   >`
     SELECT id, folder_path, storage_key, size_bytes
     FROM media_assets
@@ -500,22 +538,27 @@ export async function listAssetsByFolderPath(input: {
     }>;
   }
 
-  const kind = input.kind === "image" || input.kind === "video" ? input.kind : "all";
+  const kind =
+    input.kind === "image" || input.kind === "video" || input.kind === "audio"
+      ? input.kind
+      : "all";
   const recursive = Boolean(input.recursive);
   const limit = Math.max(1, Math.min(200, Math.trunc(input.limit || 100)));
 
   try {
     const rows = recursive
-      ? await prismaClient.$queryRaw<Array<{
-          id: string;
-          kind: string;
-          url: string;
-          folder_path: string;
-          file_name: string;
-          storage_key: string | null;
-          size_bytes: bigint | number | null;
-          created_at: Date;
-        }>>`
+      ? await prismaClient.$queryRaw<
+          Array<{
+            id: string;
+            kind: string;
+            url: string;
+            folder_path: string;
+            file_name: string;
+            storage_key: string | null;
+            size_bytes: bigint | number | null;
+            created_at: Date;
+          }>
+        >`
           SELECT id, kind, url, folder_path, file_name, storage_key, size_bytes, created_at
           FROM media_assets
           WHERE (folder_path = ${folderPath} OR folder_path LIKE ${`${folderPath}/%`})
@@ -523,16 +566,18 @@ export async function listAssetsByFolderPath(input: {
           ORDER BY created_at DESC
           LIMIT ${limit}
         `
-      : await prismaClient.$queryRaw<Array<{
-          id: string;
-          kind: string;
-          url: string;
-          folder_path: string;
-          file_name: string;
-          storage_key: string | null;
-          size_bytes: bigint | number | null;
-          created_at: Date;
-        }>>`
+      : await prismaClient.$queryRaw<
+          Array<{
+            id: string;
+            kind: string;
+            url: string;
+            folder_path: string;
+            file_name: string;
+            storage_key: string | null;
+            size_bytes: bigint | number | null;
+            created_at: Date;
+          }>
+        >`
           SELECT id, kind, url, folder_path, file_name, storage_key, size_bytes, created_at
           FROM media_assets
           WHERE folder_path = ${folderPath}

@@ -1,10 +1,16 @@
-import { json, type ActionFunctionArgs, type LoaderFunctionArgs, type MetaFunction } from "@remix-run/node";
+import {
+  json,
+  type ActionFunctionArgs,
+  type LoaderFunctionArgs,
+  type MetaFunction,
+} from "@remix-run/node";
 import { useLoaderData } from "@remix-run/react";
 import { useEffect, useMemo, useState } from "react";
 import {
   ChevronDown,
   ChevronRight,
   Copy,
+  FileAudio,
   FileImage,
   FileVideo,
   Folder,
@@ -20,8 +26,19 @@ import {
 } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "~/components/ui/tooltip";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "~/components/ui/select";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "~/components/ui/tooltip";
 import { authenticator } from "~/domain/auth/google.server";
 import { toast } from "~/components/ui/use-toast";
 import {
@@ -32,7 +49,14 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "~/components/ui/dialog";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "~/components/ui/table";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "~/components/ui/table";
 import {
   FOLDER_SEGMENT_REGEX,
   getFolderLabel,
@@ -41,7 +65,6 @@ import {
   isSafePath,
   normalizeFolderSegment,
   normalizePath,
-  normalizeStorageKey,
   replacePathPrefix,
   type LibraryPayload,
   type MediaAsset,
@@ -63,15 +86,15 @@ type LoaderData = {
 
 type ActionData =
   | {
-    ok: true;
-    message: string;
-    payload: LibraryPayload;
-  }
+      ok: true;
+      message: string;
+      payload: LibraryPayload;
+    }
   | {
-    ok: false;
-    message: string;
-    debug?: string;
-  };
+      ok: false;
+      message: string;
+      debug?: string;
+    };
 
 type UploadProgressItem = {
   id: string;
@@ -89,15 +112,22 @@ type UploadResult = {
   httpStatus?: number;
 };
 
-type DirectUploadConfig = {
-  uploadBaseUrl: string;
-  apiKey: string;
-};
-
 export const meta: MetaFunction = () => [{ title: "Admin • Asset Drive" }];
 
 function formatMegabytes(bytes: number) {
   return (bytes / (1024 * 1024)).toFixed(2);
+}
+
+function getUploadAccept(kind: UploadKind) {
+  if (kind === "video") return "video/*";
+  if (kind === "audio") return "audio/*";
+  return "image/*";
+}
+
+function getMediaKindLabel(kind: UploadKind) {
+  if (kind === "video") return "Vídeo";
+  if (kind === "audio") return "Áudio";
+  return "Imagem";
 }
 
 export async function loader({ request }: LoaderFunctionArgs) {
@@ -120,7 +150,10 @@ export async function action({ request }: ActionFunctionArgs) {
   const mediaService = await import("~/domain/media/media.service.server");
 
   if (request.method !== "POST") {
-    return json<ActionData>({ ok: false, message: "Método não permitido." }, { status: 405 });
+    return json<ActionData>(
+      { ok: false, message: "Método não permitido." },
+      { status: 405 }
+    );
   }
 
   const contentType = request.headers.get("content-type") || "";
@@ -129,7 +162,11 @@ export async function action({ request }: ActionFunctionArgs) {
     if (contentType.includes("multipart/form-data")) {
       if (!process.env.MEDIA_UPLOAD_API_KEY) {
         return json<ActionData>(
-          { ok: false, message: "Configure MEDIA_UPLOAD_API_KEY no servidor para habilitar upload." },
+          {
+            ok: false,
+            message:
+              "Configure MEDIA_UPLOAD_API_KEY no servidor para habilitar upload.",
+          },
           { status: 500 }
         );
       }
@@ -138,45 +175,61 @@ export async function action({ request }: ActionFunctionArgs) {
       const intent = String(formData.get("_intent") || "upload");
 
       if (intent !== "upload") {
-        return json<ActionData>({ ok: false, message: "Ação inválida." }, { status: 400 });
-      }
-
-      const files = formData
-        .getAll("files")
-        .filter((entry): entry is File => entry instanceof File && entry.size > 0);
-      const kindRaw = String(formData.get("kind") || "image");
-      const assetPathRaw = String(formData.get("assetPath") || "");
-      const kind: UploadKind = kindRaw === "video" ? "video" : "image";
-      const assetPath = normalizePath(assetPathRaw);
-
-      if (files.length === 0) {
-        return json<ActionData>({ ok: false, message: "Selecione ao menos um arquivo para upload." }, { status: 400 });
-      }
-
-      if (!isSafePath(assetPath)) {
         return json<ActionData>(
-          { ok: false, message: "Selecione uma pasta válida antes de enviar o arquivo." },
+          { ok: false, message: "Ação inválida." },
           { status: 400 }
         );
       }
 
-      const { successCount, failedFiles, payload } = await mediaService.uploadFilesToExternalService({
-        files,
-        kind,
-        assetPath,
-      });
+      const files = formData
+        .getAll("files")
+        .filter(
+          (entry): entry is File => entry instanceof File && entry.size > 0
+        );
+      const kindRaw = String(formData.get("kind") || "image");
+      const assetPathRaw = String(formData.get("assetPath") || "");
+      const kind: UploadKind =
+        kindRaw === "video" ? "video" : kindRaw === "audio" ? "audio" : "image";
+      const assetPath = normalizePath(assetPathRaw);
+
+      if (files.length === 0) {
+        return json<ActionData>(
+          { ok: false, message: "Selecione ao menos um arquivo para upload." },
+          { status: 400 }
+        );
+      }
+
+      if (!isSafePath(assetPath)) {
+        return json<ActionData>(
+          {
+            ok: false,
+            message: "Selecione uma pasta válida antes de enviar o arquivo.",
+          },
+          { status: 400 }
+        );
+      }
+
+      const { successCount, failedFiles, failureDetails, payload } =
+        await mediaService.uploadFilesToExternalService({
+          files,
+          kind,
+          assetPath,
+        });
 
       if (successCount === 0) {
         return json<ActionData>(
           {
             ok: false,
             message: "Falha no upload em lote. Nenhum arquivo foi enviado.",
+            debug: JSON.stringify({ failedFiles, failureDetails }, null, 2),
           },
           { status: 502 }
         );
       }
 
-      const failureMessage = failedFiles.length ? ` Falharam: ${failedFiles.join(", ")}.` : "";
+      const failureMessage = failedFiles.length
+        ? ` Falharam: ${failedFiles.join(", ")}.`
+        : "";
 
       return json<ActionData>({
         ok: true,
@@ -185,17 +238,15 @@ export async function action({ request }: ActionFunctionArgs) {
       });
     }
 
-    const body = (await request.json().catch(() => null)) as
-      | {
-        intent?: string;
-        currentPath?: string;
-        folderName?: string;
-        oldPath?: string;
-        newPath?: string;
-        assetId?: string;
-        destinationPath?: string;
-      }
-      | null;
+    const body = (await request.json().catch(() => null)) as {
+      intent?: string;
+      currentPath?: string;
+      folderName?: string;
+      oldPath?: string;
+      newPath?: string;
+      assetId?: string;
+      destinationPath?: string;
+    } | null;
 
     const intent = String(body?.intent || "");
 
@@ -205,12 +256,17 @@ export async function action({ request }: ActionFunctionArgs) {
 
       if (!segment || !FOLDER_SEGMENT_REGEX.test(segment)) {
         return json<ActionData>(
-          { ok: false, message: "Nome inválido. Use apenas letras, números, '-' e '_'." },
+          {
+            ok: false,
+            message: "Nome inválido. Use apenas letras, números, '-' e '_'.",
+          },
           { status: 400 }
         );
       }
 
-      const targetPath = normalizePath(currentPath ? `${currentPath}/${segment}` : segment);
+      const targetPath = normalizePath(
+        currentPath ? `${currentPath}/${segment}` : segment
+      );
       const payload = await mediaService.createFolderByPath(targetPath);
 
       return json<ActionData>({ ok: true, message: "Pasta criada.", payload });
@@ -220,58 +276,101 @@ export async function action({ request }: ActionFunctionArgs) {
       const oldPath = normalizePath(String(body?.oldPath || ""));
       const newPath = normalizePath(String(body?.newPath || ""));
 
-      if (!oldPath || !newPath || !isSafePath(oldPath) || !isSafePath(newPath)) {
-        return json<ActionData>({ ok: false, message: "Path inválido para renomear." }, { status: 400 });
+      if (
+        !oldPath ||
+        !newPath ||
+        !isSafePath(oldPath) ||
+        !isSafePath(newPath)
+      ) {
+        return json<ActionData>(
+          { ok: false, message: "Path inválido para renomear." },
+          { status: 400 }
+        );
       }
 
       const payload = await mediaService.renameFolderPath(oldPath, newPath);
       if (!payload) {
-        return json<ActionData>({ ok: false, message: "Pasta não encontrada." }, { status: 404 });
+        return json<ActionData>(
+          { ok: false, message: "Pasta não encontrada." },
+          { status: 404 }
+        );
       }
 
-      return json<ActionData>({ ok: true, message: "Pasta renomeada.", payload });
+      return json<ActionData>({
+        ok: true,
+        message: "Pasta renomeada.",
+        payload,
+      });
     }
 
     if (intent === "delete-folder") {
       const path = normalizePath(String(body?.currentPath || ""));
       if (!path || !isSafePath(path)) {
-        return json<ActionData>({ ok: false, message: "Path inválido para exclusão." }, { status: 400 });
+        return json<ActionData>(
+          { ok: false, message: "Path inválido para exclusão." },
+          { status: 400 }
+        );
       }
 
       const payload = await mediaService.deleteFolderPath(path);
-      return json<ActionData>({ ok: true, message: "Pasta removida.", payload });
+      return json<ActionData>({
+        ok: true,
+        message: "Pasta removida.",
+        payload,
+      });
     }
 
     if (intent === "delete-asset") {
       const assetId = String(body?.assetId || "").trim();
       if (!assetId) {
-        return json<ActionData>({ ok: false, message: "Asset inválido." }, { status: 400 });
+        return json<ActionData>(
+          { ok: false, message: "Asset inválido." },
+          { status: 400 }
+        );
       }
 
       const payload = await mediaService.deleteAssetById(assetId);
-      return json<ActionData>({ ok: true, message: "Asset removido.", payload });
+      return json<ActionData>({
+        ok: true,
+        message: "Asset removido.",
+        payload,
+      });
     }
 
     if (intent === "move-asset") {
       const assetId = String(body?.assetId || "").trim();
-      const destinationPath = normalizePath(String(body?.destinationPath || ""));
+      const destinationPath = normalizePath(
+        String(body?.destinationPath || "")
+      );
 
       if (!assetId || !destinationPath || !isSafePath(destinationPath)) {
-        return json<ActionData>({ ok: false, message: "Dados inválidos para mover asset." }, { status: 400 });
+        return json<ActionData>(
+          { ok: false, message: "Dados inválidos para mover asset." },
+          { status: 400 }
+        );
       }
 
       const payload = await mediaService.moveAsset(assetId, destinationPath);
       return json<ActionData>({ ok: true, message: "Asset movido.", payload });
     }
 
-    return json<ActionData>({ ok: false, message: "Ação inválida." }, { status: 400 });
+    return json<ActionData>(
+      { ok: false, message: "Ação inválida." },
+      { status: 400 }
+    );
   } catch (error) {
     const errorMessage = String((error as Error)?.message || "unknown_error");
     const rawMessage = errorMessage.toLowerCase();
 
-    if (String((error as Error)?.message || "").includes("target_folder_conflict")) {
+    if (
+      String((error as Error)?.message || "").includes("target_folder_conflict")
+    ) {
       return json<ActionData>(
-        { ok: false, message: "Já existe uma pasta com esse nome no mesmo nível.", debug: errorMessage },
+        {
+          ok: false,
+          message: "Já existe uma pasta com esse nome no mesmo nível.",
+          debug: errorMessage,
+        },
         { status: 409 }
       );
     }
@@ -301,14 +400,24 @@ export async function action({ request }: ActionFunctionArgs) {
     }
 
     return json<ActionData>(
-      { ok: false, message: "Não foi possível concluir a operação.", debug: errorMessage },
+      {
+        ok: false,
+        message: "Não foi possível concluir a operação.",
+        debug: errorMessage,
+      },
       { status: 500 }
     );
   }
 }
 
 export default function AdminAssetsPage() {
-  const { mediaApiBaseUrl, mediaBaseUrl, hasUploadApiKey, mediaApiHealth, library } = useLoaderData<typeof loader>();
+  const {
+    mediaApiBaseUrl,
+    mediaBaseUrl,
+    hasUploadApiKey,
+    mediaApiHealth,
+    library,
+  } = useLoaderData<typeof loader>();
 
   const [folders, setFolders] = useState<MediaFolder[]>(library.folders || []);
   const [assets, setAssets] = useState<MediaAsset[]>(library.assets || []);
@@ -321,7 +430,9 @@ export default function AdminAssetsPage() {
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [uploadQueue, setUploadQueue] = useState<UploadProgressItem[]>([]);
   const [isUploadingBatch, setIsUploadingBatch] = useState(false);
-  const [collapsedFolders, setCollapsedFolders] = useState<Set<string>>(() => new Set());
+  const [collapsedFolders, setCollapsedFolders] = useState<Set<string>>(
+    () => new Set()
+  );
 
   useEffect(() => {
     setFolders(library.folders || []);
@@ -343,7 +454,11 @@ export default function AdminAssetsPage() {
     });
   }, [currentFolder]);
 
-  const allFolders = useMemo(() => folders.map((folder) => folder.path).sort((a, b) => a.localeCompare(b)), [folders]);
+  const allFolders = useMemo(
+    () =>
+      folders.map((folder) => folder.path).sort((a, b) => a.localeCompare(b)),
+    [folders]
+  );
 
   const rootFolders = useMemo(() => {
     return allFolders.filter((folder) => !folder.includes("/"));
@@ -365,11 +480,18 @@ export default function AdminAssetsPage() {
     const normalizedSearch = search.trim().toLowerCase();
 
     return assets
-      .filter((asset) => (currentFolder ? asset.assetPath === currentFolder : !asset.assetPath))
-      .filter((asset) => (kindFilter === "all" ? true : asset.kind === kindFilter))
+      .filter((asset) =>
+        currentFolder ? asset.assetPath === currentFolder : !asset.assetPath
+      )
+      .filter((asset) =>
+        kindFilter === "all" ? true : asset.kind === kindFilter
+      )
       .filter((asset) => {
         if (!normalizedSearch) return true;
-        return asset.fileName.toLowerCase().includes(normalizedSearch) || asset.url.toLowerCase().includes(normalizedSearch);
+        return (
+          asset.fileName.toLowerCase().includes(normalizedSearch) ||
+          asset.url.toLowerCase().includes(normalizedSearch)
+        );
       })
       .sort((a, b) => +new Date(b.uploadedAt) - +new Date(a.uploadedAt));
   }, [assets, currentFolder, kindFilter, search]);
@@ -379,7 +501,9 @@ export default function AdminAssetsPage() {
     const normalizedSearch = search.trim().toLowerCase();
 
     if (!normalizedSearch) return currentLevelFolders;
-    return currentLevelFolders.filter((folder) => folder.toLowerCase().includes(normalizedSearch));
+    return currentLevelFolders.filter((folder) =>
+      folder.toLowerCase().includes(normalizedSearch)
+    );
   }, [childFolders, currentFolder, rootFolders, search]);
 
   const breadcrumbs = useMemo(() => {
@@ -395,11 +519,15 @@ export default function AdminAssetsPage() {
         const parent = getParentPath(folder);
         if (!parent) return true;
 
-        return getFolderLineage(parent).every((ancestor) => !collapsedFolders.has(ancestor));
+        return getFolderLineage(parent).every(
+          (ancestor) => !collapsedFolders.has(ancestor)
+        );
       });
     }
 
-    return allFolders.filter((folder) => folder.toLowerCase().includes(normalizedSearch));
+    return allFolders.filter((folder) =>
+      folder.toLowerCase().includes(normalizedSearch)
+    );
   }, [allFolders, collapsedFolders, search]);
 
   const foldersWithChildren = useMemo(() => {
@@ -413,8 +541,13 @@ export default function AdminAssetsPage() {
   }, [allFolders]);
 
   const storageUsage = useMemo(() => {
-    const totalBytes = assets.reduce((sum, asset) => sum + (asset.sizeBytes || 0), 0);
-    const unknownCount = assets.filter((asset) => asset.sizeBytes === null).length;
+    const totalBytes = assets.reduce(
+      (sum, asset) => sum + (asset.sizeBytes || 0),
+      0
+    );
+    const unknownCount = assets.filter(
+      (asset) => asset.sizeBytes === null
+    ).length;
     return {
       totalBytes,
       totalMb: formatMegabytes(totalBytes),
@@ -482,99 +615,76 @@ export default function AdminAssetsPage() {
       setLastErrorDebug(debugText);
       toast({
         title: "Erro",
-        description: `Falha de rede ao executar operação. (${String((error as Error)?.message || "unknown")})`,
+        description: `Falha de rede ao executar operação. (${String(
+          (error as Error)?.message || "unknown"
+        )})`,
         variant: "destructive",
       });
       return null;
     }
   }
 
-  async function fetchDirectUploadConfig(): Promise<DirectUploadConfig | null> {
-    try {
-      const response = await fetch("/api/media/upload-config");
-      if (!response.ok) return null;
-      const data = (await response.json()) as { ok: boolean; uploadBaseUrl: string; apiKey: string };
-      if (!data.ok) return null;
-      return { uploadBaseUrl: data.uploadBaseUrl, apiKey: data.apiKey };
-    } catch {
-      return null;
-    }
-  }
-
-  async function uploadSingleFile(file: File, queueId: string, config: DirectUploadConfig) {
+  async function uploadSingleFile(file: File, queueId: string) {
     return new Promise<UploadResult>((resolve) => {
-      const assetKey = normalizeStorageKey(file.name) || `asset-${Date.now()}`;
-
-      const uploadUrl = new URL(`${config.uploadBaseUrl}/v2/upload`);
-      uploadUrl.searchParams.set("kind", uploadKind);
-      uploadUrl.searchParams.set("folderPath", currentFolder);
-      uploadUrl.searchParams.set("assetKey", assetKey);
-
       const formData = new FormData();
-      formData.append("file", file, file.name);
+      formData.append("_intent", "upload");
+      formData.append("kind", uploadKind);
+      formData.append("assetPath", currentFolder);
+      formData.append("files", file, file.name);
 
       const xhr = new XMLHttpRequest();
-      xhr.open("POST", uploadUrl.toString());
-      xhr.setRequestHeader("x-api-key", config.apiKey);
+      xhr.open("POST", "/admin/assets");
 
       xhr.upload.onprogress = (event) => {
         if (!event.lengthComputable) return;
-        const percent = Math.min(100, Math.round((event.loaded / event.total) * 100));
+        const percent = Math.min(
+          100,
+          Math.round((event.loaded / event.total) * 100)
+        );
         setUploadQueue((current) =>
-          current.map((item) => (item.id === queueId ? { ...item, progress: percent, status: "uploading" } : item))
+          current.map((item) =>
+            item.id === queueId
+              ? { ...item, progress: percent, status: "uploading" }
+              : item
+          )
         );
       };
 
       xhr.onload = () => {
-        void (async () => {
-          type MediaApiData = { ok?: boolean; url?: string; assetKey?: string };
-          let mediaData: MediaApiData | null = null;
-          try {
-            mediaData = JSON.parse(xhr.responseText) as MediaApiData;
-          } catch {
-            // stays null
-          }
+        let data: ActionData | null = null;
+        try {
+          data = xhr.responseText
+            ? (JSON.parse(xhr.responseText) as ActionData)
+            : null;
+        } catch {
+          data = null;
+        }
 
-          const mediaUrl = mediaData !== null ? mediaData.url : undefined;
-          const mediaAssetKey = mediaData !== null ? mediaData.assetKey : undefined;
-          if (xhr.status >= 200 && xhr.status < 300 && mediaUrl) {
-            try {
-              const regResponse = await fetch("/api/media/register-asset", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  url: mediaUrl,
-                  kind: uploadKind,
-                  assetPath: currentFolder,
-                  fileName: file.name,
-                  assetKey: mediaAssetKey || assetKey,
-                  sizeBytes: file.size,
-                }),
-              });
-              const regData = (await regResponse.json()) as { ok: boolean; payload?: LibraryPayload };
-              if (regData.ok && regData.payload) {
-                resolve({ ok: true, message: "Upload concluído.", payload: regData.payload });
-                return;
-              }
-              resolve({ ok: false, message: "Upload ok, mas falha ao registrar no banco." });
-              return;
-            } catch {
-              resolve({ ok: false, message: "Upload ok, mas falha ao registrar no banco." });
-              return;
-            }
-          }
-
+        if (xhr.status >= 200 && xhr.status < 300 && data?.ok) {
           resolve({
-            ok: false,
-            message: `Falha no upload (status ${xhr.status || "?"}).`,
-            rawResponse: xhr.responseText,
-            httpStatus: xhr.status,
+            ok: true,
+            message: "Upload concluído.",
+            payload: data.payload,
           });
-        })();
+          return;
+        }
+
+        resolve({
+          ok: false,
+          message:
+            data?.ok === false
+              ? data.message
+              : `Falha no upload (status ${xhr.status || "?"}).`,
+          rawResponse: xhr.responseText,
+          httpStatus: xhr.status,
+        });
       };
 
       xhr.onerror = () => {
-        resolve({ ok: false, message: "Erro de rede durante upload." });
+        resolve({
+          ok: false,
+          message: "Erro de rede durante upload via /admin/assets.",
+        });
       };
 
       xhr.send(formData);
@@ -583,17 +693,19 @@ export default function AdminAssetsPage() {
 
   async function uploadBatch() {
     if (!currentFolder) {
-      toast({ title: "Erro", description: "Selecione uma pasta antes do upload.", variant: "destructive" });
+      toast({
+        title: "Erro",
+        description: "Selecione uma pasta antes do upload.",
+        variant: "destructive",
+      });
       return;
     }
     if (!selectedFiles.length) {
-      toast({ title: "Erro", description: "Selecione ao menos um arquivo.", variant: "destructive" });
-      return;
-    }
-
-    const config = await fetchDirectUploadConfig();
-    if (!config) {
-      toast({ title: "Erro", description: "Não foi possível obter configuração de upload.", variant: "destructive" });
+      toast({
+        title: "Erro",
+        description: "Selecione ao menos um arquivo.",
+        variant: "destructive",
+      });
       return;
     }
 
@@ -616,10 +728,14 @@ export default function AdminAssetsPage() {
       if (!file) continue;
 
       setUploadQueue((current) =>
-        current.map((row) => (row.id === item.id ? { ...row, status: "uploading", progress: 1 } : row))
+        current.map((row) =>
+          row.id === item.id
+            ? { ...row, status: "uploading", progress: 1 }
+            : row
+        )
       );
 
-      const result = await uploadSingleFile(file, item.id, config);
+      const result = await uploadSingleFile(file, item.id);
 
       if (result.ok) {
         successCount += 1;
@@ -631,7 +747,14 @@ export default function AdminAssetsPage() {
         }
         setUploadQueue((current) =>
           current.map((row) =>
-            row.id === item.id ? { ...row, status: "success", progress: 100, message: result.message || "Concluído" } : row
+            row.id === item.id
+              ? {
+                  ...row,
+                  status: "success",
+                  progress: 100,
+                  message: result.message || "Concluído",
+                }
+              : row
           )
         );
       } else {
@@ -646,7 +769,14 @@ export default function AdminAssetsPage() {
         setLastErrorDebug(debugLines);
         setUploadQueue((current) =>
           current.map((row) =>
-            row.id === item.id ? { ...row, status: "error", progress: 100, message: result.message } : row
+            row.id === item.id
+              ? {
+                  ...row,
+                  status: "error",
+                  progress: 100,
+                  message: result.message,
+                }
+              : row
           )
         );
       }
@@ -683,10 +813,16 @@ export default function AdminAssetsPage() {
       return;
     }
 
-    const result = await postIntent({ intent: "create-folder", currentPath: currentFolder, folderName: segment });
+    const result = await postIntent({
+      intent: "create-folder",
+      currentPath: currentFolder,
+      folderName: segment,
+    });
     if (!result) return;
 
-    const createdPath = normalizePath(currentFolder ? `${currentFolder}/${segment}` : segment);
+    const createdPath = normalizePath(
+      currentFolder ? `${currentFolder}/${segment}` : segment
+    );
     if (currentFolder) {
       setCollapsedFolders((current) => {
         const next = new Set(current);
@@ -712,7 +848,10 @@ export default function AdminAssetsPage() {
 
   async function renameFolderFromList(folderPath: string) {
     const currentName = getFolderLabel(folderPath);
-    const typed = window.prompt(`Novo nome para a pasta "${currentName}":`, currentName);
+    const typed = window.prompt(
+      `Novo nome para a pasta "${currentName}":`,
+      currentName
+    );
     if (typed === null) return;
 
     const segment = normalizeFolderSegment(typed);
@@ -728,23 +867,38 @@ export default function AdminAssetsPage() {
     const parent = getParentPath(folderPath);
     const nextPath = normalizePath(parent ? `${parent}/${segment}` : segment);
 
-    const result = await postIntent({ intent: "rename-folder", oldPath: folderPath, newPath: nextPath });
+    const result = await postIntent({
+      intent: "rename-folder",
+      oldPath: folderPath,
+      newPath: nextPath,
+    });
     if (!result) return;
 
-    if (currentFolder === folderPath || currentFolder.startsWith(`${folderPath}/`)) {
+    if (
+      currentFolder === folderPath ||
+      currentFolder.startsWith(`${folderPath}/`)
+    ) {
       setCurrentFolder(replacePathPrefix(currentFolder, folderPath, nextPath));
     }
   }
 
   async function deleteFolderFromList(folderPath: string) {
-    const confirmed = window.confirm(`Excluir pasta "${folderPath}" e todo o conteúdo?`);
+    const confirmed = window.confirm(
+      `Excluir pasta "${folderPath}" e todo o conteúdo?`
+    );
     if (!confirmed) return;
 
     const parent = getParentPath(folderPath);
-    const result = await postIntent({ intent: "delete-folder", currentPath: folderPath });
+    const result = await postIntent({
+      intent: "delete-folder",
+      currentPath: folderPath,
+    });
     if (!result) return;
 
-    if (currentFolder === folderPath || currentFolder.startsWith(`${folderPath}/`)) {
+    if (
+      currentFolder === folderPath ||
+      currentFolder.startsWith(`${folderPath}/`)
+    ) {
       setCurrentFolder(parent);
     }
   }
@@ -753,7 +907,11 @@ export default function AdminAssetsPage() {
     const target = normalizePath(destinationPath);
     if (!target) return;
 
-    await postIntent({ intent: "move-asset", assetId, destinationPath: target });
+    await postIntent({
+      intent: "move-asset",
+      assetId,
+      destinationPath: target,
+    });
   }
 
   async function removeAsset(assetId: string) {
@@ -762,7 +920,11 @@ export default function AdminAssetsPage() {
 
   async function copy(text: string) {
     if (!navigator?.clipboard) {
-      toast({ title: "Erro", description: "Clipboard indisponível.", variant: "destructive" });
+      toast({
+        title: "Erro",
+        description: "Clipboard indisponível.",
+        variant: "destructive",
+      });
       return;
     }
 
@@ -770,11 +932,18 @@ export default function AdminAssetsPage() {
       await navigator.clipboard.writeText(text);
       toast({ title: "OK", description: "URL copiada" });
     } catch {
-      toast({ title: "Erro", description: "Não foi possível copiar.", variant: "destructive" });
+      toast({
+        title: "Erro",
+        description: "Não foi possível copiar.",
+        variant: "destructive",
+      });
     }
   }
 
-  function buildFolderAssetsLink(folderPath: string, kind: "all" | UploadKind = "all") {
+  function buildFolderAssetsLink(
+    folderPath: string,
+    kind: "all" | UploadKind = "all"
+  ) {
     const base = typeof window !== "undefined" ? window.location.origin : "";
     const url = new URL("/api/media/folder-assets", base || "http://localhost");
     url.searchParams.set("folder", folderPath);
@@ -795,7 +964,13 @@ export default function AdminAssetsPage() {
 
           <Dialog>
             <DialogTrigger asChild>
-              <Button type="button" variant="outline" size="sm" className="h-9 w-9 p-0" aria-label="Abrir configurações de mídia">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-9 w-9 p-0"
+                aria-label="Abrir configurações de mídia"
+              >
                 <Settings2 className="h-4 w-4" />
               </Button>
             </DialogTrigger>
@@ -803,18 +978,33 @@ export default function AdminAssetsPage() {
               <DialogHeader>
                 <DialogTitle>Configurações de Mídia</DialogTitle>
                 <DialogDescription>
-                  Dados de conexão com o serviço externo de upload e entrega pública.
+                  Dados de conexão com o serviço externo de upload e entrega
+                  pública.
                 </DialogDescription>
               </DialogHeader>
               <div className="rounded-md border p-4 space-y-2 text-sm">
-                <p><span className="font-medium">Media API:</span> {mediaApiBaseUrl}</p>
-                <p><span className="font-medium">Media CDN:</span> {mediaBaseUrl}</p>
-                <p><span className="font-medium">Status chave de upload:</span> {hasUploadApiKey ? "configurada" : "não configurada"}</p>
+                <p>
+                  <span className="font-medium">Media API:</span>{" "}
+                  {mediaApiBaseUrl}
+                </p>
+                <p>
+                  <span className="font-medium">Media CDN:</span> {mediaBaseUrl}
+                </p>
+                <p>
+                  <span className="font-medium">Status chave de upload:</span>{" "}
+                  {hasUploadApiKey ? "configurada" : "não configurada"}
+                </p>
                 <p>
                   <span className="font-medium">Healthcheck API:</span>{" "}
                   {mediaApiHealth.ok
                     ? `online (${mediaApiHealth.endpoint} · HTTP ${mediaApiHealth.status})`
-                    : `indisponível (${mediaApiHealth.endpoint || "sem resposta"}${mediaApiHealth.status ? ` · HTTP ${mediaApiHealth.status}` : ""})`}
+                    : `indisponível (${
+                        mediaApiHealth.endpoint || "sem resposta"
+                      }${
+                        mediaApiHealth.status
+                          ? ` · HTTP ${mediaApiHealth.status}`
+                          : ""
+                      })`}
                 </p>
               </div>
             </DialogContent>
@@ -833,7 +1023,10 @@ export default function AdminAssetsPage() {
         </div>
 
         <div className="text-xs text-muted-foreground">
-          Uso total: <span className="font-medium text-foreground">{storageUsage.totalMb} MB</span>
+          Uso total:{" "}
+          <span className="font-medium text-foreground">
+            {storageUsage.totalMb} MB
+          </span>
           {storageUsage.unknownCount > 0
             ? ` · ${storageUsage.unknownCount} arquivo(s) sem tamanho registrado`
             : ""}
@@ -847,7 +1040,10 @@ export default function AdminAssetsPage() {
               <p className="text-sm font-semibold">Criar pasta</p>
               <p className="text-xs text-muted-foreground">
                 Digite o nome e clique em criar. A pasta será criada em{" "}
-                {currentFolder ? `"${getFolderLabel(currentFolder)}"` : "Meu Drive"}.
+                {currentFolder
+                  ? `"${getFolderLabel(currentFolder)}"`
+                  : "Meu Drive"}
+                .
               </p>
             </div>
             <div className="flex gap-2">
@@ -869,7 +1065,11 @@ export default function AdminAssetsPage() {
             <div className="space-y-1 max-h-[520px] overflow-auto pr-1">
               <button
                 type="button"
-                className={`w-full flex items-center gap-2 rounded-lg px-3 py-2 text-left text-sm ${!currentFolder ? "bg-primary/10 text-primary font-medium" : "hover:bg-muted"}`}
+                className={`w-full flex items-center gap-2 rounded-lg px-3 py-2 text-left text-sm ${
+                  !currentFolder
+                    ? "bg-primary/10 text-primary font-medium"
+                    : "hover:bg-muted"
+                }`}
                 onClick={() => setCurrentFolder("")}
               >
                 <Home className="h-4 w-4" />
@@ -877,32 +1077,46 @@ export default function AdminAssetsPage() {
               </button>
 
               {sidebarFolders.length === 0 && (
-                <p className="text-xs text-muted-foreground px-3 py-2">Nenhuma pasta criada.</p>
+                <p className="text-xs text-muted-foreground px-3 py-2">
+                  Nenhuma pasta criada.
+                </p>
               )}
 
               {sidebarFolders.map((folder) => {
                 const depth = folder.split("/").length - 1;
-                const isSelected = currentFolder === folder || currentFolder.startsWith(`${folder}/`);
+                const isSelected =
+                  currentFolder === folder ||
+                  currentFolder.startsWith(`${folder}/`);
                 const hasChildren = foldersWithChildren.has(folder);
                 const isCollapsed = collapsedFolders.has(folder);
 
                 return (
                   <div
                     key={folder}
-                    className={`w-full flex items-center gap-2 rounded-lg px-3 py-2 text-left text-sm ${isSelected ? "bg-primary/10 text-primary font-medium" : "hover:bg-muted"}`}
+                    className={`w-full flex items-center gap-2 rounded-lg px-3 py-2 text-left text-sm ${
+                      isSelected
+                        ? "bg-primary/10 text-primary font-medium"
+                        : "hover:bg-muted"
+                    }`}
                     style={{ paddingLeft: `${12 + depth * 14}px` }}
                   >
                     <button
                       type="button"
                       className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded hover:bg-background/80 disabled:opacity-0"
-                      aria-label={isCollapsed ? "Expandir pasta" : "Recolher pasta"}
+                      aria-label={
+                        isCollapsed ? "Expandir pasta" : "Recolher pasta"
+                      }
                       disabled={!hasChildren}
                       onClick={(event) => {
                         event.stopPropagation();
                         toggleFolderCollapse(folder);
                       }}
                     >
-                      {isCollapsed ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                      {isCollapsed ? (
+                        <ChevronRight className="h-3.5 w-3.5" />
+                      ) : (
+                        <ChevronDown className="h-3.5 w-3.5" />
+                      )}
                     </button>
                     <button
                       type="button"
@@ -922,7 +1136,10 @@ export default function AdminAssetsPage() {
                             className="h-7 w-7 p-0"
                             onClick={(event) => {
                               event.stopPropagation();
-                              const kind = uploadKind === "video" ? "video" : "all";
+                              const kind =
+                                uploadKind === "video" || uploadKind === "audio"
+                                  ? uploadKind
+                                  : "all";
                               void copy(buildFolderAssetsLink(folder, kind));
                             }}
                           >
@@ -977,8 +1194,15 @@ export default function AdminAssetsPage() {
           {lastErrorDebug && (
             <div className="rounded-md border border-red-300 bg-red-50 p-3 space-y-2">
               <div className="flex items-center justify-between gap-2">
-                <p className="text-sm font-semibold text-red-700">Debug da última falha</p>
-                <Button type="button" size="sm" variant="outline" onClick={() => copy(lastErrorDebug)}>
+                <p className="text-sm font-semibold text-red-700">
+                  Debug da última falha
+                </p>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => copy(lastErrorDebug)}
+                >
                   <Copy className="h-3.5 w-3.5 mr-1" />
                   Copiar debug
                 </Button>
@@ -992,14 +1216,22 @@ export default function AdminAssetsPage() {
           )}
 
           <div className="flex flex-wrap items-center gap-2 text-sm">
-            <button type="button" className="inline-flex items-center gap-1 hover:underline" onClick={() => setCurrentFolder("")}>
+            <button
+              type="button"
+              className="inline-flex items-center gap-1 hover:underline"
+              onClick={() => setCurrentFolder("")}
+            >
               <Home className="h-3.5 w-3.5" />
               Meu Drive
             </button>
             {breadcrumbs.map((folder) => (
               <span key={folder} className="inline-flex items-center gap-2">
                 <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
-                <button type="button" className="hover:underline" onClick={() => setCurrentFolder(folder)}>
+                <button
+                  type="button"
+                  className="hover:underline"
+                  onClick={() => setCurrentFolder(folder)}
+                >
                   {getFolderLabel(folder)}
                 </button>
               </span>
@@ -1009,7 +1241,9 @@ export default function AdminAssetsPage() {
           <div className="rounded-xl border p-3">
             <div className="grid grid-cols-1 xl:grid-cols-4 gap-3">
               <div className="space-y-2 rounded-lg border p-2">
-                <p className="text-xs uppercase tracking-wider text-muted-foreground">Tipo de Mídia</p>
+                <p className="text-xs uppercase tracking-wider text-muted-foreground">
+                  Tipo de Mídia
+                </p>
                 <div className="inline-flex items-center rounded-md border p-1 gap-1">
                   <Button
                     type="button"
@@ -1031,17 +1265,30 @@ export default function AdminAssetsPage() {
                     <FileVideo className="h-3.5 w-3.5 mr-1" />
                     Vídeo
                   </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={uploadKind === "audio" ? "default" : "ghost"}
+                    className="h-7 px-2"
+                    onClick={() => setUploadKind("audio")}
+                  >
+                    <FileAudio className="h-3.5 w-3.5 mr-1" />
+                    Áudio
+                  </Button>
                 </div>
               </div>
 
               <div className="space-y-2 rounded-lg border p-2 xl:col-span-2">
-                <p className="text-xs uppercase tracking-wider text-muted-foreground">Upload</p>
+                <p className="text-xs uppercase tracking-wider text-muted-foreground">
+                  Upload
+                </p>
                 <div className="flex flex-wrap items-center gap-2">
                   <Input
                     id="files"
                     name="files"
                     type="file"
                     multiple
+                    accept={getUploadAccept(uploadKind)}
                     className="h-9 min-w-[220px] flex-1"
                     onChange={(event) => {
                       const files = Array.from(event.currentTarget.files || []);
@@ -1051,7 +1298,12 @@ export default function AdminAssetsPage() {
                   <Button
                     type="button"
                     size="sm"
-                    disabled={isUploadingBatch || !hasUploadApiKey || !currentFolder || selectedFiles.length === 0}
+                    disabled={
+                      isUploadingBatch ||
+                      !hasUploadApiKey ||
+                      !currentFolder ||
+                      selectedFiles.length === 0
+                    }
                     className="h-9 gap-2"
                     onClick={uploadBatch}
                   >
@@ -1062,8 +1314,15 @@ export default function AdminAssetsPage() {
               </div>
 
               <div className="space-y-2 rounded-lg border p-2">
-                <p className="text-xs uppercase tracking-wider text-muted-foreground">Filtro</p>
-                <Select value={kindFilter} onValueChange={(value) => setKindFilter(value as "all" | UploadKind)}>
+                <p className="text-xs uppercase tracking-wider text-muted-foreground">
+                  Filtro
+                </p>
+                <Select
+                  value={kindFilter}
+                  onValueChange={(value) =>
+                    setKindFilter(value as "all" | UploadKind)
+                  }
+                >
                   <SelectTrigger className="h-9 w-full">
                     <SelectValue placeholder="Filtro tipo" />
                   </SelectTrigger>
@@ -1071,11 +1330,11 @@ export default function AdminAssetsPage() {
                     <SelectItem value="all">Todos tipos</SelectItem>
                     <SelectItem value="image">Imagem</SelectItem>
                     <SelectItem value="video">Vídeo</SelectItem>
+                    <SelectItem value="audio">Áudio</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
             </div>
-
           </div>
 
           {uploadQueue.length > 0 && (
@@ -1086,7 +1345,13 @@ export default function AdminAssetsPage() {
                   <div key={item.id} className="space-y-1">
                     <div className="flex items-center justify-between gap-2 text-xs">
                       <span className="truncate">{item.fileName}</span>
-                      <span className={item.status === "error" ? "text-red-600" : "text-muted-foreground"}>
+                      <span
+                        className={
+                          item.status === "error"
+                            ? "text-red-600"
+                            : "text-muted-foreground"
+                        }
+                      >
                         {item.status === "pending" && "Na fila"}
                         {item.status === "uploading" && `${item.progress}%`}
                         {item.status === "success" && "Concluído"}
@@ -1095,8 +1360,13 @@ export default function AdminAssetsPage() {
                     </div>
                     <div className="h-2 rounded-full bg-muted overflow-hidden">
                       <div
-                        className={`h-full ${item.status === "error" ? "bg-red-500" : item.status === "success" ? "bg-green-500" : "bg-primary"
-                          }`}
+                        className={`h-full ${
+                          item.status === "error"
+                            ? "bg-red-500"
+                            : item.status === "success"
+                            ? "bg-green-500"
+                            : "bg-primary"
+                        }`}
                         style={{ width: `${item.progress}%` }}
                       />
                     </div>
@@ -1118,7 +1388,11 @@ export default function AdminAssetsPage() {
             </TableHeader>
             <TableBody>
               {visibleFolders.map((folder) => (
-                <TableRow key={`folder-${folder}`} className="cursor-pointer" onClick={() => setCurrentFolder(folder)}>
+                <TableRow
+                  key={`folder-${folder}`}
+                  className="cursor-pointer"
+                  onClick={() => setCurrentFolder(folder)}
+                >
                   <TableCell className="font-medium">
                     <div className="inline-flex items-center gap-2">
                       <Folder className="h-4 w-4 text-amber-500" />
@@ -1129,7 +1403,9 @@ export default function AdminAssetsPage() {
                   <TableCell>{getParentPath(folder) || "--"}</TableCell>
                   <TableCell>--</TableCell>
                   <TableCell className="text-right">
-                    <Button type="button" size="sm" variant="ghost">Abrir</Button>
+                    <Button type="button" size="sm" variant="ghost">
+                      Abrir
+                    </Button>
                   </TableCell>
                 </TableRow>
               ))}
@@ -1140,21 +1416,37 @@ export default function AdminAssetsPage() {
                     <div className="inline-flex items-center gap-2">
                       {asset.kind === "image" ? (
                         <FileImage className="h-4 w-4 text-sky-600" />
-                      ) : (
+                      ) : asset.kind === "video" ? (
                         <FileVideo className="h-4 w-4 text-violet-600" />
+                      ) : (
+                        <FileAudio className="h-4 w-4 text-emerald-600" />
                       )}
-                      <span className="max-w-[320px] truncate">{asset.fileName}</span>
+                      <span className="max-w-[320px] truncate">
+                        {asset.fileName}
+                      </span>
                     </div>
                   </TableCell>
-                  <TableCell>{asset.kind === "image" ? "Imagem" : "Vídeo"}</TableCell>
+                  <TableCell>{getMediaKindLabel(asset.kind)}</TableCell>
                   <TableCell>{asset.assetPath}</TableCell>
-                  <TableCell>{new Date(asset.uploadedAt).toLocaleString("pt-BR")}</TableCell>
+                  <TableCell>
+                    {new Date(asset.uploadedAt).toLocaleString("pt-BR")}
+                  </TableCell>
                   <TableCell className="text-right">
                     <div className="inline-flex items-center gap-1">
-                      <Button type="button" size="sm" variant="ghost" onClick={() => copy(asset.url)}>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => copy(asset.url)}
+                      >
                         <Copy className="h-3.5 w-3.5" />
                       </Button>
-                      <Select value={asset.assetPath} onValueChange={(value) => moveAssetToFolder(asset.id, value)}>
+                      <Select
+                        value={asset.assetPath}
+                        onValueChange={(value) =>
+                          moveAssetToFolder(asset.id, value)
+                        }
+                      >
                         <SelectTrigger className="h-8 w-[170px] text-xs">
                           <SelectValue placeholder="Mover para..." />
                         </SelectTrigger>
@@ -1166,7 +1458,12 @@ export default function AdminAssetsPage() {
                           ))}
                         </SelectContent>
                       </Select>
-                      <Button type="button" size="sm" variant="ghost" onClick={() => removeAsset(asset.id)}>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => removeAsset(asset.id)}
+                      >
                         <Trash2 className="h-3.5 w-3.5 text-red-600" />
                       </Button>
                     </div>

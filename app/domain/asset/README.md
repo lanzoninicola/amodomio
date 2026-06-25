@@ -35,7 +35,7 @@ Fornecer um gerenciador de assets genérico (imagens e vídeos), desacoplado de 
 ### `media_assets`
 
 - `id: uuid`
-- `kind: text` (`image` | `video`)
+- `kind: text` (`image` | `video` | `audio`)
 - `url: text` (URL pública retornada pelo serviço de mídia)
 - `folder_path: text`
 - `file_name: text`
@@ -71,7 +71,7 @@ Com isso, o vínculo por item e a biblioteca de assets compartilham o mesmo inve
 
 Fluxo principal de upload usa `POST /v2/upload` com:
 
-- query obrigatória: `kind=image|video`, `assetKey`
+- query obrigatória: `kind=image|video|audio`, `assetKey`
 - query de pasta: `folderPath` (o serviço aceita alias `path`)
 - multipart: campo `file`
 - resposta esperada: `{ ok, kind, folderPath, assetKey, url }`
