@@ -82,10 +82,12 @@ Referência rápida para evolução futura do fluxo de custos por `Item`.
 ### Último custo e custo médio (como é gerenciado hoje)
 
 - `Último custo`:
+
   - vem do registro mais recente em `ItemCostHistory` (ordenação por `validFrom` desc e depois `createdAt` desc)
   - pode ter origem manual (aba `Custos`) ou automática (`source = item-cost-sheet`)
 
 - `Custo médio`:
+
   - é calculado por item com base nos registros de `ItemCostHistory` dentro de uma janela de dias configurável
   - a configuração fica em `setting` com `context=items.cost` e `name=averageWindowDays` (default `30`)
   - o cálculo usa a normalização para unidade de consumo quando o item possui:
@@ -94,6 +96,7 @@ Referência rápida para evolução futura do fluxo de custos por `Item`.
     - fator de conversão (`purchaseToConsumptionFactor`)
 
 - Regras de normalização (resumo):
+
   - se o custo já estiver na unidade de consumo, usa o valor direto
   - se o custo estiver na unidade de compra e houver fator de conversão válido, converte para unidade de consumo
   - se `source = item-cost-sheet` e a unidade vier vazia, o valor é tratado como custo já normalizado do item
@@ -119,6 +122,7 @@ Objetivo: ter uma única fonte de verdade para custo atual e histórico, cobrind
 ### Modelos (novo fluxo)
 
 - `Variation` (catálogo global de variações)
+
   - `id`
   - `kind` (ex.: `base`, `size`, `packaging`)
   - `code` (ex.: `base`, `pizza-medium`)
@@ -126,12 +130,14 @@ Objetivo: ter uma única fonte de verdade para custo atual e histórico, cobrind
   - `createdAt`, `updatedAt`, `deletedAt`
 
 - `ItemVariation` (vínculo do item com uma variação do catálogo)
+
   - `id`
   - `itemId` (obrigatório)
   - `variationId` (obrigatório)
   - `createdAt`, `updatedAt`, `deletedAt`
 
 - `ItemCostVariation` (fonte única de custo atual por variação)
+
   - `id`
   - `itemVariationId` (obrigatório, único)
   - `costAmount`
@@ -169,16 +175,19 @@ Objetivo: ter uma única fonte de verdade para custo atual e histórico, cobrind
 ### Fluxos operacionais
 
 - Custo manual/compra de item base:
+
   - resolve `ItemVariation` base do item
   - atualiza `ItemCostVariation`
   - grava snapshot em `ItemCostVariationHistory`
 
 - Custo derivado de ficha técnica (ex.: tamanho):
+
   - resolve a `ItemVariation` correspondente (ex.: `kind=size`, `code=pizza-medium`)
   - atualiza `ItemCostVariation` com `source=item-cost-sheet`
   - grava snapshot com `referenceType/referenceId` da origem
 
 - Consulta de custo atual:
+
   - ler sempre de `ItemCostVariation`
 
 - Consulta de trilha histórica:
@@ -193,10 +202,12 @@ Objetivo: ter uma única fonte de verdade para custo atual e histórico, cobrind
 ### Implementação base (entities)
 
 - `app/domain/item/variation.prisma.entity.server.ts`
+
   - CRUD de `Variation`
   - `ensureBaseVariation()`
 
 - `app/domain/item/item-variation.prisma.entity.server.ts`
+
   - vínculo/remoção lógica de `ItemVariation`
   - regra de proteção da variação base
   - `ensureBaseVariationForItem(itemId)`
@@ -239,24 +250,16 @@ Implementação:
 
 ## Media Drive (`admin/assets`)
 
-A pagina `admin/assets` faz upload direto do browser para `media-api.amodomio.com.br` via XHR (sem passar pelo servidor Remix), o que exige CORS configurado na `media-api`.
+A pagina `admin/assets` envia os arquivos para a propria action Remix e o
+servidor repassa para `media-api.amodomio.com.br` em `/v2/upload`. Isso evita
+depender de CORS no navegador e permite exibir status/detalhes da media-api
+quando um upload de imagem, video ou audio falhar.
 
-Sem a variavel `CORS_ALLOWED_ORIGINS` correta no deploy da `amodomio-media`, o upload falha silenciosamente com `Erro de rede durante upload` e `http_status=?` — o browser bloqueia o preflight OPTIONS antes de enviar qualquer dado.
+O endpoint externo ainda usa:
 
-### Configuracao necessaria na `amodomio-media`
-
-Adicionar a variavel de ambiente:
-
-```
-CORS_ALLOWED_ORIGINS=https://amodomio.com.br,http://localhost:3000
-```
-
-Incluir todas as origens que precisam fazer upload (producao + dev local).
-
-### Diferenca entre as paginas de upload
-
-- `admin/gerenciamento/cardapio/assets-batch`: upload via Remix server (sem CORS, funciona sem essa var)
-- `admin/assets`: upload direto browser → media-api (requer `CORS_ALLOWED_ORIGINS`)
+- `POST /v2/upload?kind=image|video|audio&folderPath=...&assetKey=...`
+- header `x-api-key` lido de `MEDIA_UPLOAD_API_KEY` no servidor
+- multipart `file=<arquivo>`
 
 ## Deployment
 
@@ -306,6 +309,7 @@ Para reduzir risco de deploy com falha no cardápio público, o projeto usa dois
 ### O que cada check valida
 
 - `Vercel Prod Loader Guard`:
+
   - roda em `pull_request` para `vercel-prod`
   - executa `app/routes/cardapio._index.loader.test.ts`
   - garante comportamento esperado do loader blocante do cardápio

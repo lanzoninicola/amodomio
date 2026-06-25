@@ -22,6 +22,10 @@ describe("parseMediaUploadApiPayload", () => {
       folderPath: "menu-items/item-1",
       assetKey: "cover-main",
       url: "https://media.amodomio.com.br/images/menu-items/item-1/cover-main.jpg",
+      thumbnailUrl: null,
+      variants: null,
+      width: null,
+      height: null,
     });
   });
 
@@ -41,6 +45,37 @@ describe("parseMediaUploadApiPayload", () => {
       folderPath: "menu-items/item-1",
       assetKey: "fallback-key",
       url: "https://media.amodomio.com.br/images/menu-items/item-1/gallery-1.jpg",
+      thumbnailUrl: null,
+      variants: null,
+      width: null,
+      height: null,
+    });
+  });
+
+  it("parses audio payloads", () => {
+    const result = parseMediaUploadApiPayload({
+      payload: {
+        ok: true,
+        kind: "audio",
+        folderPath: "marketing/audios",
+        assetKey: "jingle",
+        url: "https://media.amodomio.com.br/audios/marketing/audios/jingle.mp3",
+      },
+      fallbackKind: "audio",
+      fallbackFolderPath: "marketing/audios",
+      fallbackAssetKey: "fallback-audio",
+    });
+
+    expect(result).toEqual({
+      ok: true,
+      kind: "audio",
+      folderPath: "marketing/audios",
+      assetKey: "jingle",
+      url: "https://media.amodomio.com.br/audios/marketing/audios/jingle.mp3",
+      thumbnailUrl: null,
+      variants: null,
+      width: null,
+      height: null,
     });
   });
 });

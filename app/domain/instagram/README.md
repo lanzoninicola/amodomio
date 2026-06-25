@@ -29,14 +29,17 @@ Já estão implementados:
 - histórico de publicações e execuções;
 - endpoints protegidos para publicação individual e de grupos;
 - aba `Instagram` dentro de cada publicação;
-- sincronização genérica de mídias por origem, sem FK com o domínio consumidor.
+- sincronização genérica de mídias por origem, sem FK com o domínio consumidor;
+- conexão real validada com o app Meta **Amodo Mio Social Publisher** em
+  25/06/2026.
 
-Ainda falta validar com uma conta Meta real:
+Ainda falta validar com publicação real:
 
 - criação e publicação real de container de imagem;
 - comportamento do tempo de processamento na Vercel;
 - publicação de vídeo;
-- limites e mensagens reais de erro do app Meta da A Modo Mio.
+- limites e mensagens reais de erro durante publicação no app Meta da A Modo
+  Mio.
 
 ## Arquivos principais
 
@@ -103,6 +106,62 @@ http://localhost:3000/auth/facebook-business/callback
 
 As URIs devem ser idênticas às configuradas em
 `META_FACEBOOK_CALLBACK_URL`, incluindo protocolo, domínio, porta e caminho.
+
+### Configuração que funcionou na Meta
+
+Em 25/06/2026, a conexão foi concluída com estes valores:
+
+```text
+App ID: 1003067975991131
+Login configuration ID: 1945421122915552
+Página: A Modo Mio - Pizza Delivery e Al Taglio
+Instagram: @amodomiopb
+```
+
+No Meta for Developers:
+
+1. Em **Configurações do app → Básico**, configure **Domínios do aplicativo**:
+
+```text
+www.amodomio.com.br
+amodomio.com.br
+```
+
+2. Na mesma tela, adicione a plataforma **Site** e configure **URL do site**:
+
+```text
+https://www.amodomio.com.br/
+```
+
+3. Clique em **Save Changes**. Sem salvar, o diálogo OAuth continua rejeitando
+   o domínio mesmo que os chips estejam visíveis na tela.
+4. Em **Login do Facebook para Empresas → Configurações**, configure
+   **URIs de redirecionamento do OAuth válidos**:
+
+```text
+https://www.amodomio.com.br/auth/facebook-business/callback
+```
+
+5. Opcionalmente, no mesmo painel, configure
+   **Domínios permitidos para o SDK do JavaScript**:
+
+```text
+www.amodomio.com.br
+```
+
+6. Em **Login do Facebook para Empresas → Configurações**, crie uma
+   configuração do tipo **Token de acesso do usuário** e use as permissões:
+
+```text
+instagram_basic
+instagram_content_publish
+pages_read_engagement
+pages_show_list
+business_management
+```
+
+7. Copie a **Identificação da configuração** gerada e salve no admin
+   `/admin/marketing/instagram`, campo **ID da configuração de login**.
 
 ## Variáveis de ambiente
 
@@ -423,6 +482,53 @@ npm run dev
 - confira `www`;
 - confira porta `3000` no ambiente local;
 - reinicie o servidor após alterar `.env`.
+
+### Erro Meta `Não é possível carregar a URL`
+
+Mensagem típica:
+
+```text
+O domínio dessa URL não está incluído nos domínios do app.
+```
+
+Esse erro acontece antes do callback chegar ao Remix. O `redirect_uri` gerado
+pelo servidor pode estar correto, mas a Meta ainda bloqueia se o domínio ou a
+URI OAuth não estiverem salvos no painel.
+
+Checklist que resolveu em produção:
+
+1. Confirme no DevTools ou na barra do navegador que o diálogo OAuth usa:
+
+```text
+redirect_uri=https://www.amodomio.com.br/auth/facebook-business/callback
+```
+
+2. Em **Configurações do app → Básico**, configure e salve:
+
+```text
+Domínios do aplicativo:
+www.amodomio.com.br
+amodomio.com.br
+
+Site → URL do site:
+https://www.amodomio.com.br/
+```
+
+Não use a URL de callback no campo **URL do site**. Esse campo deve conter
+somente a origem do site.
+
+3. Em **Login do Facebook para Empresas → Configurações**, configure e salve:
+
+```text
+URIs de redirecionamento do OAuth válidos:
+https://www.amodomio.com.br/auth/facebook-business/callback
+```
+
+4. Use o validador da mesma tela com a URL completa do callback.
+5. Se ainda falhar, apague temporariamente o **ID da configuração de login** no
+   admin e teste sem `config_id`. Se funcionar sem esse ID, o problema está na
+   configuração de Login para Empresas. Se continuar falhando, o problema ainda
+   está em domínio/URI OAuth no app Meta.
 
 ### Nenhuma Página com Instagram encontrada
 

@@ -1,6 +1,11 @@
 import { json, type ActionFunctionArgs } from "@remix-run/node";
 import { authenticator } from "~/domain/auth/google.server";
-import { isSafePath, normalizePath, type UploadKind } from "~/domain/media/media.shared";
+import {
+  isSafePath,
+  normalizePath,
+  toKind,
+  type UploadKind,
+} from "~/domain/media/media.shared";
 
 export async function action({ request }: ActionFunctionArgs) {
   await authenticator.isAuthenticated(request);
@@ -20,7 +25,7 @@ export async function action({ request }: ActionFunctionArgs) {
 
   const url = String(body?.url || "").trim();
   const kindRaw = String(body?.kind || "image");
-  const kind: UploadKind = kindRaw === "video" ? "video" : "image";
+  const kind: UploadKind = toKind(kindRaw);
   const assetPath = normalizePath(String(body?.assetPath || ""));
   const fileName = String(body?.fileName || "").trim();
   const assetKey = body?.assetKey ? String(body.assetKey).trim() : null;
@@ -32,7 +37,14 @@ export async function action({ request }: ActionFunctionArgs) {
 
   const mediaService = await import("~/domain/media/media.service.server");
 
-  await mediaService.registerMediaAssetInLibrary({ kind, url, assetPath, fileName, assetKey, sizeBytes });
+  await mediaService.registerMediaAssetInLibrary({
+    kind,
+    url,
+    assetPath,
+    fileName,
+    assetKey,
+    sizeBytes,
+  });
 
   const payload = await mediaService.readLibraryFromDb();
 

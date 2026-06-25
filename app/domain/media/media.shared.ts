@@ -1,4 +1,4 @@
-export type UploadKind = "image" | "video";
+export type UploadKind = "image" | "video" | "audio";
 
 export type ImageVariants = Record<string, string>;
 
@@ -42,11 +42,17 @@ export type LibraryPayload = {
 export const FOLDER_SEGMENT_REGEX = /^[a-zA-Z0-9_-]+$/;
 
 export function normalizePath(value: string) {
-  return value.trim().replace(/^\/+|\/+$/g, "").replace(/\/{2,}/g, "/");
+  return value
+    .trim()
+    .replace(/^\/+|\/+$/g, "")
+    .replace(/\/{2,}/g, "/");
 }
 
 export function normalizeFolderSegment(value: string) {
-  return value.trim().replace(/\s+/g, "-").replace(/[^a-zA-Z0-9_-]/g, "");
+  return value
+    .trim()
+    .replace(/\s+/g, "-")
+    .replace(/[^a-zA-Z0-9_-]/g, "");
 }
 
 export function normalizeStorageKey(value: string) {
@@ -91,20 +97,27 @@ export function getFolderLineage(path: string) {
   return folders;
 }
 
-export function replacePathPrefix(source: string, oldPrefix: string, newPrefix: string) {
+export function replacePathPrefix(
+  source: string,
+  oldPrefix: string,
+  newPrefix: string
+) {
   const normalizedSource = normalizePath(source);
   const normalizedOld = normalizePath(oldPrefix);
   const normalizedNew = normalizePath(newPrefix);
 
   if (normalizedSource === normalizedOld) return normalizedNew;
-  if (!normalizedSource.startsWith(`${normalizedOld}/`)) return normalizedSource;
+  if (!normalizedSource.startsWith(`${normalizedOld}/`))
+    return normalizedSource;
 
   const tail = normalizedSource.slice(normalizedOld.length + 1);
   return normalizePath(`${normalizedNew}/${tail}`);
 }
 
 export function toKind(kind: unknown): UploadKind {
-  return String(kind) === "video" ? "video" : "image";
+  if (kind === "video") return "video";
+  if (kind === "audio") return "audio";
+  return "image";
 }
 
 export function parseMediaUploadApiPayload(input: {
@@ -128,9 +141,10 @@ export function parseMediaUploadApiPayload(input: {
     typeof raw.folderPath === "string"
       ? raw.folderPath
       : typeof raw.path === "string"
-        ? raw.path
-        : input.fallbackFolderPath;
-  const folderPath = normalizePath(folderPathRaw) || normalizePath(input.fallbackFolderPath);
+      ? raw.path
+      : input.fallbackFolderPath;
+  const folderPath =
+    normalizePath(folderPathRaw) || normalizePath(input.fallbackFolderPath);
   const assetKeyRaw =
     typeof raw.assetKey === "string" ? raw.assetKey : input.fallbackAssetKey;
   const assetKey = normalizeStorageKey(assetKeyRaw) || input.fallbackAssetKey;
@@ -142,15 +156,21 @@ export function parseMediaUploadApiPayload(input: {
       : null;
 
   const variants =
-    raw.variants && typeof raw.variants === "object" && !Array.isArray(raw.variants)
+    raw.variants &&
+    typeof raw.variants === "object" &&
+    !Array.isArray(raw.variants)
       ? (raw.variants as ImageVariants)
       : null;
 
   const width =
-    typeof raw.width === "number" && Number.isFinite(raw.width) ? raw.width : null;
+    typeof raw.width === "number" && Number.isFinite(raw.width)
+      ? raw.width
+      : null;
 
   const height =
-    typeof raw.height === "number" && Number.isFinite(raw.height) ? raw.height : null;
+    typeof raw.height === "number" && Number.isFinite(raw.height)
+      ? raw.height
+      : null;
 
   return {
     ok,

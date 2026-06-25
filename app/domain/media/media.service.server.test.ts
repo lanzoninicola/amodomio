@@ -1,5 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { checkMediaApiHealth, uploadFileToMediaApi } from "./media.service.server";
+import {
+  checkMediaApiHealth,
+  uploadFileToMediaApi,
+} from "./media.service.server";
 
 function makeFile(content: string, fileName: string, type: string) {
   const blob = new Blob([content], { type });
@@ -70,6 +73,36 @@ describe("uploadFileToMediaApi", () => {
     expect(result.endpoint).toBe("v2");
     expect(result.data.assetKey).toBe("video-main");
     expect(result.data.folderPath).toBe("menu-items/item-2");
+  });
+
+  it("uploads audio using /v2/upload response fields", async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          ok: true,
+          kind: "audio",
+          folderPath: "marketing/audios",
+          assetKey: "spot-radio",
+          url: "https://media.example.com/audios/marketing/audios/spot-radio.mp3",
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      )
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await uploadFileToMediaApi({
+      file: makeFile("audio", "spot.mp3", "audio/mpeg"),
+      kind: "audio",
+      folderPath: "marketing/audios",
+      assetKey: "spot-radio",
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.endpoint).toBe("v2");
+    expect(result.data.kind).toBe("audio");
+    expect(result.data.assetKey).toBe("spot-radio");
+    expect(String(fetchMock.mock.calls[0][0])).toContain("kind=audio");
   });
 
   it("returns the v2 failure when /v2/upload returns 404", async () => {

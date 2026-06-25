@@ -1,8 +1,13 @@
 import { json, type LoaderFunctionArgs } from "@remix-run/node";
-import { isSafePath, normalizePath, toKind, type UploadKind } from "~/domain/media/media.shared";
+import {
+  isSafePath,
+  normalizePath,
+  toKind,
+  type UploadKind,
+} from "~/domain/media/media.shared";
 
 function parseKindParam(value: string | null): "all" | UploadKind {
-  if (value === "image" || value === "video") return value;
+  if (value === "image" || value === "video" || value === "audio") return value;
   return "all";
 }
 
@@ -61,9 +66,18 @@ export async function loader({ request }: LoaderFunctionArgs) {
       sizeBytes: item.sizeBytes,
     })),
     links: {
-      self: `${url.pathname}?folder=${encodeURIComponent(folderPath)}${kind !== "all" ? `&kind=${kind}` : ""}${recursive ? "&recursive=true" : ""}&limit=${limit}`,
-      videosOnly: `${url.pathname}?folder=${encodeURIComponent(folderPath)}&kind=video${recursive ? "&recursive=true" : ""}&limit=${limit}`,
-      imagesOnly: `${url.pathname}?folder=${encodeURIComponent(folderPath)}&kind=image${recursive ? "&recursive=true" : ""}&limit=${limit}`,
+      self: `${url.pathname}?folder=${encodeURIComponent(folderPath)}${
+        kind !== "all" ? `&kind=${kind}` : ""
+      }${recursive ? "&recursive=true" : ""}&limit=${limit}`,
+      videosOnly: `${url.pathname}?folder=${encodeURIComponent(
+        folderPath
+      )}&kind=video${recursive ? "&recursive=true" : ""}&limit=${limit}`,
+      imagesOnly: `${url.pathname}?folder=${encodeURIComponent(
+        folderPath
+      )}&kind=image${recursive ? "&recursive=true" : ""}&limit=${limit}`,
+      audiosOnly: `${url.pathname}?folder=${encodeURIComponent(
+        folderPath
+      )}&kind=audio${recursive ? "&recursive=true" : ""}&limit=${limit}`,
     },
   });
 }

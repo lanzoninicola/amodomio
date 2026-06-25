@@ -466,6 +466,28 @@ type OrderTimingDashboard = {
   buckets: OrderTimingBucket[];
 };
 
+const KDS_TIME_ZONE = "America/Sao_Paulo";
+const KDS_WEEKDAY_FORMATTER = new Intl.DateTimeFormat("en-US", {
+  timeZone: KDS_TIME_ZONE,
+  weekday: "short",
+});
+const KDS_TIME_PARTS_FORMATTER = new Intl.DateTimeFormat("pt-BR", {
+  timeZone: KDS_TIME_ZONE,
+  hour: "2-digit",
+  minute: "2-digit",
+  hour12: false,
+  hourCycle: "h23",
+});
+const WEEKDAY_INDEX: Record<string, number> = {
+  Sun: 0,
+  Mon: 1,
+  Tue: 2,
+  Wed: 3,
+  Thu: 4,
+  Fri: 5,
+  Sat: 6,
+};
+
 const ORDER_TIMING_BUCKETS = Array.from({ length: 8 }, (_, index) => {
   const startMinutes = 18 * 60 + index * 30;
   const endMinutes = startMinutes + 30;
@@ -482,7 +504,13 @@ function getMinutesOfDay(value: Date | string | null | undefined) {
   const date = value instanceof Date ? value : new Date(value);
   const time = date.getTime();
   if (!Number.isFinite(time)) return null;
-  return date.getHours() * 60 + date.getMinutes();
+  const parts = KDS_TIME_PARTS_FORMATTER.formatToParts(date);
+  const hour = Number(parts.find((part) => part.type === "hour")?.value ?? "");
+  const minute = Number(
+    parts.find((part) => part.type === "minute")?.value ?? ""
+  );
+  if (!Number.isFinite(hour) || !Number.isFinite(minute)) return null;
+  return (hour % 24) * 60 + minute;
 }
 
 function formatAverageOrderTime(minutes: number | null) {
@@ -492,36 +520,39 @@ function formatAverageOrderTime(minutes: number | null) {
 }
 
 function addDaysToYmd(dateStr: string, days: number) {
-  const date = new Date(`${dateStr}T12:00:00`);
-  date.setDate(date.getDate() + days);
-  return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(
-    date.getDate()
+  const [year, month, day] = dateStr.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day + days, 12, 0, 0));
+  return `${date.getUTCFullYear()}-${pad2(date.getUTCMonth() + 1)}-${pad2(
+    date.getUTCDate()
   )}`;
 }
 
 function addMonthsToYmd(dateStr: string, months: number) {
-  const date = new Date(`${dateStr}T12:00:00`);
-  const originalDay = date.getDate();
-  date.setDate(1);
-  date.setMonth(date.getMonth() + months);
+  const [year, month, day] = dateStr.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, 1, 12, 0, 0));
+  date.setUTCMonth(date.getUTCMonth() + months);
   const lastDayOfTargetMonth = new Date(
-    date.getFullYear(),
-    date.getMonth() + 1,
-    0
-  ).getDate();
-  date.setDate(Math.min(originalDay, lastDayOfTargetMonth));
-  return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(
-    date.getDate()
+    Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 0, 12, 0, 0)
+  ).getUTCDate();
+  date.setUTCDate(Math.min(day, lastDayOfTargetMonth));
+  return `${date.getUTCFullYear()}-${pad2(date.getUTCMonth() + 1)}-${pad2(
+    date.getUTCDate()
   )}`;
+}
+
+function ymdToUtcNoonDate(dateStr: string) {
+  const [year, month, day] = dateStr.split("-").map(Number);
+  return new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
+}
+
+function getYmdWeekday(dateStr: string) {
+  const weekday = KDS_WEEKDAY_FORMATTER.format(ymdToUtcNoonDate(dateStr));
+  return WEEKDAY_INDEX[weekday] ?? ymdToUtcNoonDate(dateStr).getUTCDay();
 }
 
 function dateIntToYmd(value: number) {
   const raw = String(value).padStart(8, "0");
   return `${raw.slice(0, 4)}-${raw.slice(4, 6)}-${raw.slice(6, 8)}`;
-}
-
-function getYmdWeekday(dateStr: string) {
-  return new Date(`${dateStr}T12:00:00`).getDay();
 }
 
 function bucketIndexForOrderTime(value: Date | string | null | undefined) {
@@ -635,8 +666,7 @@ function mapGoalForDate(
   dateStr: string
 ): { min: number; target: number } {
   // Considerando seu calendário: Quarta a Domingo (Dia01..Dia05)
-  const dt = new Date(`${dateStr}T12:00:00`);
-  const dow = dt.getDay(); // 0=Dom,1=Seg,...,3=Qua,4=Qui,5=Sex,6=Sab
+  const dow = getYmdWeekday(dateStr); // 0=Dom,1=Seg,...,3=Qua,4=Qui,5=Sex,6=Sab
   // Map: Qua(3)->1, Qui(4)->2, Sex(5)->3, Sab(6)->4, Dom(0)->5
   const map: Record<number, 1 | 2 | 3 | 4 | 5> = {
     3: 1,

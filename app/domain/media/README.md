@@ -35,7 +35,7 @@ Fornecer um gerenciador de assets genérico (imagens e vídeos), desacoplado de 
 ### `media_assets`
 
 - `id: uuid`
-- `kind: text` (`image` | `video`)
+- `kind: text` (`image` | `video` | `audio`)
 - `url: text` (URL pública retornada pelo serviço de mídia)
 - `folder_path: text`
 - `file_name: text`
@@ -74,7 +74,7 @@ Fornecer um gerenciador de assets genérico (imagens e vídeos), desacoplado de 
 
 ## Ações de Arquivo
 
-- Upload em lote com seleção de tipo (`Imagem`/`Vídeo`)
+- Upload em lote com seleção de tipo (`Imagem`/`Vídeo`/`Áudio`)
 - Barra de progresso por arquivo no frontend
 - Mover arquivo entre pastas
 - Copiar URL pública
@@ -84,7 +84,7 @@ Fornecer um gerenciador de assets genérico (imagens e vídeos), desacoplado de 
 
 Upload usa endpoint externo via `POST /v2/upload` com query params:
 
-- `kind=image|video`
+- `kind=image|video|audio`
 - `folderPath=<pasta-do-asset>` (ou alias `path`)
 - `assetKey=<chave-do-asset>`
 
@@ -123,7 +123,7 @@ Para consumir assets de uma pasta no frontend público, use:
 
 Parâmetros opcionais:
 
-- `kind=image|video` (default: `all`)
+- `kind=image|video|audio` (default: `all`)
 - `recursive=true|false` (default: `false`)
 - `limit=1..200` (default: `100`)
 
