@@ -1,4 +1,3 @@
-import { AlertTriangle } from "lucide-react";
 import { useLocation } from "@remix-run/react";
 import { useEffect, useState } from "react";
 import Logo from "~/components/primitives/logo/logo";
@@ -17,10 +16,8 @@ export default function CardapioErrorRedirect({
   const location = useLocation();
   const debugMode =
     new URLSearchParams(location.search).get("debugCardapio") === "1";
-  const [redirectCancelled, setRedirectCancelled] = useState(false);
   const [secondsLeft, setSecondsLeft] = useState(redirectDelaySeconds);
-  const shouldAutoRedirect =
-    autoRedirectEnabled && !debugMode && !redirectCancelled;
+  const shouldAutoRedirect = autoRedirectEnabled && !debugMode;
   const retryHref = `${location.pathname}${location.search}`;
 
   useEffect(() => {
@@ -43,99 +40,60 @@ export default function CardapioErrorRedirect({
   }, [redirectDelaySeconds, redirectHref, shouldAutoRedirect]);
 
   return (
-    <section className="min-h-screen flex flex-col px-6 py-6 md:py-8">
-      <div className="flex justify-center pt-2 md:pt-4">
-        <Logo circle={true} className="w-20 md:w-24" tagline={false} />
+    <section className="flex min-h-screen flex-col bg-white px-6 py-8 text-black md:py-10">
+      <div className="flex justify-center">
+        <Logo
+          circle={true}
+          color="black"
+          className="w-24 bg-white shadow-sm ring-1 ring-black/10 md:w-28"
+          tagline={false}
+        />
       </div>
 
-      <div className="flex-1 flex items-center justify-center pb-20 md:pb-0">
-        <div className="max-w-md text-center font-neue">
-          <div className="flex flex-col items-center justify-center">
-            <AlertTriangle className="h-8 w-8 text-amber-600" />
-            <p className="mt-1 text-lg md:text-xl font-semibold leading-tight text-amber-600">
-              Ocorreu um erro.
-            </p>
-          </div>
-          <div className="mt-5 flex flex-col items-center justify-center">
-            <p className="text-lg md:text-xl font-semibold leading-tight text-black">
-              {shouldAutoRedirect
-                ? "Estamos redirecionando você para finalizar seu pedido."
-                : "O redirecionamento automático está pausado."}
-            </p>
-          </div>
+      <div className="flex flex-1 items-center justify-center pb-10">
+        <div className="w-full max-w-sm text-center font-neue">
+          <p className="text-xl font-semibold leading-tight md:text-2xl">
+            Vamos finalizar seu pedido.
+          </p>
+          <p className="mx-auto mt-3 max-w-xs text-base leading-relaxed text-slate-600">
+            Se a tela não mudar sozinha, toque no botão abaixo.
+          </p>
+
           {shouldAutoRedirect ? (
-            <div className="mt-6 space-y-3">
-              <p className="text-xs font-semibold uppercase tracking-widest text-amber-800">
-                Redirecionamento automático
+            <div className="mt-10">
+              <p className="text-[7rem] font-normal leading-none tracking-normal text-black md:text-[9rem]">
+                {secondsLeft}
               </p>
-              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-amber-100 ring-1 ring-amber-300/70">
-                <p className="text-3xl font-bold leading-none text-amber-700">
-                  {secondsLeft}
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setRedirectCancelled(true)}
-                className="text-sm font-semibold text-slate-700 underline underline-offset-4"
-              >
-                Pausar para diagnosticar
-              </button>
             </div>
           ) : (
-            <div className="mt-6 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-left text-sm text-amber-950">
+            <div className="mt-8 rounded-md border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
               {!autoRedirectEnabled ? (
-                <p>
-                  O redirecionamento está desabilitado nas configurações do
-                  cardápio.
-                </p>
+                <p>Toque no botão abaixo para continuar seu pedido.</p>
               ) : debugMode ? (
-                <p>
-                  Modo de diagnóstico ativo por{" "}
-                  <code className="font-semibold">debugCardapio=1</code>.
-                </p>
+                <p>Pré-visualização aberta. O envio automático está pausado.</p>
               ) : (
-                <p>Redirecionamento pausado nesta tela.</p>
+                <p>Toque no botão abaixo para continuar seu pedido.</p>
               )}
-              <p className="mt-1 text-xs text-amber-800">
-                O erro continua registrado no console e nos logs da aplicação.
-              </p>
             </div>
           )}
 
-          <div className="mt-8 hidden items-center justify-center gap-3 md:flex">
+          <div className="mt-10 flex flex-col items-center justify-center gap-3">
             {!shouldAutoRedirect && (
               <a
                 href={retryHref}
-                className="inline-flex items-center rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-semibold tracking-wide text-slate-800"
+                className="inline-flex min-h-11 items-center rounded-md border border-slate-300 bg-white px-5 py-2 text-sm font-semibold text-slate-800"
               >
-                TENTAR NOVAMENTE
+                Tentar novamente
               </a>
             )}
             <a
               href={redirectHref}
-              className="inline-flex items-center rounded-md bg-black px-4 py-2 text-sm font-semibold tracking-wide text-white"
+              className="inline-flex min-h-12 items-center rounded-md bg-black px-6 py-3 text-sm font-semibold text-white"
             >
-              FINALIZAR O PEDIDO
+              Finalizar pedido
             </a>
           </div>
         </div>
-      </div>
-
-      <div className="fixed inset-x-0 bottom-4 flex flex-col items-center gap-2 px-6 md:hidden">
-        {!shouldAutoRedirect && (
-          <a
-            href={retryHref}
-            className="inline-flex items-center rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-semibold tracking-wide text-slate-800"
-          >
-            TENTAR NOVAMENTE
-          </a>
-        )}
-        <a
-          href={redirectHref}
-          className="inline-flex items-center rounded-md bg-black text-white px-4 py-2 text-sm font-semibold tracking-wide"
-        >
-          FINALIZAR O PEDIDO
-        </a>
       </div>
     </section>
   );
