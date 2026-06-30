@@ -81,12 +81,36 @@ export function InstagramStoryMediaForm({
 
   return (
     <div className="grid min-w-0 gap-6">
-      <div>
-        <h2 className="text-lg font-semibold">Stories do Instagram</h2>
-        <p className="text-sm text-slate-500">
-          Selecione as imagens do destaque que também serão publicadas no
-          Instagram.
-        </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h2 className="text-lg font-semibold">Stories do Instagram</h2>
+          <p className="text-sm text-slate-500">
+            Selecione as imagens do destaque que também serão publicadas no
+            Instagram.
+          </p>
+        </div>
+        <div className="flex shrink-0 gap-2">
+          <Button
+            type="submit"
+            name="_intent"
+            value="save"
+            variant="outline"
+            size="sm"
+            disabled={submitting}
+          >
+            Salvar
+          </Button>
+          <Button
+            type="submit"
+            name="_intent"
+            value="publish"
+            size="sm"
+            disabled={submitting || !mediaItems.length || !connected}
+          >
+            <Send className="mr-2 h-4 w-4" />
+            Publicar
+          </Button>
+        </div>
       </div>
 
       {!connected ? (
@@ -176,7 +200,7 @@ export function InstagramStoryMediaForm({
         })}
       </div>
 
-      <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+      <div className="grid gap-3">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="text-sm font-semibold">Agendamento externo</div>
           <Button
@@ -190,35 +214,12 @@ export function InstagramStoryMediaForm({
             {copied ? "Script copiado" : "Copiar script"}
           </Button>
         </div>
-        <code className="mt-3 block break-all rounded bg-white p-2 text-xs">
+        <code className="block break-all rounded bg-white p-2 text-xs">
           {publishEndpoint}
         </code>
-        <pre className="mt-3 overflow-x-auto rounded bg-slate-950 p-3 text-xs text-slate-100">
+        <pre className="overflow-x-auto rounded bg-slate-950 p-3 text-xs text-slate-100">
           <code>{script}</code>
         </pre>
-      </div>
-
-      <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
-        <Button
-          type="submit"
-          name="_intent"
-          value="save"
-          variant="outline"
-          disabled={submitting}
-          className="w-full sm:w-auto"
-        >
-          Salvar configuração
-        </Button>
-        <Button
-          type="submit"
-          name="_intent"
-          value="publish"
-          disabled={submitting || !mediaItems.length || !connected}
-          className="w-full sm:w-auto"
-        >
-          <Send className="mr-2 h-4 w-4" />
-          Salvar e publicar
-        </Button>
       </div>
     </div>
   );

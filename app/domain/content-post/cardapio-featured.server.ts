@@ -6,6 +6,7 @@ import {
 
 export type CardapioFeaturedMedia = {
   id: string;
+  kind?: string | null;
   imageUrl: string;
   fullscreenImageUrl?: string | null;
   alt?: string | null;
@@ -13,6 +14,8 @@ export type CardapioFeaturedMedia = {
   linkText?: string | null;
   linkBackgroundColor?: string | null;
   linkTextColor?: string | null;
+  linkPosition?: string | null;
+  linkNewTab?: boolean;
 };
 
 export type CardapioFeatured = {
@@ -54,7 +57,7 @@ export async function findPublishedCardapioFeatured(): Promise<
       ContentPost: {
         include: {
           Media: {
-            where: { active: true, deletedAt: null, kind: "image" },
+            where: { active: true, deletedAt: null, kind: { in: ["image", "video"] } },
             orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
           },
         },
@@ -74,6 +77,7 @@ export async function findPublishedCardapioFeatured(): Promise<
         ...config,
         images: target.ContentPost.Media.map((media) => ({
           id: media.id,
+          kind: media.kind,
           imageUrl: media.mediaUrl,
           fullscreenImageUrl: media.fullscreenMediaUrl || media.mediaUrl,
           alt: media.alt,
@@ -81,6 +85,8 @@ export async function findPublishedCardapioFeatured(): Promise<
           linkText: media.linkText,
           linkBackgroundColor: media.linkBackgroundColor,
           linkTextColor: media.linkTextColor,
+          linkPosition: media.linkPosition,
+          linkNewTab: media.linkNewTab,
         })),
       };
     })

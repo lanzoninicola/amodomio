@@ -2238,6 +2238,8 @@ model ContentPostMedia {
   linkText            String?   @map("link_text")
   linkBackgroundColor String?   @map("link_background_color")
   linkTextColor       String?   @map("link_text_color")
+  linkPosition        String?   @map("link_position")
+  linkNewTab          Boolean   @default(true) @map("link_new_tab")
   sortOrder           Int       @default(0) @map("sort_order")
   active              Boolean   @default(true)
   createdAt           DateTime  @default(now()) @map("created_at")

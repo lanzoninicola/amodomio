@@ -69,7 +69,13 @@ export async function listContentPosts(q = "") {
       _count: { select: { Media: true, Targets: true } },
       Targets: {
         where: { deletedAt: null },
-        select: { channel: true, enabled: true, status: true },
+        select: {
+          channel: true,
+          enabled: true,
+          status: true,
+          lastPublishedAt: true,
+          removedAt: true,
+        },
       },
     },
     take: 100,
@@ -113,6 +119,8 @@ export async function createContentPost(input: {
           linkText: item.linkText || null,
           linkBackgroundColor: item.linkBackgroundColor || null,
           linkTextColor: item.linkTextColor || null,
+          linkPosition: item.linkPosition || null,
+          linkNewTab: item.linkNewTab ?? true,
           sortOrder: item.sortOrder,
         })),
       },
@@ -192,6 +200,8 @@ export async function replaceContentPostMedia(
         linkText: item.linkText || null,
         linkBackgroundColor: item.linkBackgroundColor || null,
         linkTextColor: item.linkTextColor || null,
+        linkPosition: item.linkPosition || null,
+        linkNewTab: item.linkNewTab ?? true,
         sortOrder: item.sortOrder,
       })),
     });
