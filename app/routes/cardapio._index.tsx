@@ -136,6 +136,7 @@ export default function CardapioWebIndex() {
     menuItemInterestEnabled,
     likesEnabled,
     filterViewMode,
+    worldCupBannerEnabled,
     featuredSections = [],
   } = useLoaderData<typeof loader>();
   const [showLikeCelebration, setShowLikeCelebration] = useState(false);
@@ -227,6 +228,7 @@ export default function CardapioWebIndex() {
                     likesEnabled={likesEnabled}
                     desktopFeedLayout
                     filterViewMode={filterViewMode}
+                    worldCupBannerEnabled={worldCupBannerEnabled}
                   />
                 </main>
 

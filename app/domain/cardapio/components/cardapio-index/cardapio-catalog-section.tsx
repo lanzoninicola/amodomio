@@ -55,6 +55,7 @@ export function CardapioCatalogSection({
   likesEnabled,
   desktopFeedLayout = false,
   filterViewMode = "chip",
+  worldCupBannerEnabled = true,
 }: {
   items: CardapioIndexItem[] | GroupedItems[];
   tags: Tag[];
@@ -62,6 +63,7 @@ export function CardapioCatalogSection({
   likesEnabled: boolean;
   desktopFeedLayout?: boolean;
   filterViewMode?: "chip" | "stories";
+  worldCupBannerEnabled?: boolean;
 }) {
   const [currentItems, setCurrentItems] = useState(items);
   const [currentFilterTag, setCurrentFilterTag] = useState<Tag | null>(null);
@@ -84,8 +86,8 @@ export function CardapioCatalogSection({
   const groupedItems = isGrouped(currentItems) ? currentItems : [];
   const orderedGroups = groupedItems.length
     ? [...groupedItems].sort(
-        (a, b) => (a.sortOrderIndex ?? 0) - (b.sortOrderIndex ?? 0)
-      )
+      (a, b) => (a.sortOrderIndex ?? 0) - (b.sortOrderIndex ?? 0)
+    )
     : [];
 
   const onCurrentTagSelected = useCallback(
@@ -122,7 +124,7 @@ export function CardapioCatalogSection({
       className={cn(
         "flex flex-col m-4",
         desktopFeedLayout &&
-          "md:mx-auto md:my-0 md:w-full md:max-w-[700px] md:px-6 md:py-6"
+        "md:mx-auto md:my-0 md:w-full md:max-w-[700px] md:px-6 md:py-6"
       )}
     >
       {filterViewMode === "stories" ? (
@@ -209,8 +211,8 @@ export function CardapioCatalogSection({
       )}
 
       {orderedGroups.length > 0 ? (
-        <div className="fixed left-4 right-4 top-[calc(1rem+env(safe-area-inset-top))] z-40 flex h-[50px] items-center md:hidden">
-          <div className="flex w-full items-center gap-2">
+        <div className="fixed left-0 right-0 top-[calc(1rem+env(safe-area-inset-top))] z-40 flex flex-col md:hidden">
+          <div className="flex h-[50px] w-full items-center gap-2 px-4">
             {orderedGroups.map((group) => (
               <button
                 key={group.groupId}
@@ -246,6 +248,20 @@ export function CardapioCatalogSection({
               </button>
             ) : null}
           </div>
+          {worldCupBannerEnabled && (
+            <a
+              href="https://www.fifa.com/pt/tournaments/mens/worldcup/canadamexicousa2026/teams/brazil/fixtures"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mx-4 flex items-center justify-between rounded-lg bg-green-600 px-3 py-1.5 text-white shadow-md"
+            >
+              <span className="font-neue text-[11px] uppercase font-semibold tracking-tight">🇧🇷 Brasil no Mundial 2026</span>
+              <div className="flex items-center gap-x-2">
+                <span className="font-neue text-[10px] ">Ver jogos</span>
+                <ArrowRight size={14} />
+              </div>
+            </a>
+          )}
         </div>
       ) : null}
 
@@ -326,12 +342,12 @@ function StoryFilter({
   const symbol = /veg|salad|verde/.test(normalizedLabel)
     ? "leaf"
     : /doce|sobremesa|chocolate/.test(normalizedLabel)
-    ? "sparkle"
-    : /picante|apiment/.test(normalizedLabel)
-    ? "flame"
-    : /nov|destaque|promo/.test(normalizedLabel)
-    ? "star"
-    : "slice";
+      ? "sparkle"
+      : /picante|apiment/.test(normalizedLabel)
+        ? "flame"
+        : /nov|destaque|promo/.test(normalizedLabel)
+          ? "star"
+          : "slice";
 
   return (
     <button
@@ -633,7 +649,7 @@ export function CardapioItemsGrid({
       className={cn(
         "mt-4 columns-2 gap-4 md:grid md:grid-cols-3 md:columns-auto md:gap-3 lg:grid-cols-4 xl:grid-cols-4",
         desktopFeedLayout &&
-          "md:grid-cols-2 md:gap-5 lg:grid-cols-2 xl:grid-cols-2"
+        "md:grid-cols-2 md:gap-5 lg:grid-cols-2 xl:grid-cols-2"
       )}
     >
       {items.map((item, index) => (
@@ -688,7 +704,7 @@ function CardapioGridItem({
     featuredImage?.thumbnailUrl || item.imagePlaceholderURL || "";
   const featuredMediaKind =
     featuredImage?.kind === "video" ||
-    /\.(mp4|mov|webm|m4v|ogg|ogv)(\?|$)/i.test(featuredMediaUrl)
+      /\.(mp4|mov|webm|m4v|ogg|ogv)(\?|$)/i.test(featuredMediaUrl)
       ? "video"
       : "image";
   const featuredMediaSrcSet = buildImageSrcSet(featuredImage?.variants);
@@ -866,8 +882,8 @@ function CardapioGridItem({
               {priceRange.minimum === priceRange.maximum
                 ? formatMoneyString(priceRange.minimum)
                 : `De ${formatMoneyString(
-                    priceRange.minimum
-                  )} a ${formatMoneyString(priceRange.maximum)}`}
+                  priceRange.minimum
+                )} a ${formatMoneyString(priceRange.maximum)}`}
             </span>
 
             {isDesktop ? (

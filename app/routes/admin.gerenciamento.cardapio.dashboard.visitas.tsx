@@ -104,6 +104,65 @@ const rangeOptions: RangeOption[] = [
 
 const resolveRange = (value: string | null) =>
   rangeOptions.find((option) => option.value === value) ?? rangeOptions[0];
+
+type CountRow = {
+  count: number | bigint;
+};
+
+const viewListFilter = { type: "view_list" };
+
+function buildCreatedAtFilter(start: Date, end?: Date | null) {
+  return end
+    ? Prisma.sql`created_at >= ${start} AND created_at < ${end}`
+    : Prisma.sql`created_at >= ${start}`;
+}
+
+async function readVisitCount(start: Date, end?: Date | null) {
+  const createdAtFilter = buildCreatedAtFilter(start, end);
+  const rows = await prismaClient.$queryRaw<CountRow[]>(Prisma.sql`
+    SELECT COUNT(*)::int AS count
+    FROM (
+      SELECT created_at
+      FROM item_interest_events
+      WHERE type = ${viewListFilter.type}
+        AND ${createdAtFilter}
+
+      UNION ALL
+
+      SELECT created_at
+      FROM menu_item_interest_events
+      WHERE type = ${viewListFilter.type}
+        AND ${createdAtFilter}
+    ) events
+  `);
+
+  return Number(rows[0]?.count ?? 0);
+}
+
+async function readUniqueVisitorCount(start: Date, end?: Date | null) {
+  const createdAtFilter = buildCreatedAtFilter(start, end);
+  const rows = await prismaClient.$queryRaw<CountRow[]>(Prisma.sql`
+    SELECT COUNT(DISTINCT client_id)::int AS count
+    FROM (
+      SELECT client_id, created_at
+      FROM item_interest_events
+      WHERE type = ${viewListFilter.type}
+        AND client_id IS NOT NULL
+        AND ${createdAtFilter}
+
+      UNION ALL
+
+      SELECT client_id, created_at
+      FROM menu_item_interest_events
+      WHERE type = ${viewListFilter.type}
+        AND client_id IS NOT NULL
+        AND ${createdAtFilter}
+    ) events
+  `);
+
+  return Number(rows[0]?.count ?? 0);
+}
+
 export async function loader({ request }: LoaderFunctionArgs) {
   const url = new URL(request.url);
   const currentMonth = resolveMonthRange(url.searchParams.get("month"));
@@ -118,7 +177,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
           currentMonth.start.getMonth() - (range.months - 1),
           1
         );
-  const viewListFilter = { type: "view_list" };
 
   const [
     totalVisitsCurrent,
@@ -130,60 +188,35 @@ export async function loader({ request }: LoaderFunctionArgs) {
     uniqueVisitorsByHourRaw,
     uniqueVisitorsByWeekdayRaw,
   ] = await Promise.all([
-    prismaClient.menuItemInterestEvent.count({
-      where: {
-        createdAt: { gte: currentMonth.start, lt: currentMonth.end },
-        ...viewListFilter,
-      },
-    }),
-    prismaClient.menuItemInterestEvent.count({
-      where: {
-        createdAt: { gte: previousMonth.start, lt: previousMonth.end },
-        ...viewListFilter,
-      },
-    }),
-    prismaClient.menuItemInterestEvent.count({
-      where: {
-        ...(rangeStart ? { createdAt: { gte: rangeStart } } : {}),
-        ...viewListFilter,
-      },
-    }),
-    prismaClient.menuItemInterestEvent.groupBy({
-      by: ["clientId"],
-      _count: { _all: true },
-      where: {
-        createdAt: { gte: currentMonth.start, lt: currentMonth.end },
-        clientId: { not: null },
-        ...viewListFilter,
-      },
-    }),
-    prismaClient.menuItemInterestEvent.groupBy({
-      by: ["clientId"],
-      _count: { _all: true },
-      where: {
-        createdAt: { gte: previousMonth.start, lt: previousMonth.end },
-        clientId: { not: null },
-        ...viewListFilter,
-      },
-    }),
-    prismaClient.menuItemInterestEvent.groupBy({
-      by: ["clientId"],
-      _count: { _all: true },
-      where: {
-        ...(rangeStart ? { createdAt: { gte: rangeStart } } : {}),
-        clientId: { not: null },
-        ...viewListFilter,
-      },
-    }),
+    readVisitCount(currentMonth.start, currentMonth.end),
+    readVisitCount(previousMonth.start, previousMonth.end),
+    rangeStart ? readVisitCount(rangeStart) : readVisitCount(new Date(0)),
+    readUniqueVisitorCount(currentMonth.start, currentMonth.end),
+    readUniqueVisitorCount(previousMonth.start, previousMonth.end),
+    rangeStart
+      ? readUniqueVisitorCount(rangeStart)
+      : readUniqueVisitorCount(new Date(0)),
     prismaClient.$queryRaw<{ hour: number | null; count: number }[]>(
       Prisma.sql`
         SELECT date_part('hour', created_at) AS hour,
                COUNT(DISTINCT client_id) AS count
-        FROM menu_item_interest_events
-        WHERE created_at >= ${currentMonth.start}
-          AND created_at < ${currentMonth.end}
-          AND client_id IS NOT NULL
-          AND type = ${viewListFilter.type}
+        FROM (
+          SELECT client_id, created_at
+          FROM item_interest_events
+          WHERE created_at >= ${currentMonth.start}
+            AND created_at < ${currentMonth.end}
+            AND client_id IS NOT NULL
+            AND type = ${viewListFilter.type}
+
+          UNION ALL
+
+          SELECT client_id, created_at
+          FROM menu_item_interest_events
+          WHERE created_at >= ${currentMonth.start}
+            AND created_at < ${currentMonth.end}
+            AND client_id IS NOT NULL
+            AND type = ${viewListFilter.type}
+        ) events
         GROUP BY 1
         ORDER BY 1
       `
@@ -192,11 +225,23 @@ export async function loader({ request }: LoaderFunctionArgs) {
       Prisma.sql`
         SELECT date_part('dow', created_at) AS day,
                COUNT(DISTINCT client_id) AS count
-        FROM menu_item_interest_events
-        WHERE created_at >= ${currentMonth.start}
-          AND created_at < ${currentMonth.end}
-          AND client_id IS NOT NULL
-          AND type = ${viewListFilter.type}
+        FROM (
+          SELECT client_id, created_at
+          FROM item_interest_events
+          WHERE created_at >= ${currentMonth.start}
+            AND created_at < ${currentMonth.end}
+            AND client_id IS NOT NULL
+            AND type = ${viewListFilter.type}
+
+          UNION ALL
+
+          SELECT client_id, created_at
+          FROM menu_item_interest_events
+          WHERE created_at >= ${currentMonth.start}
+            AND created_at < ${currentMonth.end}
+            AND client_id IS NOT NULL
+            AND type = ${viewListFilter.type}
+        ) events
         GROUP BY 1
         ORDER BY 1
       `
@@ -243,9 +288,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
     totalVisitsCurrent,
     totalVisitsPrevious,
     totalVisitsTotal,
-    uniqueVisitorsCurrent: uniqueVisitorsCurrent.length,
-    uniqueVisitorsPrevious: uniqueVisitorsPrevious.length,
-    uniqueVisitorsTotal: uniqueVisitorsTotal.length,
+    uniqueVisitorsCurrent,
+    uniqueVisitorsPrevious,
+    uniqueVisitorsTotal,
     uniqueVisitorsByHour,
     uniqueVisitorsByWeekday,
   });

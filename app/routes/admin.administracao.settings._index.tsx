@@ -78,6 +78,8 @@ import { ensureAdminNavigationMenuLayoutSetting } from "~/domain/website-navigat
 import {
   CARDAPIO_FILTER_VIEW_SETTING_NAME,
   DEFAULT_CARDAPIO_FILTER_VIEW_MODE,
+  WORLD_CUP_BANNER_SETTING_NAME,
+  DEFAULT_WORLD_CUP_BANNER_ENABLED,
 } from "~/domain/cardapio/cardapio-index.server";
 import {
   CARDAPIO_CONTINGENCY_SETTINGS_CONTEXT,
@@ -142,6 +144,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     stockPhotoChatGptReturnUrlSetting,
     costReviewWhatsappEnabledSetting,
     costReviewWhatsappPhoneSetting,
+    worldCupBannerSetting,
   ] = await Promise.all([
     prismaClient.setting.findFirst({
       where: { context: ENGAGEMENT_SETTINGS_CONTEXT, name: LIKE_SETTING_NAME },
@@ -226,6 +229,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
         context: COST_REVIEW_NOTIFICATION_CONTEXT,
         name: COST_REVIEW_WHATSAPP_PHONE_SETTING,
       },
+      orderBy: [{ createdAt: "desc" }],
+    }),
+    prismaClient.setting.findFirst({
+      where: { context: "cardapio", name: WORLD_CUP_BANNER_SETTING_NAME },
       orderBy: [{ createdAt: "desc" }],
     }),
   ]);
@@ -381,6 +388,18 @@ export async function loader({ request }: LoaderFunctionArgs) {
         name: COST_REVIEW_WHATSAPP_PHONE_SETTING,
         type: "string",
         value: DEFAULT_COST_REVIEW_WHATSAPP_PHONE,
+        createdAt: new Date(),
+      },
+    });
+  }
+
+  if (!worldCupBannerSetting) {
+    await prismaClient.setting.create({
+      data: {
+        context: "cardapio",
+        name: WORLD_CUP_BANNER_SETTING_NAME,
+        type: "boolean",
+        value: String(DEFAULT_WORLD_CUP_BANNER_ENABLED),
         createdAt: new Date(),
       },
     });

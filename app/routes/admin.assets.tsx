@@ -633,7 +633,7 @@ export default function AdminAssetsPage() {
       formData.append("files", file, file.name);
 
       const xhr = new XMLHttpRequest();
-      xhr.open("POST", "/admin/assets");
+      xhr.open("POST", "/api/media/upload");
 
       xhr.upload.onprogress = (event) => {
         if (!event.lengthComputable) return;
@@ -683,7 +683,7 @@ export default function AdminAssetsPage() {
       xhr.onerror = () => {
         resolve({
           ok: false,
-          message: "Erro de rede durante upload via /admin/assets.",
+          message: "Erro de rede durante upload via /api/media/upload.",
         });
       };
 

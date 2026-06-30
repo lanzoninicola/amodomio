@@ -114,11 +114,10 @@ function ChannelPriceRow(props: {
                   type="button"
                   variant={showCopyFrom ? "default" : "outline"}
                   size="sm"
-                  className={`w-full justify-start gap-2 text-[11px] uppercase tracking-wide ${
-                    showCopyFrom
+                  className={`w-full justify-start gap-2 text-[11px] uppercase tracking-wide ${showCopyFrom
                       ? "bg-violet-700 text-white hover:bg-violet-800"
                       : "border-violet-200 bg-violet-50 text-violet-700 hover:bg-violet-100 hover:text-violet-800"
-                  }`}
+                    }`}
                   disabled={fetcher.state !== "idle"}
                   onClick={() => {
                     setShowCopyFrom((prev) => !prev);
@@ -177,8 +176,8 @@ function ChannelPriceRow(props: {
       {props.editableVariations.map((itemVariation) => {
         const pricingRow = props.channel.id
           ? props.pricingRowByKey.get(
-              `${itemVariation.id}::${props.channel.id}`
-            )
+            `${itemVariation.id}::${props.channel.id}`
+          )
           : null;
 
         return (
@@ -236,7 +235,6 @@ export default function AdminItemVendaPrecosEditarRoute() {
     channels,
     editableVariations,
     pricingRows,
-    nativeModelAvailable,
     item,
     allItems,
     dnaHelpUrl,
@@ -253,32 +251,7 @@ export default function AdminItemVendaPrecosEditarRoute() {
 
   return (
     <section className="space-y-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 className="text-sm font-semibold text-slate-950">
-            Editar preços
-          </h2>
-          <div className="text-xs text-slate-500">
-            Source: Item. O custo usa a ficha técnica ativa vinculada à
-            variação.
-          </div>
-        </div>
-        <div
-          className={`rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-wide ${
-            nativeModelAvailable
-              ? "bg-emerald-100 text-emerald-700"
-              : "bg-amber-100 text-amber-800"
-          }`}
-        >
-          {nativeModelAvailable ? "Disponível" : "Indisponível"}
-        </div>
-      </div>
-
-      {!nativeModelAvailable ? (
-        <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-          Esta edição ainda não está disponível nesta execução.
-        </div>
-      ) : enabledChannels.length === 0 ? (
+      {enabledChannels.length === 0 ? (
         <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
           Nenhum canal habilitado para este item. Vá na aba `Canais` para
           introduzi-lo em um canal antes de configurar preços.

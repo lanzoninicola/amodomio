@@ -1,9 +1,14 @@
-import { ClipboardEvent, KeyboardEvent, useEffect, useMemo, useState } from "react";
+import {
+  ClipboardEvent,
+  KeyboardEvent,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import { DecimalLike } from "~/domain/kds";
 
-
 type BaseProps = {
-  id?: string
+  id?: string;
   name: string;
   defaultValue?: DecimalLike | null;
   placeholder?: string;
@@ -18,8 +23,8 @@ function toNumber(v?: DecimalLike | null) {
     v == null
       ? 0
       : typeof v === "number"
-        ? v
-        : Number((v as any)?.toString?.() ?? `${v}`);
+      ? v
+      : Number((v as any)?.toString?.() ?? `${v}`);
   return Number.isFinite(n) ? n : 0;
 }
 
@@ -60,7 +65,8 @@ function useDigitKeyboard({
       });
       return;
     }
-    if (k === "Tab" || k.startsWith("Arrow") || k === "Home" || k === "End") return;
+    if (k === "Tab" || k.startsWith("Arrow") || k === "Home" || k === "End")
+      return;
 
     e.preventDefault();
   };
@@ -83,7 +89,10 @@ export function IntegerInput({
   const initial = Math.max(0, Math.round(toNumber(defaultValue)));
   const [units, setUnits] = useState<number>(initial);
 
-  useEffect(() => setUnits(Math.max(0, Math.round(toNumber(defaultValue)))), [defaultValue]);
+  useEffect(
+    () => setUnits(Math.max(0, Math.round(toNumber(defaultValue)))),
+    [defaultValue]
+  );
 
   const clampUnits = (nextUnits: number) => {
     const clamped = Math.max(0, Math.min(Math.round(nextUnits), MAX_MAGNITUDE));
@@ -91,7 +100,11 @@ export function IntegerInput({
     return clamped;
   };
 
-  const onKeyDown = useDigitKeyboard({ setUnits, disabled: disabled || readOnly, clampUnits });
+  const onKeyDown = useDigitKeyboard({
+    setUnits,
+    disabled: disabled || readOnly,
+    clampUnits,
+  });
 
   const display = useMemo(() => {
     return Math.min(units, MAX_MAGNITUDE).toLocaleString("pt-BR", {
@@ -106,10 +119,15 @@ export function IntegerInput({
         inputMode="numeric"
         value={display}
         onKeyDown={onKeyDown}
-        onChange={onValueChange ? (e) => onValueChange(Number(e.target.value)) : () => { }}
+        onChange={
+          onValueChange
+            ? (e) => onValueChange(Number(e.target.value))
+            : () => {}
+        }
         disabled={disabled}
-        className={`${className} h-9 border rounded px-2 py-1 text-right ${disabled ? "bg-gray-50 text-gray-400" : ""
-          }`}
+        className={`${className} h-9 border rounded px-2 py-1 text-right ${
+          disabled ? "bg-gray-50 text-gray-400" : ""
+        }`}
         placeholder={placeholder}
         {...props}
       />
@@ -124,7 +142,6 @@ export function IntegerInput({
 type DecimalInputProps = BaseProps & {
   /** Casas decimais (padrão 2, mesmo comportamento do MoneyInput) */
   fractionDigits?: number;
-
 };
 
 function parseDecimalText(text: string) {
@@ -140,9 +157,7 @@ function parseDecimalText(text: string) {
   const sepIndex = Math.max(lastComma, lastDot);
 
   const hasSeparator = sepIndex !== -1;
-  const integerPart = hasSeparator
-    ? cleaned.slice(0, sepIndex)
-    : cleaned;
+  const integerPart = hasSeparator ? cleaned.slice(0, sepIndex) : cleaned;
   const decimalPart = hasSeparator ? cleaned.slice(sepIndex + 1) : "";
 
   const intDigits = integerPart.replace(/[^\d-]/g, "") || "0";
@@ -154,6 +169,7 @@ function parseDecimalText(text: string) {
 }
 
 export function DecimalInput({
+  id,
   name,
   defaultValue,
   placeholder,
@@ -164,7 +180,10 @@ export function DecimalInput({
   readOnly = false,
 }: DecimalInputProps) {
   // escala 10^fractionDigits (ex.: 2 casas => 100)
-  const scale = useMemo(() => Math.pow(10, Math.max(0, Math.floor(fractionDigits))), [fractionDigits]);
+  const scale = useMemo(
+    () => Math.pow(10, Math.max(0, Math.floor(fractionDigits))),
+    [fractionDigits]
+  );
 
   // Armazenamos em "units" o valor inteiro já escalado (ex.: 12,34 => 1234)
   const initialUnits = Math.max(0, Math.round(toNumber(defaultValue) * scale));
@@ -181,7 +200,11 @@ export function DecimalInput({
     return clamped;
   };
 
-  const onKeyDown = useDigitKeyboard({ setUnits, disabled: disabled || readOnly, clampUnits });
+  const onKeyDown = useDigitKeyboard({
+    setUnits,
+    disabled: disabled || readOnly,
+    clampUnits,
+  });
 
   const onPaste = (e: ClipboardEvent<HTMLInputElement>) => {
     if (disabled || readOnly) return;
@@ -204,15 +227,21 @@ export function DecimalInput({
   return (
     <div className="relative">
       <input
+        id={id}
         type="text"
         inputMode="numeric"
         value={display}
         onKeyDown={onKeyDown}
         onPaste={onPaste}
-        onChange={onValueChange ? (e) => onValueChange(Number(e.target.value)) : () => { }}
+        onChange={
+          onValueChange
+            ? (e) => onValueChange(Number(e.target.value))
+            : () => {}
+        }
         disabled={disabled}
-        className={`${className} h-9 border rounded px-2 py-1 text-right ${disabled ? "bg-gray-50 text-gray-400" : ""
-          }`}
+        className={`${className} h-9 border rounded px-2 py-1 text-right ${
+          disabled ? "bg-gray-50 text-gray-400" : ""
+        }`}
         placeholder={placeholder}
         readOnly={readOnly}
       />

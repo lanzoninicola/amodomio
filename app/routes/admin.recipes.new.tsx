@@ -5,24 +5,68 @@ import {
   redirect,
 } from "@remix-run/node";
 import { useActionData, useLoaderData } from "@remix-run/react";
+import { getAvailableItemUnits } from "~/domain/item/item-units.server";
 import RecipeForm from "~/domain/recipe/components/recipe-form/recipe-form";
 import { ensureItemCostSheetForRecipe } from "~/domain/recipe/recipe-item-cost-sheet.server";
 import { recipeEntity } from "~/domain/recipe/recipe.entity.server";
 import prismaClient from "~/lib/prisma/client.server";
 import { prismaIt } from "~/lib/prisma/prisma-it.server";
-import { ok, serverError } from "~/utils/http-response.server";
+import { badRequest, ok, serverError } from "~/utils/http-response.server";
+
+function parseDecimalInput(value: unknown): number | null {
+  const normalized = String(value ?? "").trim();
+  if (!normalized) return null;
+  const parsed = Number(normalized.replace(",", "."));
+  return Number.isFinite(parsed) ? parsed : Number.NaN;
+}
+
+function parseRecipeCostingInput(values: Record<string, FormDataEntryValue>) {
+  const costingModeRaw = String(values.costingMode || "per_variation").trim();
+  const costingMode = costingModeRaw === "yield" ? "yield" : "per_variation";
+  const yieldQuantity = parseDecimalInput(values.yieldQuantity);
+  const yieldUnit = String(values.yieldUnit || "")
+    .trim()
+    .toUpperCase();
+
+  if (costingMode === "yield") {
+    if (
+      yieldQuantity === null ||
+      Number.isNaN(yieldQuantity) ||
+      yieldQuantity <= 0
+    ) {
+      throw new Error("Informe quanto a receita produz");
+    }
+    if (!yieldUnit) {
+      throw new Error("Informe a unidade do rendimento");
+    }
+  }
+
+  return {
+    costingMode,
+    yieldQuantity: costingMode === "yield" ? yieldQuantity : null,
+    yieldUnit: costingMode === "yield" ? yieldUnit : null,
+  };
+}
 
 export async function loader({}: LoaderFunctionArgs) {
   try {
     const db = prismaClient as any;
-    const items = await db.item.findMany({
-      where: { active: true },
-      select: { id: true, name: true, classification: true },
-      orderBy: [{ name: "asc" }],
-      take: 500,
-    });
+    const [items, unitOptions] = await Promise.all([
+      db.item.findMany({
+        where: { active: true },
+        select: {
+          id: true,
+          name: true,
+          classification: true,
+          consumptionUm: true,
+        },
+        orderBy: [{ name: "asc" }],
+        take: 500,
+      }),
+      getAvailableItemUnits(),
+    ]);
 
-    return ok({ items });
+    return ok({ items, unitOptions });
   } catch (error) {
     return serverError(error);
   }
@@ -34,11 +78,20 @@ export async function action({ request }: ActionFunctionArgs) {
 
   if (_action === "recipe-create") {
     const recipeType = (values.type as RecipeType) || RecipeType.semiFinished;
+    let costingInput: ReturnType<typeof parseRecipeCostingInput>;
+    try {
+      costingInput = parseRecipeCostingInput(values);
+    } catch (error) {
+      return badRequest((error as Error)?.message || "Rendimento inválido");
+    }
 
     const [err, data] = await prismaIt(
       recipeEntity.create({
         name: values.name as string,
         type: recipeType,
+        costingMode: costingInput.costingMode,
+        yieldQuantity: costingInput.yieldQuantity,
+        yieldUnit: costingInput.yieldUnit,
         description: (values?.description as string) || "",
         hasVariations: false,
         isGlutenFree: values.isGlutenFree === "on" ? true : false,
@@ -55,6 +108,7 @@ export async function action({ request }: ActionFunctionArgs) {
       const db = prismaClient as any;
       const isSemiFinished = data.type === "semiFinished";
       const explicitItemId = String(values.linkedItemId || "").trim();
+      let itemWasCreated = false;
 
       let item = explicitItemId
         ? await db.item.findUnique({ where: { id: explicitItemId } })
@@ -64,6 +118,7 @@ export async function action({ request }: ActionFunctionArgs) {
           });
 
       if (!item) {
+        itemWasCreated = true;
         item = await db.item.create({
           data: {
             name: data.name,
@@ -74,7 +129,13 @@ export async function action({ request }: ActionFunctionArgs) {
             canTransform: true,
             canSell: !isSemiFinished,
             canStock: true,
+            consumptionUm: costingInput.yieldUnit,
           },
+        });
+      } else if (costingInput.yieldUnit && !item.consumptionUm) {
+        item = await db.item.update({
+          where: { id: item.id },
+          data: { consumptionUm: costingInput.yieldUnit },
         });
       }
 
@@ -86,7 +147,11 @@ export async function action({ request }: ActionFunctionArgs) {
         },
       });
 
-      if (String(values.createItemCostSheet || "").trim().toLowerCase() === "yes") {
+      if (
+        String(values.createItemCostSheet || "")
+          .trim()
+          .toLowerCase() === "yes"
+      ) {
         await ensureItemCostSheetForRecipe({
           db,
           item,
@@ -95,6 +160,17 @@ export async function action({ request }: ActionFunctionArgs) {
             name: data.name,
           },
         });
+      }
+
+      if (itemWasCreated) {
+        const params = new URLSearchParams({
+          linkedItemCreatedId: String(item.id),
+        });
+        const unit = String(item.consumptionUm || "")
+          .trim()
+          .toUpperCase();
+        if (unit) params.set("linkedItemUnit", unit);
+        return redirect(`/admin/recipes/${data.id}?${params.toString()}`);
       }
     } catch (_error) {
       // best effort: keep old flow working even if `items` or `recipes.item_id` migration is pending
@@ -113,7 +189,9 @@ export default function AdminRecipesNew() {
     id: string;
     name: string;
     classification?: string | null;
+    consumptionUm?: string | null;
   }>;
+  const unitOptions = (loaderData?.payload?.unitOptions || []) as string[];
   const hasError = Number(actionData?.status || 0) >= 400;
   const errorMessage = actionData?.message || "Erro ao salvar receita";
   const errorDetails =
@@ -154,6 +232,7 @@ export default function AdminRecipesNew() {
         title="Nova receita"
         actionName="recipe-create"
         items={items}
+        unitOptions={unitOptions}
         createCostSheetOption={{ enabled: true }}
       />
     </section>

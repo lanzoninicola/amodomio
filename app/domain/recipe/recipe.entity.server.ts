@@ -80,7 +80,15 @@ export class RecipeEntity {
           itemId: recipe.itemId,
           variationId: recipe.variationId,
           type: recipe.type,
+          costingMode: recipe.costingMode || "per_variation",
+          yieldQuantity:
+            recipe.yieldQuantity == null
+              ? null
+              : Number(recipe.yieldQuantity || 0),
+          yieldUnit: recipe.yieldUnit || null,
           description: recipe.description || "",
+          productionProcedure: recipe.productionProcedure || null,
+          productionNotes: recipe.productionNotes || null,
           hasVariations: Boolean(recipe.hasVariations),
           isGlutenFree: Boolean(recipe.isGlutenFree),
           isVegetarian: Boolean(recipe.isVegetarian),
@@ -108,8 +116,7 @@ export class RecipeEntity {
               itemVariationId: line.itemVariationId,
               unit: line.unit,
               quantity: Number(line.quantity || 0),
-              lossPct:
-                line.lossPct == null ? null : Number(line.lossPct || 0),
+              lossPct: line.lossPct == null ? null : Number(line.lossPct || 0),
             })),
           });
         }
