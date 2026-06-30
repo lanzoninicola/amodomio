@@ -250,10 +250,10 @@ Implementação:
 
 ## Media Drive (`admin/assets`)
 
-A pagina `admin/assets` envia os arquivos para a propria action Remix e o
-servidor repassa para `media-api.amodomio.com.br` em `/v2/upload`. Isso evita
-depender de CORS no navegador e permite exibir status/detalhes da media-api
-quando um upload de imagem, video ou audio falhar.
+A pagina `admin/assets` envia os arquivos para a resource route
+`/api/media/upload`, e o servidor repassa para `media-api.amodomio.com.br` em
+`/v2/upload`. Isso evita depender de CORS no navegador e permite exibir
+status/detalhes da media-api quando um upload de imagem, video ou audio falhar.
 
 O endpoint externo ainda usa:
 

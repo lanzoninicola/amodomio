@@ -39,7 +39,24 @@
       "Bash(sudo tee -a /etc/sysctl.conf)",
       "Bash(sudo sysctl -p)",
       "Bash(PGPASSWORD=cglCDH3gxCOaaheFGBw psql -h 69.62.91.94 -p 55433 -U zzeeuuss -d amodomio -c \"SELECT id, title, key, published, deleted_at FROM cardapio_highlight_sections LIMIT 10;\")",
-      "Bash(node --experimental-vm-modules -e ' *)"
+      "Bash(node --experimental-vm-modules -e ' *)",
+      "Bash(npx tsc *)",
+      "Bash(grep -E 'error TS|custos|item-cost-sheets.$id')",
+      "Bash(grep -E 'custos\\\\.tsx|item-cost-sheets\\\\.$id\\\\.tsx')",
+      "Bash(grep -n \"nativeModelAvailable\" \"/home/lanzo/Documents/Coding/amodomio/app/routes/admin.gerenciamento.cardapio.sell-price-management.\\\\$channel.edit-items.tsx\" \"/home/lanzo/Documents/Coding/amodomio/app/routes/admin.items.\\\\$id.venda.precos.tsx\")",
+      "Bash(grep -n \"batch\" \"/home/lanzo/Documents/Coding/amodomio/app/routes/admin.item-cost-sheets.\\\\$id.custos.tsx\")",
+      "Bash(grep -n \"colSpan={6}\\\\|colSpan={6}\" \"/home/lanzo/Documents/Coding/amodomio/app/routes/admin.item-cost-sheets.\\\\$id.custos.tsx\")",
+      "Bash(grep -n \"AdminItemOutletContext\\\\|recipeId\\\\|ItemVariation\\\\|costSheet\\\\|isProduced\\\\|produced\" \"/home/lanzo/Documents/Coding/amodomio/app/routes/admin.items.\\\\$id.tsx\" | head -40)",
+      "Bash(grep -n \"AdminItemCostSheetDetailOutletContext\" /home/lanzo/Documents/Coding/amodomio/app/routes/admin.item-cost-sheets.\\\\$id.tsx | head -5)",
+      "Bash(grep -n \"return \\(\" /home/lanzo/Documents/Coding/amodomio/app/routes/admin.item-cost-sheets.\\\\$id.custos.tsx | head -5)",
+      "Bash(grep -n \"space-y-5\\\\|const isActive\" /home/lanzo/Documents/Coding/amodomio/app/routes/admin.item-cost-sheets.\\\\$id.custos.tsx | head -5)",
+      "Bash(grep -E 'custos.tsx|cost-sheets.$id.tsx')",
+      "Bash(ls /home/lanzo/Documents/Coding/amodomio/app/routes/admin.recipes.\\\\$id.* 2>/dev/null | head -20)",
+      "Bash(mv /home/lanzo/Documents/Coding/amodomio/app/routes/admin.recipes.\\\\$id.vinculos.tsx /home/lanzo/Documents/Coding/amodomio/app/routes/admin.recipes.\\\\$id.receitas.tsx)",
+      "Bash(ls /home/lanzo/Documents/Coding/amodomio/app/routes/admin.recipes.\\\\$id.receitas.* 2>/dev/null)",
+      "Bash(rm /home/lanzo/Documents/Coding/amodomio/app/routes/admin.recipes.\\\\$id.receitas.como-ingrediente.tsx \\\\ *)",
+      "Bash(grep -n \"recipeId\\\\|unlink\\\\|recipe.*null\\\\|eliminar\\\\|linked.*recipe\\\\|recipe.*linked\\\\|delete\\\\|remove\" /home/lanzo/Documents/Coding/amodomio/app/routes/admin.items.\\\\$id.variations.tsx | head -60)",
+      "Bash(grep -n \"item-variations-update\\\\|recipeId.*null\\\\|recipe.*unlink\\\\|confirmRecipeVariation\" /home/lanzo/Documents/Coding/amodomio/app/routes/admin.items.\\\\$id.tsx | head -40)"
     ],
     "additionalDirectories": [
       "/home/lanzo/Documents/Coding/amodomio/app/routes"

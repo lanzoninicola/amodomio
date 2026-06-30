@@ -143,14 +143,22 @@ export async function getRecipeCompositionCostSnapshot(
 ) {
   const recipe = await db.recipe.findUnique({
     where: { id: recipeId },
-    select: { id: true, name: true },
+    select: {
+      id: true,
+      name: true,
+      costingMode: true,
+      yieldQuantity: true,
+      yieldUnit: true,
+    },
   });
   if (!recipe) throw new Error("Receita não encontrada");
 
   const allLines = await listRecipeCompositionLines(db, recipeId);
+  const costingMode = String(recipe.costingMode || "per_variation");
+  const isYieldRecipe = costingMode === "yield";
 
   let lines = allLines;
-  if (itemVariationId) {
+  if (itemVariationId && !isYieldRecipe) {
     const ownerVariation = await db.itemVariation.findUnique({
       where: { id: itemVariationId },
       select: { variationId: true },
@@ -170,20 +178,13 @@ export async function getRecipeCompositionCostSnapshot(
 
   for (const line of lines) {
     const variationId = line.ItemVariation?.variationId || null;
-    const effectiveLossPct = Number(line.lossPct ?? line.defaultLossPct ?? 0);
     const costInfo = await resolveRecipeIngredientCostSnapshot({
       db,
       itemId: line.itemId,
       variationId: variationId || null,
       _depth,
     });
-    const safeLossPct = Math.min(99.9999, Math.max(0, effectiveLossPct));
-    const grossQuantity =
-      safeLossPct > 0
-        ? Number(
-            (Number(line.quantity || 0) / (1 - safeLossPct / 100)).toFixed(6)
-          )
-        : Number(line.quantity || 0);
+    const grossQuantity = Number(line.quantity || 0);
 
     lastTotal += Number(
       ((Number(costInfo.lastUnitCostAmount || 0) || 0) * grossQuantity).toFixed(
@@ -197,14 +198,27 @@ export async function getRecipeCompositionCostSnapshot(
     );
   }
 
+  const yieldQuantity = Number(recipe.yieldQuantity || 0);
+  const divisor = isYieldRecipe && yieldQuantity > 0 ? yieldQuantity : 1;
+  const unitCostAmount = Number((avgTotal / divisor).toFixed(6));
+  const lastUnitCostAmount = Number((lastTotal / divisor).toFixed(6));
+
   return {
     recipe,
     lastTotal,
     avgTotal,
-    unitCostAmount: avgTotal,
-    note: `calculado pela composicao da receita: ultimo=${lastTotal.toFixed(
-      4
-    )} medio=${avgTotal.toFixed(4)}`,
+    unitCostAmount,
+    note: isYieldRecipe
+      ? `calculado pela composicao da receita: ultimo=${lastTotal.toFixed(
+          4
+        )} medio=${avgTotal.toFixed(4)} rendimento=${yieldQuantity.toFixed(
+          4
+        )} ${
+          String(recipe.yieldUnit || "").trim() || "UN"
+        } custo_un=${unitCostAmount.toFixed(4)}`
+      : `calculado pela composicao da receita: ultimo=${lastUnitCostAmount.toFixed(
+          4
+        )} medio=${unitCostAmount.toFixed(4)}`,
   };
 }
 

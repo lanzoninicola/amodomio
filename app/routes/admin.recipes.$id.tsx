@@ -42,14 +42,22 @@ import {
 } from "~/components/ui/dialog";
 import { toast } from "~/components/ui/use-toast";
 import { DecimalInput } from "~/components/inputs/inputs";
+import { getAvailableItemUnits } from "~/domain/item/item-units.server";
 import { recipeEntity } from "~/domain/recipe/recipe.entity.server";
 import { ensureItemCostSheetForRecipe } from "~/domain/recipe/recipe-item-cost-sheet.server";
 import { countRecipeCostSheetUsage } from "~/domain/recipe/recipe-cost-sheet-usage.server";
+import { countParentRecipes } from "~/domain/recipe/recipe-links.server";
 import {
   DEFAULT_RECIPE_CHATGPT_PROJECT_URL,
   RECIPE_CHATGPT_PROJECT_URL_SETTING_NAME,
   RECIPE_CHATGPT_SETTINGS_CONTEXT,
 } from "~/domain/recipe/recipe-chatgpt-settings";
+import {
+  buildExternalRecipeChatGptImportPreview,
+  importExternalRecipeFromChatGpt,
+  parseExternalRecipeChatGptImportPayload,
+  type ExternalRecipeImportMode,
+} from "~/domain/recipe/recipe-external-chatgpt.server";
 import {
   applyRecipeCompositionLineToVariations,
   createRecipeCompositionIngredientSkeleton,
@@ -63,7 +71,6 @@ import {
 import prismaClient from "~/lib/prisma/client.server";
 import { prismaIt } from "~/lib/prisma/prisma-it.server";
 import { cn } from "~/lib/utils";
-import formatDecimalPlaces from "~/utils/format-decimal-places";
 import type { HttpResponse } from "~/utils/http-response.server";
 import { badRequest, ok } from "~/utils/http-response.server";
 import { lastUrlSegment } from "~/utils/url";
@@ -81,6 +88,160 @@ function parseDecimalInput(value: unknown): number | null {
   if (!normalized) return null;
   const parsed = Number(normalized.replace(",", "."));
   return Number.isFinite(parsed) ? parsed : Number.NaN;
+}
+
+function parseExternalRecipeExcludedIngredientIndexes(value: unknown) {
+  const raw = String(value || "").trim();
+  if (!raw) return new Set<number>();
+
+  try {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return new Set<number>();
+    return new Set(
+      parsed
+        .map((entry) => Number(entry))
+        .filter((entry) => Number.isInteger(entry) && entry >= 0)
+    );
+  } catch (_error) {
+    return new Set<number>();
+  }
+}
+
+function filterExternalRecipePayloadIngredients<
+  T extends ReturnType<typeof parseExternalRecipeChatGptImportPayload>
+>(payload: T, excludedIngredientIndexes: Set<number>): T {
+  if (excludedIngredientIndexes.size === 0) return payload;
+  return {
+    ...payload,
+    ingredients: payload.ingredients.filter(
+      (ingredient) => !excludedIngredientIndexes.has(ingredient.sourceIndex)
+    ),
+  };
+}
+
+function normalizeRecipeUnit(value: unknown) {
+  return String(value || "")
+    .trim()
+    .toUpperCase();
+}
+
+function convertRecipeQuantityUnit(params: {
+  quantity: number;
+  fromUnit: string;
+  toUnit: string;
+}) {
+  const fromUnit = normalizeRecipeUnit(params.fromUnit);
+  const toUnit = normalizeRecipeUnit(params.toUnit);
+  if (!fromUnit || !toUnit || fromUnit === toUnit) return params.quantity;
+
+  if (fromUnit === "G" && toUnit === "KG") return params.quantity / 1000;
+  if (fromUnit === "KG" && toUnit === "G") return params.quantity * 1000;
+  if (fromUnit === "ML" && toUnit === "L") return params.quantity / 1000;
+  if (fromUnit === "L" && toUnit === "ML") return params.quantity * 1000;
+
+  return params.quantity;
+}
+
+function parseMissingIngredientQuantity(missingIngredient: {
+  unit: string | null;
+  notes: string | null;
+}) {
+  const notes = String(missingIngredient.notes || "");
+  const match = notes.match(/(\d+(?:[,.]\d+)?)\s*(kg|g|l|ml|un)\b/i);
+  if (!match) return null;
+
+  const quantity = parseDecimalInput(match[1]);
+  const sourceUnit = normalizeRecipeUnit(match[2]);
+  const targetUnit = normalizeRecipeUnit(missingIngredient.unit || sourceUnit);
+  if (quantity === null || Number.isNaN(quantity) || quantity < 0) return null;
+
+  return {
+    quantity: convertRecipeQuantityUnit({
+      quantity,
+      fromUnit: sourceUnit,
+      toUnit: targetUnit,
+    }),
+    unit: targetUnit || sourceUnit || "UN",
+  };
+}
+
+async function promoteExternalMissingIngredientsToCreateRows(params: {
+  db: any;
+  recipeId: string;
+  payload: ReturnType<typeof parseExternalRecipeChatGptImportPayload>;
+}) {
+  const linkedVariations = await listRecipeLinkedVariations(
+    params.db,
+    params.recipeId
+  );
+  const linkedVariationIds = linkedVariations
+    .map((variation) => String(variation.itemVariationId || ""))
+    .filter(Boolean);
+  if (linkedVariationIds.length === 0) return params.payload;
+
+  const promotedIngredients: typeof params.payload.ingredients = [];
+  const remainingMissingIngredients: typeof params.payload.missingIngredients =
+    [];
+  const sourceIndexOffset = 100000;
+
+  params.payload.missingIngredients.forEach((missingIngredient, index) => {
+    const parsedQuantity = parseMissingIngredientQuantity(missingIngredient);
+    if (!parsedQuantity) {
+      remainingMissingIngredients.push(missingIngredient);
+      return;
+    }
+
+    promotedIngredients.push({
+      sourceIndex: sourceIndexOffset + index,
+      itemId: null,
+      itemName: missingIngredient.name,
+      classification: "insumo",
+      unit: parsedQuantity.unit,
+      defaultLossPct: 0,
+      variationQuantities: Object.fromEntries(
+        linkedVariationIds.map((variationId) => [
+          variationId,
+          parsedQuantity.quantity,
+        ])
+      ),
+    });
+  });
+
+  if (promotedIngredients.length === 0) return params.payload;
+
+  return {
+    ...params.payload,
+    ingredients: [...params.payload.ingredients, ...promotedIngredients],
+    missingIngredients: remainingMissingIngredients,
+  };
+}
+
+function parseRecipeCostingInput(values: Record<string, FormDataEntryValue>) {
+  const costingModeRaw = String(values.costingMode || "per_variation").trim();
+  const costingMode = costingModeRaw === "yield" ? "yield" : "per_variation";
+  const yieldQuantity = parseDecimalInput(values.yieldQuantity);
+  const yieldUnit = String(values.yieldUnit || "")
+    .trim()
+    .toUpperCase();
+
+  if (costingMode === "yield") {
+    if (
+      yieldQuantity === null ||
+      Number.isNaN(yieldQuantity) ||
+      yieldQuantity <= 0
+    ) {
+      throw new Error("Informe quanto a receita produz");
+    }
+    if (!yieldUnit) {
+      throw new Error("Informe a unidade do rendimento");
+    }
+  }
+
+  return {
+    costingMode,
+    yieldQuantity: costingMode === "yield" ? yieldQuantity : null,
+    yieldUnit: costingMode === "yield" ? yieldUnit : null,
+  };
 }
 
 function extractJsonPayloadFromText(value: string) {
@@ -413,9 +574,11 @@ async function buildRecipeChatGptImportPreview(params: {
 
 export const RECIPE_SECTIONS = [
   "cadastro",
+  "procedimento",
   "composicao",
   "variacoes",
   "fichas",
+  "receitas",
 ] as const;
 export type RecipeSection = (typeof RECIPE_SECTIONS)[number];
 export const ALPHABET_FILTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
@@ -434,6 +597,9 @@ export function buildRecipeSectionHref(
   section: RecipeSection
 ) {
   if (section === "cadastro") return `/admin/recipes/${recipeId}`;
+  if (section === "procedimento") {
+    return `/admin/recipes/${recipeId}/procedimento/editar`;
+  }
   return `/admin/recipes/${recipeId}/${section}`;
 }
 
@@ -459,21 +625,65 @@ function buildRecipeCostSheetCreatedHref(
   return `${href}?${params.toString()}`;
 }
 
+function buildRecipeLinkedItemCreatedHref(params: {
+  recipeId: string;
+  section?: RecipeSection;
+  itemId: string;
+  unit?: string | null;
+}) {
+  const href = buildRecipeSectionHref(
+    params.recipeId,
+    params.section || "cadastro"
+  );
+  const searchParams = new URLSearchParams({
+    linkedItemCreatedId: params.itemId,
+  });
+  const unit = String(params.unit || "")
+    .trim()
+    .toUpperCase();
+  if (unit) searchParams.set("linkedItemUnit", unit);
+  return `${href}?${searchParams.toString()}`;
+}
+
+function formatRecipeQuantity(value: unknown, fractionDigits = 3) {
+  const quantity = Number(value || 0);
+  if (!Number.isFinite(quantity) || quantity <= 0) return "";
+  return quantity.toLocaleString("pt-BR", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: fractionDigits,
+  });
+}
+
 async function ensureRecipeLinkedItem(db: any, recipe: Recipe) {
   const linkedItemId = String((recipe as any)?.itemId || "").trim();
+  const recipeYieldUnit =
+    String((recipe as any)?.costingMode || "") === "yield"
+      ? String((recipe as any)?.yieldUnit || "")
+          .trim()
+          .toUpperCase()
+      : "";
 
   if (linkedItemId) {
     const item = await db.item.findUnique({
       where: { id: linkedItemId },
-      select: { id: true, name: true },
+      select: { id: true, name: true, consumptionUm: true },
     });
-    if (item) return item;
+    if (item) {
+      if (recipeYieldUnit && !item.consumptionUm) {
+        return await db.item.update({
+          where: { id: item.id },
+          data: { consumptionUm: recipeYieldUnit },
+          select: { id: true, name: true, consumptionUm: true },
+        });
+      }
+      return item;
+    }
   }
 
   let item = await db.item.findFirst({
     where: { name: recipe.name },
     orderBy: { updatedAt: "desc" },
-    select: { id: true, name: true },
+    select: { id: true, name: true, consumptionUm: true },
   });
 
   if (!item) {
@@ -488,8 +698,15 @@ async function ensureRecipeLinkedItem(db: any, recipe: Recipe) {
         canTransform: true,
         canSell: !isSemiFinished,
         canStock: true,
+        consumptionUm: recipeYieldUnit || null,
       },
-      select: { id: true, name: true },
+      select: { id: true, name: true, consumptionUm: true },
+    });
+  } else if (recipeYieldUnit && !item.consumptionUm) {
+    item = await db.item.update({
+      where: { id: item.id },
+      data: { consumptionUm: recipeYieldUnit },
+      select: { id: true, name: true, consumptionUm: true },
     });
   }
 
@@ -542,11 +759,14 @@ export async function loader({ params }: LoaderFunctionArgs) {
     const [
       recipeLines,
       linkedVariations,
+      unitOptions,
       chatGptProjectUrlSetting,
       recipeCostSheetCount,
+      recipeLinksCount,
     ] = await Promise.all([
       listRecipeCompositionLines(db, recipeId),
       listRecipeLinkedVariations(db, recipeId),
+      getAvailableItemUnits(),
       db.setting.findFirst({
         where: {
           context: RECIPE_CHATGPT_SETTINGS_CONTEXT,
@@ -556,6 +776,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
         select: { value: true },
       }),
       countRecipeCostSheetUsage(db, recipeId),
+      countParentRecipes(db, String((recipe as any)?.itemId || "") || null),
     ]);
 
     return ok({
@@ -563,7 +784,9 @@ export async function loader({ params }: LoaderFunctionArgs) {
       items,
       recipeLines,
       linkedVariations,
+      unitOptions,
       recipeCostSheetCount,
+      recipeLinksCount,
       chatGptProjectUrl:
         String(chatGptProjectUrlSetting?.value || "").trim() ||
         DEFAULT_RECIPE_CHATGPT_PROJECT_URL,
@@ -911,6 +1134,102 @@ export async function action({ request }: ActionFunctionArgs) {
     }
   }
 
+  if (_action === "external-recipe-chatgpt-preview") {
+    const recipeId = String(values.recipeId || "").trim();
+    const chatGptResponse = String(values.chatGptResponse || "").trim();
+    const importMode = String(
+      values.externalRecipeImportMode || "replace_current"
+    ).trim() as ExternalRecipeImportMode;
+    const excludedIngredientIndexes =
+      parseExternalRecipeExcludedIngredientIndexes(
+        values.externalRecipeExcludedIngredientIndexes
+      );
+
+    if (!recipeId) return badRequest("Receita inválida");
+    if (!chatGptResponse)
+      return badRequest("Cole a resposta do ChatGPT antes de pré-visualizar");
+
+    try {
+      const db = prismaClient as any;
+      const payload = filterExternalRecipePayloadIngredients(
+        await promoteExternalMissingIngredientsToCreateRows({
+          db,
+          recipeId,
+          payload: parseExternalRecipeChatGptImportPayload(chatGptResponse),
+        }),
+        excludedIngredientIndexes
+      );
+      if (payload.ingredients.length === 0) {
+        return badRequest(
+          "A resposta só contém ingredientes pendentes. Ajuste o JSON ou cadastre os itens antes de importar."
+        );
+      }
+
+      const { preview } = await buildExternalRecipeChatGptImportPreview({
+        db,
+        recipeId,
+        payload,
+        importMode,
+      });
+
+      return ok({
+        message: "Pré-visualização gerada",
+        payload: preview,
+      });
+    } catch (error) {
+      return badRequest(
+        (error as Error)?.message ||
+          "Erro ao gerar pré-visualização da receita externa"
+      );
+    }
+  }
+
+  if (_action === "external-recipe-chatgpt-import") {
+    const recipeId = String(values.recipeId || "").trim();
+    const chatGptResponse = String(values.chatGptResponse || "").trim();
+    const importMode = String(
+      values.externalRecipeImportMode || "replace_current"
+    ).trim() as ExternalRecipeImportMode;
+    const excludedIngredientIndexes =
+      parseExternalRecipeExcludedIngredientIndexes(
+        values.externalRecipeExcludedIngredientIndexes
+      );
+
+    if (!recipeId) return badRequest("Receita inválida");
+    if (!chatGptResponse)
+      return badRequest("Cole a resposta do ChatGPT antes de importar");
+
+    try {
+      const db = prismaClient as any;
+      const payload = filterExternalRecipePayloadIngredients(
+        await promoteExternalMissingIngredientsToCreateRows({
+          db,
+          recipeId,
+          payload: parseExternalRecipeChatGptImportPayload(chatGptResponse),
+        }),
+        excludedIngredientIndexes
+      );
+      if (payload.ingredients.length === 0) {
+        return badRequest(
+          "A resposta só contém ingredientes pendentes. Ajuste o JSON ou cadastre os itens antes de importar."
+        );
+      }
+
+      await importExternalRecipeFromChatGpt({
+        db,
+        recipeId,
+        payload,
+        importMode,
+      });
+
+      return buildRecipeSectionRedirect(recipeId, "variacoes");
+    } catch (error) {
+      return badRequest(
+        (error as Error)?.message || "Erro ao importar receita externa"
+      );
+    }
+  }
+
   if (_action === "recipe-line-delete") {
     const recipeId = String(values.recipeId || "").trim();
     const recipeLineId = String(values.recipeLineId || "").trim();
@@ -999,19 +1318,11 @@ export async function action({ request }: ActionFunctionArgs) {
     const quantity = Number(
       String(values.lineQuantity || "0").replace(",", ".")
     );
-    const requestedLossPct = parseLossPctInput(values.lineLossPct);
 
     if (!recipeId || !recipeLineId) return badRequest("Linha inválida");
     if (!unit) return badRequest("Informe a unidade de consumo");
     if (!Number.isFinite(quantity) || quantity <= 0)
       return badRequest("Informe uma quantidade válida");
-    if (Number.isNaN(requestedLossPct)) return badRequest("Perda inválida");
-    if (
-      requestedLossPct !== null &&
-      (requestedLossPct < 0 || requestedLossPct >= 100)
-    ) {
-      return badRequest("Perda deve ser entre 0 e 99,9999");
-    }
 
     try {
       const db = prismaClient as any;
@@ -1021,16 +1332,13 @@ export async function action({ request }: ActionFunctionArgs) {
         return badRequest("Linha da receita não encontrada");
       }
 
-      const effectiveLossPct =
-        requestedLossPct ?? Number(line.lossPct ?? line.defaultLossPct ?? 0);
-
       await updateRecipeCompositionLine({
         db,
         lineId: recipeLineId,
         recipeId,
         unit,
         quantity,
-        lossPct: effectiveLossPct,
+        lossPct: null,
       });
 
       return buildRecipeSectionRedirect(recipeId, currentSection);
@@ -1096,16 +1404,13 @@ export async function action({ request }: ActionFunctionArgs) {
         (line) => String(line.recipeIngredientId || "") === recipeIngredientId
       );
       for (const line of targetLines) {
-        const effectiveLossPct = Number(
-          line.lossPct ?? line.defaultLossPct ?? 0
-        );
         await updateRecipeCompositionLine({
           db,
           lineId: line.id,
           recipeId,
           unit,
           quantity: Number(line.quantity || 0),
-          lossPct: effectiveLossPct,
+          lossPct: null,
         });
       }
       return buildRecipeSectionRedirect(recipeId, currentSection);
@@ -1183,10 +1488,20 @@ export async function action({ request }: ActionFunctionArgs) {
       );
     }
 
+    let costingInput: ReturnType<typeof parseRecipeCostingInput>;
+    try {
+      costingInput = parseRecipeCostingInput(values);
+    } catch (error) {
+      return badRequest((error as Error)?.message || "Rendimento inválido");
+    }
+
     const nextRecipe = {
       ...recipe,
       name: values.name as string,
       type: values.type as RecipeType,
+      costingMode: costingInput.costingMode,
+      yieldQuantity: costingInput.yieldQuantity,
+      yieldUnit: costingInput.yieldUnit,
       description: (values?.description as string) || "",
       hasVariations: false,
       isGlutenFree: values.isGlutenFree === "on" ? true : false,
@@ -1206,6 +1521,7 @@ export async function action({ request }: ActionFunctionArgs) {
     }
 
     let ensuredItem: any = null;
+    let linkedItemWasCreated = false;
 
     try {
       const db = prismaClient as any;
@@ -1218,12 +1534,20 @@ export async function action({ request }: ActionFunctionArgs) {
           name: true,
           description: true,
           type: true,
+          costingMode: true,
+          yieldUnit: true,
         },
       });
 
       if (updatedRecipe) {
         const previousItemId = updatedRecipe.itemId as string | null;
         let itemId = previousItemId;
+        const recipeYieldUnit =
+          String(updatedRecipe.costingMode || "") === "yield"
+            ? String(updatedRecipe.yieldUnit || "")
+                .trim()
+                .toUpperCase()
+            : "";
 
         if (explicitItemId && explicitItemId !== itemId) {
           const explicitItem = await db.item.findUnique({
@@ -1231,7 +1555,13 @@ export async function action({ request }: ActionFunctionArgs) {
           });
           if (explicitItem) {
             itemId = explicitItem.id;
-            ensuredItem = explicitItem;
+            ensuredItem =
+              recipeYieldUnit && !explicitItem.consumptionUm
+                ? await db.item.update({
+                    where: { id: explicitItem.id },
+                    data: { consumptionUm: recipeYieldUnit },
+                  })
+                : explicitItem;
             await db.recipe.update({
               where: { id: updatedRecipe.id },
               data: {
@@ -1250,6 +1580,7 @@ export async function action({ request }: ActionFunctionArgs) {
 
           if (!item) {
             const isSemiFinished = updatedRecipe.type === "semiFinished";
+            linkedItemWasCreated = true;
             item = await db.item.create({
               data: {
                 name: updatedRecipe.name,
@@ -1262,7 +1593,13 @@ export async function action({ request }: ActionFunctionArgs) {
                 canTransform: true,
                 canSell: !isSemiFinished,
                 canStock: true,
+                consumptionUm: recipeYieldUnit || null,
               },
+            });
+          } else if (recipeYieldUnit && !item.consumptionUm) {
+            item = await db.item.update({
+              where: { id: item.id },
+              data: { consumptionUm: recipeYieldUnit },
             });
           }
 
@@ -1383,6 +1720,17 @@ export async function action({ request }: ActionFunctionArgs) {
             )
           );
         }
+
+        if (linkedItemWasCreated && ensuredItem?.id) {
+          return redirect(
+            buildRecipeLinkedItemCreatedHref({
+              recipeId: String(values.recipeId || "").trim(),
+              section: currentSection,
+              itemId: String(ensuredItem.id),
+              unit: ensuredItem.consumptionUm || null,
+            })
+          );
+        }
       }
     } catch (_error) {
       // best effort: preserve legacy behavior when migrations are pending
@@ -1392,6 +1740,75 @@ export async function action({ request }: ActionFunctionArgs) {
       String(values.recipeId || "").trim(),
       currentSection
     );
+  }
+
+  if (_action === "recipe-procedure-update") {
+    const recipeId = String(values.recipeId || "").trim();
+    if (!recipeId) return badRequest("Receita inválida");
+
+    const [err] = await prismaIt(
+      recipeEntity.update(recipeId, {
+        productionProcedure:
+          String(values?.productionProcedure || "").trim() || null,
+      })
+    );
+
+    if (err) {
+      return badRequest(err);
+    }
+
+    return redirect(`/admin/recipes/${recipeId}/procedimento/editar`);
+  }
+
+  if (_action === "recipe-procedure-notes-update") {
+    const recipeId = String(values.recipeId || "").trim();
+    if (!recipeId) return badRequest("Receita inválida");
+
+    const [err] = await prismaIt(
+      recipeEntity.update(recipeId, {
+        productionNotes: String(values?.productionNotes || "").trim() || null,
+      })
+    );
+
+    if (err) {
+      return badRequest(err);
+    }
+
+    return redirect(`/admin/recipes/${recipeId}/procedimento/editar`);
+  }
+
+  if (_action === "recipe-procedure-yield-update") {
+    const recipeId = String(values.recipeId || "").trim();
+    const yieldQuantity = parseDecimalInput(values.yieldQuantity);
+    const yieldUnit = String(values.yieldUnit || "")
+      .trim()
+      .toUpperCase();
+
+    if (!recipeId) return badRequest("Receita inválida");
+    if (
+      yieldQuantity === null ||
+      Number.isNaN(yieldQuantity) ||
+      yieldQuantity <= 0
+    ) {
+      return badRequest("Informe quanto a receita rende");
+    }
+    if (!yieldUnit) {
+      return badRequest("Informe a unidade do rendimento");
+    }
+
+    const [err] = await prismaIt(
+      recipeEntity.update(recipeId, {
+        costingMode: "yield",
+        yieldQuantity,
+        yieldUnit,
+      })
+    );
+
+    if (err) {
+      return badRequest(err);
+    }
+
+    return redirect(`/admin/recipes/${recipeId}/procedimento/editar`);
   }
 
   return null;
@@ -1502,11 +1919,6 @@ export function InlineVariationCellEditor({
   const effectiveLossPct = showVariationLoss
     ? Number(lineLossPct || 0)
     : Number(globalLossPct || 0);
-  const safeLossPct = Math.min(99.9999, Math.max(0, effectiveLossPct));
-  const grossQty =
-    safeLossPct > 0
-      ? Number(lineQuantity || 0) / (1 - safeLossPct / 100)
-      : Number(lineQuantity || 0);
   const saveMessage =
     saveStatus === "saving"
       ? "Salvando valor..."
@@ -1516,6 +1928,8 @@ export function InlineVariationCellEditor({
       ? String((fetcher.data as any)?.message || "Erro ao salvar.")
       : hasPending
       ? "Alteração pendente."
+      : Number(lineQuantity || 0) <= 0
+      ? "Informe a quantidade."
       : "Sem alterações pendentes.";
 
   return (
@@ -1596,12 +2010,6 @@ export function InlineVariationCellEditor({
             aria-live="polite"
           >
             {saveMessage}
-          </div>
-          <div className="flex items-center justify-between gap-3">
-            <span>Qtd bruta</span>
-            <span className="font-medium text-xs text-slate-600">
-              {formatDecimalPlaces(Number(grossQty || 0), 4)}
-            </span>
           </div>
         </div>
       </div>
@@ -1739,6 +2147,7 @@ export type AdminRecipeOutletContext = {
     consumptionUm?: string | null;
   }>;
   recipeLines: any[];
+  unitOptions: string[];
   chatGptProjectUrl: string;
   linkedVariations: Array<{
     itemVariationId: string;
@@ -1761,6 +2170,11 @@ const recipeNavigation: Array<{
     to: (recipeId) => buildRecipeSectionHref(recipeId, "cadastro"),
   },
   {
+    name: "Procedimento",
+    key: "procedimento",
+    to: (recipeId) => buildRecipeSectionHref(recipeId, "procedimento"),
+  },
+  {
     name: "Composição",
     key: "composicao",
     to: (recipeId) => buildRecipeSectionHref(recipeId, "composicao"),
@@ -1774,6 +2188,11 @@ const recipeNavigation: Array<{
     name: "Fichas técnicas",
     key: "fichas",
     to: (recipeId) => buildRecipeSectionHref(recipeId, "fichas"),
+  },
+  {
+    name: "Receitas",
+    key: "receitas",
+    to: (recipeId) => buildRecipeSectionHref(recipeId, "receitas"),
   },
   {
     name: "Assistente",
@@ -1793,6 +2212,8 @@ export default function AdminRecipeDetailLayout() {
     []) as AdminRecipeOutletContext["items"];
   const recipeLines = (loaderData?.payload?.recipeLines ||
     []) as AdminRecipeOutletContext["recipeLines"];
+  const unitOptions = (loaderData?.payload?.unitOptions ||
+    []) as AdminRecipeOutletContext["unitOptions"];
   const chatGptProjectUrl = String(
     loaderData?.payload?.chatGptProjectUrl || DEFAULT_RECIPE_CHATGPT_PROJECT_URL
   );
@@ -1801,6 +2222,17 @@ export default function AdminRecipeDetailLayout() {
   const recipeCostSheetCount = Number(
     loaderData?.payload?.recipeCostSheetCount || 0
   );
+  const recipeLinksCount = Number(loaderData?.payload?.recipeLinksCount || 0);
+  const isYieldRecipe = String((recipe as any)?.costingMode || "") === "yield";
+  const recipeYieldQuantityText = isYieldRecipe
+    ? formatRecipeQuantity((recipe as any)?.yieldQuantity)
+    : "";
+  const recipeYieldUnit = String((recipe as any)?.yieldUnit || "")
+    .trim()
+    .toUpperCase();
+  const recipeYieldLabel = recipeYieldQuantityText
+    ? `${recipeYieldQuantityText} ${recipeYieldUnit || "UM"}`
+    : "";
   const linkedItem = items.find((item) => item.id === recipe?.itemId);
   const referenceVariation =
     linkedVariations.find((variation) => variation.isReference) ||
@@ -1815,20 +2247,44 @@ export default function AdminRecipeDetailLayout() {
     : recipeLines;
   const recipeLineCount = summaryLines.length;
   const lastSegment = lastUrlSegment(location.pathname);
-  const activeTab =
-    lastSegment === "composition-builder"
-      ? "composition-builder"
-      : resolveRecipeSection(lastSegment);
+  const activeTab = location.pathname.includes(
+    `/admin/recipes/${recipe?.id}/procedimento`
+  )
+    ? "procedimento"
+    : location.pathname.includes(`/admin/recipes/${recipe?.id}/receitas`)
+    ? "receitas"
+    : lastSegment === "composition-builder"
+    ? "composition-builder"
+    : resolveRecipeSection(lastSegment);
   const createdCostSheetId = String(
     searchParams.get("createdCostSheetId") || ""
   ).trim();
   const createdCostSheetHref = createdCostSheetId
     ? `/admin/item-cost-sheets/${createdCostSheetId}/custos`
     : "";
+  const linkedItemCreatedId = String(
+    searchParams.get("linkedItemCreatedId") || ""
+  ).trim();
+  const linkedItemCreatedUnit = String(searchParams.get("linkedItemUnit") || "")
+    .trim()
+    .toUpperCase();
+  const linkedItemCreatedHref = linkedItemCreatedId
+    ? `/admin/items/${linkedItemCreatedId}/main`
+    : "";
   const handleCreatedCostSheetDialogOpenChange = (open: boolean) => {
     if (open) return;
     const nextParams = new URLSearchParams(searchParams);
     nextParams.delete("createdCostSheetId");
+    setSearchParams(nextParams, {
+      preventScrollReset: true,
+      replace: true,
+    });
+  };
+  const handleLinkedItemCreatedDialogOpenChange = (open: boolean) => {
+    if (open) return;
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.delete("linkedItemCreatedId");
+    nextParams.delete("linkedItemUnit");
     setSearchParams(nextParams, {
       preventScrollReset: true,
       replace: true,
@@ -1896,6 +2352,51 @@ export default function AdminRecipeDetailLayout() {
         </DialogContent>
       </Dialog>
 
+      <Dialog
+        open={Boolean(linkedItemCreatedId)}
+        onOpenChange={handleLinkedItemCreatedDialogOpenChange}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Item vinculado criado</DialogTitle>
+            <DialogDescription>
+              O vínculo com item é opcional. Como nenhum item foi selecionado, o
+              sistema criou um item para esta receita.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            {linkedItemCreatedUnit ? (
+              <>
+                UM aplicada ao item:{" "}
+                <span className="font-semibold">{linkedItemCreatedUnit}</span>.
+              </>
+            ) : (
+              "Revise o item criado e defina a UM de consumo antes de usar esta receita em custos."
+            )}
+          </div>
+          <DialogFooter className="gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => handleLinkedItemCreatedDialogOpenChange(false)}
+            >
+              Continuar na receita
+            </Button>
+            <Button asChild>
+              <Link
+                to={linkedItemCreatedHref}
+                target="_blank"
+                rel="noreferrer"
+                className="gap-2"
+              >
+                Revisar item
+                <ExternalLink size={14} />
+              </Link>
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0 space-y-2">
           <div className="flex flex-wrap items-center gap-2">
@@ -1911,6 +2412,11 @@ export default function AdminRecipeDetailLayout() {
             >
               {recipe.type === "pizzaTopping" ? "Sabor Pizza" : "Produzido"}
             </span>
+            {recipeYieldLabel ? (
+              <span className="inline-flex items-center rounded-full bg-white px-2.5 py-0.5 text-xs font-semibold text-slate-600 ring-1 ring-slate-200">
+                Rendimento: {recipeYieldLabel}
+              </span>
+            ) : null}
           </div>
           {linkedItem ? (
             <Link
@@ -2003,7 +2509,11 @@ export default function AdminRecipeDetailLayout() {
           {recipeNavigation.map((navItem) => {
             const isActive = activeTab === navItem.key;
             const count =
-              navItem.key === "fichas" ? recipeCostSheetCount : null;
+              navItem.key === "fichas"
+                ? recipeCostSheetCount
+                : navItem.key === "receitas"
+                ? recipeLinksCount
+                : null;
             return (
               <Link
                 key={navItem.key}
@@ -2043,6 +2553,7 @@ export default function AdminRecipeDetailLayout() {
           recipe,
           items,
           recipeLines,
+          unitOptions,
           chatGptProjectUrl,
           linkedVariations,
         }}

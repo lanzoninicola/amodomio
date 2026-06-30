@@ -53,8 +53,6 @@ function parseMoneyInput(value: FormDataEntryValue | null) {
 export async function loader({ request }: LoaderFunctionArgs) {
   try {
     const db = prismaClient as any;
-    const nativeModelAvailable = await itemSellingPriceVariationEntity.isAvailable();
-
     const [
       channels,
       user,
@@ -99,7 +97,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
           isMarketplace: Boolean(c.isMarketplace),
         })),
         userEmail: user ? user.email : null,
-        nativeModelAvailable,
         dnaHelpUrl: String(dnaHelpSetting?.value || "").trim() || null,
         profitPriceHelpUrl: String(profitPriceHelpSetting?.value || "").trim() || null,
         rows: [],
@@ -245,7 +242,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
         isMarketplace: Boolean(c.isMarketplace),
       })),
       userEmail: user ? user.email : null,
-      nativeModelAvailable,
       dnaHelpUrl: String(dnaHelpSetting?.value || "").trim() || null,
       profitPriceHelpUrl: String(profitPriceHelpSetting?.value || "").trim() || null,
       rows,
@@ -688,7 +684,6 @@ export default function AdminGerenciamentoCardapioSellPriceManagementAllChannels
   const payload = (loaderData?.payload || {}) as {
     channels?: PriceManagementChannel[];
     userEmail?: string | null;
-    nativeModelAvailable?: boolean;
     dnaHelpUrl?: string | null;
     profitPriceHelpUrl?: string | null;
     rows?: PriceManagementRow[];
@@ -788,14 +783,6 @@ export default function AdminGerenciamentoCardapioSellPriceManagementAllChannels
     return (
       <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
         {loaderData?.message || "Falha ao carregar."}
-      </div>
-    );
-  }
-
-  if (payload.nativeModelAvailable === false) {
-    return (
-      <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-        Esta edição ainda não está disponível nesta execução.
       </div>
     );
   }

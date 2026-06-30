@@ -6,7 +6,6 @@ import { DeleteItemButton } from "~/components/primitives/table-list";
 import NoRecordsFound from "~/components/primitives/no-records-found/no-records-found";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
-import { Checkbox } from "~/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "~/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "~/components/ui/table";
@@ -48,6 +47,26 @@ type SellingChannelOption = {
   name: string;
   sortOrderIndex: number;
 };
+
+function NativeCheckbox({
+  checked,
+  "aria-label": ariaLabel,
+  onCheckedChange,
+}: {
+  checked: boolean;
+  "aria-label": string;
+  onCheckedChange: (checked: boolean) => void;
+}) {
+  return (
+    <input
+      type="checkbox"
+      checked={checked}
+      aria-label={ariaLabel}
+      onChange={(event) => onCheckedChange(event.currentTarget.checked)}
+      className="h-4 w-4 rounded border-slate-300 text-slate-950 accent-slate-950"
+    />
+  );
+}
 
 async function supportsComponentModel(db: any) {
   try {
@@ -758,10 +777,10 @@ export default function AdminItemCostSheetsIndex() {
             <TableHeader className="bg-slate-50/90">
               <TableRow className="hover:bg-slate-50/90">
                 <TableHead className="h-10 w-[52px] px-4 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  <Checkbox
+                  <NativeCheckbox
                     checked={allFilteredSelected}
                     aria-label="Selecionar fichas visíveis"
-                    onCheckedChange={(checked) => toggleSelectAllFiltered(checked === true)}
+                    onCheckedChange={toggleSelectAllFiltered}
                   />
                 </TableHead>
                 <TableHead className="h-10 px-4 text-xs font-semibold uppercase tracking-wide text-slate-500">Ficha</TableHead>
@@ -779,10 +798,10 @@ export default function AdminItemCostSheetsIndex() {
               {filtered.map((sheet) => (
                 <TableRow key={sheet.id} className="border-slate-100 hover:bg-slate-50/40">
                   <TableCell className="px-4 py-3">
-                    <Checkbox
+                    <NativeCheckbox
                       checked={selectedSheetIds.includes(sheet.id)}
                       aria-label={`Selecionar ficha ${sheet.name}`}
-                      onCheckedChange={(checked) => toggleSheetSelection(sheet.id, checked === true)}
+                      onCheckedChange={(checked) => toggleSheetSelection(sheet.id, checked)}
                     />
                   </TableCell>
                   <TableCell className="px-4 py-3">

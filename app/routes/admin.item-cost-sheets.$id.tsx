@@ -12,7 +12,10 @@ import {
   type ShouldRevalidateFunction,
 } from "@remix-run/react";
 
-export const shouldRevalidate: ShouldRevalidateFunction = ({ nextUrl, formAction }) => {
+export const shouldRevalidate: ShouldRevalidateFunction = ({
+  nextUrl,
+  formAction,
+}) => {
   if (formAction) return true;
   return nextUrl.pathname.endsWith("/custos");
 };
@@ -77,6 +80,16 @@ type PackagingItemOption = {
   unitCostAmount: number;
 };
 
+type SubRecipeLine = {
+  ingredientId: string;
+  itemName: string;
+  unit: string;
+  quantity: number;
+  batchQuantity: number;
+  avgUnitCostAmount: number;
+  totalCostAmount: number;
+};
+
 type RecipeCompositionBreakdownLine = {
   ingredientId: string;
   itemId: string;
@@ -90,13 +103,22 @@ type RecipeCompositionBreakdownLine = {
   avgUnitCostAmount: number;
   totalCostAmount: number;
   notes: string | null;
+  subRecipeId: string | null;
+  subRecipeCostingMode: string | null;
+  subRecipeYield: number | null;
+  subRecipeYieldUnit: string | null;
+  subRecipeLines: SubRecipeLine[] | null;
 };
 
 type RecipeCompositionBreakdown = {
   recipeId: string;
   recipeName: string;
+  recipeCostingMode: string;
+  yieldQuantity: number;
+  yieldUnit: string | null;
   ownerItemVariationId: string;
   ownerVariationLabel: string | null;
+  ingredientsTotalCostAmount: number;
   unitCostAmount: number;
   lines: RecipeCompositionBreakdownLine[];
 };
@@ -302,14 +324,60 @@ async function buildRecipeCompositionBreakdownMap(
     uniqueRecipeIds.map(async (recipeId) => {
       const recipe = await db.recipe.findUnique({
         where: { id: recipeId },
-        select: { id: true, name: true },
+        select: {
+          id: true,
+          name: true,
+          costingMode: true,
+          yieldQuantity: true,
+          yieldUnit: true,
+        },
       });
       const allLines = await listRecipeCompositionLines(db, recipeId);
+
+      const uniqueItemIds = [
+        ...new Set(allLines.map((l: any) => l.itemId).filter(Boolean)),
+      ] as string[];
+      const subRecipeByItemId = new Map<string, { id: string; itemId: string }>();
+      const subRecipeLinesByRecipeId = new Map<string, any[]>();
+
+      if (uniqueItemIds.length > 0) {
+        const subRecipes = await db.recipe.findMany({
+          where: { itemId: { in: uniqueItemIds } },
+          select: {
+            id: true,
+            itemId: true,
+            costingMode: true,
+            yieldQuantity: true,
+            yieldUnit: true,
+          },
+        });
+        for (const sr of subRecipes) {
+          subRecipeByItemId.set(String(sr.itemId), sr);
+        }
+        for (const sr of subRecipes) {
+          const srLines = await listRecipeCompositionLines(db, sr.id);
+          const seenIds = new Set<string>();
+          subRecipeLinesByRecipeId.set(
+            sr.id,
+            srLines.filter((l: any) => {
+              if (seenIds.has(l.itemId)) return false;
+              seenIds.add(l.itemId);
+              return true;
+            })
+          );
+        }
+      }
+
       return [
         recipeId,
         {
           recipeName: recipe?.name || "Receita",
+          recipeCostingMode: String(recipe?.costingMode || "per_variation"),
+          yieldQuantity: Number(recipe?.yieldQuantity || 0),
+          yieldUnit: recipe?.yieldUnit || null,
           allLines,
+          subRecipeByItemId,
+          subRecipeLinesByRecipeId,
         },
       ] as const;
     })
@@ -344,14 +412,17 @@ async function buildRecipeCompositionBreakdownMap(
           const ownerItemVariationId = String(sheet.itemVariationId || "");
           const ownerVariation = ownerVariationMap.get(ownerItemVariationId);
           const ownerVariationId = ownerVariation?.variationId || null;
+          const isYieldRecipe =
+            String(recipeData?.recipeCostingMode || "") === "yield";
 
-          const filteredLines = ownerVariationId
-            ? recipeData?.allLines.filter(
-                (recipeLine) =>
-                  String(recipeLine.ItemVariation?.variationId || "") ===
-                  ownerVariationId
-              ) || []
-            : recipeData?.allLines || [];
+          const filteredLines =
+            ownerVariationId && !isYieldRecipe
+              ? recipeData?.allLines.filter(
+                  (recipeLine) =>
+                    String(recipeLine.ItemVariation?.variationId || "") ===
+                    ownerVariationId
+                ) || []
+              : recipeData?.allLines || [];
 
           const breakdownLines = await Promise.all(
             filteredLines.map(async (recipeLine) => {
@@ -359,15 +430,9 @@ async function buildRecipeCompositionBreakdownMap(
                 recipeLine.ItemVariation?.variationId || null;
               const ingredientVariationLabel =
                 recipeLine.ItemVariation?.Variation?.name || null;
-              const lossPct = Number(
-                recipeLine.lossPct ?? recipeLine.defaultLossPct ?? 0
-              );
-              const safeLossPct = Math.min(99.9999, Math.max(0, lossPct));
+              const lossPct = 0;
               const quantity = Number(recipeLine.quantity || 0);
-              const grossQuantity =
-                safeLossPct > 0
-                  ? Number((quantity / (1 - safeLossPct / 100)).toFixed(6))
-                  : quantity;
+              const grossQuantity = quantity;
               const costInfo = await getAvgCost(
                 recipeLine.itemId,
                 ingredientVariationId
@@ -377,6 +442,59 @@ async function buildRecipeCompositionBreakdownMap(
                   Number(costInfo.avgUnitCostAmount || 0) * grossQuantity
                 ).toFixed(6)
               );
+
+              const linkedSubRecipe =
+                recipeData?.subRecipeByItemId.get(recipeLine.itemId) || null;
+              let subRecipeId: string | null = null;
+              let subRecipeCostingMode: string | null = null;
+              let subRecipeYield: number | null = null;
+              let subRecipeYieldUnit: string | null = null;
+              let subRecipeLines: SubRecipeLine[] | null = null;
+
+              if (linkedSubRecipe) {
+                subRecipeId = linkedSubRecipe.id;
+                subRecipeCostingMode = String(
+                  linkedSubRecipe.costingMode || "per_variation"
+                );
+                const rawYield = Number(linkedSubRecipe.yieldQuantity || 0);
+                subRecipeYield = rawYield > 0 ? rawYield : null;
+                subRecipeYieldUnit = linkedSubRecipe.yieldUnit || null;
+
+                const isYieldMode =
+                  subRecipeCostingMode === "yield" &&
+                  subRecipeYield != null &&
+                  subRecipeYield > 0;
+                const parentQty = Number(quantity || 0);
+                const scaleFactor =
+                  isYieldMode && subRecipeYield ? parentQty / subRecipeYield : 1;
+
+                const rawSubLines =
+                  recipeData?.subRecipeLinesByRecipeId.get(linkedSubRecipe.id) ||
+                  [];
+                subRecipeLines = await Promise.all(
+                  rawSubLines.map(async (subLine: any) => {
+                    const subVarId =
+                      subLine.ItemVariation?.variationId || null;
+                    const subCost = await getAvgCost(subLine.itemId, subVarId);
+                    const batchQty = Number(subLine.quantity || 0);
+                    const scaledQty = batchQty * scaleFactor;
+                    const unitCost = Number(subCost.avgUnitCostAmount || 0);
+                    return {
+                      ingredientId: String(
+                        subLine.recipeIngredientId || subLine.id
+                      ),
+                      itemName: subLine.Item?.name || "Ingrediente",
+                      unit: subLine.unit || "UN",
+                      quantity: scaledQty,
+                      batchQuantity: batchQty,
+                      avgUnitCostAmount: unitCost,
+                      totalCostAmount: Number(
+                        (unitCost * scaledQty).toFixed(6)
+                      ),
+                    } satisfies SubRecipeLine;
+                  })
+                );
+              }
 
               return {
                 ingredientId: String(
@@ -393,26 +511,42 @@ async function buildRecipeCompositionBreakdownMap(
                 avgUnitCostAmount: Number(costInfo.avgUnitCostAmount || 0),
                 totalCostAmount,
                 notes: recipeLine.notes || null,
+                subRecipeId,
+                subRecipeCostingMode,
+                subRecipeYield,
+                subRecipeYieldUnit,
+                subRecipeLines,
               } satisfies RecipeCompositionBreakdownLine;
             })
           );
 
-          const unitCostAmount = breakdownLines.reduce(
+          const ingredientsTotalCostAmount = breakdownLines.reduce(
             (acc, breakdownLine) =>
               acc + Number(breakdownLine.totalCostAmount || 0),
             0
           );
+          const yieldQuantity = Number(recipeData?.yieldQuantity || 0);
+          const divisor =
+            isYieldRecipe && yieldQuantity > 0 ? yieldQuantity : 1;
+          const unitCostAmount = ingredientsTotalCostAmount / divisor;
 
           return [
             ownerItemVariationId,
             {
               recipeId,
               recipeName: recipeData?.recipeName || line.name || "Receita",
+              recipeCostingMode:
+                recipeData?.recipeCostingMode || "per_variation",
+              yieldQuantity,
+              yieldUnit: recipeData?.yieldUnit || null,
               ownerItemVariationId,
               ownerVariationLabel:
                 ownerVariation?.variationLabel ||
                 sheet.ItemVariation?.Variation?.name ||
                 null,
+              ingredientsTotalCostAmount: roundItemCostSheetMoney(
+                ingredientsTotalCostAmount
+              ),
               unitCostAmount: roundItemCostSheetMoney(unitCostAmount),
               lines: breakdownLines,
             } satisfies RecipeCompositionBreakdown,
@@ -766,6 +900,35 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       ),
     });
 
+    // Detect recipe lines whose item has no active cost sheet (cost is dynamic)
+    let recipeLinesWithDynamicCost: Array<{ lineId: string; lineName: string }> = [];
+    if (isCostsTabRequest) {
+      const recipeLines = compositionRows.filter((l: any) => l.type === "recipe" && l.refId);
+      if (recipeLines.length > 0) {
+        const recipeIds = [...new Set(recipeLines.map((l: any) => String(l.refId)))] as string[];
+        const subRecipes = await db.recipe.findMany({
+          where: { id: { in: recipeIds } },
+          select: { id: true, itemId: true },
+        });
+        const subRecipeItemIds = subRecipes.filter((r: any) => r.itemId).map((r: any) => String(r.itemId));
+        const activeSheetSet = new Set<string>();
+        if (subRecipeItemIds.length > 0) {
+          const activeSheets = await db.itemCostSheet.findMany({
+            where: { itemId: { in: subRecipeItemIds }, isActive: true },
+            select: { itemId: true },
+          });
+          for (const sheet of activeSheets) activeSheetSet.add(String(sheet.itemId));
+        }
+        const recipeItemIdMap = new Map(subRecipes.map((r: any) => [String(r.id), r.itemId ? String(r.itemId) : null]));
+        for (const line of recipeLines) {
+          const recipeItemId = recipeItemIdMap.get(String(line.refId));
+          if (!recipeItemId || !activeSheetSet.has(recipeItemId)) {
+            recipeLinesWithDynamicCost.push({ lineId: String(line.id), lineName: String((line as any).name || "") });
+          }
+        }
+      }
+    }
+
     return ok({
       item: currentSheet.Item,
       recipeSheets: visibleRecipeSheets,
@@ -796,6 +959,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       recipeSheetDependencyCountById,
       deletionGuard,
       unitOptions,
+      recipeLinesWithDynamicCost,
     });
   } catch (error) {
     return serverError(error);
@@ -1201,16 +1365,25 @@ export async function action({ request, params }: ActionFunctionArgs) {
       if (!itemCostSheetId) return badRequest("Ficha de custo inválida");
       if (!refSheetId)
         return badRequest("Selecione a ficha de custo de referência");
-      if (itemCostSheetId === refSheetId)
-        return badRequest("Não é permitido referenciar a própria ficha");
       if (!(quantity > 0)) return badRequest("Informe uma quantidade válida");
       if (itemCostSheetId !== currentSheet.id)
         return badRequest("Ficha de custo divergente");
 
+      const referencedSheet = await db.itemCostSheet.findUnique({
+        where: { id: refSheetId },
+        select: { id: true, baseItemCostSheetId: true },
+      });
+      if (!referencedSheet)
+        return badRequest("Ficha de referência não encontrada");
+      const referencedRootSheetId =
+        referencedSheet.baseItemCostSheetId || referencedSheet.id;
+      if (referencedRootSheetId === rootSheetId)
+        return badRequest("Não é permitido referenciar a própria ficha");
+
       const createsCycle = await wouldCreateRecipeSheetCycle(
         db,
         rootSheetId,
-        refSheetId
+        referencedRootSheetId
       );
       if (createsCycle)
         return badRequest(
@@ -1596,6 +1769,7 @@ export type AdminItemCostSheetDetailOutletContext = {
   totalSheetCost: number;
   detailPath: string;
   actionData: any;
+  recipeLinesWithDynamicCost: Array<{ lineId: string; lineName: string }>;
 };
 
 export default function AdminItemCostSheetDetail() {
@@ -1669,6 +1843,7 @@ export default function AdminItemCostSheetDetail() {
     0
   );
   const detailPath = sheetDetailHref(selectedSheet?.id || rootSheetId);
+  const recipeLinesWithDynamicCost = (payload.recipeLinesWithDynamicCost || []) as Array<{ lineId: string; lineName: string }>;
   const infoTabs = [
     { href: "dados-gerais", label: "dados gerais" },
     { href: "custos", label: "custos" },
@@ -1698,15 +1873,29 @@ export default function AdminItemCostSheetDetail() {
     totalSheetCost,
     detailPath,
     actionData,
+    recipeLinesWithDynamicCost,
   };
 
   return (
     <div className="min-h-[calc(100vh-8rem)] space-y-6 bg-white pb-20  md:pb-24">
       <div className="space-y-3">
         <div>
-          <h2 className="text-[30px] font-semibold tracking-[-0.03em] text-slate-950">
-            {selectedSheet?.name || item?.name || "Ficha de custo"}
-          </h2>
+          <div className="flex items-center gap-3">
+            <h2 className="text-[30px] font-semibold tracking-[-0.03em] text-slate-950">
+              {selectedSheet?.name || item?.name || "Ficha de custo"}
+            </h2>
+            {selectedSheet ? (
+              selectedSheet.isActive ? (
+                <span className="inline-flex rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold uppercase tracking-wide text-emerald-700">
+                  ativa
+                </span>
+              ) : (
+                <span className="inline-flex rounded-full border border-slate-200 bg-slate-100 px-2.5 py-0.5 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  rascunho
+                </span>
+              )
+            ) : null}
+          </div>
           {item ? (
             <Link
               to={`/admin/items/${item.id}/main`}

@@ -18,6 +18,8 @@ const REELS_ENABLED_SETTING_NAME = "reels.enabled";
 const REELS_SETTING_CONTEXT = "cardapio";
 export const CARDAPIO_FILTER_VIEW_SETTING_NAME = "filter.view-mode";
 export const DEFAULT_CARDAPIO_FILTER_VIEW_MODE = "chip";
+export const WORLD_CUP_BANNER_SETTING_NAME = "world-cup-banner.enabled";
+export const DEFAULT_WORLD_CUP_BANNER_ENABLED = true;
 const MENU_ITEM_INTEREST_SETTING_CONTEXT = "cardapio";
 const MENU_ITEM_INTEREST_SETTING_NAME = "menu-item-interest-enabled";
 const SIMULATE_ERROR_SETTING_CONTEXT = "cardapio";
@@ -35,6 +37,7 @@ export type CardapioIndexLoaderData = {
   likesEnabled: boolean;
   sharesEnabled: boolean;
   filterViewMode: "chip" | "stories";
+  worldCupBannerEnabled: boolean;
   featuredSections: CardapioFeatured[];
 };
 
@@ -142,7 +145,7 @@ export async function loadCardapioIndexData(
       reelUrls = await loadReelUrls(request);
     }
 
-    const [menuItemInterestSetting, filterViewSetting] = await Promise.all([
+    const [menuItemInterestSetting, filterViewSetting, worldCupBannerSetting] = await Promise.all([
       prismaClient.setting.findFirst({
         where: {
           context: MENU_ITEM_INTEREST_SETTING_CONTEXT,
@@ -157,6 +160,13 @@ export async function loadCardapioIndexData(
         },
         orderBy: [{ createdAt: "desc" }],
       }),
+      prismaClient.setting.findFirst({
+        where: {
+          context: REELS_SETTING_CONTEXT,
+          name: WORLD_CUP_BANNER_SETTING_NAME,
+        },
+        orderBy: [{ createdAt: "desc" }],
+      }),
     ]);
     const menuItemInterestEnabled = parseBooleanSetting(
       menuItemInterestSetting?.value,
@@ -166,6 +176,10 @@ export async function loadCardapioIndexData(
       filterViewSetting?.value === "stories"
         ? "stories"
         : DEFAULT_CARDAPIO_FILTER_VIEW_MODE;
+    const worldCupBannerEnabled = parseBooleanSetting(
+      worldCupBannerSetting?.value,
+      DEFAULT_WORLD_CUP_BANNER_ENABLED
+    );
     const { likesEnabled, sharesEnabled } = await getEngagementSettings();
     const [items, tags] = await Promise.all([itemsPromise, tagsPromise]);
 
@@ -178,6 +192,7 @@ export async function loadCardapioIndexData(
       likesEnabled,
       sharesEnabled,
       filterViewMode,
+      worldCupBannerEnabled,
       featuredSections,
     };
 

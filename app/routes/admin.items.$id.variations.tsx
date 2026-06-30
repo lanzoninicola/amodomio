@@ -284,12 +284,12 @@ export default function AdminItemVariationsTab() {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
-              Eliminar variação com receita vinculada?
+              Remover variação com receita vinculada?
             </AlertDialogTitle>
             <AlertDialogDescription>
-              Ao eliminar a variação do item, a receita vinculada a essa
-              variação também deixa de ficar disponível no fluxo deste item.
-              Confirme se é isso mesmo antes de salvar.
+              A receita não será deletada. O vínculo entre essa variação e a
+              receita ficará inativo, mas pode ser restaurado se a variação for
+              adicionada novamente.
             </AlertDialogDescription>
           </AlertDialogHeader>
 
@@ -302,11 +302,11 @@ export default function AdminItemVariationsTab() {
                 {row.Recipe?.name ? (
                   <span>
                     {" "}
-                    remove a receita vinculada "{row.Recipe.name}" do fluxo do
-                    item.
+                    tem a receita "{row.Recipe.name}" vinculada — o vínculo
+                    ficará inativo.
                   </span>
                 ) : (
-                  <span> possui uma receita vinculada.</span>
+                  <span> tem uma receita vinculada — o vínculo ficará inativo.</span>
                 )}
               </div>
             ))}
@@ -315,7 +315,7 @@ export default function AdminItemVariationsTab() {
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction onClick={submitConfirmedRemoval}>
-              Sim, eliminar variação
+              Remover variação
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

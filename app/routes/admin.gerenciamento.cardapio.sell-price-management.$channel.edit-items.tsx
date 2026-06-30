@@ -47,12 +47,11 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       return badRequest("Modelo Item não disponível no Prisma Client desta execução.");
     }
 
-    const [channel, user, nativeModelAvailable, sizeMap, sellingPriceConfig] = await Promise.all([
+    const [channel, user, sizeMap, sellingPriceConfig] = await Promise.all([
       db.itemSellingChannel.findFirst({
         where: { key: sellingChannelKey },
       }),
       authenticator.isAuthenticated(request),
-      itemSellingPriceVariationEntity.isAvailable(),
       listSizeMapByKey(),
       menuItemSellingPriceUtilityEntity.getSellingPriceConfig(),
     ]);
@@ -85,7 +84,6 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           name: channel.name,
         },
         userEmail: user?.email || null,
-        nativeModelAvailable,
         rows: [],
       });
     }
@@ -226,7 +224,6 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         name: channel.name,
       },
       userEmail: user?.email || null,
-      nativeModelAvailable,
       rows,
     });
   } catch (error) {
@@ -298,7 +295,6 @@ export default function AdminGerenciamentoCardapioSellPriceManagementItemsEdit()
   const payload = (loaderData?.payload || {}) as {
     channel?: { id: string; key: string; name: string };
     userEmail?: string | null;
-    nativeModelAvailable?: boolean;
     rows?: Array<{
       id: string;
       name: string;
@@ -374,10 +370,6 @@ export default function AdminGerenciamentoCardapioSellPriceManagementItemsEdit()
       {hasLoaderError ? (
         <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
           {loaderData?.message || "Falha ao carregar a tela."}
-        </div>
-      ) : payload.nativeModelAvailable === false ? (
-        <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-          Esta edição ainda não está disponível nesta execução.
         </div>
       ) : filteredRows.length === 0 ? (
         <div className="rounded-lg border border-slate-200 bg-white px-4 py-5 text-sm text-slate-500">

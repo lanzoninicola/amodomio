@@ -1,6 +1,6 @@
 import { useFetcher, useOutletContext } from "@remix-run/react";
 import { RotateCcw, Settings, Trash2 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import GptAssistantPanel from "~/components/gpt-assistant-panel";
 import { Button } from "~/components/ui/button";
 import {
@@ -37,6 +37,9 @@ type RecipeChatGptAssistantPanelProps = {
   formAction?: string;
   backTo?: string;
   backLabel?: string;
+  assistantChoiceContent?: ReactNode;
+  assistantChoiceLabel?: string;
+  promptTabLabel?: string;
 };
 
 export default function RecipeChatGptAssistantPanel(
@@ -63,11 +66,16 @@ export default function RecipeChatGptAssistantPanel(
   const [chatGptResponse, setChatGptResponse] = useState("");
   const [lastPreviewedResponse, setLastPreviewedResponse] = useState("");
   const referenceVariationId = useMemo(() => {
-    const ref = linkedVariations.find((v) => v.isReference && v.itemVariationId);
+    const ref = linkedVariations.find(
+      (v) => v.isReference && v.itemVariationId
+    );
     return ref?.itemVariationId ? String(ref.itemVariationId) : "__all";
   }, [linkedVariations]);
-  const [previewVariationFilter, setPreviewVariationFilter] = useState(referenceVariationId);
-  const [ignoredDeleteItemIds, setIgnoredDeleteItemIds] = useState<string[]>([]);
+  const [previewVariationFilter, setPreviewVariationFilter] =
+    useState(referenceVariationId);
+  const [ignoredDeleteItemIds, setIgnoredDeleteItemIds] = useState<string[]>(
+    []
+  );
   const [manualDeleteItemIds, setManualDeleteItemIds] = useState<string[]>([]);
 
   const baseIngredients = useMemo(() => {
@@ -252,72 +260,80 @@ export default function RecipeChatGptAssistantPanel(
       }
       copyToastTitle="Prompt copiado"
       copyToastContent="Cole o prompt no projeto Receitas Builder."
+      assistantChoiceContent={props.assistantChoiceContent}
+      assistantChoiceLabel={props.assistantChoiceLabel}
+      promptTabLabel={props.promptTabLabel}
       beforeResponseContent={
         <div className="space-y-3">
           {hasStalePreview ? (
             <div className="border-l-2 border-amber-400 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-              A resposta foi alterada depois da última prévia. Gere
-              uma nova prévia antes de importar.
+              A resposta foi alterada depois da última prévia. Gere uma nova
+              prévia antes de importar.
             </div>
           ) : null}
         </div>
       }
       previewActionsContent={
-          <Dialog>
-            <DialogTrigger asChild>
-              <Button type="button" variant="outline" size="sm" className="flex gap-x-2">
-                <Settings size={14} />
-                Contexto
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-2xl">
-              <DialogHeader>
-                <DialogTitle>Contexto enviado no prompt</DialogTitle>
-                <DialogDescription>
-                  Resumo dos dados usados para montar o prompt desta receita.
-                </DialogDescription>
-              </DialogHeader>
+        <Dialog>
+          <DialogTrigger asChild>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="flex gap-x-2"
+            >
+              <Settings size={14} />
+              Contexto
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="sm:max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>Contexto enviado no prompt</DialogTitle>
+              <DialogDescription>
+                Resumo dos dados usados para montar o prompt desta receita.
+              </DialogDescription>
+            </DialogHeader>
 
-              <div className="grid gap-3 text-xs text-slate-600 md:grid-cols-4">
-                <div>
-                  <div className="font-semibold text-slate-500">Receita</div>
-                  <div className="mt-1 truncate font-medium text-slate-900">
-                    {recipe.name}
-                  </div>
-                </div>
-                <div>
-                  <div className="font-semibold text-slate-500">
-                    Ingredientes atuais
-                  </div>
-                  <div className="mt-1 font-medium text-slate-900">
-                    {baseIngredients.length}
-                  </div>
-                </div>
-                <div>
-                  <div className="font-semibold text-slate-500">Variações</div>
-                  <div className="mt-1 font-medium text-slate-900">
-                    {variationCount}
-                  </div>
-                </div>
-                <div>
-                  <div className="font-semibold text-slate-500">
-                    Catálogo no prompt
-                  </div>
-                  <div className="mt-1 font-medium text-slate-900">
-                    {items.length} itens
-                  </div>
+            <div className="grid gap-3 text-xs text-slate-600 md:grid-cols-4">
+              <div>
+                <div className="font-semibold text-slate-500">Receita</div>
+                <div className="mt-1 truncate font-medium text-slate-900">
+                  {recipe.name}
                 </div>
               </div>
+              <div>
+                <div className="font-semibold text-slate-500">
+                  Ingredientes atuais
+                </div>
+                <div className="mt-1 font-medium text-slate-900">
+                  {baseIngredients.length}
+                </div>
+              </div>
+              <div>
+                <div className="font-semibold text-slate-500">Variações</div>
+                <div className="mt-1 font-medium text-slate-900">
+                  {variationCount}
+                </div>
+              </div>
+              <div>
+                <div className="font-semibold text-slate-500">
+                  Catálogo no prompt
+                </div>
+                <div className="mt-1 font-medium text-slate-900">
+                  {items.length} itens
+                </div>
+              </div>
+            </div>
 
-              {filledVariationCells > 0 ? (
-                <p className="border-t border-slate-200 pt-3 text-xs text-slate-600">
-                  A composição atual tem {filledVariationCells} célula(s) com
-                  quantidade. A importação atualiza os ingredientes enviados no
-                  JSON e mantém os não citados.
-                </p>
-              ) : null}
-            </DialogContent>
-          </Dialog>
+            {filledVariationCells > 0 ? (
+              <p className="border-t border-slate-200 pt-3 text-xs text-slate-600">
+                A composição atual tem {filledVariationCells} célula(s) com
+                quantidade. A importação atualiza os ingredientes enviados no
+                JSON e mantém os não citados.
+              </p>
+            ) : null}
+          </DialogContent>
+        </Dialog>
       }
       responseMetaContent={
         <MissingIngredientsPreview ingredients={pastedMissingIngredients} />
@@ -405,10 +421,16 @@ export default function RecipeChatGptAssistantPanel(
                     <tbody className="divide-y divide-slate-100">
                       {previewPayload.importableIngredients.flatMap(
                         (ingredient: any) => {
-                          const isAiDelete = ingredient.previewAction === "delete";
-                          const isManual = manualDeleteItemIds.includes(ingredient.itemId);
-                          const isIgnored = ignoredDeleteItemIds.includes(ingredient.itemId);
-                          const isEffectiveDelete = (isAiDelete && !isIgnored) || isManual;
+                          const isAiDelete =
+                            ingredient.previewAction === "delete";
+                          const isManual = manualDeleteItemIds.includes(
+                            ingredient.itemId
+                          );
+                          const isIgnored = ignoredDeleteItemIds.includes(
+                            ingredient.itemId
+                          );
+                          const isEffectiveDelete =
+                            (isAiDelete && !isIgnored) || isManual;
 
                           const statusCell = (
                             <td className="px-4 py-2.5 whitespace-nowrap">
@@ -441,7 +463,9 @@ export default function RecipeChatGptAssistantPanel(
                                   <button
                                     type="button"
                                     title="Desfazer — marcar para eliminar novamente"
-                                    onClick={() => toggleIgnoredDeleteItem(ingredient.itemId)}
+                                    onClick={() =>
+                                      toggleIgnoredDeleteItem(ingredient.itemId)
+                                    }
                                     className="rounded p-0.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
                                   >
                                     <Trash2 size={12} />
@@ -450,7 +474,9 @@ export default function RecipeChatGptAssistantPanel(
                                   <button
                                     type="button"
                                     title="Manter ingrediente"
-                                    onClick={() => toggleIgnoredDeleteItem(ingredient.itemId)}
+                                    onClick={() =>
+                                      toggleIgnoredDeleteItem(ingredient.itemId)
+                                    }
                                     className="rounded p-0.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
                                   >
                                     <RotateCcw size={12} />
@@ -460,7 +486,9 @@ export default function RecipeChatGptAssistantPanel(
                                 <button
                                   type="button"
                                   title="Manter ingrediente"
-                                  onClick={() => toggleManualDeleteItem(ingredient.itemId)}
+                                  onClick={() =>
+                                    toggleManualDeleteItem(ingredient.itemId)
+                                  }
                                   className="rounded p-0.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
                                 >
                                   <RotateCcw size={12} />
@@ -469,7 +497,9 @@ export default function RecipeChatGptAssistantPanel(
                                 <button
                                   type="button"
                                   title="Marcar para eliminar"
-                                  onClick={() => toggleManualDeleteItem(ingredient.itemId)}
+                                  onClick={() =>
+                                    toggleManualDeleteItem(ingredient.itemId)
+                                  }
                                   className="rounded p-0.5 text-slate-300 hover:bg-red-50 hover:text-red-600"
                                 >
                                   <Trash2 size={12} />
@@ -478,7 +508,9 @@ export default function RecipeChatGptAssistantPanel(
                             </td>
                           );
 
-                          const variations = Array.isArray(ingredient.variations)
+                          const variations = Array.isArray(
+                            ingredient.variations
+                          )
                             ? ingredient.variations
                             : [];
                           if (variations.length === 0) {
@@ -501,7 +533,13 @@ export default function RecipeChatGptAssistantPanel(
                                 </td>
                                 <td className="px-4 py-2.5 text-right font-medium text-slate-900 whitespace-nowrap">
                                   {isEffectiveDelete
-                                    ? (baseQtyByItemId.get(ingredient.itemId) || 0).toLocaleString("pt-BR", { maximumFractionDigits: 3 })
+                                    ? (
+                                        baseQtyByItemId.get(
+                                          ingredient.itemId
+                                        ) || 0
+                                      ).toLocaleString("pt-BR", {
+                                        maximumFractionDigits: 3,
+                                      })
                                     : 0}
                                 </td>
                                 <td className="px-4 py-2.5 text-right text-xs text-slate-500 whitespace-nowrap">
@@ -511,7 +549,7 @@ export default function RecipeChatGptAssistantPanel(
                             ];
                           }
 
-                          return variations.map((variation: any) => (
+                          return variations.map((variation: any) =>
                             String(variation.itemVariationId || "") ===
                               previewVariationFilter ||
                             previewVariationFilter === "__all" ? (
@@ -542,7 +580,7 @@ export default function RecipeChatGptAssistantPanel(
                                 </td>
                               </tr>
                             ) : null
-                          ));
+                          );
                         }
                       )}
                     </tbody>

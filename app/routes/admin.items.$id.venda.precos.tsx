@@ -58,10 +58,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
     const db = prismaClient as any;
 
     // Immediate: guard + fast state needed before first render
-    const [item, nativeModelAvailable] = await Promise.all([
-      db.item.findUnique({ where: { id }, select: { id: true, name: true } }),
-      itemSellingPriceVariationEntity.isAvailable(),
-    ]);
+    const item = await db.item.findUnique({ where: { id }, select: { id: true, name: true } });
 
     if (!item) return badRequest("Item não encontrado");
 
@@ -201,7 +198,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
       };
     })();
 
-    return defer({ item, nativeModelAvailable, payload });
+    return defer({ item, payload });
   } catch (error) {
     return serverError(error);
   }
@@ -450,7 +447,6 @@ export type AdminItemVendaPrecosOutletContext = AdminItemVendaOutletContext & {
     profitExpectedPerc?: number;
     updatedBy?: string | null;
   }>;
-  nativeModelAvailable: boolean;
   dnaHelpUrl: string | null;
   profitPriceHelpUrl: string | null;
   pricingRows: Array<{
@@ -488,8 +484,7 @@ type DeferredPayload = {
 
 export default function AdminItemVendaPrecosLayout() {
   const actionData = useActionData<typeof action>();
-  const { nativeModelAvailable, payload } = useLoaderData() as {
-    nativeModelAvailable: boolean;
+  const { payload } = useLoaderData() as {
     payload: Promise<DeferredPayload>;
   };
   const sellingContext = useOutletContext<AdminItemVendaOutletContext>();
@@ -557,7 +552,6 @@ export default function AdminItemVendaPrecosLayout() {
               allItems: resolvedPayload.allItems || [],
               editableVariations: resolvedPayload.editableVariations || [],
               nativeRows: resolvedPayload.nativeRows || [],
-              nativeModelAvailable,
               dnaHelpUrl: resolvedPayload.dnaHelpUrl || null,
               profitPriceHelpUrl: resolvedPayload.profitPriceHelpUrl || null,
               pricingRows: resolvedPayload.pricingRows || [],

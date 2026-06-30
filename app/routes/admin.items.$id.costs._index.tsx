@@ -1,4 +1,5 @@
 import { Link, useOutletContext } from "@remix-run/react";
+import { Info } from "lucide-react";
 import { buildAdminItemsMeta } from "~/domain/item/admin-items-meta";
 import type { AdminItemOutletContext } from "./admin.items.$id";
 
@@ -56,6 +57,12 @@ function getRowEventDate(row: { validFrom?: unknown; createdAt?: unknown }): Dat
 
 export default function AdminItemCostsIndex() {
   const { item, costMetrics, costAverageWindows } = useOutletContext<AdminItemOutletContext>();
+
+  const isProducedItem = Number(item._linkedRecipeCount || 0) > 0;
+  const costSheets: any[] = item.ItemCostSheet || [];
+  const hasActiveCostSheet = costSheets.some((s: any) => s.isActive);
+  const inactiveCostSheet = costSheets.find((s: any) => !s.baseItemCostSheetId);
+  const showProducedAlert = isProducedItem && !hasActiveCostSheet;
 
   const history: any[] = item._itemCostVariationHistory || [];
   const referenceUnit = item.consumptionUm || item.purchaseUm || costMetrics?.latestCost?.unit || "";
@@ -119,6 +126,50 @@ export default function AdminItemCostsIndex() {
   const COMPACT = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   return (
+    <div className="space-y-4">
+      {showProducedAlert ? (
+        <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+          <div className="flex items-start gap-3">
+            <Info className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
+            <div className="min-w-0 flex-1">
+              <div className="text-sm font-semibold text-slate-700">
+                Item produzido — custo calculado pela receita
+              </div>
+              <p className="mt-1 text-xs text-slate-500">
+                O custo é derivado dinamicamente dos ingredientes da receita a
+                cada consulta. Funciona corretamente, mas sem histórico nem
+                rastreabilidade de variação ao longo do tempo. Para ter
+                histórico, vincule uma ficha de custo ativa a este item.
+              </p>
+              {inactiveCostSheet ? (
+                <Link
+                  to={`/admin/item-cost-sheets/${inactiveCostSheet.id}/dados-gerais`}
+                  className="mt-2 inline-flex text-xs font-semibold text-slate-500 underline hover:text-slate-800"
+                >
+                  Ver ficha existente (inativa) →
+                </Link>
+              ) : (
+                <Link
+                  to={`/admin/item-cost-sheets?itemId=${item.id}`}
+                  className="mt-2 inline-flex text-xs font-semibold text-slate-500 underline hover:text-slate-800"
+                >
+                  Criar ficha de custo →
+                </Link>
+              )}
+            </div>
+          </div>
+        </div>
+      ) : isProducedItem && hasActiveCostSheet ? (
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3">
+          <div className="flex items-center gap-3">
+            <Info className="h-4 w-4 shrink-0 text-emerald-600" />
+            <p className="text-xs text-emerald-800">
+              Item produzido. O custo exibido vem da ficha de custo ativa
+              vinculada à receita.
+            </p>
+          </div>
+        </div>
+      ) : null}
     <div className="grid gap-4 lg:grid-cols-2">
 
       {/* Coluna esquerda — KPIs + atalhos */}
@@ -258,6 +309,7 @@ export default function AdminItemCostsIndex() {
         )}
       </div>
 
+    </div>
     </div>
   );
 }
