@@ -89,6 +89,9 @@ export function CardapioCatalogSection({
       (a, b) => (a.sortOrderIndex ?? 0) - (b.sortOrderIndex ?? 0)
     )
     : [];
+  const visibleGroupChips = orderedGroups.filter(
+    (g) => g.groupId !== "__sem_grupo__"
+  );
 
   const onCurrentTagSelected = useCallback(
     (tag: Tag | null) => {
@@ -210,10 +213,10 @@ export function CardapioCatalogSection({
         </div>
       )}
 
-      {orderedGroups.length > 0 ? (
+      {visibleGroupChips.length > 0 ? (
         <div className="fixed left-0 right-0 top-[calc(1rem+env(safe-area-inset-top))] z-40 flex flex-col md:hidden">
           <div className="flex h-[50px] w-full items-center gap-2 px-4">
-            {orderedGroups.map((group) => (
+            {visibleGroupChips.map((group) => (
               <button
                 key={group.groupId}
                 type="button"
@@ -265,9 +268,9 @@ export function CardapioCatalogSection({
         </div>
       ) : null}
 
-      {orderedGroups.length > 0 ? (
+      {visibleGroupChips.length > 0 ? (
         <div className="mt-1 hidden gap-2 overflow-x-auto pb-2 md:flex">
-          {orderedGroups.map((group) => (
+          {visibleGroupChips.map((group) => (
             <button
               key={group.groupId}
               type="button"
@@ -548,7 +551,19 @@ export function CardapioItemsGrid({
   likesEnabled: boolean;
   desktopFeedLayout?: boolean;
 }) {
-  const [expandedItemId, setExpandedItemId] = useState<string | null>(null);
+  const initialHash =
+    typeof window !== "undefined"
+      ? window.location.hash.replace("#", "")
+      : null;
+  const initialExpandedId = initialHash
+    ? (items.find(
+        (item) => item.slug === initialHash || item.id === initialHash
+      )?.id ?? null)
+    : null;
+
+  const [expandedItemId, setExpandedItemId] = useState<string | null>(
+    initialExpandedId
+  );
   const [isDesktop, setIsDesktop] = useState(false);
   const itemRefs = useRef<Record<string, HTMLLIElement | null>>({});
   const trackedViewRef = useRef<Set<string>>(new Set());
@@ -560,6 +575,15 @@ export function CardapioItemsGrid({
     update();
     mediaQuery.addEventListener?.("change", update);
     return () => mediaQuery.removeEventListener?.("change", update);
+  }, []);
+
+  useEffect(() => {
+    if (!initialExpandedId) return;
+    const raf1 = requestAnimationFrame(() => {
+      requestAnimationFrame(() => scrollToItemTop(initialExpandedId));
+    });
+    return () => cancelAnimationFrame(raf1);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const trackInterest = useCallback(
@@ -767,6 +791,7 @@ function CardapioGridItem({
   return (
     <li
       ref={setRefs}
+      id={item.slug ?? item.id}
       className={cn(
         "mb-4 inline-flex w-full break-inside-avoid flex-col overflow-hidden rounded-[20px] bg-white shadow-[0_6px_16px_rgba(15,23,42,0.14)] md:mb-0 md:flex md:rounded-xl md:bg-zinc-900 md:shadow-none",
         "transition-all duration-300 ease-in-out",

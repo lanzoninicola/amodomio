@@ -9,6 +9,8 @@ export type ContentPostMediaInput = {
   linkText?: string | null;
   linkBackgroundColor?: string | null;
   linkTextColor?: string | null;
+  linkPosition?: string | null;
+  linkNewTab?: boolean;
   sortOrder: number;
 };
 
@@ -49,6 +51,8 @@ export function parseContentPostMediaForm(
       String(form.get(`linkTextColor_${index}`) || ""),
       DEFAULT_CONTENT_LINK_TEXT_COLOR
     ),
+    linkPosition: String(form.get(`linkPosition_${index}`) || "top") === "bottom" ? "bottom" : "top",
+    linkNewTab: form.get(`linkNewTab_${index}`) !== "false",
     sortOrder: index,
   }));
 }

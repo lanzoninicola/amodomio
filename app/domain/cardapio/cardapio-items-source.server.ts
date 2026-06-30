@@ -598,6 +598,7 @@ async function listNativeCardapioItems(
       ItemSellingPriceVariation: {
         where: {
           ItemSellingChannel: { key: sellingChannelKey },
+          ItemVariation: { deletedAt: null },
         },
         orderBy: [{ updatedAt: "desc" }],
         select: {

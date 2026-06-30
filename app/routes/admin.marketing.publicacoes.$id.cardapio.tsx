@@ -114,14 +114,19 @@ export default function ContentPostCardapioPage() {
         </div>
       ) : null}
 
-      <div>
-        <h2 className="text-lg font-semibold">Cardápio</h2>
-        <p className="text-sm text-slate-500">
-          Ajuste como esta publicação aparece no destaque do cardápio.
-        </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h2 className="text-lg font-semibold">Cardápio</h2>
+          <p className="text-sm text-slate-500">
+            Ajuste como esta publicação aparece no destaque do cardápio.
+          </p>
+        </div>
+        <Button type="submit" size="sm" disabled={navigation.state === "submitting"}>
+          {navigation.state === "submitting" ? "Salvando..." : "Salvar"}
+        </Button>
       </div>
 
-      <div className="grid gap-4 rounded-lg border bg-slate-50 p-4">
+      <div className="grid gap-4">
         <div className="grid gap-2 sm:grid-cols-2">
           <div className="grid gap-2">
             <Label htmlFor="cardapioSortOrder">Ordem</Label>
@@ -159,9 +164,6 @@ export default function ContentPostCardapioPage() {
         />
       </div>
 
-      <Button type="submit" disabled={navigation.state === "submitting"}>
-        {navigation.state === "submitting" ? "Salvando..." : "Salvar cardápio"}
-      </Button>
     </Form>
   );
 }

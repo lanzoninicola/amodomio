@@ -56,7 +56,19 @@
       "Bash(ls /home/lanzo/Documents/Coding/amodomio/app/routes/admin.recipes.\\\\$id.receitas.* 2>/dev/null)",
       "Bash(rm /home/lanzo/Documents/Coding/amodomio/app/routes/admin.recipes.\\\\$id.receitas.como-ingrediente.tsx \\\\ *)",
       "Bash(grep -n \"recipeId\\\\|unlink\\\\|recipe.*null\\\\|eliminar\\\\|linked.*recipe\\\\|recipe.*linked\\\\|delete\\\\|remove\" /home/lanzo/Documents/Coding/amodomio/app/routes/admin.items.\\\\$id.variations.tsx | head -60)",
-      "Bash(grep -n \"item-variations-update\\\\|recipeId.*null\\\\|recipe.*unlink\\\\|confirmRecipeVariation\" /home/lanzo/Documents/Coding/amodomio/app/routes/admin.items.\\\\$id.tsx | head -40)"
+      "Bash(grep -n \"item-variations-update\\\\|recipeId.*null\\\\|recipe.*unlink\\\\|confirmRecipeVariation\" /home/lanzo/Documents/Coding/amodomio/app/routes/admin.items.\\\\$id.tsx | head -40)",
+      "Bash(npx prisma *)",
+      "Bash(grep -n \"showOnCardapio\\\\|visible\\\\|show\" /home/lanzo/Documents/Coding/amodomio/app/routes/admin.items.\\\\$id.venda.comercial.tsx | head -30)",
+      "Bash(node -e ' *)",
+      "Bash(prisma --version)",
+      "Bash(node node_modules/.bin/prisma migrate dev --name add_link_position_to_content_post_media)",
+      "Bash(bash -c 'source \"$HOME/.nvm/nvm.sh\" && nvm use && npx prisma migrate dev --name add_link_position_link_new_tab')",
+      "Bash(~/.nvm/versions/node/v20.19.0/bin/npx prisma *)",
+      "Bash(~/.nvm/versions/node/v20.19.0/bin/node ~/.nvm/versions/node/v20.19.0/bin/npx prisma migrate dev --name add_link_position_link_new_tab)",
+      "Bash(~/.nvm/versions/node/v20.19.0/bin/node /home/lanzo/Documents/Coding/amodomio/node_modules/prisma/build/index.js migrate dev --name add_link_position_link_new_tab)",
+      "Bash(~/.nvm/versions/node/v20.19.0/bin/node /home/lanzo/Documents/Coding/amodomio/node_modules/prisma/build/index.js db execute --file /home/lanzo/Documents/Coding/amodomio/prisma/migrations/20260800000029_add_link_position_new_tab/migration.sql --schema /home/lanzo/Documents/Coding/amodomio/prisma/schema.prisma)",
+      "Bash(~/.nvm/versions/node/v20.19.0/bin/node /home/lanzo/Documents/Coding/amodomio/node_modules/prisma/build/index.js db execute --file /home/lanzo/Documents/Coding/amodomio/prisma/migrations/20260800000029_add_link_position_new_tab/migration.sql)",
+      "Bash(~/.nvm/versions/node/v20.19.0/bin/node /home/lanzo/Documents/Coding/amodomio/node_modules/prisma/build/index.js generate)"
     ],
     "additionalDirectories": [
       "/home/lanzo/Documents/Coding/amodomio/app/routes"

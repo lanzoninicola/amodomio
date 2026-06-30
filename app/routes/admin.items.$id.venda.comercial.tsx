@@ -153,6 +153,10 @@ export async function action({ request, params }: ActionFunctionArgs) {
       return badRequest("Categoria inválida");
     }
 
+    if (!itemGroupIdRaw) {
+      return badRequest("Grupo é obrigatório");
+    }
+
     if (slug) {
       const slugConflict = await (
         prismaClient as any
@@ -272,7 +276,7 @@ export default function AdminItemVendaComercialRoute() {
     sellingInfo?.categoryId || ""
   );
   const [groupIdValue, setGroupIdValue] = useState(
-    sellingInfo?.itemGroupId || "__EMPTY__"
+    sellingInfo?.itemGroupId || ""
   );
   const [ingredientsValue, setIngredientsValue] = useState(
     sellingInfo?.ingredients || ""
@@ -295,7 +299,7 @@ export default function AdminItemVendaComercialRoute() {
 
   useEffect(() => {
     setCategoryIdValue(sellingInfo?.categoryId || "");
-    setGroupIdValue(sellingInfo?.itemGroupId || "__EMPTY__");
+    setGroupIdValue(sellingInfo?.itemGroupId || "");
     setIngredientsValue(sellingInfo?.ingredients || "");
   }, [
     sellingInfo?.categoryId,
@@ -354,11 +358,7 @@ export default function AdminItemVendaComercialRoute() {
     <Form method="post" className="space-y-6">
       <input type="hidden" name="_action" value="update-commercial-info" />
       <input type="hidden" name="categoryId" value={categoryIdValue} />
-      <input
-        type="hidden"
-        name="itemGroupId"
-        value={groupIdValue === "__EMPTY__" ? "" : groupIdValue}
-      />
+      <input type="hidden" name="itemGroupId" value={groupIdValue} />
 
       <section className="space-y-4">
         <div>
@@ -434,13 +434,14 @@ export default function AdminItemVendaComercialRoute() {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="itemGroupIdSelect">Grupo</Label>
+            <Label htmlFor="itemGroupIdSelect">
+              Grupo <span className="text-red-500">*</span>
+            </Label>
             <Select value={groupIdValue} onValueChange={setGroupIdValue}>
               <SelectTrigger id="itemGroupIdSelect">
-                <SelectValue placeholder="Sem grupo" />
+                <SelectValue placeholder="Selecionar grupo..." />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="__EMPTY__">Sem grupo</SelectItem>
                 {groups.map((group) => (
                   <SelectItem key={group.id} value={group.id}>
                     {group.name}

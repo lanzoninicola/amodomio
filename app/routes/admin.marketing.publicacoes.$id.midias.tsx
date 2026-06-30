@@ -6,10 +6,17 @@ import {
   useLoaderData,
   useNavigation,
 } from "@remix-run/react";
-import { LinkIcon } from "lucide-react";
+import { ExternalLink, LinkIcon } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "~/components/ui/select";
 import { Textarea } from "~/components/ui/textarea";
 import {
   DEFAULT_CONTENT_LINK_BACKGROUND_COLOR,
@@ -52,25 +59,33 @@ export default function ContentPostMediaPage() {
 
   return (
     <Form method="post" className="grid gap-6">
-      <div>
-        <h2 className="text-lg font-semibold">Mídias</h2>
-        <p className="text-sm text-slate-500">
-          Arquivos canônicos reutilizados por todos os canais.
-        </p>
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <h2 className="text-lg font-semibold">Mídias</h2>
+          <p className="text-sm text-slate-500">
+            Arquivos canônicos reutilizados por todos os canais.
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <a
+            href="/admin/assets"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex min-h-9 shrink-0 items-center justify-center gap-2 rounded-md px-4 text-sm font-semibold text-blue-600"
+          >
+            Gerenciar assets
+            <ExternalLink className="h-4 w-4" />
+          </a>
+          <Button type="submit" disabled={navigation.state === "submitting"}>
+            {navigation.state === "submitting" ? "Salvando..." : "Salvar mídias"}
+          </Button>
+        </div>
       </div>
       {actionData?.message ? (
         <div className="rounded-md border p-3 text-sm">
           {actionData.message}
         </div>
       ) : null}
-      <a
-        href="/admin/assets"
-        target="_blank"
-        rel="noopener noreferrer"
-        className="inline-flex min-h-11 w-full items-center justify-center rounded-md border border-blue-200 px-4 text-sm font-semibold text-blue-600 sm:w-fit"
-      >
-        Abrir gerenciador de assets
-      </a>
       <div className="grid gap-5 md:grid-cols-2">
         <div className="grid gap-2">
           <Label htmlFor="mediaUrls">Mídias públicas</Label>
@@ -143,6 +158,36 @@ export default function ContentPostMediaPage() {
                   }
                 />
               </div>
+              <div className="grid gap-2">
+                <Label>Posição do link</Label>
+                <Select
+                  name={`linkPosition_${index}`}
+                  defaultValue={media.linkPosition || "top"}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="top">Topo</SelectItem>
+                    <SelectItem value="bottom">Rodapé</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-2">
+                <Label>Abrir link</Label>
+                <Select
+                  name={`linkNewTab_${index}`}
+                  defaultValue={media.linkNewTab === false ? "false" : "true"}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="true">Nova aba</SelectItem>
+                    <SelectItem value="false">Mesma aba</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
               {media.linkUrl && media.linkText ? (
                 <span className="inline-flex items-center gap-1 text-xs text-slate-500">
                   <LinkIcon className="h-3 w-3" /> {media.linkText}
@@ -152,9 +197,6 @@ export default function ContentPostMediaPage() {
           </div>
         ))}
       </div>
-      <Button type="submit" disabled={navigation.state === "submitting"}>
-        {navigation.state === "submitting" ? "Salvando..." : "Salvar mídias"}
-      </Button>
     </Form>
   );
 }

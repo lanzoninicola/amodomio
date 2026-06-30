@@ -372,28 +372,43 @@ function CardapioFeaturedPromotionCarousel({
         >
           <CarouselContent className="-ml-0">
             {images.map((image, index) => {
+              const isVideo = image.kind === "video";
               const src = isExpanded
                 ? image.fullscreenImageUrl || image.imageUrl
                 : image.imageUrl;
+              const altText =
+                image.alt ||
+                `${section.title}, imagem ${index + 1} de ${images.length}`;
               return (
                 <CarouselItem key={`${src}-${index}`} className="pl-0">
-                  <div className="relative overflow-hidden md:rounded-xl">
-                    <img
-                      className={
-                        isExpanded
-                          ? "hidden h-[calc(100dvh-5rem)] w-full object-contain md:block"
-                          : "aspect-[4/5] w-full object-cover"
-                      }
-                      src={src}
-                      alt={
-                        image.alt ||
-                        `${section.title}, imagem ${index + 1} de ${
-                          images.length
-                        }`
-                      }
-                      loading={index === 0 ? "eager" : "lazy"}
-                      decoding="async"
-                    />
+                  <div className={`relative overflow-hidden ${section.displayStyle === "default" ? "rounded-xl" : "md:rounded-xl"}`}>
+                    {isVideo ? (
+                      <video
+                        className={
+                          isExpanded
+                            ? "hidden h-[calc(100dvh-5rem)] w-full object-contain md:block"
+                            : "w-full max-h-[42vh] object-contain md:max-h-[38vh]"
+                        }
+                        src={src}
+                        autoPlay
+                        muted
+                        loop
+                        playsInline
+                        aria-label={altText}
+                      />
+                    ) : (
+                      <img
+                        className={
+                          isExpanded
+                            ? "hidden h-[calc(100dvh-5rem)] w-full object-contain md:block"
+                            : "aspect-[4/5] w-full object-cover"
+                        }
+                        src={src}
+                        alt={altText}
+                        loading={index === 0 ? "eager" : "lazy"}
+                        decoding="async"
+                      />
+                    )}
 
                     <button
                       type="button"
@@ -526,21 +541,32 @@ function CardapioFeaturedPromotionCarousel({
             >
               <CarouselContent className="-ml-0">
                 {images.map((image, index) => {
+                  const isVideo = image.kind === "video";
                   const src = image.fullscreenImageUrl || image.imageUrl;
+                  const altText =
+                    image.alt ||
+                    `${section.title}, imagem ${index + 1} de ${images.length}`;
                   return (
                     <CarouselItem key={`${src}-${index}`} className="pl-0">
                       <div className="relative">
-                        <img
-                          className="h-[calc(100dvh-5rem)] w-full object-contain"
-                          src={src}
-                          alt={
-                            image.alt ||
-                            `${section.title}, imagem ${index + 1} de ${
-                              images.length
-                            }`
-                          }
-                          decoding="async"
-                        />
+                        {isVideo ? (
+                          <video
+                            className="h-[calc(100dvh-5rem)] w-full object-contain"
+                            src={src}
+                            autoPlay
+                            muted
+                            loop
+                            playsInline
+                            aria-label={altText}
+                          />
+                        ) : (
+                          <img
+                            className="h-[calc(100dvh-5rem)] w-full object-contain"
+                            src={src}
+                            alt={altText}
+                            decoding="async"
+                          />
+                        )}
                         <PromotionLinkSticker
                           image={image}
                           sectionKey={section.key}
@@ -597,12 +623,15 @@ function PromotionLinkSticker({
 }) {
   if (!image.linkUrl || !image.linkText) return null;
 
+  const isBottom = image.linkPosition === "bottom";
+  const opensNewTab = image.linkNewTab !== false;
+
   return (
     <a
       href={image.linkUrl}
-      target="_blank"
-      rel="noreferrer"
-      className="absolute left-1/2 top-5 z-20 inline-flex max-w-[88%] -translate-x-1/2 items-center gap-2 rounded-2xl px-4 py-2.5 font-neue text-base leading-none shadow-xl transition hover:scale-[1.02] focus:outline-none focus:ring-2 focus:ring-black/30 md:top-6 md:text-sm"
+      target={opensNewTab ? "_blank" : "_self"}
+      rel={opensNewTab ? "noreferrer" : undefined}
+      className={`absolute left-1/2 z-20 inline-flex max-w-[88%] -translate-x-1/2 items-center gap-2 rounded-2xl px-4 py-2.5 font-neue text-base leading-none shadow-xl transition hover:scale-[1.02] focus:outline-none focus:ring-2 focus:ring-black/30 md:text-sm ${isBottom ? "bottom-5 md:bottom-6" : "top-5 md:top-6"}`}
       style={{
         backgroundColor: image.linkBackgroundColor || "#ffffff",
         color: image.linkTextColor || "#111111",
