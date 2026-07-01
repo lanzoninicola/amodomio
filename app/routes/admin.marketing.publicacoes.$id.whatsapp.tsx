@@ -10,6 +10,7 @@ import { StatusPublicationMediaForm } from "~/domain/whatsapp-status/components/
 import {
   getStatusPublicationGroup,
   publishStatusPublicationGroup,
+  removeStatusPublicationGroup,
   syncStatusPublicationGroup,
 } from "~/domain/whatsapp-status/whatsapp-status-publication-group.server";
 import {
@@ -102,29 +103,33 @@ export default function ContentPostWhatsappPage() {
   const actionData = useActionData<typeof action>();
   const navigation = useNavigation();
 
+  const publishBlockedReason = !target.enabled
+    ? "Habilite o canal WhatsApp Status na aba Canais antes de publicar."
+    : post.status !== "active"
+    ? "Ative a publicação antes de publicar."
+    : post.Media.length === 0
+    ? "Adicione mídias à publicação para poder publicar."
+    : null;
+
   return (
     <Form method="post" className="grid gap-6">
-      {!target.enabled ? (
-        <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-          Habilite WhatsApp Status na aba Canais.
-        </div>
-      ) : null}
       <StatusPublicationMediaForm
         caption={whatsapp.caption || post.caption || ""}
         captionPlaceholder={post.caption || post.title}
-        mediaItems={post.Media.filter((media) => media.kind === "image").map(
-          (media) => ({
-            key: media.id,
-            imageUrl: media.mediaUrl,
-            alt: media.alt,
-            label: media.title,
-          })
-        )}
+        mediaItems={post.Media.map((media) => ({
+          key: media.id,
+          kind: media.kind === "video" ? ("video" as const) : ("image" as const),
+          imageUrl: media.kind === "image" ? media.mediaUrl : null,
+          videoUrl: media.kind === "video" ? media.mediaUrl : null,
+          alt: media.alt,
+          label: media.title,
+        }))}
         publications={whatsapp.publications}
         selectedKeys={whatsapp.selectedKeys}
         publishEndpoint={publishEndpoint}
         feedback={actionData || null}
         submitting={navigation.state === "submitting"}
+        publishBlockedReason={publishBlockedReason}
       />
     </Form>
   );

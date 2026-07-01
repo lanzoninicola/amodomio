@@ -8,7 +8,9 @@ import { buildDokployPublishScript } from "~/domain/whatsapp-status/whatsapp-sta
 
 type MediaItem = {
   key: string;
-  imageUrl: string;
+  kind: "image" | "video";
+  imageUrl?: string | null;
+  videoUrl?: string | null;
   alt?: string | null;
   label?: string;
 };
@@ -48,6 +50,7 @@ export function StatusPublicationMediaForm({
   publishEndpoint,
   feedback,
   submitting,
+  publishBlockedReason,
 }: {
   title?: string;
   description?: string;
@@ -59,6 +62,7 @@ export function StatusPublicationMediaForm({
   publishEndpoint: string;
   feedback?: { ok: boolean; message: string } | null;
   submitting?: boolean;
+  publishBlockedReason?: string | null;
 }) {
   const [copied, setCopied] = useState(false);
   const selected = new Set(selectedKeys);
@@ -109,13 +113,19 @@ export function StatusPublicationMediaForm({
             name="_intent"
             value="publish"
             size="sm"
-            disabled={submitting || !mediaItems.length}
+            disabled={submitting || !!publishBlockedReason}
           >
             <Send className="mr-2 h-4 w-4" />
             Publicar
           </Button>
         </div>
       </div>
+
+      {publishBlockedReason ? (
+        <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          {publishBlockedReason}
+        </div>
+      ) : null}
 
       {feedback?.message ? (
         <div
@@ -170,11 +180,20 @@ export function StatusPublicationMediaForm({
               key={item.key}
               className="grid cursor-pointer gap-3 rounded-lg border border-slate-200 p-3"
             >
-              <img
-                src={item.imageUrl}
-                alt={item.alt || item.label || `Imagem ${index + 1}`}
-                className="aspect-[4/5] w-full rounded-md bg-slate-100 object-cover"
-              />
+              {item.kind === "video" && item.videoUrl ? (
+                <video
+                  src={item.videoUrl}
+                  className="aspect-[4/5] w-full rounded-md bg-slate-100 object-cover"
+                  muted
+                  playsInline
+                />
+              ) : (
+                <img
+                  src={item.imageUrl ?? ""}
+                  alt={item.alt || item.label || `Imagem ${index + 1}`}
+                  className="aspect-[4/5] w-full rounded-md bg-slate-100 object-cover"
+                />
+              )}
               <div className="flex items-start gap-3">
                 <input
                   type="checkbox"

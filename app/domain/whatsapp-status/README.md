@@ -64,6 +64,16 @@ Gerencia posts que serão enviados para o Status do WhatsApp via Z-API.
 Publicações editoriais usam `sourceType = content-post-target`, o ID do alvo
 `whatsapp-status` como `sourceId` e o ID da mídia como `sourceItemKey`.
 
+Nesse fluxo, configuração e publicação são estados diferentes:
+
+- salvar legenda e mídias selecionadas sincroniza o grupo reutilizável e deixa o
+  target editorial em `needs_sync`;
+- publicar pelo endpoint unificado cria uma execução, envia os status ativos e
+  marca o target como `active` com `lastPublishedAt`;
+- limpar o estado de publicação zera apenas dados da última publicação
+  (`lastPublishedAt`, status/resposta/erro), mantendo legenda, mídia vinculada,
+  `sourceItemKey` e seleção ativa para permitir nova publicação.
+
 Schedulers devem preferir o endpoint unificado:
 
 ```text

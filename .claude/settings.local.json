@@ -68,7 +68,10 @@
       "Bash(~/.nvm/versions/node/v20.19.0/bin/node /home/lanzo/Documents/Coding/amodomio/node_modules/prisma/build/index.js migrate dev --name add_link_position_link_new_tab)",
       "Bash(~/.nvm/versions/node/v20.19.0/bin/node /home/lanzo/Documents/Coding/amodomio/node_modules/prisma/build/index.js db execute --file /home/lanzo/Documents/Coding/amodomio/prisma/migrations/20260800000029_add_link_position_new_tab/migration.sql --schema /home/lanzo/Documents/Coding/amodomio/prisma/schema.prisma)",
       "Bash(~/.nvm/versions/node/v20.19.0/bin/node /home/lanzo/Documents/Coding/amodomio/node_modules/prisma/build/index.js db execute --file /home/lanzo/Documents/Coding/amodomio/prisma/migrations/20260800000029_add_link_position_new_tab/migration.sql)",
-      "Bash(~/.nvm/versions/node/v20.19.0/bin/node /home/lanzo/Documents/Coding/amodomio/node_modules/prisma/build/index.js generate)"
+      "Bash(~/.nvm/versions/node/v20.19.0/bin/node /home/lanzo/Documents/Coding/amodomio/node_modules/prisma/build/index.js generate)",
+      "WebFetch(domain:developer.z-api.io)",
+      "WebSearch",
+      "Bash(sed -n '1,200p' /home/lanzo/Documents/Coding/amodomio/app/routes/admin.marketing.publicacoes.\\\\$id.canais.tsx)"
     ],
     "additionalDirectories": [
       "/home/lanzo/Documents/Coding/amodomio/app/routes"

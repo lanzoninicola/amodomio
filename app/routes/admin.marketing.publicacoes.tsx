@@ -13,7 +13,7 @@ export default function AdminMarketingContentPostsLayout() {
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex min-w-0 flex-wrap items-center gap-2 text-sm">
               <Link
-                to="/admin"
+                to="/admin/marketing/publicacoes"
                 className="inline-flex items-center gap-1.5 font-semibold text-slate-700 hover:text-slate-950"
               >
                 <span className="flex size-5 items-center justify-center rounded-full border border-slate-200 text-slate-500">

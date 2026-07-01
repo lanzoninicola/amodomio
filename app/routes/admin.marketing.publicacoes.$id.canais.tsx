@@ -93,12 +93,21 @@ export default function ContentPostChannelsPage() {
 
   return (
     <Form method="post" className="grid max-w-2xl gap-6">
-      <div>
-        <h2 className="text-lg font-semibold">Canais ativados</h2>
-        <p className="text-sm text-slate-500">
-          Escolha quais abas e adaptadores ficam disponíveis para esta
-          publicação.
-        </p>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h2 className="text-lg font-semibold">Canais ativados</h2>
+          <p className="text-sm text-slate-500">
+            Escolha quais abas e adaptadores ficam disponíveis para esta
+            publicação.
+          </p>
+        </div>
+        <Button
+          type="submit"
+          disabled={navigation.state === "submitting"}
+          className="sm:shrink-0"
+        >
+          {navigation.state === "submitting" ? "Salvando..." : "Salvar canais"}
+        </Button>
       </div>
       {post.status !== "active" ? (
         <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
@@ -134,9 +143,6 @@ export default function ContentPostChannelsPage() {
           byChannel.get(CONTENT_POST_CHANNELS.INSTAGRAM_STORY)?.enabled
         )}
       />
-      <Button type="submit" disabled={navigation.state === "submitting"}>
-        {navigation.state === "submitting" ? "Salvando..." : "Salvar canais"}
-      </Button>
     </Form>
   );
 }

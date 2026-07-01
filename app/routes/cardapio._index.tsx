@@ -44,7 +44,7 @@ import {
   DialogContent,
   DialogTitle,
 } from "~/components/ui/dialog";
-import { ArrowLeft, LinkIcon, Maximize2, X } from "lucide-react";
+import { ArrowLeft, LinkIcon, Maximize2, Volume2, VolumeX, X } from "lucide-react";
 import type {
   CardapioIndexItem,
   GroupedItems,
@@ -486,11 +486,10 @@ function CardapioFeaturedPromotionCarousel({
                 <button
                   key={`${image.imageUrl}-${index}`}
                   type="button"
-                  className={`h-1.5 rounded-full transition-[width,background-color] ${
-                    currentSlide === index
-                      ? "w-5 bg-zinc-900"
-                      : "w-1.5 bg-zinc-300"
-                  }`}
+                  className={`h-1.5 rounded-full transition-[width,background-color] ${currentSlide === index
+                    ? "w-5 bg-zinc-900"
+                    : "w-1.5 bg-zinc-300"
+                    }`}
                   onClick={() => api?.scrollTo(index)}
                   aria-label={`Ir para imagem ${index + 1}`}
                 />
@@ -513,7 +512,7 @@ function CardapioFeaturedPromotionCarousel({
       </div>
 
       <Dialog open={isMobileExpanded} onOpenChange={setIsMobileExpanded}>
-        <DialogContent className="h-[100dvh] w-screen max-w-none border-0 bg-transparent p-2 pt-16 shadow-none md:hidden [&>button]:hidden">
+        <DialogContent className="h-[100dvh] w-screen max-w-none border-0 bg-transparent px-2 pt-16 pb-6 shadow-none md:hidden [&>button]:hidden">
           <DialogTitle className="sr-only">{section.title}</DialogTitle>
 
           <div className="fixed left-3 top-3 z-[60]">
@@ -529,11 +528,10 @@ function CardapioFeaturedPromotionCarousel({
           </div>
 
           <div
-            className={`relative m-auto w-full max-w-[430px] shadow-2xl ${
-              section.displayStyle === "polaroid"
-                ? "bg-[#fffdf8] p-2 pb-5"
-                : "overflow-hidden rounded-2xl bg-white"
-            }`}
+            className={`relative m-auto w-full max-w-[430px] shadow-2xl ${section.displayStyle === "polaroid"
+              ? "bg-[#fffdf8] p-2 pb-5"
+              : "overflow-hidden rounded-2xl bg-white"
+              }`}
           >
             <Carousel
               setApi={setMobileExpandedApi}
@@ -550,14 +548,10 @@ function CardapioFeaturedPromotionCarousel({
                     <CarouselItem key={`${src}-${index}`} className="pl-0">
                       <div className="relative">
                         {isVideo ? (
-                          <video
-                            className="h-[calc(100dvh-5rem)] w-full object-contain"
+                          <ModalVideo
                             src={src}
-                            autoPlay
-                            muted
-                            loop
-                            playsInline
-                            aria-label={altText}
+                            className="h-[calc(100dvh-5rem)] w-full object-contain"
+                            altText={altText}
                           />
                         ) : (
                           <img
@@ -592,11 +586,10 @@ function CardapioFeaturedPromotionCarousel({
                   <button
                     key={`${image.imageUrl}-${index}`}
                     type="button"
-                    className={`h-1.5 rounded-full transition-[width,background-color] ${
-                      currentSlide === index
-                        ? "w-5 bg-zinc-900"
-                        : "w-1.5 bg-zinc-300"
-                    }`}
+                    className={`h-1.5 rounded-full transition-[width,background-color] ${currentSlide === index
+                      ? "w-5 bg-zinc-900"
+                      : "w-1.5 bg-zinc-300"
+                      }`}
                     onClick={() => mobileExpandedApi?.scrollTo(index)}
                     aria-label={`Ir para imagem ${index + 1}`}
                   />
@@ -606,6 +599,49 @@ function CardapioFeaturedPromotionCarousel({
           </div>
         </DialogContent>
       </Dialog>
+    </>
+  );
+}
+
+function ModalVideo({
+  src,
+  className,
+  altText,
+}: {
+  src: string;
+  className: string;
+  altText: string;
+}) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [muted, setMuted] = useState(true);
+
+  const toggle = () => {
+    const v = videoRef.current;
+    if (!v) return;
+    v.muted = !v.muted;
+    setMuted(v.muted);
+  };
+
+  return (
+    <>
+      <video
+        ref={videoRef}
+        className={className}
+        src={src}
+        autoPlay
+        muted
+        loop
+        playsInline
+        aria-label={altText}
+      />
+      <button
+        type="button"
+        onClick={toggle}
+        className="absolute bottom-3 right-3 z-30 rounded-full bg-black/80 p-2.5 text-white backdrop-blur-sm"
+        aria-label={muted ? "Ativar som" : "Silenciar"}
+      >
+        {muted ? <VolumeX className="h-5 w-5" /> : <Volume2 className="h-5 w-5" />}
+      </button>
     </>
   );
 }
@@ -631,7 +667,7 @@ function PromotionLinkSticker({
       href={image.linkUrl}
       target={opensNewTab ? "_blank" : "_self"}
       rel={opensNewTab ? "noreferrer" : undefined}
-      className={`absolute left-1/2 z-20 inline-flex max-w-[88%] -translate-x-1/2 items-center gap-2 rounded-2xl px-4 py-2.5 font-neue text-base leading-none shadow-xl transition hover:scale-[1.02] focus:outline-none focus:ring-2 focus:ring-black/30 md:text-sm ${isBottom ? "bottom-5 md:bottom-6" : "top-5 md:top-6"}`}
+      className={`absolute left-1/2 z-20 inline-flex max-w-[88%] -translate-x-1/2 items-center gap-2 rounded-2xl px-4 py-2.5 font-neue text-base leading-none shadow-xl transition hover:scale-[1.02] focus:outline-none focus:ring-2 focus:ring-black/30 md:text-sm ${isBottom ? (placement === "mobile_modal" ? "bottom-16" : "bottom-5 md:bottom-6") : "top-5 md:top-6"}`}
       style={{
         backgroundColor: image.linkBackgroundColor || "#ffffff",
         color: image.linkTextColor || "#111111",
