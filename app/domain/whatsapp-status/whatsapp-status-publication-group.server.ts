@@ -9,6 +9,7 @@ import {
   type StatusPublicationKind,
 } from "~/domain/whatsapp-status/whatsapp-status-publication.shared";
 import prismaClient from "~/lib/prisma/client.server";
+import { Prisma } from "@prisma/client";
 
 export type StatusPublicationSource = {
   sourceType: string;
@@ -120,6 +121,7 @@ export async function syncStatusPublicationGroup(params: {
       data: {
         active: false,
         deactivatedAt: new Date(),
+        caption: caption || null,
       },
     });
 
@@ -161,6 +163,39 @@ export async function syncStatusPublicationGroup(params: {
   });
 
   return getStatusPublicationGroup(source);
+}
+
+export async function removeStatusPublicationGroup(
+  source: StatusPublicationSource
+) {
+  const normalizedSource = normalizeSource(source);
+  await prismaClient.whatsappStatusPublication.updateMany({
+    where: { ...normalizedSource, deletedAt: null },
+    data: {
+      deletedAt: new Date(),
+      active: false,
+      deactivatedAt: new Date(),
+      lastPublishedAt: null,
+      lastPublishStatus: null,
+      lastPublishResponse: Prisma.DbNull,
+      lastPublishError: null,
+    },
+  });
+}
+
+export async function clearStatusPublicationGroupPublishState(
+  source: StatusPublicationSource
+) {
+  const normalizedSource = normalizeSource(source);
+  await prismaClient.whatsappStatusPublication.updateMany({
+    where: { ...normalizedSource, deletedAt: null },
+    data: {
+      lastPublishedAt: null,
+      lastPublishStatus: null,
+      lastPublishResponse: Prisma.DbNull,
+      lastPublishError: null,
+    },
+  });
 }
 
 export async function publishStatusPublicationGroup(

@@ -70,11 +70,13 @@ export async function listContentPosts(q = "") {
       Targets: {
         where: { deletedAt: null },
         select: {
+          id: true,
           channel: true,
           enabled: true,
           status: true,
           lastPublishedAt: true,
           removedAt: true,
+          updatedAt: true,
         },
       },
     },
@@ -285,11 +287,19 @@ export async function updateContentPostTarget(params: {
   );
   const enabledStatus = active
     ? params.channel === CONTENT_POST_CHANNELS.CARDAPIO_FEATURED
-      ? "active"
+      ? previous?.status === "active"
+        ? "active"
+        : "needs_sync"
       : previous?.status === "active"
       ? "active"
       : "needs_sync"
     : "draft";
+  const cardapioPublishedAt =
+    params.channel === CONTENT_POST_CHANNELS.CARDAPIO_FEATURED &&
+    active &&
+    previous?.status === "active"
+      ? previous?.lastPublishedAt ?? new Date()
+      : undefined;
 
   const target = await prismaClient.contentPublicationTarget.upsert({
     where: {
@@ -305,12 +315,20 @@ export async function updateContentPostTarget(params: {
       status: enabledStatus,
       sortOrder: params.sortOrder ?? 0,
       config: params.config as any,
+      lastPublishedAt:
+        params.channel === CONTENT_POST_CHANNELS.CARDAPIO_FEATURED
+          ? cardapioPublishedAt ?? null
+          : undefined,
     },
     update: {
       enabled,
       status: enabledStatus,
       sortOrder: params.sortOrder ?? 0,
       config: params.config as any,
+      lastPublishedAt:
+        params.channel === CONTENT_POST_CHANNELS.CARDAPIO_FEATURED
+          ? cardapioPublishedAt ?? null
+          : undefined,
       removalRequestedAt: null,
       removedAt: null,
       lastError: null,
@@ -341,13 +359,22 @@ export async function setContentPostStatus(id: string, statusValue: unknown) {
 
   if (status === CONTENT_POST_STATUSES.ACTIVE) {
     for (const target of existing.Targets.filter((item) => item.enabled)) {
+      const targetStatus =
+        target.channel === CONTENT_POST_CHANNELS.CARDAPIO_FEATURED
+          ? target.status === "active" && target.lastPublishedAt
+            ? "active"
+            : "needs_sync"
+          : "needs_sync";
+
       await prismaClient.contentPublicationTarget.update({
         where: { id: target.id },
         data: {
-          status:
-            target.channel === CONTENT_POST_CHANNELS.CARDAPIO_FEATURED
-              ? "active"
-              : "needs_sync",
+          status: targetStatus,
+          lastPublishedAt:
+            target.channel === CONTENT_POST_CHANNELS.CARDAPIO_FEATURED &&
+            targetStatus !== "active"
+              ? null
+              : target.lastPublishedAt,
           removalRequestedAt: null,
           removedAt: null,
         },
@@ -450,14 +477,46 @@ export async function markContentTargetSynced(targetId: string) {
   });
   if (!target) return;
 
+  const activeContent =
+    target.enabled &&
+    target.ContentPost.status === CONTENT_POST_STATUSES.ACTIVE;
+  const configuredStatus = activeContent
+    ? target.channel === CONTENT_POST_CHANNELS.CARDAPIO_FEATURED
+      ? target.status === "active" && target.lastPublishedAt
+        ? "active"
+        : "needs_sync"
+      : "needs_sync"
+    : "draft";
+
   await prismaClient.contentPublicationTarget.update({
     where: { id: targetId },
     data: {
-      status:
-        target.enabled &&
-        target.ContentPost.status === CONTENT_POST_STATUSES.ACTIVE
-          ? "active"
-          : "draft",
+      status: configuredStatus,
+      lastPublishedAt:
+        target.channel === CONTENT_POST_CHANNELS.CARDAPIO_FEATURED &&
+        configuredStatus === "active"
+          ? target.lastPublishedAt
+          : null,
+      removalRequestedAt: null,
+      removedAt: null,
+      lastError: null,
+    },
+  });
+}
+
+export async function clearContentTargetPublicationData(targetId: string) {
+  const target = await prismaClient.contentPublicationTarget.findUnique({
+    where: { id: targetId },
+  });
+  if (!target || target.deletedAt) return;
+
+  await prismaClient.contentPublicationTarget.update({
+    where: { id: targetId },
+    data: {
+      status: target.enabled ? "needs_sync" : "draft",
+      lastPublishedAt: null,
+      removalRequestedAt: null,
+      removedAt: null,
       lastError: null,
     },
   });

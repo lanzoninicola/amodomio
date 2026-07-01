@@ -3,6 +3,7 @@ import {
   CalendarDays,
   Camera,
   Images,
+  Megaphone,
   Package,
   Pizza,
   ReceiptText,
@@ -158,6 +159,23 @@ export default function AdminMobileLayout() {
                 </span>
                 <span className="col-span-2 text-[11px] leading-snug text-slate-600">
                   Upload e organização de capa/galeria
+                </span>
+              </span>
+            </Link>
+
+            <Link
+              to="/admin/marketing/publicacoes"
+              className="grid grid-cols-[auto_1fr] items-center gap-x-2 gap-y-1.5 rounded-xl border border-slate-200 bg-white p-3 shadow-sm"
+            >
+              <span className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-pink-100 text-pink-700">
+                <Megaphone className="h-5 w-5" />
+              </span>
+              <span className="contents">
+                <span className="text-xs font-semibold leading-tight text-slate-900">
+                  Publicações
+                </span>
+                <span className="col-span-2 text-[11px] leading-snug text-slate-600">
+                  Criar e acompanhar posts do marketing
                 </span>
               </span>
             </Link>
