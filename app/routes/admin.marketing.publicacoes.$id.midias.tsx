@@ -34,7 +34,7 @@ import {
 } from "~/domain/content-post/content-post.server";
 import { invalidateCardapioIndexCache } from "~/domain/cardapio/cardapio-cache.server";
 import AssetLibraryPickerDialog from "~/domain/media/components/asset-library-picker-dialog";
-import type { MediaAsset } from "~/domain/media/media.shared";
+import { normalizePath, type MediaAsset } from "~/domain/media/media.shared";
 import prismaClient from "~/lib/prisma/client.server";
 
 export async function loader({ params }: LoaderFunctionArgs) {
@@ -177,6 +177,7 @@ export default function ContentPostMediaPage() {
     value: item.id,
     label: item.name,
   }));
+  const uploadPath = normalizePath(`marketing/publicacoes/${post.key}`);
 
   function appendLine(current: string, value: string) {
     const lines = current
@@ -214,7 +215,7 @@ export default function ContentPostMediaPage() {
             <ExternalLink className="h-4 w-4" />
           </a>
           <AssetLibraryPickerDialog
-            defaultUploadPath="marketing/publicacoes"
+            defaultUploadPath={uploadPath}
             disabled={isSubmitting}
             onSelect={addAssetFromLibrary}
             triggerLabel="Escolher asset"
