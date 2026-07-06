@@ -1,12 +1,7 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
-import {
-  Form,
-  useActionData,
-  useLoaderData,
-  useNavigation,
-} from "@remix-run/react";
-import { ExternalLink, LinkIcon } from "lucide-react";
+import { NavLink, Outlet, useFetcher, useLoaderData } from "@remix-run/react";
+import { LinkIcon, Save, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
@@ -33,9 +28,14 @@ import {
   replaceContentPostMedia,
 } from "~/domain/content-post/content-post.server";
 import { invalidateCardapioIndexCache } from "~/domain/cardapio/cardapio-cache.server";
-import AssetLibraryPickerDialog from "~/domain/media/components/asset-library-picker-dialog";
-import { normalizePath, type MediaAsset } from "~/domain/media/media.shared";
+import { normalizePath } from "~/domain/media/media.shared";
 import prismaClient from "~/lib/prisma/client.server";
+
+export type ContentPostMediaOutletContext = {
+  addMediaUrl: (mediaUrl: string, fullscreenMediaUrl?: string) => void;
+  disabled: boolean;
+  uploadPath: string;
+};
 
 export async function loader({ params }: LoaderFunctionArgs) {
   const [post, menuItems] = await Promise.all([
@@ -160,10 +160,14 @@ function MediaLinkFields({
   );
 }
 
+function isVideoMediaUrl(mediaUrl: string) {
+  return /\.(mp4|mov|webm)(?:$|\?)/i.test(mediaUrl);
+}
+
 export default function ContentPostMediaPage() {
   const { post, menuItems } = useLoaderData<typeof loader>();
-  const actionData = useActionData<typeof action>();
-  const navigation = useNavigation();
+  const fetcher = useFetcher<typeof action>();
+  const actionData = fetcher.data;
   const [mediaUrls, setMediaUrls] = useState(() =>
     post.Media.map((media) => media.mediaUrl).join("\n")
   );
@@ -172,12 +176,16 @@ export default function ContentPostMediaPage() {
       "\n"
     )
   );
-  const isSubmitting = navigation.state === "submitting";
+  const isSubmitting = fetcher.state !== "idle";
   const itemOptions: SearchableSelectOption[] = menuItems.map((item) => ({
     value: item.id,
     label: item.name,
   }));
   const uploadPath = normalizePath(`marketing/publicacoes/${post.key}`);
+  const mediaLines = mediaUrls
+    .split(/\r?\n/g)
+    .map((line) => line.trim())
+    .filter(Boolean);
 
   function appendLine(current: string, value: string) {
     const lines = current
@@ -188,15 +196,40 @@ export default function ContentPostMediaPage() {
     return [...lines, value].join("\n");
   }
 
-  function addAssetFromLibrary(asset: MediaAsset) {
-    const url = asset.url.trim();
+  function addMediaUrl(mediaUrl: string, fullscreenMediaUrl?: string) {
+    const url = mediaUrl.trim();
+    const fullscreenUrl = fullscreenMediaUrl?.trim() || url;
     if (!url) return;
     setMediaUrls((current) => appendLine(current, url));
-    setFullscreenMediaUrls((current) => appendLine(current, url));
+    setFullscreenMediaUrls((current) => appendLine(current, fullscreenUrl));
+  }
+
+  function removeMediaUrlAt(indexToRemove: number) {
+    setMediaUrls((current) =>
+      current
+        .split(/\r?\n/g)
+        .map((line) => line.trim())
+        .filter(Boolean)
+        .filter((_, index) => index !== indexToRemove)
+        .join("\n")
+    );
+    setFullscreenMediaUrls((current) =>
+      current
+        .split(/\r?\n/g)
+        .map((line) => line.trim())
+        .filter(Boolean)
+        .filter((_, index) => index !== indexToRemove)
+        .join("\n")
+    );
   }
 
   return (
-    <Form method="post" className="grid gap-6">
+    <fetcher.Form
+      method="post"
+      action={`/admin/marketing/publicacoes/${post.id}/midias`}
+      preventScrollReset
+      className="grid gap-5 sm:gap-6"
+    >
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-lg font-semibold">Mídias</h2>
@@ -204,23 +237,13 @@ export default function ContentPostMediaPage() {
             Arquivos canônicos reutilizados por todos os canais.
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <a
-            href="/admin/assets"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex min-h-9 shrink-0 items-center justify-center gap-2 rounded-md px-4 text-sm font-semibold text-blue-600"
-          >
-            Gerenciar assets
-            <ExternalLink className="h-4 w-4" />
-          </a>
-          <AssetLibraryPickerDialog
-            defaultUploadPath={uploadPath}
+        <div className="flex items-center gap-2">
+          <Button
+            type="submit"
             disabled={isSubmitting}
-            onSelect={addAssetFromLibrary}
-            triggerLabel="Escolher asset"
-          />
-          <Button type="submit" disabled={isSubmitting}>
+            className="min-h-11 w-full gap-2 sm:min-h-10 sm:w-auto"
+          >
+            <Save className="h-4 w-4" />
             {isSubmitting ? "Salvando..." : "Salvar mídias"}
           </Button>
         </div>
@@ -230,29 +253,116 @@ export default function ContentPostMediaPage() {
           {actionData.message}
         </div>
       ) : null}
-      <div className="grid gap-5 md:grid-cols-2">
+
+      <nav className="grid grid-cols-2 rounded-md border bg-slate-50 p-1">
+        {[
+          { label: "Mídia interna", to: "interno" },
+          { label: "Link externo", to: "externo" },
+        ].map((item) => (
+          <NavLink
+            key={item.to}
+            to={item.to}
+            className={({ isActive }) =>
+              `inline-flex min-h-11 items-center justify-center rounded px-2 text-center text-sm font-semibold transition ${
+                isActive
+                  ? "bg-white text-slate-950 shadow-sm"
+                  : "text-slate-500"
+              }`
+            }
+          >
+            {item.label}
+          </NavLink>
+        ))}
+      </nav>
+
+      <Outlet
+        context={
+          {
+            addMediaUrl,
+            disabled: isSubmitting,
+            uploadPath,
+          } satisfies ContentPostMediaOutletContext
+        }
+      />
+
+      {mediaLines.length ? (
         <div className="grid gap-2">
-          <Label htmlFor="mediaUrls">Mídias públicas</Label>
-          <Textarea
-            id="mediaUrls"
-            name="mediaUrls"
-            rows={7}
-            value={mediaUrls}
-            onChange={(event) => setMediaUrls(event.target.value)}
-            required
-          />
+          <div className="flex items-center justify-between gap-3">
+            <Label>Mídias no rascunho</Label>
+            <span className="text-xs text-slate-500">
+              {mediaLines.length} vinculada(s)
+            </span>
+          </div>
+          <div className="grid gap-2">
+            {mediaLines.map((mediaUrl, index) => (
+              <div
+                key={`${mediaUrl}-${index}`}
+                className="grid gap-2 rounded-md border p-2 sm:grid-cols-[56px_minmax(0,1fr)_auto] sm:items-center"
+              >
+                <div className="hidden h-14 overflow-hidden rounded bg-slate-100 sm:block">
+                  {isVideoMediaUrl(mediaUrl) ? (
+                    <video
+                      src={mediaUrl}
+                      className="h-full w-full bg-black object-cover"
+                      muted
+                      preload="metadata"
+                    />
+                  ) : (
+                    <img
+                      src={mediaUrl}
+                      alt=""
+                      className="h-full w-full object-cover"
+                      loading="lazy"
+                    />
+                  )}
+                </div>
+                <span className="min-w-0 break-all text-xs text-slate-600">
+                  {mediaUrl}
+                </span>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="min-h-9 gap-2 text-red-700 sm:w-auto"
+                  onClick={() => removeMediaUrlAt(index)}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  Remover
+                </Button>
+              </div>
+            ))}
+          </div>
         </div>
-        <div className="grid gap-2">
-          <Label htmlFor="fullscreenMediaUrls">Versões ampliadas</Label>
-          <Textarea
-            id="fullscreenMediaUrls"
-            name="fullscreenMediaUrls"
-            rows={7}
-            value={fullscreenMediaUrls}
-            onChange={(event) => setFullscreenMediaUrls(event.target.value)}
-          />
+      ) : null}
+
+      <details className="rounded-md border">
+        <summary className="min-h-11 cursor-pointer px-3 py-3 text-sm font-semibold">
+          Editar URLs manualmente
+        </summary>
+        <div className="grid gap-5 border-t p-3 lg:grid-cols-[minmax(0,1fr)_minmax(320px,420px)]">
+          <div className="grid gap-2">
+            <Label htmlFor="mediaUrls">Mídias públicas</Label>
+            <Textarea
+              id="mediaUrls"
+              name="mediaUrls"
+              rows={5}
+              value={mediaUrls}
+              onChange={(event) => setMediaUrls(event.target.value)}
+            />
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="fullscreenMediaUrls">Versões ampliadas</Label>
+            <Textarea
+              id="fullscreenMediaUrls"
+              name="fullscreenMediaUrls"
+              rows={5}
+              value={fullscreenMediaUrls}
+              onChange={(event) => setFullscreenMediaUrls(event.target.value)}
+            />
+          </div>
         </div>
-      </div>
+      </details>
+
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {post.Media.map((media, index) => (
           <div key={media.id} className="overflow-hidden rounded-lg border">
@@ -331,6 +441,15 @@ export default function ContentPostMediaPage() {
           </div>
         ))}
       </div>
-    </Form>
+
+      <Button
+        type="submit"
+        disabled={isSubmitting}
+        className="min-h-11 w-full gap-2 sm:hidden"
+      >
+        <Save className="h-4 w-4" />
+        {isSubmitting ? "Salvando..." : "Salvar mídias"}
+      </Button>
+    </fetcher.Form>
   );
 }

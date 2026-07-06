@@ -71,12 +71,7 @@ export default function ContentPostLayout() {
   return (
     <div className="flex min-w-0 max-w-5xl flex-col gap-5 pb-12 sm:gap-6">
       <div className="space-y-4">
-        <Link
-          to="/admin/marketing/publicacoes"
-          className="inline-flex items-center gap-1 text-sm font-semibold"
-        >
-          <ChevronLeft size={14} /> publicações
-        </Link>
+
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex min-w-0 flex-wrap items-center gap-3">
             <h1 className="break-words text-xl font-semibold sm:text-2xl">
@@ -132,10 +127,9 @@ export default function ContentPostLayout() {
               key={item.to}
               to={item.to}
               className={({ isActive }) =>
-                `inline-flex min-h-11 items-center border-b-2 text-sm font-medium ${
-                  isActive
-                    ? "border-slate-950 text-slate-950"
-                    : "border-transparent text-slate-400"
+                `inline-flex min-h-11 items-center border-b-2 text-sm font-medium ${isActive
+                  ? "border-slate-950 text-slate-950"
+                  : "border-transparent text-slate-400"
                 }`
               }
             >
