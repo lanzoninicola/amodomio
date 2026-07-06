@@ -9,6 +9,7 @@ import {
 } from "~/domain/instagram/instagram-story-publication.shared";
 import { ValidationError } from "~/domain/z-api/errors";
 import prismaClient from "~/lib/prisma/client.server";
+import { Prisma } from "@prisma/client";
 
 export type InstagramStorySource = {
   sourceType: string;
@@ -132,6 +133,21 @@ export async function syncInstagramStoryGroup(params: {
   });
 
   return getInstagramStoryGroup(source);
+}
+
+export async function clearInstagramStoryGroupPublishState(
+  source: InstagramStorySource
+) {
+  const normalizedSource = normalizeSource(source);
+  await prismaClient.instagramStoryPublication.updateMany({
+    where: { ...normalizedSource, deletedAt: null },
+    data: {
+      lastPublishedAt: null,
+      lastPublishStatus: null,
+      lastPublishResponse: Prisma.DbNull,
+      lastPublishError: null,
+    },
+  });
 }
 
 export async function publishInstagramStoryGroup(

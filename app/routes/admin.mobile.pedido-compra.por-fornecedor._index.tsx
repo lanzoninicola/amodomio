@@ -3,10 +3,7 @@ import { Link, useLoaderData } from "@remix-run/react";
 import { ChevronRight, Search } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Separator } from "~/components/ui/separator";
-import {
-  countOpenSupplierPurchaseOrders,
-  listSupplierOrderSuppliers,
-} from "~/domain/supplier/supplier-order.server";
+import { listSupplierOrderSuppliers } from "~/domain/supplier/supplier-order.server";
 import { ok } from "~/utils/http-response.server";
 
 type SupplierListItem = {
@@ -16,17 +13,13 @@ type SupplierListItem = {
 };
 
 export async function loader(_: LoaderFunctionArgs) {
-  const [suppliers, openOrdersCount] = await Promise.all([
-    listSupplierOrderSuppliers(),
-    countOpenSupplierPurchaseOrders(),
-  ]);
-  return ok({ suppliers, openOrdersCount });
+  const suppliers = await listSupplierOrderSuppliers();
+  return ok({ suppliers });
 }
 
 export default function AdminMobilePedidoFornecedorIndex() {
   const { payload } = useLoaderData<typeof loader>();
   const suppliers = (payload.suppliers || []) as SupplierListItem[];
-  const openOrdersCount = Number(payload.openOrdersCount || 0);
   const [filterQuery, setFilterQuery] = useState("");
 
   const visibleSuppliers = useMemo(() => {
@@ -60,16 +53,6 @@ export default function AdminMobilePedidoFornecedorIndex() {
 
   return (
     <div className="space-y-4 pb-8">
-      {openOrdersCount > 0 ? (
-        <Link
-          to="/admin/mobile/pedido-compra/por-fornecedor/pedidos-abertos"
-          className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-amber-600 px-3 py-3 text-sm font-semibold text-white"
-        >
-          Ver pedidos em aberto ({openOrdersCount})
-          <ChevronRight className="h-4 w-4" />
-        </Link>
-      ) : null}
-
       <label className="block">
         <span className="text-sm font-semibold text-slate-900">Fornecedor</span>
         <div className="mt-2 flex items-center gap-2 border-b border-slate-200 pb-3">

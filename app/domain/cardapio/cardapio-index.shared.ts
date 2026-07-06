@@ -122,6 +122,10 @@ export function getCardapioItemHref(
   return `/cardapio/${encodeURIComponent(identifier)}`;
 }
 
+export function getCardapioItemAnchorHref(item: { slug: string }) {
+  return `/cardapio#${encodeURIComponent(item.slug)}`;
+}
+
 export function getCardapioInterestItemId(item: CardapioIndexItem) {
   return item.id;
 }

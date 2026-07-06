@@ -319,6 +319,69 @@ function getItemBaseUnit(
   return item?.consumptionUm || item?.purchaseUm || "-";
 }
 
+function resolveItemUnitRows(
+  item: any | null | undefined,
+  linkedUnits: string[] = []
+) {
+  if (!item) return [];
+  const rows: Array<{
+    unit: string;
+    explanation: string;
+    highlight?: boolean;
+  }> = [];
+  const seen = new Set<string>();
+  const baseUnit = normalizeItemUnit(item.consumptionUm);
+
+  if (baseUnit) {
+    rows.push({
+      unit: baseUnit,
+      explanation: "base do estoque",
+      highlight: true,
+    });
+    seen.add(baseUnit);
+  }
+
+  const purchaseUnit = normalizeItemUnit(item.purchaseUm);
+  if (purchaseUnit && !seen.has(purchaseUnit)) {
+    const factor = Number(item.purchaseToConsumptionFactor ?? NaN);
+    rows.push({
+      unit: purchaseUnit,
+      explanation:
+        factor > 0 && baseUnit
+          ? `1 ${purchaseUnit} = ${factor.toLocaleString("pt-BR", {
+              maximumFractionDigits: 4,
+            })} ${baseUnit}`
+          : "sem fator",
+    });
+    seen.add(purchaseUnit);
+  }
+
+  for (const conversion of item.ItemPurchaseConversion ?? []) {
+    const unit = normalizeItemUnit(conversion?.purchaseUm);
+    if (!unit || seen.has(unit)) continue;
+    const factor = Number(conversion?.factor ?? NaN);
+    rows.push({
+      unit,
+      explanation:
+        factor > 0 && baseUnit
+          ? `1 ${unit} = ${factor.toLocaleString("pt-BR", {
+              maximumFractionDigits: 4,
+            })} ${baseUnit}`
+          : "sem fator",
+    });
+    seen.add(unit);
+  }
+
+  for (const linkedUnit of linkedUnits) {
+    const unit = normalizeItemUnit(linkedUnit);
+    if (!unit || seen.has(unit)) continue;
+    rows.push({ unit, explanation: "vinculada ao item" });
+    seen.add(unit);
+  }
+
+  return rows;
+}
+
 function num(value: FormDataEntryValue | null) {
   const n = Number(String(value || "").replace(",", "."));
   return Number.isFinite(n) ? n : NaN;
@@ -662,6 +725,7 @@ export function ItemSystemMapperCell({
   items,
   batchId,
   unitOptions,
+  itemUnitOptionsByItemId = {},
   categories = [],
   costHint,
   compact = false,
@@ -673,6 +737,7 @@ export function ItemSystemMapperCell({
   items: any[];
   batchId: string;
   unitOptions: string[];
+  itemUnitOptionsByItemId?: Record<string, string[]>;
   categories?: Array<{ id: string; name: string }>;
   costHint?: {
     lastCostPerUnit: number | null;
@@ -698,6 +763,7 @@ export function ItemSystemMapperCell({
       : "__EMPTY__";
   });
   const mapItemFetcher = useFetcher<typeof action>();
+  const editLineFetcher = useFetcher<typeof action>();
   const createItemFetcher = useFetcher<typeof action>();
   const createUmFetcher = useFetcher<typeof action>();
   const [createUmDialogOpen, setCreateUmDialogOpen] = useState(false);
@@ -708,6 +774,16 @@ export function ItemSystemMapperCell({
   const restoreScrollRef = useRef<number | null>(null);
   const commandListRef = useRef<HTMLDivElement>(null);
   const selectedItem = items.find((item) => item.id === selectedItemId);
+  const selectedItemUnitRows = resolveItemUnitRows(
+    selectedItem,
+    itemUnitOptionsByItemId[selectedItemId] || []
+  );
+  const selectableUnitCodes = new Set([
+    ...unitOptions.map((unit) => normalizeItemUnit(unit)).filter(Boolean),
+    ...(itemUnitOptionsByItemId[selectedItemId] || [])
+      .map((unit) => normalizeItemUnit(unit))
+      .filter(Boolean),
+  ]);
   const ingredientName = line.ingredientName || "";
   const sortedItems = [...items].sort((a, b) => {
     const scoreA = computeItemSimilarity(ingredientName, a.name);
@@ -723,6 +799,10 @@ export function ItemSystemMapperCell({
     createItemFetcher.formData?.get("_action") ===
       "batch-create-and-map-item" &&
     String(createItemFetcher.formData?.get("lineId") || "") === String(line.id);
+  const isEditingLineUnit =
+    editLineFetcher.state !== "idle" &&
+    editLineFetcher.formData?.get("_action") === "batch-edit-line" &&
+    String(editLineFetcher.formData?.get("lineId") || "") === String(line.id);
   const buttonLabel = selectedItem
     ? `${selectedItem.name} [${
         selectedItem.classification || "-"
@@ -764,6 +844,50 @@ export function ItemSystemMapperCell({
     setUmCode("");
     setUmFactor(0);
   }, [createUmFetcher.state, createUmFetcher.data]);
+
+  function submitMovementUnit(unit: string) {
+    const movementUnit = normalizeItemUnit(unit);
+    if (!movementUnit || !selectedItemId) return;
+    if (!selectableUnitCodes.has(movementUnit)) return;
+    const fd = new FormData();
+    const qtyEntry = Number(line.qtyEntry ?? 0);
+    const costTotalAmount = Number(line.costTotalAmount ?? 0);
+    const derivedCostAmount =
+      Number.isFinite(qtyEntry) && qtyEntry > 0
+        ? costTotalAmount / qtyEntry
+        : null;
+    fd.set("_action", "batch-edit-line");
+    fd.set("batchId", batchId);
+    fd.set("lineId", line.id);
+    fd.set("movementUnit", movementUnit);
+    fd.set("qtyEntry", String(qtyEntry));
+    fd.set(
+      "costAmount",
+      derivedCostAmount != null ? String(derivedCostAmount) : ""
+    );
+    fd.set("costTotalAmount", String(costTotalAmount));
+    fd.set("manualConversionFactor", String(line.manualConversionFactor ?? ""));
+    fd.set("mappedItemId", selectedItemId);
+    fd.set("supplierId", line.supplierId || "");
+    fd.set("supplierName", line.supplierName || "");
+    fd.set("supplierCnpj", line.supplierCnpj || "");
+    fd.set(
+      "movementAt",
+      line.movementAt
+        ? new Date(line.movementAt).toISOString().slice(0, 16)
+        : ""
+    );
+    fd.set("ingredientName", line.ingredientName || "");
+    fd.set("motivo", line.motivo || "");
+    fd.set("invoiceNumber", line.invoiceNumber || "");
+    fd.set("observation", line.observation || "");
+    fd.set("autoApproveCostReview", "off");
+    fd.set("importAfterSave", "off");
+    editLineFetcher.submit(fd, {
+      method: "post",
+      action: `/admin/import-stock-movements/${batchId}`,
+    });
+  }
 
   return (
     <div className="space-y-1">
@@ -1579,6 +1703,35 @@ export function ItemSystemMapperCell({
             )}
           </div>
         )}
+        {!compact && selectedItem && selectedItemUnitRows.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 pt-1">
+            {selectedItemUnitRows.map((row) => {
+              const isSelected =
+                normalizeItemUnit(line.movementUnit || line.unitEntry) ===
+                row.unit;
+              const isSelectable = selectableUnitCodes.has(row.unit);
+              return (
+                <button
+                  key={row.unit}
+                  type="button"
+                  disabled={isEditingLineUnit || !isSelectable}
+                  onClick={() => submitMovementUnit(row.unit)}
+                  className={cn(
+                    "rounded border px-2 py-1 text-[11px] font-semibold transition",
+                    isSelected
+                      ? "border-slate-300 bg-slate-100 text-slate-900"
+                      : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-slate-900",
+                    (isEditingLineUnit || !isSelectable) &&
+                      "cursor-not-allowed opacity-50"
+                  )}
+                  title={`Vincular UM ${row.unit} ao movimento`}
+                >
+                  {row.unit}
+                </button>
+              );
+            })}
+          </div>
+        )}
         {!compact &&
           showCostHint &&
           (costHint &&
@@ -1902,6 +2055,38 @@ export async function loader({ params }: LoaderFunctionArgs) {
           .map((l) => String(l.mappedItemId))
       ),
     ];
+    const lastEntryMovementUnitByItemId: Record<string, string | null> = {};
+    if (mappedItemIds.length > 0) {
+      const recentEntryMovements = await db.stockMovement.findMany({
+        where: {
+          itemId: { in: mappedItemIds },
+          direction: "entry",
+          deletedAt: null,
+        },
+        select: {
+          itemId: true,
+          movementUnit: true,
+          quantityUnit: true,
+        },
+        orderBy: [
+          { movementAt: "desc" },
+          { appliedAt: "desc" },
+          { createdAt: "desc" },
+        ],
+        take: Math.max(mappedItemIds.length * 5, 50),
+      });
+      for (const row of recentEntryMovements as Array<{
+        itemId: string;
+        movementUnit: string | null;
+        quantityUnit: string | null;
+      }>) {
+        if (lastEntryMovementUnitByItemId[row.itemId] !== undefined) continue;
+        lastEntryMovementUnitByItemId[row.itemId] =
+          normalizeItemUnit(row.movementUnit) ||
+          normalizeItemUnit(row.quantityUnit) ||
+          null;
+      }
+    }
     const itemCostHints: Record<
       string,
       { lastCostPerUnit: number | null; avgCostPerUnit: number | null }
@@ -2018,6 +2203,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
       batchId,
       unitOptions,
       itemUnitOptionsByItemId,
+      lastEntryMovementUnitByItemId,
       measurementConversions,
       categories,
       suppliers,
@@ -2475,6 +2661,7 @@ export type AdminImportStockMovementsBatchOutletContext = {
   appliedChanges: any[];
   unitOptions: string[];
   itemUnitOptionsByItemId: Record<string, string[]>;
+  lastEntryMovementUnitByItemId: Record<string, string | null>;
   measurementConversions: Array<{
     fromUnit: string;
     toUnit: string;
@@ -2506,6 +2693,8 @@ export default function AdminImportStockMovementsBatchDetailRoute() {
     []) as string[];
   const itemUnitOptionsByItemId = ((loaderData as any)?.payload
     ?.itemUnitOptionsByItemId || {}) as Record<string, string[]>;
+  const lastEntryMovementUnitByItemId = ((loaderData as any)?.payload
+    ?.lastEntryMovementUnitByItemId || {}) as Record<string, string | null>;
   const measurementConversions = ((loaderData as any)?.payload
     ?.measurementConversions || []) as Array<{
     fromUnit: string;
@@ -2676,6 +2865,7 @@ export default function AdminImportStockMovementsBatchDetailRoute() {
     appliedChanges,
     unitOptions,
     itemUnitOptionsByItemId,
+    lastEntryMovementUnitByItemId,
     measurementConversions,
     suppliers,
     categories,

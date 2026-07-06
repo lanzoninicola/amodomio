@@ -7,6 +7,7 @@ import {
 } from "~/domain/item/item-assets.server";
 import { getItemMediaFolderPath } from "~/domain/menu-item-assets/menu-item-assets.shared";
 import {
+  findMediaAssetById,
   registerMediaAssetInLibrary,
   uploadFileToMediaApi,
 } from "~/domain/media/media.service.server";
@@ -260,6 +261,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
     visible?: boolean;
     isPrimary?: boolean;
     kind?: VisualUploadKind;
+    mediaAssetId?: string;
   } = {};
 
   try {
@@ -268,25 +270,43 @@ export async function action({ request, params }: ActionFunctionArgs) {
     return json({ error: "invalid_json" }, { status: 400 });
   }
 
-  const url = typeof body?.url === "string" ? body.url.trim() : "";
+  const selectedMediaAssetId =
+    typeof body?.mediaAssetId === "string" ? body.mediaAssetId.trim() : "";
+  const selectedMediaAsset = selectedMediaAssetId
+    ? await findMediaAssetById(selectedMediaAssetId)
+    : null;
+
+  if (selectedMediaAssetId && !selectedMediaAsset) {
+    return json({ error: "media_asset_not_found" }, { status: 404 });
+  }
+
+  const url =
+    selectedMediaAsset?.url ||
+    (typeof body?.url === "string" ? body.url.trim() : "");
   if (!url) {
     return json({ error: "missing_url" }, { status: 400 });
   }
 
   const kind =
-    body?.kind === "video" || body?.kind === "image"
+    selectedMediaAsset?.kind === "video" || selectedMediaAsset?.kind === "image"
+      ? selectedMediaAsset.kind
+      : body?.kind === "video" || body?.kind === "image"
       ? body.kind
       : inferKindFromMimeOrUrl({ url });
-  const fileName = getFileNameFromUrl(url);
-  const folderPath = getItemMediaFolderPath(itemId);
-  const savedAsset = await registerMediaAssetInLibrary({
-    kind,
-    url,
-    assetPath: folderPath,
-    fileName,
-    assetKey: normalizeStorageKey(fileName) || null,
-    sizeBytes: null,
-  });
+  const fileName = selectedMediaAsset?.fileName || getFileNameFromUrl(url);
+  const savedAsset = selectedMediaAsset
+    ? {
+        id: selectedMediaAsset.id,
+        folderPath: selectedMediaAsset.assetPath,
+      }
+    : await registerMediaAssetInLibrary({
+        kind,
+        url,
+        assetPath: getItemMediaFolderPath(itemId),
+        fileName,
+        assetKey: normalizeStorageKey(fileName) || null,
+        sizeBytes: null,
+      });
 
   const created = await createItemAsset({
     itemId,

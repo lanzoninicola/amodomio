@@ -22,7 +22,6 @@ import {
   Search,
   Settings2,
   Trash2,
-  Upload,
 } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
@@ -41,6 +40,7 @@ import {
 } from "~/components/ui/tooltip";
 import { authenticator } from "~/domain/auth/google.server";
 import { toast } from "~/components/ui/use-toast";
+import MediaUploadPanel from "~/domain/media/components/media-upload-panel";
 import {
   Dialog,
   DialogContent,
@@ -96,32 +96,10 @@ type ActionData =
       debug?: string;
     };
 
-type UploadProgressItem = {
-  id: string;
-  fileName: string;
-  progress: number;
-  status: "pending" | "uploading" | "success" | "error";
-  message?: string;
-};
-
-type UploadResult = {
-  ok: boolean;
-  message: string;
-  payload?: LibraryPayload;
-  rawResponse?: string;
-  httpStatus?: number;
-};
-
 export const meta: MetaFunction = () => [{ title: "Admin • Asset Drive" }];
 
 function formatMegabytes(bytes: number) {
   return (bytes / (1024 * 1024)).toFixed(2);
-}
-
-function getUploadAccept(kind: UploadKind) {
-  if (kind === "video") return "video/*";
-  if (kind === "audio") return "audio/*";
-  return "image/*";
 }
 
 function getMediaKindLabel(kind: UploadKind) {
@@ -424,12 +402,8 @@ export default function AdminAssetsPage() {
   const [currentFolder, setCurrentFolder] = useState("");
   const [newFolderName, setNewFolderName] = useState("");
   const [search, setSearch] = useState("");
-  const [uploadKind, setUploadKind] = useState<UploadKind>("image");
   const [kindFilter, setKindFilter] = useState<"all" | UploadKind>("all");
   const [lastErrorDebug, setLastErrorDebug] = useState("");
-  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
-  const [uploadQueue, setUploadQueue] = useState<UploadProgressItem[]>([]);
-  const [isUploadingBatch, setIsUploadingBatch] = useState(false);
   const [collapsedFolders, setCollapsedFolders] = useState<Set<string>>(
     () => new Set()
   );
@@ -621,184 +595,6 @@ export default function AdminAssetsPage() {
         variant: "destructive",
       });
       return null;
-    }
-  }
-
-  async function uploadSingleFile(file: File, queueId: string) {
-    return new Promise<UploadResult>((resolve) => {
-      const formData = new FormData();
-      formData.append("_intent", "upload");
-      formData.append("kind", uploadKind);
-      formData.append("assetPath", currentFolder);
-      formData.append("files", file, file.name);
-
-      const xhr = new XMLHttpRequest();
-      xhr.open("POST", "/api/media/upload");
-
-      xhr.upload.onprogress = (event) => {
-        if (!event.lengthComputable) return;
-        const percent = Math.min(
-          100,
-          Math.round((event.loaded / event.total) * 100)
-        );
-        setUploadQueue((current) =>
-          current.map((item) =>
-            item.id === queueId
-              ? { ...item, progress: percent, status: "uploading" }
-              : item
-          )
-        );
-      };
-
-      xhr.onload = () => {
-        let data: ActionData | null = null;
-        try {
-          data = xhr.responseText
-            ? (JSON.parse(xhr.responseText) as ActionData)
-            : null;
-        } catch {
-          data = null;
-        }
-
-        if (xhr.status >= 200 && xhr.status < 300 && data?.ok) {
-          resolve({
-            ok: true,
-            message: "Upload concluído.",
-            payload: data.payload,
-          });
-          return;
-        }
-
-        resolve({
-          ok: false,
-          message:
-            data?.ok === false
-              ? data.message
-              : `Falha no upload (status ${xhr.status || "?"}).`,
-          rawResponse: xhr.responseText,
-          httpStatus: xhr.status,
-        });
-      };
-
-      xhr.onerror = () => {
-        resolve({
-          ok: false,
-          message: "Erro de rede durante upload via /api/media/upload.",
-        });
-      };
-
-      xhr.send(formData);
-    });
-  }
-
-  async function uploadBatch() {
-    if (!currentFolder) {
-      toast({
-        title: "Erro",
-        description: "Selecione uma pasta antes do upload.",
-        variant: "destructive",
-      });
-      return;
-    }
-    if (!selectedFiles.length) {
-      toast({
-        title: "Erro",
-        description: "Selecione ao menos um arquivo.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    const queue = selectedFiles.map((file, index) => ({
-      id: `${Date.now()}-${index}-${file.name}`,
-      fileName: file.name,
-      progress: 0,
-      status: "pending" as const,
-    }));
-    setUploadQueue(queue);
-    setIsUploadingBatch(true);
-
-    let successCount = 0;
-    let failCount = 0;
-    let shouldReloadLibrary = false;
-
-    for (let index = 0; index < queue.length; index++) {
-      const item = queue[index];
-      const file = selectedFiles[index];
-      if (!file) continue;
-
-      setUploadQueue((current) =>
-        current.map((row) =>
-          row.id === item.id
-            ? { ...row, status: "uploading", progress: 1 }
-            : row
-        )
-      );
-
-      const result = await uploadSingleFile(file, item.id);
-
-      if (result.ok) {
-        successCount += 1;
-        if (result.payload) {
-          setFolders(result.payload.folders);
-          setAssets(result.payload.assets);
-        } else {
-          shouldReloadLibrary = true;
-        }
-        setUploadQueue((current) =>
-          current.map((row) =>
-            row.id === item.id
-              ? {
-                  ...row,
-                  status: "success",
-                  progress: 100,
-                  message: result.message || "Concluído",
-                }
-              : row
-          )
-        );
-      } else {
-        failCount += 1;
-        const debugLines = [
-          `[upload-debug] ${new Date().toISOString()}`,
-          `file=${file.name}`,
-          `http_status=${result.httpStatus ?? "?"}`,
-          `message=${result.message}`,
-          `raw=${result.rawResponse || "none"}`,
-        ].join("\n");
-        setLastErrorDebug(debugLines);
-        setUploadQueue((current) =>
-          current.map((row) =>
-            row.id === item.id
-              ? {
-                  ...row,
-                  status: "error",
-                  progress: 100,
-                  message: result.message,
-                }
-              : row
-          )
-        );
-      }
-    }
-
-    setIsUploadingBatch(false);
-    setSelectedFiles([]);
-
-    if (successCount > 0) {
-      toast({
-        title: "Upload concluído",
-        description: `Sucesso: ${successCount}. Falhas: ${failCount}.`,
-      });
-      if (shouldReloadLibrary) {
-        window.setTimeout(() => window.location.reload(), 400);
-      }
-    } else {
-      toast({
-        title: "Falha no upload",
-        description: "Nenhum arquivo foi enviado com sucesso.",
-        variant: "destructive",
-      });
     }
   }
 
@@ -1137,8 +933,8 @@ export default function AdminAssetsPage() {
                             onClick={(event) => {
                               event.stopPropagation();
                               const kind =
-                                uploadKind === "video" || uploadKind === "audio"
-                                  ? uploadKind
+                                kindFilter === "video" || kindFilter === "audio"
+                                  ? kindFilter
                                   : "all";
                               void copy(buildFolderAssetsLink(folder, kind));
                             }}
@@ -1239,78 +1035,24 @@ export default function AdminAssetsPage() {
           </div>
 
           <div className="rounded-xl border p-3">
-            <div className="grid grid-cols-1 xl:grid-cols-4 gap-3">
+            <div className="grid grid-cols-1 xl:grid-cols-[2fr_1fr] gap-3">
               <div className="space-y-2 rounded-lg border p-2">
-                <p className="text-xs uppercase tracking-wider text-muted-foreground">
-                  Tipo de Mídia
-                </p>
-                <div className="inline-flex items-center rounded-md border p-1 gap-1">
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant={uploadKind === "image" ? "default" : "ghost"}
-                    className="h-7 px-2"
-                    onClick={() => setUploadKind("image")}
-                  >
-                    <FileImage className="h-3.5 w-3.5 mr-1" />
-                    Imagem
-                  </Button>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant={uploadKind === "video" ? "default" : "ghost"}
-                    className="h-7 px-2"
-                    onClick={() => setUploadKind("video")}
-                  >
-                    <FileVideo className="h-3.5 w-3.5 mr-1" />
-                    Vídeo
-                  </Button>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant={uploadKind === "audio" ? "default" : "ghost"}
-                    className="h-7 px-2"
-                    onClick={() => setUploadKind("audio")}
-                  >
-                    <FileAudio className="h-3.5 w-3.5 mr-1" />
-                    Áudio
-                  </Button>
-                </div>
-              </div>
-
-              <div className="space-y-2 rounded-lg border p-2 xl:col-span-2">
                 <p className="text-xs uppercase tracking-wider text-muted-foreground">
                   Upload
                 </p>
-                <div className="flex flex-wrap items-center gap-2">
-                  <Input
-                    id="files"
-                    name="files"
-                    type="file"
-                    multiple
-                    accept={getUploadAccept(uploadKind)}
-                    className="h-9 min-w-[220px] flex-1"
-                    onChange={(event) => {
-                      const files = Array.from(event.currentTarget.files || []);
-                      setSelectedFiles(files);
-                    }}
-                  />
-                  <Button
-                    type="button"
-                    size="sm"
-                    disabled={
-                      isUploadingBatch ||
-                      !hasUploadApiKey ||
-                      !currentFolder ||
-                      selectedFiles.length === 0
-                    }
-                    className="h-9 gap-2"
-                    onClick={uploadBatch}
-                  >
-                    <Upload className="h-4 w-4" />
-                    {isUploadingBatch ? "Enviando..." : "Upload em lote"}
-                  </Button>
-                </div>
+                <MediaUploadPanel
+                  assetPath={currentFolder}
+                  disabled={!hasUploadApiKey}
+                  disabledMessage={
+                    !hasUploadApiKey
+                      ? "Configure MEDIA_UPLOAD_API_KEY no servidor para habilitar upload."
+                      : undefined
+                  }
+                  onUploaded={(payload) => {
+                    setFolders(payload.folders);
+                    setAssets(payload.assets);
+                  }}
+                />
               </div>
 
               <div className="space-y-2 rounded-lg border p-2">
@@ -1336,45 +1078,6 @@ export default function AdminAssetsPage() {
               </div>
             </div>
           </div>
-
-          {uploadQueue.length > 0 && (
-            <div className="rounded-md border p-3 space-y-2">
-              <p className="text-sm font-medium">Progresso do upload</p>
-              <div className="space-y-2 max-h-48 overflow-auto pr-1">
-                {uploadQueue.map((item) => (
-                  <div key={item.id} className="space-y-1">
-                    <div className="flex items-center justify-between gap-2 text-xs">
-                      <span className="truncate">{item.fileName}</span>
-                      <span
-                        className={
-                          item.status === "error"
-                            ? "text-red-600"
-                            : "text-muted-foreground"
-                        }
-                      >
-                        {item.status === "pending" && "Na fila"}
-                        {item.status === "uploading" && `${item.progress}%`}
-                        {item.status === "success" && "Concluído"}
-                        {item.status === "error" && (item.message || "Erro")}
-                      </span>
-                    </div>
-                    <div className="h-2 rounded-full bg-muted overflow-hidden">
-                      <div
-                        className={`h-full ${
-                          item.status === "error"
-                            ? "bg-red-500"
-                            : item.status === "success"
-                            ? "bg-green-500"
-                            : "bg-primary"
-                        }`}
-                        style={{ width: `${item.progress}%` }}
-                      />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
 
           <Table>
             <TableHeader>

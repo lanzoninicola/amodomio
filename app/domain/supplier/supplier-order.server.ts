@@ -52,17 +52,67 @@ export async function listSupplierOrderProducts(supplierId: string): Promise<{
   globalUnitOptions: string[];
 }> {
   const db = itemPrismaEntity.client as any;
-  const [supplier, globalUnitOptions] = await Promise.all([
+  const [supplier, globalUnitOptions, items] = await Promise.all([
     getSupplierOrderSupplier(supplierId),
     getAvailableItemUnits(),
+    db.item.findMany({
+      where: {
+        active: true,
+        classification: { notIn: ["semi_acabado", "produto_final"] },
+      },
+      select: {
+        id: true,
+        name: true,
+        consumptionUm: true,
+        ItemUnit: { select: { unitCode: true } },
+      },
+      orderBy: [{ name: "asc" }],
+    }),
   ]);
 
   if (!supplier) {
     return { supplier: null, itemRows: [], globalUnitOptions };
   }
 
+  const itemMap = new Map<string, SupplierOrderProduct>();
+  for (const item of items) {
+    const consumptionUnit = normalizeSupplierOrderUnit(item.consumptionUm);
+    const itemUnitOptions = Array.from(
+      new Set(
+        (item.ItemUnit || [])
+          .map((row: { unitCode: string }) =>
+            normalizeSupplierOrderUnit(row.unitCode)
+          )
+          .filter(Boolean) as string[]
+      )
+    )
+      .filter((unit) => unit !== consumptionUnit)
+      .sort((a, b) => a.localeCompare(b, "pt-BR"));
+    const linkedUnitOptions = Array.from(
+      new Set([consumptionUnit, ...itemUnitOptions].filter(Boolean) as string[])
+    );
+
+    itemMap.set(item.id, {
+      itemId: item.id,
+      itemName: item.name,
+      consumptionUm: item.consumptionUm ?? null,
+      linkedUnitOptions,
+      lastPurchaseUnit: null,
+      lastCost: null,
+      lastCostUnit: null,
+      lastMovementAt: null,
+      totalMovements: 0,
+      otherSupplierCosts: [],
+    });
+  }
+
   const movements = await db.stockMovement.findMany({
-    where: { supplierId, direction: "entry", deletedAt: null },
+    where: {
+      supplierId,
+      direction: "entry",
+      deletedAt: null,
+      itemId: { in: items.map((item: { id: string }) => item.id) },
+    },
     select: {
       itemId: true,
       newCostAtImport: true,
@@ -70,63 +120,28 @@ export async function listSupplierOrderProducts(supplierId: string): Promise<{
       movementUnit: true,
       quantityUnit: true,
       movementAt: true,
-      Item: {
-        select: {
-          id: true,
-          name: true,
-          consumptionUm: true,
-          ItemUnit: { select: { unitCode: true } },
-        },
-      },
     },
     orderBy: { movementAt: "desc" },
   });
 
-  const itemMap = new Map<string, SupplierOrderProduct>();
   for (const movement of movements) {
     if (!movement.itemId) continue;
 
-    if (!itemMap.has(movement.itemId)) {
-      const consumptionUnit = normalizeSupplierOrderUnit(
-        movement.Item?.consumptionUm
-      );
-      const itemUnitOptions = Array.from(
-        new Set(
-          (movement.Item?.ItemUnit || [])
-            .map((row: { unitCode: string }) =>
-              normalizeSupplierOrderUnit(row.unitCode)
-            )
-            .filter(Boolean) as string[]
-        )
-      )
-        .filter((unit) => unit !== consumptionUnit)
-        .sort((a, b) => a.localeCompare(b, "pt-BR"));
-      const linkedUnitOptions = Array.from(
-        new Set(
-          [consumptionUnit, ...itemUnitOptions].filter(Boolean) as string[]
-        )
-      );
+    const row = itemMap.get(movement.itemId);
+    if (!row) continue;
 
-      itemMap.set(movement.itemId, {
-        itemId: movement.itemId,
-        itemName: movement.Item?.name ?? movement.itemId,
-        consumptionUm: movement.Item?.consumptionUm ?? null,
-        linkedUnitOptions,
-        lastPurchaseUnit:
-          normalizeSupplierOrderUnit(
-            movement.movementUnit ||
-              movement.quantityUnit ||
-              movement.newCostUnitAtImport
-          ) || null,
-        lastCost: movement.newCostAtImport ?? null,
-        lastCostUnit: movement.newCostUnitAtImport ?? null,
-        lastMovementAt: movement.movementAt ?? null,
-        totalMovements: 1,
-        otherSupplierCosts: [],
-      });
-    } else {
-      itemMap.get(movement.itemId)!.totalMovements += 1;
+    if (row.totalMovements === 0) {
+      row.lastPurchaseUnit =
+        normalizeSupplierOrderUnit(
+          movement.movementUnit ||
+            movement.quantityUnit ||
+            movement.newCostUnitAtImport
+        ) || null;
+      row.lastCost = movement.newCostAtImport ?? null;
+      row.lastCostUnit = movement.newCostUnitAtImport ?? null;
+      row.lastMovementAt = movement.movementAt ?? null;
     }
+    row.totalMovements += 1;
   }
 
   const itemIds = Array.from(itemMap.keys());

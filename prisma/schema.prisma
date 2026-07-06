@@ -2236,6 +2236,7 @@ model ContentPostMedia {
   alt                 String?   @db.Text
   linkUrl             String?   @map("link_url") @db.Text
   linkText            String?   @map("link_text")
+  linkMenuItemId      String?   @map("link_menu_item_id")
   linkBackgroundColor String?   @map("link_background_color")
   linkTextColor       String?   @map("link_text_color")
   linkPosition        String?   @map("link_position")
@@ -2257,7 +2258,6 @@ model ContentPublicationTarget {
   id                 String    @id @default(uuid())
   contentPostId      String    @map("content_post_id")
   channel            String
-  enabled            Boolean   @default(false)
   status             String    @default("draft")
   sortOrder          Int       @default(0) @map("sort_order")
   config             Json?
@@ -2273,7 +2273,7 @@ model ContentPublicationTarget {
   Executions  ContentPublicationExecution[]
 
   @@unique([contentPostId, channel], map: "content_publication_targets_post_channel")
-  @@index([channel, enabled, status, sortOrder], map: "content_publication_targets_channel_status_idx")
+  @@index([channel, status, sortOrder], map: "content_publication_targets_channel_status_idx")
   @@index([deletedAt], map: "content_publication_targets_deleted_at_idx")
   @@map("content_publication_targets")
 }

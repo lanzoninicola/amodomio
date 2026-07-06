@@ -9,6 +9,7 @@ import { Label } from "~/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
 import { ITEM_UNIT_OPTIONS, normalizeItemUnit } from "~/domain/item/item-units";
 import { buildAdminItemsMeta } from "~/domain/item/admin-items-meta";
+import { buildUniqueItemSellingSlug } from "~/domain/item/item-selling-slug.server";
 import { getAvailableItemUnits } from "~/domain/item/item-units.server";
 import prismaClient from "~/lib/prisma/client.server";
 import { badRequest, ok, serverError } from "~/utils/http-response.server";
@@ -89,6 +90,11 @@ export async function action({ request }: ActionFunctionArgs) {
       }
     }
 
+    const canSell = toBool(formData.get("canSell"));
+    const sellingSlug = canSell
+      ? await buildUniqueItemSellingSlug(db, name)
+      : null;
+
     const item = await db.item.create({
       data: {
         name,
@@ -99,8 +105,17 @@ export async function action({ request }: ActionFunctionArgs) {
         active: toBool(formData.get("active")),
         canPurchase: toBool(formData.get("canPurchase")),
         canTransform: toBool(formData.get("canTransform")),
-        canSell: toBool(formData.get("canSell")),
+        canSell,
         canStock: toBool(formData.get("canStock")),
+        ...(sellingSlug
+          ? {
+              ItemSellingInfo: {
+                create: {
+                  slug: sellingSlug,
+                },
+              },
+            }
+          : {}),
       },
       select: { id: true },
     });

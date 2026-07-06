@@ -11,6 +11,26 @@ Rules:
 - The pipx package/venv is named `graphifyy`, but the required importable Python module for this repo is `graphify`
 - Validation command: `/home/lanzo/.local/share/pipx/venvs/graphifyy/bin/python -c "from graphify.watch import _rebuild_code; print('ok')"`
 
+## Node environment
+
+Antes de executar qualquer comando Node/NPM/Prisma/Vite/Remix neste projeto,
+carregue o nvm e ative a versao Node do projeto.
+
+Use este prefixo para comandos que dependem de Node:
+
+```bash
+source ~/.nvm/nvm.sh >/dev/null 2>&1; nvm use >/dev/null 2>&1; <comando>
+```
+
+Se precisar fixar a versao esperada neste ambiente:
+
+```bash
+source ~/.nvm/nvm.sh >/dev/null 2>&1; nvm use 20.19.0 >/dev/null 2>&1; <comando>
+```
+
+Nao execute `node`, `npm`, `npx`, `vite`, `prisma`, `remix` ou scripts do
+`package.json` antes de ativar o Node correto com `nvm use`.
+
 ## Desenvolvimento
 
 Nao execute `npm run build` para alteracoes pequenas.
@@ -42,21 +62,13 @@ Excecoes aceitaveis:
 
 ## TypeScript
 
-Nao execute verificacao completa de TypeScript (`tsc`) a cada alteracao.
+Nunca execute verificacao de TypeScript (`tsc`). Sempre pule essa etapa,
+mesmo em fluxos de verify/code-review/commit/deploy.
 
-Evite:
+Evite sempre:
 
 - `npx tsc`
 - `tsc --noEmit`
-
-Execute TypeScript completo apenas quando:
-
-- alterar tipos globais
-- alterar contratos compartilhados
-- alterar configuracoes TypeScript
-- finalizar tarefas grandes
-- antes de commit importante
-- antes de deploy
 
 Para pequenas alteracoes:
 

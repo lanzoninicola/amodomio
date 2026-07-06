@@ -6,6 +6,7 @@ import {
   useLoaderData,
   useNavigation,
 } from "@remix-run/react";
+import { Send, Undo2 } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
@@ -16,13 +17,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from "~/components/ui/select";
+import { Separator } from "~/components/ui/separator";
 import { Switch } from "~/components/ui/switch";
 import {
   getContentPost,
+  runContentTargetOperation,
+  unpublishContentTarget,
   updateContentPostTarget,
 } from "~/domain/content-post/content-post.server";
 import {
   CONTENT_POST_CHANNELS,
+  CONTENT_POST_STATUSES,
   parseCardapioFeaturedConfig,
 } from "~/domain/content-post/content-post.shared";
 import { invalidateCardapioIndexCache } from "~/domain/cardapio/cardapio-cache.server";
@@ -44,6 +49,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
 export async function action({ request, params }: ActionFunctionArgs) {
   const contentPostId = String(params.id || "");
   const form = await request.formData();
+  const intent = String(form.get("_intent") || "save");
   const displayStyle = String(form.get("displayStyle") || "polaroid");
   const post = await getContentPost(contentPostId);
   const target = post.Targets.find(
@@ -51,10 +57,15 @@ export async function action({ request, params }: ActionFunctionArgs) {
   );
   if (!target) throw new Response("Canal não encontrado", { status: 404 });
 
+  if (intent === "unpublish") {
+    await unpublishContentTarget(target.id);
+    await invalidateCardapioIndexCache();
+    return json({ ok: true, message: "Removido do cardápio." });
+  }
+
   await updateContentPostTarget({
     contentPostId,
     channel: CONTENT_POST_CHANNELS.CARDAPIO_FEATURED,
-    enabled: target.enabled,
     sortOrder: parseOrder(form.get("cardapioSortOrder")),
     config: {
       displayStyle: displayStyle === "default" ? "default" : "polaroid",
@@ -62,6 +73,27 @@ export async function action({ request, params }: ActionFunctionArgs) {
       showPromotionHint: form.get("showPromotionHint") === "on",
     },
   });
+
+  if (intent === "publish") {
+    if (post.status !== CONTENT_POST_STATUSES.ACTIVE) {
+      return json(
+        { ok: false, message: "Ative o conteúdo primeiro." },
+        { status: 409 }
+      );
+    }
+
+    await runContentTargetOperation({
+      targetId: target.id,
+      operation: "publish",
+      source: "manual",
+      execute: async () => ({
+        channel: CONTENT_POST_CHANNELS.CARDAPIO_FEATURED,
+      }),
+      response: (value) => value,
+    });
+    await invalidateCardapioIndexCache();
+    return json({ ok: true, message: "Publicado no cardápio." });
+  }
 
   await invalidateCardapioIndexCache();
   return json({ ok: true, message: "Configuração do cardápio salva." });
@@ -94,14 +126,47 @@ export default function ContentPostCardapioPage() {
   const actionData = useActionData<typeof action>();
   const navigation = useNavigation();
   const config = parseCardapioFeaturedConfig(target.config);
+  const submitting = navigation.state === "submitting";
+  const canUnpublish = target.status === "active" && Boolean(target.lastPublishedAt);
 
   return (
     <Form method="post" className="grid max-w-2xl gap-6">
-      {!target.enabled ? (
-        <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-          Habilite Cardápio na aba Canais ativados.
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h2 className="text-lg font-semibold">Cardápio</h2>
+          <p className="text-sm text-slate-500">
+            Ajuste como esta publicação aparece no destaque do cardápio.
+          </p>
         </div>
-      ) : null}
+        <div className="flex shrink-0 flex-wrap justify-end gap-2">
+          <Button
+            type="submit"
+            name="_intent"
+            value="unpublish"
+            size="sm"
+            variant="outline"
+            disabled={submitting || !canUnpublish}
+            className="gap-2"
+          >
+            <Undo2 className="h-4 w-4" aria-hidden="true" />
+            {submitting ? "Removendo..." : "Despublicar"}
+          </Button>
+          <Button
+            type="submit"
+            name="_intent"
+            value="publish"
+            size="sm"
+            disabled={submitting}
+            className="gap-2"
+          >
+            <Send className="h-4 w-4" aria-hidden="true" />
+            {submitting ? "Publicando..." : "Publicar"}
+          </Button>
+        </div>
+      </div>
+
+      <Separator className="my-1" />
+
       {post.status !== "active" ? (
         <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
           A configuração fica salva, mas só aparece no cardápio quando o
@@ -114,15 +179,17 @@ export default function ContentPostCardapioPage() {
         </div>
       ) : null}
 
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h2 className="text-lg font-semibold">Cardápio</h2>
-          <p className="text-sm text-slate-500">
-            Ajuste como esta publicação aparece no destaque do cardápio.
-          </p>
-        </div>
-        <Button type="submit" size="sm" disabled={navigation.state === "submitting"}>
-          {navigation.state === "submitting" ? "Salvando..." : "Salvar"}
+      <div className="flex items-center justify-between gap-4">
+        <h3 className="text-sm font-semibold text-slate-700">Configuração</h3>
+        <Button
+          type="submit"
+          name="_intent"
+          value="save"
+          size="sm"
+          variant="outline"
+          disabled={submitting}
+        >
+          {submitting ? "Salvando..." : "Salvar"}
         </Button>
       </div>
 
@@ -163,7 +230,6 @@ export default function ContentPostCardapioPage() {
           defaultChecked={config.showPromotionHint}
         />
       </div>
-
     </Form>
   );
 }

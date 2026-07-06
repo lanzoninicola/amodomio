@@ -22,6 +22,7 @@ import { Textarea } from "~/components/ui/textarea";
 import type { AdminItemVendaOutletContext } from "./admin.items.$id.venda";
 import { toast } from "~/components/ui/use-toast";
 import { buildAdminItemsMeta } from "~/domain/item/admin-items-meta";
+import { buildUniqueItemSellingSlug } from "~/domain/item/item-selling-slug.server";
 import prismaClient from "~/lib/prisma/client.server";
 import { slugifyString } from "~/utils/slugify";
 import { badRequest, ok, serverError } from "~/utils/http-response.server";
@@ -147,7 +148,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
     const slugRaw = String(formData.get("slug") || "").trim();
     const categoryId = String(formData.get("categoryId") || "").trim();
     const itemGroupIdRaw = String(formData.get("itemGroupId") || "").trim();
-    const slug = slugRaw ? slugifyString(slugRaw) : null;
+    const requestedSlug = slugRaw ? slugifyString(slugRaw) : null;
 
     if (!categoryId) {
       return badRequest("Categoria inválida");
@@ -157,12 +158,27 @@ export async function action({ request, params }: ActionFunctionArgs) {
       return badRequest("Grupo é obrigatório");
     }
 
-    if (slug) {
+    const item = await (prismaClient as any).item.findUnique({
+      where: { id: itemId },
+      select: { id: true, name: true },
+    });
+
+    if (!item) {
+      return badRequest("Item não encontrado");
+    }
+
+    const slug =
+      requestedSlug ||
+      (await buildUniqueItemSellingSlug(prismaClient as any, item.name, {
+        itemId,
+      }));
+
+    if (requestedSlug) {
       const slugConflict = await (
         prismaClient as any
       ).itemSellingInfo.findFirst({
         where: {
-          slug,
+          slug: requestedSlug,
           itemId: { not: itemId },
         },
         select: { itemId: true },
@@ -266,6 +282,7 @@ export default function AdminItemVendaComercialRoute() {
 
   const item = payload.item || null;
   const sellingInfo = item?.ItemSellingInfo || null;
+  const generatedItemSlug = slugifyString(item?.name) || "";
   const linkedRecipe = item?.Recipe?.[0] || null;
   const recipeIngredientNames = (linkedRecipe?.RecipeIngredient || []).map(
     (ri) => ri.IngredientItem.name
@@ -462,15 +479,19 @@ export default function AdminItemVendaComercialRoute() {
 
         <div className="grid gap-4 lg:grid-cols-2">
           <div className="space-y-2">
-            <Label htmlFor="slug">Slug público</Label>
+            <Label htmlFor="slug">
+              Slug público <span className="text-red-500">*</span>
+            </Label>
             <Input
               id="slug"
               name="slug"
-              defaultValue={sellingInfo?.slug || ""}
-              placeholder={slugifyString(item.name) || "slug-publico"}
+              defaultValue={sellingInfo?.slug || generatedItemSlug}
+              placeholder={generatedItemSlug || "slug-publico"}
+              required
             />
             <p className="text-xs text-slate-500">
-              Usado na URL da pagina dos detalhes.
+              Gerado automaticamente pelo nome do item e usado na URL da pagina
+              dos detalhes.
             </p>
           </div>
         </div>

@@ -64,7 +64,7 @@ export async function listContentPosts(q = "") {
           }
         : {}),
     },
-    orderBy: [{ status: "asc" }, { updatedAt: "desc" }],
+    orderBy: [{ createdAt: "desc" }],
     include: {
       _count: { select: { Media: true, Targets: true } },
       Targets: {
@@ -72,7 +72,6 @@ export async function listContentPosts(q = "") {
         select: {
           id: true,
           channel: true,
-          enabled: true,
           status: true,
           lastPublishedAt: true,
           removedAt: true,
@@ -98,9 +97,6 @@ export async function createContentPost(input: {
   if (!key || !title) {
     throw new ValidationError("Informe título e chave da publicação.");
   }
-  if (!media.length) {
-    throw new ValidationError("Informe pelo menos uma mídia.");
-  }
 
   return prismaClient.contentPost.create({
     data: {
@@ -109,39 +105,40 @@ export async function createContentPost(input: {
       subtitle: normalizeString(input.subtitle) || null,
       caption: normalizeString(input.caption) || null,
       status: assertStatus(input.status),
-      Media: {
-        create: media.map((item) => ({
-          key: item.key,
-          title: item.title,
-          kind: item.kind,
-          mediaUrl: item.mediaUrl,
-          fullscreenMediaUrl: item.fullscreenMediaUrl || null,
-          alt: item.alt || null,
-          linkUrl: item.linkUrl || null,
-          linkText: item.linkText || null,
-          linkBackgroundColor: item.linkBackgroundColor || null,
-          linkTextColor: item.linkTextColor || null,
-          linkPosition: item.linkPosition || null,
-          linkNewTab: item.linkNewTab ?? true,
-          sortOrder: item.sortOrder,
-        })),
-      },
+      ...(media.length
+        ? {
+            Media: {
+              create: media.map((item) => ({
+                key: item.key,
+                title: item.title,
+                kind: item.kind,
+                mediaUrl: item.mediaUrl,
+                fullscreenMediaUrl: item.fullscreenMediaUrl || null,
+                alt: item.alt || null,
+                linkUrl: item.linkUrl || null,
+                linkText: item.linkText || null,
+                linkBackgroundColor: item.linkBackgroundColor || null,
+                linkTextColor: item.linkTextColor || null,
+                linkPosition: item.linkPosition || null,
+                linkNewTab: item.linkNewTab ?? true,
+                sortOrder: item.sortOrder,
+              })),
+            },
+          }
+        : {}),
       Targets: {
         create: [
           {
             channel: CONTENT_POST_CHANNELS.CARDAPIO_FEATURED,
-            enabled: false,
             status: "draft",
           },
           {
             channel: CONTENT_POST_CHANNELS.WHATSAPP_STATUS,
-            enabled: false,
             status: "draft",
             sortOrder: 1,
           },
           {
             channel: CONTENT_POST_CHANNELS.INSTAGRAM_STORY,
-            enabled: false,
             status: "draft",
             sortOrder: 2,
           },
@@ -149,6 +146,149 @@ export async function createContentPost(input: {
       },
     },
     select: { id: true },
+  });
+}
+
+async function buildUniqueCopyKey(baseKey: string) {
+  const normalizedBase = normalizeString(baseKey) || "publicacao";
+  const copyBase = `${normalizedBase}-copia`;
+
+  for (let attempt = 0; attempt < 100; attempt++) {
+    const key = attempt === 0 ? copyBase : `${copyBase}-${attempt + 1}`;
+    const existing = await prismaClient.contentPost.findUnique({
+      where: { key },
+      select: { id: true },
+    });
+    if (!existing) return key;
+  }
+
+  return `${copyBase}-${Date.now()}`;
+}
+
+export async function duplicateContentPost(id: string) {
+  const source = await getContentPost(id);
+  const copiedTitle = `${source.title} Copia`;
+  const copiedKey = await buildUniqueCopyKey(source.key);
+
+  return prismaClient.$transaction(async (tx) => {
+    const duplicated = await tx.contentPost.create({
+      data: {
+        key: copiedKey,
+        title: copiedTitle,
+        subtitle: source.subtitle,
+        caption: source.caption,
+        status: CONTENT_POST_STATUSES.DRAFT,
+      },
+      select: { id: true },
+    });
+
+    const mediaIdMap = new Map<string, string>();
+    for (const media of source.Media) {
+      const duplicatedMedia = await tx.contentPostMedia.create({
+        data: {
+          contentPostId: duplicated.id,
+          key: media.key,
+          title: media.title,
+          kind: media.kind,
+          mediaUrl: media.mediaUrl,
+          fullscreenMediaUrl: media.fullscreenMediaUrl,
+          alt: media.alt,
+          linkUrl: media.linkUrl,
+          linkText: media.linkText,
+          linkBackgroundColor: media.linkBackgroundColor,
+          linkTextColor: media.linkTextColor,
+          linkPosition: media.linkPosition,
+          linkNewTab: media.linkNewTab,
+          sortOrder: media.sortOrder,
+          active: media.active,
+        },
+        select: { id: true },
+      });
+      mediaIdMap.set(media.id, duplicatedMedia.id);
+    }
+
+    const targetIdMap = new Map<string, string>();
+    for (const target of source.Targets) {
+      const duplicatedTarget = await tx.contentPublicationTarget.create({
+        data: {
+          contentPostId: duplicated.id,
+          channel: target.channel,
+          status: "draft",
+          sortOrder: target.sortOrder,
+          config: target.config as any,
+          lastPublishedAt: null,
+          removalRequestedAt: null,
+          removedAt: null,
+          lastError: null,
+        },
+        select: { id: true },
+      });
+      targetIdMap.set(target.id, duplicatedTarget.id);
+    }
+
+    for (const [sourceTargetId, duplicatedTargetId] of targetIdMap) {
+      const source = contentPostSocialSource(sourceTargetId);
+      const duplicatedSource = contentPostSocialSource(duplicatedTargetId);
+
+      const whatsappPublications = await tx.whatsappStatusPublication.findMany({
+        where: { ...source, deletedAt: null },
+      });
+      for (const publication of whatsappPublications) {
+        await tx.whatsappStatusPublication.create({
+          data: {
+            sourceType: duplicatedSource.sourceType,
+            sourceId: duplicatedSource.sourceId,
+            sourceItemKey:
+              mediaIdMap.get(publication.sourceItemKey || "") ||
+              publication.sourceItemKey,
+            title: publication.title,
+            kind: publication.kind,
+            message: publication.message,
+            imageUrl: publication.imageUrl,
+            videoUrl: publication.videoUrl,
+            caption: publication.caption,
+            active: publication.active,
+            deactivatedAt: publication.active ? null : new Date(),
+            lastPublishedAt: null,
+            lastPublishStatus: null,
+            lastPublishResponse: undefined,
+            lastPublishError: null,
+            deletedAt: null,
+          },
+        });
+      }
+
+      const instagramPublications = await tx.instagramStoryPublication.findMany(
+        {
+          where: { ...source, deletedAt: null },
+        }
+      );
+      for (const publication of instagramPublications) {
+        await tx.instagramStoryPublication.create({
+          data: {
+            sourceType: duplicatedSource.sourceType,
+            sourceId: duplicatedSource.sourceId,
+            sourceItemKey:
+              mediaIdMap.get(publication.sourceItemKey || "") ||
+              publication.sourceItemKey,
+            title: publication.title,
+            kind: publication.kind,
+            mediaUrl: publication.mediaUrl,
+            active: publication.active,
+            deactivatedAt: publication.active ? null : new Date(),
+            lastContainerId: null,
+            lastInstagramMediaId: null,
+            lastPublishedAt: null,
+            lastPublishStatus: null,
+            lastPublishResponse: undefined,
+            lastPublishError: null,
+            deletedAt: null,
+          },
+        });
+      }
+    }
+
+    return duplicated;
   });
 }
 
@@ -200,6 +340,7 @@ export async function replaceContentPostMedia(
         alt: item.alt || null,
         linkUrl: item.linkUrl || null,
         linkText: item.linkText || null,
+        linkMenuItemId: item.linkMenuItemId || null,
         linkBackgroundColor: item.linkBackgroundColor || null,
         linkTextColor: item.linkTextColor || null,
         linkPosition: item.linkPosition || null,
@@ -275,33 +416,24 @@ export async function ensureContentPostTarget(
 export async function updateContentPostTarget(params: {
   contentPostId: string;
   channel: ContentPostChannel;
-  enabled: boolean;
   sortOrder?: number;
   config?: unknown;
 }) {
   const post = await getContentPost(params.contentPostId);
-  const enabled = params.enabled;
-  const active = enabled && post.status === CONTENT_POST_STATUSES.ACTIVE;
+  const active = post.status === CONTENT_POST_STATUSES.ACTIVE;
   const previous = post.Targets.find(
     (target) => target.channel === params.channel
   );
-  const enabledStatus = active
-    ? params.channel === CONTENT_POST_CHANNELS.CARDAPIO_FEATURED
-      ? previous?.status === "active"
-        ? "active"
-        : "needs_sync"
-      : previous?.status === "active"
+  const hasPublishedState =
+    previous?.status === "active" && Boolean(previous.lastPublishedAt);
+  const targetStatus = active
+    ? hasPublishedState
       ? "active"
       : "needs_sync"
     : "draft";
-  const cardapioPublishedAt =
-    params.channel === CONTENT_POST_CHANNELS.CARDAPIO_FEATURED &&
-    active &&
-    previous?.status === "active"
-      ? previous?.lastPublishedAt ?? new Date()
-      : undefined;
+  const publishedAt = hasPublishedState ? previous?.lastPublishedAt : null;
 
-  const target = await prismaClient.contentPublicationTarget.upsert({
+  return prismaClient.contentPublicationTarget.upsert({
     where: {
       contentPostId_channel: {
         contentPostId: params.contentPostId,
@@ -311,36 +443,26 @@ export async function updateContentPostTarget(params: {
     create: {
       contentPostId: params.contentPostId,
       channel: params.channel,
-      enabled,
-      status: enabledStatus,
+      status: targetStatus,
       sortOrder: params.sortOrder ?? 0,
       config: params.config as any,
-      lastPublishedAt:
-        params.channel === CONTENT_POST_CHANNELS.CARDAPIO_FEATURED
-          ? cardapioPublishedAt ?? null
-          : undefined,
+      lastPublishedAt: publishedAt,
     },
     update: {
-      enabled,
-      status: enabledStatus,
+      status: targetStatus,
       sortOrder: params.sortOrder ?? 0,
       config: params.config as any,
-      lastPublishedAt:
-        params.channel === CONTENT_POST_CHANNELS.CARDAPIO_FEATURED
-          ? cardapioPublishedAt ?? null
-          : undefined,
+      lastPublishedAt: publishedAt,
       removalRequestedAt: null,
       removedAt: null,
       lastError: null,
       deletedAt: null,
     },
   });
+}
 
-  if (!enabled && previous?.enabled) {
-    await requestContentTargetRemoval(target.id, false);
-  }
-
-  return target;
+export async function unpublishContentTarget(targetId: string) {
+  await requestContentTargetRemoval(targetId);
 }
 
 export async function setContentPostStatus(id: string, statusValue: unknown) {
@@ -358,7 +480,7 @@ export async function setContentPostStatus(id: string, statusValue: unknown) {
   });
 
   if (status === CONTENT_POST_STATUSES.ACTIVE) {
-    for (const target of existing.Targets.filter((item) => item.enabled)) {
+    for (const target of existing.Targets) {
       const targetStatus =
         target.channel === CONTENT_POST_CHANNELS.CARDAPIO_FEATURED
           ? target.status === "active" && target.lastPublishedAt
@@ -384,14 +506,11 @@ export async function setContentPostStatus(id: string, statusValue: unknown) {
   }
 
   for (const target of existing.Targets) {
-    await requestContentTargetRemoval(target.id, true);
+    await requestContentTargetRemoval(target.id);
   }
 }
 
-async function requestContentTargetRemoval(
-  targetId: string,
-  preserveEnabled: boolean
-) {
+async function requestContentTargetRemoval(targetId: string) {
   const target = await prismaClient.contentPublicationTarget.findUnique({
     where: { id: targetId },
   });
@@ -408,7 +527,6 @@ async function requestContentTargetRemoval(
     await tx.contentPublicationTarget.update({
       where: { id: target.id },
       data: {
-        enabled: preserveEnabled ? target.enabled : false,
         status: stillExternallyVisible ? "removal_pending" : "removed",
         removalRequestedAt: now,
         removedAt: stillExternallyVisible ? null : now,
@@ -478,7 +596,6 @@ export async function markContentTargetSynced(targetId: string) {
   if (!target) return;
 
   const activeContent =
-    target.enabled &&
     target.ContentPost.status === CONTENT_POST_STATUSES.ACTIVE;
   const configuredStatus = activeContent
     ? target.channel === CONTENT_POST_CHANNELS.CARDAPIO_FEATURED
@@ -497,24 +614,6 @@ export async function markContentTargetSynced(targetId: string) {
         configuredStatus === "active"
           ? target.lastPublishedAt
           : null,
-      removalRequestedAt: null,
-      removedAt: null,
-      lastError: null,
-    },
-  });
-}
-
-export async function clearContentTargetPublicationData(targetId: string) {
-  const target = await prismaClient.contentPublicationTarget.findUnique({
-    where: { id: targetId },
-  });
-  if (!target || target.deletedAt) return;
-
-  await prismaClient.contentPublicationTarget.update({
-    where: { id: targetId },
-    data: {
-      status: target.enabled ? "needs_sync" : "draft",
-      lastPublishedAt: null,
       removalRequestedAt: null,
       removedAt: null,
       lastError: null,

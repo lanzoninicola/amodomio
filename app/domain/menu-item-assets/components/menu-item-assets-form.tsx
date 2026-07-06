@@ -14,21 +14,24 @@ import {
   DialogHeader,
   DialogTitle,
 } from "~/components/ui/dialog";
-import { Input } from "~/components/ui/input";
 import { Switch } from "~/components/ui/switch";
 import { toast } from "~/components/ui/use-toast";
 import {
   Check,
   Download,
   Eye,
+  ExternalLink,
   FileImage,
   FileVideo,
+  FolderOpen,
   GripVertical,
   ImagePlus,
   Star,
   Trash2,
   UploadCloud,
 } from "lucide-react";
+import AssetLibraryPickerDialog from "~/domain/media/components/asset-library-picker-dialog";
+import type { MediaAsset } from "~/domain/media/media.shared";
 import { cn } from "~/lib/utils";
 import {
   parseMenuItemAssetsApiResponse,
@@ -115,10 +118,12 @@ export default function MenuItemAssetsForm({
   const [uploading, setUploading] = useState(false);
   const [draggingOverDropzone, setDraggingOverDropzone] = useState(false);
   const [draggingImageId, setDraggingImageId] = useState<string | null>(null);
+  const [assetSource, setAssetSource] = useState<"computer" | "library">(
+    "computer"
+  );
   const [uploadKind, setUploadKind] = useState<"image" | "video">("image");
-  const [linkingByUrl, setLinkingByUrl] = useState(false);
-  const [urlToLink, setUrlToLink] = useState("");
-  const [visibleFromUrl, setVisibleFromUrl] = useState(true);
+  const [linkingFromLibrary, setLinkingFromLibrary] = useState(false);
+  const [visibleFromLibrary, setVisibleFromLibrary] = useState(true);
   const [previewAsset, setPreviewAsset] = useState<MenuItemAssetDto | null>(
     null
   );
@@ -265,7 +270,11 @@ export default function MenuItemAssetsForm({
 
   const deleteImage = useCallback(
     async (asset: MenuItemAssetDto) => {
-      const confirmed = window.confirm("Excluir este asset?");
+      const confirmed = window.confirm(
+        asset.isPrimary
+          ? "Excluir a capa deste item? Se existir outro asset, ele será definido como nova capa."
+          : "Excluir este asset?"
+      );
       if (!confirmed) return;
 
       const response = await fetch(endpoints.item(asset.id), {
@@ -329,50 +338,43 @@ export default function MenuItemAssetsForm({
     [draggingImageId, galleryImages, reorderGallery]
   );
 
-  const addImageByUrl = useCallback(async () => {
-    const url = urlToLink.trim();
-    if (!url) {
-      toast({
-        title: "URL obrigatória",
-        description: "Informe a URL do asset para vincular.",
-        variant: "destructive",
-      });
-      return;
-    }
+  const addAssetFromLibrary = useCallback(
+    async (asset: MediaAsset) => {
+      try {
+        setLinkingFromLibrary(true);
+        const response = await fetch(endpoints.list, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            url: asset.url,
+            kind: asset.kind === "video" ? "video" : "image",
+            visible: visibleFromLibrary,
+            isPrimary: false,
+            mediaAssetId: asset.id,
+          }),
+        });
 
-    try {
-      setLinkingByUrl(true);
-      const response = await fetch(endpoints.list, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          url,
-          kind: /\.(mp4|mov|webm|m4v)(\?|$)/i.test(url) ? "video" : "image",
-          visible: visibleFromUrl,
-          isPrimary: false,
-        }),
-      });
+        if (!response.ok) {
+          throw new Error("Falha ao vincular asset");
+        }
 
-      if (!response.ok) {
-        throw new Error("Falha ao vincular URL");
+        await refreshImages();
+        toast({
+          title: "Asset vinculado",
+          description: "O asset do gerenciador foi vinculado ao item.",
+        });
+      } catch (error) {
+        toast({
+          title: "Erro",
+          description: "Não foi possível vincular o asset selecionado.",
+          variant: "destructive",
+        });
+      } finally {
+        setLinkingFromLibrary(false);
       }
-
-      setUrlToLink("");
-      await refreshImages();
-      toast({
-        title: "Asset vinculado",
-        description: "A URL foi vinculada ao item com sucesso.",
-      });
-    } catch (error) {
-      toast({
-        title: "Erro",
-        description: "Não foi possível vincular o asset por URL.",
-        variant: "destructive",
-      });
-    } finally {
-      setLinkingByUrl(false);
-    }
-  }, [endpoints.list, refreshImages, urlToLink, visibleFromUrl]);
+    },
+    [endpoints.list, refreshImages, visibleFromLibrary]
+  );
 
   return (
     <section className="grid gap-6 lg:grid-cols-12">
@@ -417,7 +419,7 @@ export default function MenuItemAssetsForm({
                 <Check className="h-3.5 w-3.5" />
                 Imagem principal
               </div>
-              <div className="mt-2 flex gap-2">
+              <div className="mt-2 flex flex-wrap gap-2">
                 <Button
                   type="button"
                   variant="outline"
@@ -444,6 +446,16 @@ export default function MenuItemAssetsForm({
                     Baixar
                   </a>
                 </Button>
+                <Button
+                  type="button"
+                  variant="destructive"
+                  size="sm"
+                  className="h-8 px-2 text-xs"
+                  onClick={() => deleteImage(primaryImage)}
+                >
+                  <Trash2 className="mr-1 h-3.5 w-3.5" />
+                  Excluir
+                </Button>
               </div>
             </div>
           </div>
@@ -455,99 +467,160 @@ export default function MenuItemAssetsForm({
       </div>
 
       <div className="lg:col-span-9 flex flex-col gap-4">
-        <div
-          className={cn(
-            "rounded-xl border-2 border-dashed p-6 text-center transition-colors",
-            draggingOverDropzone
-              ? "border-primary bg-primary/5"
-              : "border-muted-foreground/30"
-          )}
-          onDragOver={(e) => {
-            e.preventDefault();
-            setDraggingOverDropzone(true);
-          }}
-          onDragLeave={() => setDraggingOverDropzone(false)}
-          onDrop={onDropFiles}
-        >
-          <div className="mb-3 inline-flex items-center rounded-md border p-1 gap-1">
-            <Button
-              type="button"
-              size="sm"
-              variant={uploadKind === "image" ? "default" : "ghost"}
-              className="h-7 px-2"
-              onClick={() => setUploadKind("image")}
-            >
-              <FileImage className="h-3.5 w-3.5 mr-1" />
-              Imagem
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant={uploadKind === "video" ? "default" : "ghost"}
-              className="h-7 px-2"
-              onClick={() => setUploadKind("video")}
-            >
-              <FileVideo className="h-3.5 w-3.5 mr-1" />
-              Vídeo
-            </Button>
-          </div>
-          <UploadCloud className="mx-auto mb-2 h-8 w-8 text-muted-foreground" />
-          <p className="text-sm font-medium">
-            Arraste{" "}
-            {uploadKind === "image" ? "assets de imagem" : "assets de vídeo"}{" "}
-            aqui ou selecione arquivos
-          </p>
-          <p className="text-xs text-muted-foreground mb-4">
-            Upload múltiplo, somente{" "}
-            {uploadKind === "image" ? "imagens" : "vídeos"}.
-          </p>
-          <div className="flex items-center justify-center gap-2">
-            <Button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={uploading}
-            >
-              <ImagePlus className="h-4 w-4 mr-2" />
-              {uploading ? "Enviando..." : "Selecionar assets"}
-            </Button>
-          </div>
-          <input
-            ref={fileInputRef}
-            type="file"
-            multiple
-            accept={uploadKind === "image" ? "image/*" : "video/*"}
-            className="hidden"
-            onChange={onInputChange}
-          />
-        </div>
-
         <div className="rounded-xl border p-4">
-          <h3 className="text-sm font-semibold uppercase tracking-wider mb-3">
-            Vincular por URL
-          </h3>
-          <div className="grid gap-2 md:grid-cols-[1fr_120px_auto]">
-            <Input
-              placeholder="https://media....../images/menu-items/.../foto.webp"
-              value={urlToLink}
-              onChange={(e) => setUrlToLink(e.target.value)}
-            />
-            <div className="flex items-center justify-center gap-2 rounded-md border px-3">
-              <span className="text-xs">Visível</span>
-              <Switch
-                checked={visibleFromUrl}
-                onCheckedChange={(checked) =>
-                  setVisibleFromUrl(Boolean(checked))
-                }
+          <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h3 className="text-sm font-semibold uppercase tracking-wider">
+                Adicionar asset
+              </h3>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Escolha se o arquivo vem do computador ou do gerenciador de
+                assets.
+              </p>
+            </div>
+            <div className="inline-flex w-full items-center rounded-md border p-1 sm:w-auto">
+              <Button
+                type="button"
+                size="sm"
+                variant={assetSource === "computer" ? "default" : "ghost"}
+                className="h-8 flex-1 px-2 text-xs sm:flex-none"
+                onClick={() => setAssetSource("computer")}
+              >
+                <UploadCloud className="mr-1 h-3.5 w-3.5" />
+                Computador
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant={assetSource === "library" ? "default" : "ghost"}
+                className="h-8 flex-1 px-2 text-xs sm:flex-none"
+                onClick={() => setAssetSource("library")}
+              >
+                <FolderOpen className="mr-1 h-3.5 w-3.5" />
+                Gerenciador
+              </Button>
+            </div>
+          </div>
+
+          {assetSource === "computer" ? (
+            <div
+              className={cn(
+                "rounded-lg border-2 border-dashed p-6 text-center transition-colors",
+                draggingOverDropzone
+                  ? "border-primary bg-primary/5"
+                  : "border-muted-foreground/30"
+              )}
+              onDragOver={(e) => {
+                e.preventDefault();
+                setDraggingOverDropzone(true);
+              }}
+              onDragLeave={() => setDraggingOverDropzone(false)}
+              onDrop={onDropFiles}
+            >
+              <div className="mb-3 inline-flex items-center rounded-md border p-1 gap-1">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={uploadKind === "image" ? "default" : "ghost"}
+                  className="h-7 px-2"
+                  onClick={() => setUploadKind("image")}
+                >
+                  <FileImage className="h-3.5 w-3.5 mr-1" />
+                  Imagem
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={uploadKind === "video" ? "default" : "ghost"}
+                  className="h-7 px-2"
+                  onClick={() => setUploadKind("video")}
+                >
+                  <FileVideo className="h-3.5 w-3.5 mr-1" />
+                  Vídeo
+                </Button>
+              </div>
+              <UploadCloud className="mx-auto mb-2 h-8 w-8 text-muted-foreground" />
+              <p className="text-sm font-medium">
+                Arraste{" "}
+                {uploadKind === "image"
+                  ? "assets de imagem"
+                  : "assets de vídeo"}{" "}
+                aqui ou selecione arquivos
+              </p>
+              <p className="text-xs text-muted-foreground mb-4">
+                Upload múltiplo, somente{" "}
+                {uploadKind === "image" ? "imagens" : "vídeos"}.
+              </p>
+              <div className="flex items-center justify-center gap-2">
+                <Button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploading}
+                >
+                  <ImagePlus className="h-4 w-4 mr-2" />
+                  {uploading ? "Enviando..." : "Selecionar assets"}
+                </Button>
+              </div>
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                accept={uploadKind === "image" ? "image/*" : "video/*"}
+                className="hidden"
+                onChange={onInputChange}
               />
             </div>
-            <Button
-              type="button"
-              onClick={addImageByUrl}
-              disabled={linkingByUrl}
-            >
-              {linkingByUrl ? "Vinculando..." : "Vincular URL"}
-            </Button>
-          </div>
+          ) : (
+            <div className="rounded-lg border p-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-sm font-medium">
+                    Selecionar asset do gerenciador
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    A modal permite buscar imagens e vídeos cadastrados no
+                    sistema e vincular ao item.
+                  </p>
+                </div>
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                  <div className="flex h-10 items-center justify-center gap-2 rounded-md border px-3">
+                    <span className="text-xs">Visível</span>
+                    <Switch
+                      checked={visibleFromLibrary}
+                      onCheckedChange={(checked) =>
+                        setVisibleFromLibrary(Boolean(checked))
+                      }
+                    />
+                  </div>
+                  <AssetLibraryPickerDialog
+                    disabled={linkingFromLibrary}
+                    onSelect={addAssetFromLibrary}
+                    triggerLabel={
+                      linkingFromLibrary ? "Vinculando..." : "Escolher asset"
+                    }
+                  />
+                </div>
+              </div>
+              <div className="mt-3">
+                <Button
+                  asChild
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 px-2 text-xs"
+                >
+                  <a
+                    href="/admin/assets"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    <ExternalLink className="mr-1 h-3.5 w-3.5" />
+                    Abrir página do gerenciador
+                  </a>
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="rounded-xl border p-4">
