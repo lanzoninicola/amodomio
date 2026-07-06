@@ -289,6 +289,43 @@ export async function readLibraryFromDb(): Promise<LibraryPayload> {
   }
 }
 
+export async function findMediaAssetById(assetId: string) {
+  const id = assetId.trim();
+  if (!id) return null;
+
+  const rows = await prismaClient.$queryRaw<
+    Array<{
+      id: string;
+      kind: string;
+      url: string;
+      folder_path: string;
+      file_name: string;
+      storage_key: string | null;
+      size_bytes: bigint | number | null;
+      created_at: Date;
+    }>
+  >`
+    SELECT id, kind, url, folder_path, file_name, storage_key, size_bytes, created_at
+    FROM media_assets
+    WHERE id = ${id}
+    LIMIT 1
+  `;
+
+  const row = rows[0];
+  if (!row) return null;
+
+  return {
+    id: row.id,
+    kind: toKind(row.kind),
+    url: row.url,
+    assetPath: row.folder_path,
+    fileName: row.file_name,
+    assetKey: row.storage_key,
+    sizeBytes: row.size_bytes === null ? null : Number(row.size_bytes),
+    uploadedAt: new Date(row.created_at).toISOString(),
+  };
+}
+
 export async function ensureFolderLineage(path: string) {
   const lineage = getFolderLineage(path);
   for (const folderPath of lineage) {

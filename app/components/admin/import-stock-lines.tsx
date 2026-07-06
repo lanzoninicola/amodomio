@@ -105,6 +105,61 @@ function formatDecimal(value: unknown) {
   });
 }
 
+function buildBatchEditLineFormData({
+  batchId,
+  line,
+  movementUnit,
+  qtyEntry,
+  costTotalAmount,
+  manualConversionFactor,
+  mappedItemId,
+  approveCostReview = false,
+  importAfterSave = false,
+}: {
+  batchId: string;
+  line: any;
+  movementUnit: string;
+  qtyEntry?: number;
+  costTotalAmount?: number;
+  manualConversionFactor?: string;
+  mappedItemId?: string | null;
+  approveCostReview?: boolean;
+  importAfterSave?: boolean;
+}) {
+  const parsedQtyEntry = Number(qtyEntry ?? line.qtyEntry ?? 0);
+  const parsedCostTotalAmount = Number(
+    costTotalAmount ?? line.costTotalAmount ?? 0
+  );
+  const derivedCostAmount =
+    Number.isFinite(parsedQtyEntry) && parsedQtyEntry > 0
+      ? parsedCostTotalAmount / parsedQtyEntry
+      : null;
+  const fd = new FormData();
+  fd.set("_action", "batch-edit-line");
+  fd.set("batchId", batchId);
+  fd.set("lineId", line.id);
+  fd.set("movementUnit", normalizeUnit(movementUnit) || "");
+  fd.set("qtyEntry", String(parsedQtyEntry));
+  fd.set(
+    "costAmount",
+    derivedCostAmount != null ? String(derivedCostAmount) : ""
+  );
+  fd.set("costTotalAmount", String(parsedCostTotalAmount));
+  fd.set("manualConversionFactor", manualConversionFactor ?? "");
+  fd.set("mappedItemId", mappedItemId || line.mappedItemId || "");
+  fd.set("supplierId", line.supplierId || "");
+  fd.set("supplierName", line.supplierName || "");
+  fd.set("supplierCnpj", line.supplierCnpj || "");
+  fd.set("movementAt", formatDateTimeLocalValue(line.movementAt));
+  fd.set("ingredientName", line.ingredientName || "");
+  fd.set("motivo", line.motivo || "");
+  fd.set("invoiceNumber", line.invoiceNumber || "");
+  fd.set("observation", line.observation || "");
+  fd.set("autoApproveCostReview", approveCostReview ? "on" : "off");
+  fd.set("importAfterSave", importAfterSave ? "on" : "off");
+  return fd;
+}
+
 function findMeasurementConversion(
   measurementConversions: Array<{
     fromUnit: string;
@@ -190,77 +245,112 @@ function CostHistoryHint({
   );
 }
 
-function ItemUnitsHeaderSummary({ item }: { item: any | null }) {
-  const unitRows = useMemo(() => {
-    if (!item) return [];
-    const rows: Array<{
-      unit: string;
-      explanation: string;
-      highlight?: boolean;
-    }> = [];
-    const seen = new Set<string>();
-    const baseUnit = normalizeUnit(item.consumptionUm);
+function resolveItemUnitRows(item: any | null, linkedUnits: string[] = []) {
+  if (!item) return [];
+  const rows: Array<{
+    unit: string;
+    explanation: string;
+    highlight?: boolean;
+  }> = [];
+  const seen = new Set<string>();
+  const baseUnit = normalizeUnit(item.consumptionUm);
 
-    if (baseUnit) {
-      rows.push({
-        unit: baseUnit,
-        explanation: "base do estoque",
-        highlight: true,
-      });
-      seen.add(baseUnit);
-    }
+  if (baseUnit) {
+    rows.push({
+      unit: baseUnit,
+      explanation: "base do estoque",
+      highlight: true,
+    });
+    seen.add(baseUnit);
+  }
 
-    const purchaseUnit = normalizeUnit(item.purchaseUm);
-    if (purchaseUnit && !seen.has(purchaseUnit)) {
-      const factor = Number(item.purchaseToConsumptionFactor ?? NaN);
-      rows.push({
-        unit: purchaseUnit,
-        explanation:
-          factor > 0 && baseUnit
-            ? `1 ${purchaseUnit} = ${factor.toLocaleString("pt-BR", {
-                maximumFractionDigits: 4,
-              })} ${baseUnit}`
-            : "sem fator",
-      });
-      seen.add(purchaseUnit);
-    }
+  const purchaseUnit = normalizeUnit(item.purchaseUm);
+  if (purchaseUnit && !seen.has(purchaseUnit)) {
+    const factor = Number(item.purchaseToConsumptionFactor ?? NaN);
+    rows.push({
+      unit: purchaseUnit,
+      explanation:
+        factor > 0 && baseUnit
+          ? `1 ${purchaseUnit} = ${factor.toLocaleString("pt-BR", {
+              maximumFractionDigits: 4,
+            })} ${baseUnit}`
+          : "sem fator",
+    });
+    seen.add(purchaseUnit);
+  }
 
-    for (const conversion of item.ItemPurchaseConversion ?? []) {
-      const unit = normalizeUnit(conversion?.purchaseUm);
-      if (!unit || seen.has(unit)) continue;
-      const factor = Number(conversion?.factor ?? NaN);
-      rows.push({
-        unit,
-        explanation:
-          factor > 0 && baseUnit
-            ? `1 ${unit} = ${factor.toLocaleString("pt-BR", {
-                maximumFractionDigits: 4,
-              })} ${baseUnit}`
-            : "sem fator",
-      });
-      seen.add(unit);
-    }
+  for (const conversion of item.ItemPurchaseConversion ?? []) {
+    const unit = normalizeUnit(conversion?.purchaseUm);
+    if (!unit || seen.has(unit)) continue;
+    const factor = Number(conversion?.factor ?? NaN);
+    rows.push({
+      unit,
+      explanation:
+        factor > 0 && baseUnit
+          ? `1 ${unit} = ${factor.toLocaleString("pt-BR", {
+              maximumFractionDigits: 4,
+            })} ${baseUnit}`
+          : "sem fator",
+    });
+    seen.add(unit);
+  }
 
-    return rows;
-  }, [item]);
+  for (const linkedUnit of linkedUnits) {
+    const unit = normalizeUnit(linkedUnit);
+    if (!unit || seen.has(unit)) continue;
+    rows.push({
+      unit,
+      explanation: "vinculada ao item",
+    });
+    seen.add(unit);
+  }
+
+  return rows;
+}
+
+function ItemUnitsHeaderSummary({
+  item,
+  linkedUnits = [],
+  selectedUnit,
+  isSaving = false,
+  onUnitClick,
+}: {
+  item: any | null;
+  linkedUnits?: string[];
+  selectedUnit?: string | null;
+  isSaving?: boolean;
+  onUnitClick?: (unit: string) => void;
+}) {
+  const unitRows = useMemo(
+    () => resolveItemUnitRows(item, linkedUnits),
+    [item, linkedUnits]
+  );
+  const normalizedSelectedUnit = normalizeUnit(selectedUnit);
 
   return (
     <div className="min-w-0">
       {unitRows.length > 0 ? (
         <div className="pt-0.5">
           {unitRows.slice(0, 4).map((row) => (
-            <div
+            <button
               key={row.unit}
+              type="button"
+              disabled={!onUnitClick || isSaving}
+              onClick={() => onUnitClick?.(row.unit)}
               className={cn(
-                "grid grid-cols-[52px_minmax(0,1fr)] gap-2 py-0.5 text-[11px] leading-tight",
+                "grid w-full grid-cols-[52px_minmax(0,1fr)] gap-2 rounded px-1 py-0.5 text-left text-[11px] leading-tight transition",
                 row.highlight
                   ? "font-semibold text-slate-800"
-                  : "text-slate-600"
+                  : "text-slate-600",
+                onUnitClick &&
+                  "hover:bg-white hover:text-slate-950 hover:shadow-sm disabled:cursor-wait disabled:opacity-60",
+                normalizedSelectedUnit === row.unit &&
+                  "bg-white text-slate-950 shadow-sm"
               )}
             >
-              <div className="truncate">{row.unit}</div>
-              <div className="truncate text-slate-500">{row.explanation}</div>
-            </div>
+              <span className="truncate">{row.unit}</span>
+              <span className="truncate text-slate-500">{row.explanation}</span>
+            </button>
           ))}
           {unitRows.length > 4 ? (
             <div className="mt-0.5 text-[10px] text-slate-400">
@@ -371,7 +461,6 @@ function EditableTwoLevelRow({
     for (const unit of linkedUnits) merged.add(unit);
     return Array.from(merged).sort((a, b) => a.localeCompare(b, "pt-BR"));
   }, [itemUnitOptionsByItemId, line.mappedItemId]);
-
   const conversionPreview = useMemo(() => {
     const movUnit = normalizeUnit(movementUnitDraft);
     const targetUnit = normalizeUnit(
@@ -575,6 +664,7 @@ function EditableTwoLevelRow({
                 items={items}
                 batchId={selectedBatchId}
                 unitOptions={unitOptions}
+                itemUnitOptionsByItemId={itemUnitOptionsByItemId}
                 categories={categories}
                 costHint={hint}
                 showCostHint={false}
@@ -973,6 +1063,7 @@ function LineCard({
   unitOptions,
   categories,
   itemUnitOptionsByItemId,
+  lastEntryMovementUnitByItemId,
   measurementConversions,
   location,
   isEditing,
@@ -991,6 +1082,7 @@ function LineCard({
   unitOptions: string[];
   categories: Array<{ id: string; name: string }>;
   itemUnitOptionsByItemId: Record<string, string[]>;
+  lastEntryMovementUnitByItemId: Record<string, string | null>;
   measurementConversions: Array<{
     fromUnit: string;
     toUnit: string;
@@ -1061,6 +1153,14 @@ function LineCard({
     for (const unit of linkedUnits) merged.add(unit);
     return Array.from(merged).sort((a, b) => a.localeCompare(b, "pt-BR"));
   }, [itemUnitOptionsByItemId, line.mappedItemId]);
+  const rawLastEntryMovementUnit = normalizeUnit(
+    lastEntryMovementUnitByItemId[line.mappedItemId || ""]
+  );
+  const lastEntryMovementUnit =
+    rawLastEntryMovementUnit &&
+    availableMovementUnits.includes(rawLastEntryMovementUnit)
+      ? rawLastEntryMovementUnit
+      : null;
 
   const conversionPreview = useMemo(() => {
     const movUnit = normalizeUnit(movementUnitDraft);
@@ -1145,29 +1245,37 @@ function LineCard({
     approveCostReview = false,
   }: { approveCostReview?: boolean } = {}) {
     hasSubmittedRef.current = true;
-    const fd = new FormData();
-    fd.set("_action", "batch-edit-line");
-    fd.set("batchId", batchId);
-    fd.set("lineId", line.id);
-    fd.set("movementUnit", movementUnitDraft);
-    fd.set("qtyEntry", String(qtyEntryDraft));
-    fd.set(
-      "costAmount",
-      derivedCostAmount != null ? String(derivedCostAmount) : ""
-    );
-    fd.set("costTotalAmount", String(costTotalAmountDraft));
-    fd.set("manualConversionFactor", manualConversionFactorDraft);
-    fd.set("mappedItemId", line.mappedItemId || "");
-    fd.set("supplierId", line.supplierId || "");
-    fd.set("supplierName", line.supplierName || "");
-    fd.set("supplierCnpj", line.supplierCnpj || "");
-    fd.set("movementAt", formatDateTimeLocalValue(line.movementAt));
-    fd.set("ingredientName", line.ingredientName || "");
-    fd.set("motivo", line.motivo || "");
-    fd.set("invoiceNumber", line.invoiceNumber || "");
-    fd.set("observation", line.observation || "");
-    fd.set("autoApproveCostReview", approveCostReview ? "on" : "off");
-    fd.set("importAfterSave", "off");
+    const fd = buildBatchEditLineFormData({
+      batchId,
+      line,
+      movementUnit: movementUnitDraft,
+      qtyEntry: qtyEntryDraft,
+      costTotalAmount: costTotalAmountDraft,
+      manualConversionFactor: manualConversionFactorDraft,
+      mappedItemId: line.mappedItemId || "",
+      approveCostReview,
+    });
+    fetcher.submit(fd, {
+      method: "post",
+      action: `/admin/import-stock-movements/${batchId}`,
+    });
+  }
+
+  function handleUnitShortcut(unit: string) {
+    const normalized = normalizeUnit(unit);
+    if (!normalized) return;
+    if (!availableMovementUnits.includes(normalized)) return;
+    setMovementUnitDraft(normalized);
+    const fd = buildBatchEditLineFormData({
+      batchId,
+      line,
+      movementUnit: normalized,
+      qtyEntry: qtyEntryDraft,
+      costTotalAmount: costTotalAmountDraft,
+      manualConversionFactor: manualConversionFactorDraft,
+      mappedItemId: line.mappedItemId || "",
+    });
+    hasSubmittedRef.current = true;
     fetcher.submit(fd, {
       method: "post",
       action: `/admin/import-stock-movements/${batchId}`,
@@ -1425,7 +1533,15 @@ function LineCard({
             </div>
           </div>
 
-          <ItemUnitsHeaderSummary item={selectedItem} />
+          <ItemUnitsHeaderSummary
+            item={selectedItem}
+            linkedUnits={itemUnitOptionsByItemId[line.mappedItemId || ""] || []}
+            selectedUnit={
+              movementUnitDraft || line.movementUnit || line.unitEntry
+            }
+            isSaving={isSaving}
+            onUnitClick={line.mappedItemId ? handleUnitShortcut : undefined}
+          />
 
           <div className="flex shrink-0 flex-col items-start gap-1.5 self-center lg:items-end">
             <CardHeaderStatus status={line.status} />
@@ -1491,6 +1607,7 @@ function LineCard({
                     items={items}
                     batchId={batchId}
                     unitOptions={unitOptions}
+                    itemUnitOptionsByItemId={itemUnitOptionsByItemId}
                     categories={categories}
                     costHint={hint}
                     mobile={mobile}
@@ -1541,6 +1658,7 @@ function LineCard({
                     items={items}
                     batchId={batchId}
                     unitOptions={unitOptions}
+                    itemUnitOptionsByItemId={itemUnitOptionsByItemId}
                     categories={categories}
                     costHint={hint}
                     showCostHint={false}
@@ -1562,29 +1680,47 @@ function LineCard({
                     UM
                   </div>
                   {isEditing ? (
-                    <Select
-                      value={movementUnitDraft || "__EMPTY__"}
-                      onValueChange={(v) =>
-                        setMovementUnitDraft(v === "__EMPTY__" ? "" : v)
-                      }
-                    >
-                      <SelectTrigger
-                        className={cn(
-                          "bg-white",
-                          mobile ? "h-12 rounded-xl text-base" : "h-9 text-xs"
-                        )}
+                    <>
+                      <Select
+                        value={movementUnitDraft || "__EMPTY__"}
+                        onValueChange={(v) =>
+                          setMovementUnitDraft(v === "__EMPTY__" ? "" : v)
+                        }
                       >
-                        <SelectValue placeholder="UM" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="__EMPTY__">Sel.</SelectItem>
-                        {availableMovementUnits.map((unit) => (
-                          <SelectItem key={unit} value={unit}>
-                            {unit}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                        <SelectTrigger
+                          className={cn(
+                            "bg-white",
+                            mobile ? "h-12 rounded-xl text-base" : "h-9 text-xs"
+                          )}
+                        >
+                          <SelectValue placeholder="UM" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__EMPTY__">Sel.</SelectItem>
+                          {availableMovementUnits.map((unit) => (
+                            <SelectItem key={unit} value={unit}>
+                              {unit}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {lastEntryMovementUnit ? (
+                        <button
+                          type="button"
+                          disabled={isSaving}
+                          onClick={() =>
+                            handleUnitShortcut(lastEntryMovementUnit)
+                          }
+                          className={cn(
+                            "mt-1 text-left text-[11px] font-semibold text-slate-500 underline underline-offset-2 transition hover:text-slate-900",
+                            isSaving && "cursor-wait opacity-60"
+                          )}
+                          title={`Usar UM do ultimo movimento de entrada: ${lastEntryMovementUnit}`}
+                        >
+                          última entrada: {lastEntryMovementUnit}
+                        </button>
+                      ) : null}
+                    </>
                   ) : (
                     <div
                       className={cn(
@@ -1975,6 +2111,7 @@ export function ImportStockLinesPanel({
     selectedBatch,
     unitOptions,
     itemUnitOptionsByItemId,
+    lastEntryMovementUnitByItemId,
     measurementConversions,
     itemCostHints,
     summary,
@@ -2349,6 +2486,7 @@ export function ImportStockLinesPanel({
                   unitOptions={unitOptions}
                   categories={categories}
                   itemUnitOptionsByItemId={itemUnitOptionsByItemId}
+                  lastEntryMovementUnitByItemId={lastEntryMovementUnitByItemId}
                   measurementConversions={measurementConversions}
                   location={location}
                   isEditing={activeEditingLineId === line.id}
@@ -2503,6 +2641,7 @@ export function ImportStockLinesPanel({
                               items={items}
                               batchId={selectedBatch.id}
                               unitOptions={unitOptions}
+                              itemUnitOptionsByItemId={itemUnitOptionsByItemId}
                               categories={categories}
                               costHint={hint}
                               showCostHint={false}

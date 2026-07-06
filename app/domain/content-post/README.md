@@ -25,7 +25,7 @@ O cardápio não possui mais uma entidade editorial própria. Ele lê
 
 Estados de `ContentPublicationTarget` usados na operação:
 
-- `draft`: canal desativado ou conteúdo editorial ainda não ativo;
+- `draft`: conteúdo editorial ainda não ativo;
 - `needs_sync`: canal habilitado e configurado, pronto para publicação, mas
   ainda não publicado;
 - `active`: canal publicado. Para canais com data, `lastPublishedAt` registra o
@@ -40,9 +40,10 @@ salva deixa o target em `needs_sync`; a transição para `active` acontece pela
 ação explícita de publicar, registrada em `ContentPublicationExecution`.
 
 No `cardapio-featured`, a publicação é uma projeção interna: o cardápio público
-retorna apenas targets `enabled`, `active` e com `ContentPost.status = active`.
-Salvar ajustes de um Cardápio já publicado preserva `active`; configurar ou
-habilitar uma primeira vez deixa `needs_sync` até o operador publicar.
+retorna apenas targets `active`, com `lastPublishedAt` preenchido e com
+`ContentPost.status = active`. Salvar ajustes de um Cardápio já publicado
+preserva `active`; configurar pela primeira vez deixa `needs_sync` até o
+operador publicar.
 
 No `whatsapp-status`, legenda e mídias selecionadas pertencem à configuração do
 grupo. Limpar o estado de publicação remove apenas dados de envio
@@ -59,8 +60,8 @@ Quando o post sai do estado `active`:
 4. uma execução `remove` registra que a plataforma precisa expirar o conteúdo
    quando a API não oferece remoção confiável.
 
-Reativar o post reativa apenas os alvos marcados como `enabled`. Publicações
-externas não são disparadas automaticamente.
+Reativar o post reativa todos os alvos do post. Publicações externas não são
+disparadas automaticamente.
 
 ## Tracking do cardápio
 
@@ -75,7 +76,7 @@ série existente. O campo `value` continua recebendo uma chave estável, agora
 /admin/marketing/publicacoes
 /admin/marketing/publicacoes/:id/conteudo
 /admin/marketing/publicacoes/:id/midias
-/admin/marketing/publicacoes/:id/canais
+/admin/marketing/publicacoes/:id/cardapio
 /admin/marketing/publicacoes/:id/whatsapp
 /admin/marketing/publicacoes/:id/instagram
 ```

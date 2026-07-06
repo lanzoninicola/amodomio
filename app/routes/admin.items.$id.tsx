@@ -27,7 +27,11 @@ import {
   calculateItemCostMetrics,
   getItemAverageCostWindowDays,
 } from "~/domain/item/item-cost-metrics.server";
-import { recalculateItemCostHistory } from "~/domain/item/item-cost-recalculate.server";
+import {
+  recalculateItemCostHistory,
+  relabelItemCostUnitAfterConsumptionUnitChange,
+} from "~/domain/item/item-cost-recalculate.server";
+import { buildUniqueItemSellingSlug } from "~/domain/item/item-selling-slug.server";
 import { loadItemCostAuditForItem } from "~/domain/item/item-cost-audit.server";
 import { getAvailableItemUnits as getAvailableItemUnitsFromServer } from "~/domain/item/item-units.server";
 import {
@@ -579,6 +583,20 @@ export async function action({ request, params }: ActionFunctionArgs) {
         }
       }
 
+      const currentItem = await db.item.findUnique({
+        where: { id },
+        select: {
+          consumptionUm: true,
+          ItemSellingInfo: {
+            select: {
+              slug: true,
+            },
+          },
+        },
+      });
+      const previousConsumptionUm = normalizeUnit(currentItem?.consumptionUm);
+      const canSell = toBool(formData.get("canSell"));
+
       await db.item.update({
         where: { id },
         data: {
@@ -591,10 +609,31 @@ export async function action({ request, params }: ActionFunctionArgs) {
           active: toBool(formData.get("active")),
           canPurchase: toBool(formData.get("canPurchase")),
           canTransform: toBool(formData.get("canTransform")),
-          canSell: toBool(formData.get("canSell")),
+          canSell,
           canStock: toBool(formData.get("canStock")),
         },
       });
+
+      if (canSell && !currentItem?.ItemSellingInfo?.slug) {
+        const sellingSlug = await buildUniqueItemSellingSlug(db, name, {
+          itemId: id,
+        });
+
+        await db.itemSellingInfo.upsert({
+          where: { itemId: id },
+          update: { slug: sellingSlug },
+          create: { itemId: id, slug: sellingSlug },
+        });
+      }
+
+      const costUnitRelabel =
+        previousConsumptionUm && consumptionUm !== previousConsumptionUm
+          ? await relabelItemCostUnitAfterConsumptionUnitChange({
+              itemId: id,
+              fromUnit: previousConsumptionUm,
+              toUnit: consumptionUm,
+            })
+          : null;
 
       const hasConfiguredVariations = !!(await db.itemVariation.findFirst({
         where: {
@@ -609,9 +648,17 @@ export async function action({ request, params }: ActionFunctionArgs) {
         select: { id: true },
       }));
 
+      const relabeledCount =
+        Number(costUnitRelabel?.currentUpdated || 0) +
+        Number(costUnitRelabel?.historyUpdated || 0);
+
       return ok({
-        message: "Item atualizado com sucesso",
+        message:
+          relabeledCount > 0
+            ? `Item atualizado com sucesso. ${relabeledCount} registro(s) de custo foram ajustados de ${costUnitRelabel?.fromUnit} para ${costUnitRelabel?.toUnit}.`
+            : "Item atualizado com sucesso",
         missingVariations: !hasConfiguredVariations,
+        costUnitRelabel,
       });
     }
 

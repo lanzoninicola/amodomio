@@ -8,9 +8,9 @@ import {
 } from "@remix-run/react";
 import { StatusPublicationMediaForm } from "~/domain/whatsapp-status/components/status-publication-media-form";
 import {
+  clearStatusPublicationGroupPublishState,
   getStatusPublicationGroup,
   publishStatusPublicationGroup,
-  removeStatusPublicationGroup,
   syncStatusPublicationGroup,
 } from "~/domain/whatsapp-status/whatsapp-status-publication-group.server";
 import {
@@ -18,6 +18,7 @@ import {
   getContentPost,
   markContentTargetSynced,
   runContentTargetOperation,
+  unpublishContentTarget,
 } from "~/domain/content-post/content-post.server";
 import { CONTENT_POST_CHANNELS } from "~/domain/content-post/content-post.shared";
 import { buildContentTargetPublishEndpoint } from "~/domain/content-post/content-post.shared";
@@ -46,15 +47,23 @@ export async function action({ request, params }: ActionFunctionArgs) {
     (item) => item.channel === CONTENT_POST_CHANNELS.WHATSAPP_STATUS
   );
   if (!target) throw new Response("Canal não encontrado", { status: 404 });
-  if (!target.enabled || post.status !== "active") {
+
+  const form = await request.formData();
+  const source = contentPostSocialSource(target.id);
+
+  if (String(form.get("_intent") || "") === "unpublish") {
+    await unpublishContentTarget(target.id);
+    await clearStatusPublicationGroupPublishState(source);
+    return json({ ok: true, message: "Status removido do WhatsApp." });
+  }
+
+  if (post.status !== "active") {
     return json(
-      { ok: false, message: "Ative o conteúdo e o canal WhatsApp primeiro." },
+      { ok: false, message: "Ative o conteúdo primeiro." },
       { status: 409 }
     );
   }
 
-  const form = await request.formData();
-  const source = contentPostSocialSource(target.id);
   await syncStatusPublicationGroup({
     source,
     caption: String(form.get("statusPublicationCaption") || post.caption || ""),
@@ -103,13 +112,13 @@ export default function ContentPostWhatsappPage() {
   const actionData = useActionData<typeof action>();
   const navigation = useNavigation();
 
-  const publishBlockedReason = !target.enabled
-    ? "Habilite o canal WhatsApp Status na aba Canais antes de publicar."
-    : post.status !== "active"
-    ? "Ative a publicação antes de publicar."
-    : post.Media.length === 0
-    ? "Adicione mídias à publicação para poder publicar."
-    : null;
+  const publishBlockedReason =
+    post.status !== "active"
+      ? "Ative a publicação antes de publicar."
+      : post.Media.length === 0
+      ? "Adicione mídias à publicação para poder publicar."
+      : null;
+  const canUnpublish = target.status === "active" && Boolean(target.lastPublishedAt);
 
   return (
     <Form method="post" className="grid gap-6">
@@ -130,6 +139,7 @@ export default function ContentPostWhatsappPage() {
         feedback={actionData || null}
         submitting={navigation.state === "submitting"}
         publishBlockedReason={publishBlockedReason}
+        canUnpublish={canUnpublish}
       />
     </Form>
   );

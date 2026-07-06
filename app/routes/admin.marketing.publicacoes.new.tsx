@@ -7,7 +7,6 @@ import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { Textarea } from "~/components/ui/textarea";
 import { createContentPost } from "~/domain/content-post/content-post.server";
-import { parseContentPostMediaForm } from "~/domain/content-post/content-post-media.shared";
 import { slugifyContentPostKey } from "~/domain/content-post/content-post.shared";
 
 export async function action({ request }: ActionFunctionArgs) {
@@ -22,7 +21,7 @@ export async function action({ request }: ActionFunctionArgs) {
       title,
       subtitle: String(form.get("subtitle") || ""),
       caption: String(form.get("caption") || ""),
-      media: parseContentPostMediaForm(form, title),
+      media: [],
     });
     throw redirect(`/admin/marketing/publicacoes/${post.id}`);
   } catch (error: any) {
@@ -72,25 +71,6 @@ export default function NewContentPost() {
         <div className="grid gap-2">
           <Label htmlFor="caption">Texto/legenda base</Label>
           <Textarea id="caption" name="caption" rows={4} />
-        </div>
-        <div className="grid gap-2">
-          <Label htmlFor="mediaUrls">URLs das mídias</Label>
-          <Textarea
-            id="mediaUrls"
-            name="mediaUrls"
-            rows={6}
-            placeholder="Uma URL pública por linha"
-            required
-          />
-        </div>
-        <div className="grid gap-2">
-          <Label htmlFor="fullscreenMediaUrls">URLs ampliadas (opcional)</Label>
-          <Textarea
-            id="fullscreenMediaUrls"
-            name="fullscreenMediaUrls"
-            rows={4}
-            placeholder="Uma URL por linha, na mesma ordem"
-          />
         </div>
         <Button type="submit" disabled={navigation.state === "submitting"}>
           {navigation.state === "submitting"

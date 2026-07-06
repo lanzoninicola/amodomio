@@ -1,5 +1,10 @@
 import type { LoaderFunctionArgs } from "@remix-run/node";
-import { Form, Link, useLoaderData, useNavigation } from "@remix-run/react";
+import {
+  Link,
+  useFetcher,
+  useLoaderData,
+  useNavigation,
+} from "@remix-run/react";
 import {
   Check,
   Minus,
@@ -119,7 +124,9 @@ export default function AdminMobilePedidoFornecedorProdutos() {
     selection,
   } = payload as any;
   const navigation = useNavigation();
+  const saveFetcher = useFetcher<{ ok: boolean; error?: string }>();
   const isLoading = navigation.state !== "idle";
+  const isSaving = saveFetcher.state !== "idle";
   const [itemQuery, setItemQuery] = useState("");
   const [selectedItems, setSelectedItems] = useState<
     Record<string, ProductSelection>
@@ -163,8 +170,7 @@ export default function AdminMobilePedidoFornecedorProdutos() {
         qty: String(entry.qty || "1"),
         unit:
           String(entry.unit || "").toUpperCase() ||
-          globalUnitOptions[0] ||
-          "UN",
+          getPreferredFreeItemUnit(globalUnitOptions),
       }))
   );
 
@@ -223,13 +229,13 @@ export default function AdminMobilePedidoFornecedorProdutos() {
 
   function addFreeItem() {
     setFreeItems((items) => [
-      ...items,
       {
         key: `${Date.now()}-${items.length}`,
         name: "",
         qty: "1",
-        unit: globalUnitOptions[0] || "UN",
+        unit: getPreferredFreeItemUnit(globalUnitOptions),
       },
+      ...items,
     ]);
   }
 
@@ -318,9 +324,10 @@ export default function AdminMobilePedidoFornecedorProdutos() {
             </span>
           </p>
 
-          <Form
+          <saveFetcher.Form
             method="post"
             action="/admin/mobile/pedido-compra/por-fornecedor"
+            preventScrollReset
             className="space-y-2"
           >
             <input type="hidden" name="_intent" value="save-order" />
@@ -355,7 +362,7 @@ export default function AdminMobilePedidoFornecedorProdutos() {
               </div>
             ))}
 
-            <section className="space-y-2 rounded-xl border border-dashed border-slate-300 bg-slate-50 p-3">
+            <section className="space-y-2 rounded-xl bg-slate-50 p-3">
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <p className="text-sm font-semibold text-slate-900">
@@ -378,7 +385,7 @@ export default function AdminMobilePedidoFornecedorProdutos() {
               {freeItems.map((item) => (
                 <article
                   key={item.key}
-                  className="space-y-3 rounded-xl border border-slate-200 bg-white p-3"
+                  className="space-y-3 rounded-xl bg-white p-3"
                 >
                   <div className="flex items-center gap-2">
                     <input
@@ -687,15 +694,26 @@ export default function AdminMobilePedidoFornecedorProdutos() {
               <div className="sticky bottom-4 z-10 flex justify-center">
                 <button
                   type="submit"
+                  disabled={isSaving}
                   className="inline-flex items-center gap-2 rounded-2xl bg-slate-900 px-6 py-3.5 text-sm font-semibold text-white shadow-xl"
                 >
                   <Send className="h-4 w-4" />
-                  {orderId ? "Salvar pedido" : "Criar pedido"} ({selectedCount}{" "}
-                  {selectedCount === 1 ? "item" : "itens"})
+                  {isSaving
+                    ? "Salvando..."
+                    : `${
+                        orderId ? "Salvar pedido" : "Criar pedido"
+                      } (${selectedCount} ${
+                        selectedCount === 1 ? "item" : "itens"
+                      })`}
                 </button>
               </div>
             ) : null}
-          </Form>
+            {saveFetcher.data?.error ? (
+              <p className="rounded-xl bg-red-50 px-3 py-2 text-sm font-medium text-red-700">
+                {saveFetcher.data.error}
+              </p>
+            ) : null}
+          </saveFetcher.Form>
         </>
       ) : !isLoading ? (
         <div className="flex flex-col items-center gap-2 py-14 text-slate-400">
@@ -763,4 +781,11 @@ function normalizeUnit(unit: unknown) {
   return String(unit || "")
     .trim()
     .toUpperCase();
+}
+
+function getPreferredFreeItemUnit(globalUnitOptions: string[] = []) {
+  const normalizedOptions = globalUnitOptions.map((unit) =>
+    normalizeUnit(unit)
+  );
+  return normalizedOptions.includes("UN") ? "UN" : normalizedOptions[0] || "UN";
 }

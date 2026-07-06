@@ -9,6 +9,7 @@ import {
 import { InstagramStoryMediaForm } from "~/domain/instagram/components/instagram-story-media-form";
 import { getInstagramConnection } from "~/domain/instagram/instagram-facebook-login.server";
 import {
+  clearInstagramStoryGroupPublishState,
   getInstagramStoryGroup,
   publishInstagramStoryGroup,
   syncInstagramStoryGroup,
@@ -18,6 +19,7 @@ import {
   getContentPost,
   markContentTargetSynced,
   runContentTargetOperation,
+  unpublishContentTarget,
 } from "~/domain/content-post/content-post.server";
 import { CONTENT_POST_CHANNELS } from "~/domain/content-post/content-post.shared";
 import { buildContentTargetPublishEndpoint } from "~/domain/content-post/content-post.shared";
@@ -51,15 +53,23 @@ export async function action({ request, params }: ActionFunctionArgs) {
     (item) => item.channel === CONTENT_POST_CHANNELS.INSTAGRAM_STORY
   );
   if (!target) throw new Response("Canal não encontrado", { status: 404 });
-  if (!target.enabled || post.status !== "active") {
+
+  const form = await request.formData();
+  const source = contentPostSocialSource(target.id);
+
+  if (String(form.get("_intent") || "") === "unpublish") {
+    await unpublishContentTarget(target.id);
+    await clearInstagramStoryGroupPublishState(source);
+    return json({ ok: true, message: "Story removido do Instagram." });
+  }
+
+  if (post.status !== "active") {
     return json(
-      { ok: false, message: "Ative o conteúdo e o canal Instagram primeiro." },
+      { ok: false, message: "Ative o conteúdo primeiro." },
       { status: 409 }
     );
   }
 
-  const form = await request.formData();
-  const source = contentPostSocialSource(target.id);
   await syncInstagramStoryGroup({
     source,
     selectedKeys: form
@@ -109,14 +119,10 @@ export default function ContentPostInstagramPage() {
     useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const navigation = useNavigation();
+  const canUnpublish = target.status === "active" && Boolean(target.lastPublishedAt);
 
   return (
     <Form method="post" className="grid gap-6">
-      {!target.enabled ? (
-        <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-          Habilite Instagram Story na aba Canais.
-        </div>
-      ) : null}
       <InstagramStoryMediaForm
         mediaItems={post.Media.map((media) => ({
           key: media.id,
@@ -130,6 +136,7 @@ export default function ContentPostInstagramPage() {
         feedback={actionData || null}
         submitting={navigation.state === "submitting"}
         connected={connected}
+        canUnpublish={canUnpublish}
       />
     </Form>
   );

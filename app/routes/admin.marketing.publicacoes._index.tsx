@@ -4,23 +4,33 @@ import { Form, Link, useFetcher, useLoaderData } from "@remix-run/react";
 import {
   AlertTriangle,
   CheckCircle2,
+  Copy,
   RefreshCw,
   Search,
   Send,
   SlidersHorizontal,
+  Trash2,
   type LucideIcon,
   XCircle,
 } from "lucide-react";
 import { Badge } from "~/components/ui/badge";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "~/components/ui/select";
 import { Separator } from "~/components/ui/separator";
 import { invalidateCardapioIndexCache } from "~/domain/cardapio/cardapio-cache.server";
 import {
-  clearContentTargetPublicationData,
   contentPostSocialSource,
+  duplicateContentPost,
   getContentPost,
   listContentPosts,
   runContentTargetOperation,
-  updateContentPostTarget,
+  softDeleteContentPost,
+  unpublishContentTarget,
 } from "~/domain/content-post/content-post.server";
 import {
   CONTENT_POST_CHANNELS,
@@ -31,63 +41,105 @@ import {
   clearStatusPublicationGroupPublishState,
   publishStatusPublicationGroup,
 } from "~/domain/whatsapp-status/whatsapp-status-publication-group.server";
+import {
+  clearInstagramStoryGroupPublishState,
+  publishInstagramStoryGroup,
+} from "~/domain/instagram/instagram-story-publication-group.server";
 import prismaClient from "~/lib/prisma/client.server";
 
 export async function loader({ request }: LoaderFunctionArgs) {
-  const q = new URL(request.url).searchParams.get("q") || "";
+  const searchParams = new URL(request.url).searchParams;
+  const q = searchParams.get("q") || "";
+  const publicationStatus = parsePublicationStatusFilter(
+    searchParams.get("publicationStatus")
+  );
   const posts = await listContentPosts(q);
   const whatsappTargetIds = posts.flatMap((post) =>
     post.Targets.filter(
       (target) => target.channel === CONTENT_POST_CHANNELS.WHATSAPP_STATUS
     ).map((target) => target.id)
   );
+  const instagramTargetIds = posts.flatMap((post) =>
+    post.Targets.filter(
+      (target) => target.channel === CONTENT_POST_CHANNELS.INSTAGRAM_STORY
+    ).map((target) => target.id)
+  );
   const sourceType = contentPostSocialSource("__target__").sourceType;
-  const configuredWhatsappTargets = whatsappTargetIds.length
-    ? await prismaClient.whatsappStatusPublication.findMany({
-        where: {
-          sourceType,
-          sourceId: { in: whatsappTargetIds },
-          active: true,
-          deletedAt: null,
-        },
-        select: { sourceId: true },
-        distinct: ["sourceId"],
-      })
-    : [];
+  const [configuredWhatsappTargets, configuredInstagramTargets] =
+    await Promise.all([
+      whatsappTargetIds.length
+        ? prismaClient.whatsappStatusPublication.findMany({
+            where: {
+              sourceType,
+              sourceId: { in: whatsappTargetIds },
+              active: true,
+              deletedAt: null,
+            },
+            select: { sourceId: true },
+            distinct: ["sourceId"],
+          })
+        : [],
+      instagramTargetIds.length
+        ? prismaClient.instagramStoryPublication.findMany({
+            where: {
+              sourceType,
+              sourceId: { in: instagramTargetIds },
+              active: true,
+              deletedAt: null,
+            },
+            select: { sourceId: true },
+            distinct: ["sourceId"],
+          })
+        : [],
+    ]);
   const configuredWhatsappTargetIds = new Set(
     configuredWhatsappTargets
       .map((item) => item.sourceId)
       .filter((sourceId): sourceId is string => Boolean(sourceId))
   );
+  const configuredInstagramTargetIds = new Set(
+    configuredInstagramTargets
+      .map((item) => item.sourceId)
+      .filter((sourceId): sourceId is string => Boolean(sourceId))
+  );
+
+  const normalizedPosts = posts.map((post) => ({
+    ...post,
+    Targets: post.Targets.map((target) => {
+      const status =
+        target.status === "active" && !target.lastPublishedAt
+          ? "needs_sync"
+          : target.status;
+
+      return {
+        ...target,
+        status,
+        canPublishDirect:
+          post.status === CONTENT_POST_STATUSES.ACTIVE &&
+          status !== "active" &&
+          (target.channel === CONTENT_POST_CHANNELS.CARDAPIO_FEATURED ||
+            (target.channel === CONTENT_POST_CHANNELS.WHATSAPP_STATUS &&
+              configuredWhatsappTargetIds.has(target.id)) ||
+            (target.channel === CONTENT_POST_CHANNELS.INSTAGRAM_STORY &&
+              configuredInstagramTargetIds.has(target.id))),
+        canUnpublish: status === "active" && Boolean(target.lastPublishedAt),
+      };
+    }),
+  }));
+  const filteredPosts =
+    publicationStatus === "all"
+      ? normalizedPosts
+      : normalizedPosts.filter((post) =>
+          post.Targets.some(
+            (target) =>
+              getPublicationStatusFilterValue(target) === publicationStatus
+          )
+        );
 
   return json({
-    posts: posts.map((post) => ({
-      ...post,
-      Targets: post.Targets.map((target) => {
-        const externalChannel =
-          target.channel === CONTENT_POST_CHANNELS.WHATSAPP_STATUS ||
-          target.channel === CONTENT_POST_CHANNELS.INSTAGRAM_STORY;
-        const status =
-          externalChannel &&
-          target.status === "active" &&
-          !target.lastPublishedAt
-            ? "needs_sync"
-            : target.status;
-
-        return {
-          ...target,
-          status,
-          canPublishDirect:
-            target.enabled &&
-            post.status === CONTENT_POST_STATUSES.ACTIVE &&
-            status !== "active" &&
-            (target.channel === CONTENT_POST_CHANNELS.CARDAPIO_FEATURED ||
-              (target.channel === CONTENT_POST_CHANNELS.WHATSAPP_STATUS &&
-                configuredWhatsappTargetIds.has(target.id))),
-        };
-      }),
-    })),
+    posts: filteredPosts,
     q,
+    publicationStatus,
   });
 }
 
@@ -95,6 +147,18 @@ export async function action({ request }: ActionFunctionArgs) {
   const form = await request.formData();
   const intent = String(form.get("_intent") || "");
   const contentPostId = String(form.get("contentPostId") || "");
+
+  if (intent === "duplicate-post") {
+    const duplicated = await duplicateContentPost(contentPostId);
+    return json({ ok: true, id: duplicated.id });
+  }
+
+  if (intent === "delete-post") {
+    await softDeleteContentPost(contentPostId);
+    await invalidateCardapioIndexCache();
+    return json({ ok: true });
+  }
+
   const channel = String(form.get("channel") || "") as ContentPostChannel;
   const post = await getContentPost(contentPostId);
   const target = post.Targets.find((t) => t.channel === channel);
@@ -102,14 +166,18 @@ export async function action({ request }: ActionFunctionArgs) {
     throw new Response("Canal não encontrado", { status: 404 });
   }
 
-  if (
-    intent === "clear-whatsapp-publication" &&
-    channel === CONTENT_POST_CHANNELS.WHATSAPP_STATUS
-  ) {
-    await clearStatusPublicationGroupPublishState(
-      contentPostSocialSource(target.id)
-    );
-    await clearContentTargetPublicationData(target.id);
+  if (intent === "unpublish") {
+    await unpublishContentTarget(target.id);
+    const source = contentPostSocialSource(target.id);
+    if (channel === CONTENT_POST_CHANNELS.WHATSAPP_STATUS) {
+      await clearStatusPublicationGroupPublishState(source);
+    }
+    if (channel === CONTENT_POST_CHANNELS.INSTAGRAM_STORY) {
+      await clearInstagramStoryGroupPublishState(source);
+    }
+    if (channel === CONTENT_POST_CHANNELS.CARDAPIO_FEATURED) {
+      await invalidateCardapioIndexCache();
+    }
     return json({ ok: true });
   }
 
@@ -117,9 +185,9 @@ export async function action({ request }: ActionFunctionArgs) {
     intent === "publish-cardapio" &&
     channel === CONTENT_POST_CHANNELS.CARDAPIO_FEATURED
   ) {
-    if (!target.enabled || post.status !== CONTENT_POST_STATUSES.ACTIVE) {
+    if (post.status !== CONTENT_POST_STATUSES.ACTIVE) {
       return json(
-        { ok: false, message: "Ative o conteúdo e o canal Cardápio primeiro." },
+        { ok: false, message: "Ative o conteúdo primeiro." },
         { status: 409 }
       );
     }
@@ -139,9 +207,9 @@ export async function action({ request }: ActionFunctionArgs) {
     intent === "publish-whatsapp" &&
     channel === CONTENT_POST_CHANNELS.WHATSAPP_STATUS
   ) {
-    if (!target.enabled || post.status !== CONTENT_POST_STATUSES.ACTIVE) {
+    if (post.status !== CONTENT_POST_STATUSES.ACTIVE) {
       return json(
-        { ok: false, message: "Ative o conteúdo e o canal WhatsApp primeiro." },
+        { ok: false, message: "Ative o conteúdo primeiro." },
         { status: 409 }
       );
     }
@@ -168,25 +236,40 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 
   if (
-    intent !== "disable-cardapio" ||
-    channel !== CONTENT_POST_CHANNELS.CARDAPIO_FEATURED
+    intent === "publish-instagram" &&
+    channel === CONTENT_POST_CHANNELS.INSTAGRAM_STORY
   ) {
-    return json({ ok: false }, { status: 400 });
+    if (post.status !== CONTENT_POST_STATUSES.ACTIVE) {
+      return json(
+        { ok: false, message: "Ative o conteúdo primeiro." },
+        { status: 409 }
+      );
+    }
+
+    const source = contentPostSocialSource(target.id);
+    try {
+      const result = await runContentTargetOperation({
+        targetId: target.id,
+        operation: "publish",
+        source: "manual",
+        execute: () =>
+          publishInstagramStoryGroup(source, { source: "manual" }),
+        externalId: (value) =>
+          value.publications.at(-1)?.publication.lastInstagramMediaId,
+        response: (value) => ({
+          publications: value.publications.map((item) => item.publication.id),
+        }),
+      });
+      return json({ ok: true, published: result.publications.length });
+    } catch (error: any) {
+      return json(
+        { ok: false, message: error?.message || "Erro ao publicar." },
+        { status: Number(error?.status) || 500 }
+      );
+    }
   }
 
-  await updateContentPostTarget({
-    contentPostId,
-    channel,
-    enabled: false,
-    sortOrder: target?.sortOrder ?? 0,
-    config: target?.config,
-  });
-
-  if (channel === CONTENT_POST_CHANNELS.CARDAPIO_FEATURED) {
-    await invalidateCardapioIndexCache();
-  }
-
-  return json({ ok: true });
+  return json({ ok: false }, { status: 400 });
 }
 
 const statusLabel: Record<string, string> = {
@@ -194,6 +277,39 @@ const statusLabel: Record<string, string> = {
   active: "Ativo",
   archived: "Arquivado",
 };
+
+const PUBLICATION_STATUS_FILTERS = [
+  { value: "all", label: "Todos os status" },
+  { value: "draft", label: "Rascunho" },
+  { value: "needs_sync", label: "Aguardando publicação" },
+  { value: "active", label: "Publicado" },
+  { value: "failed", label: "Falhou" },
+  { value: "removed", label: "Removido" },
+] as const;
+
+type PublicationStatusFilter =
+  (typeof PUBLICATION_STATUS_FILTERS)[number]["value"];
+
+function parsePublicationStatusFilter(
+  value: string | null
+): PublicationStatusFilter {
+  return PUBLICATION_STATUS_FILTERS.some((item) => item.value === value)
+    ? (value as PublicationStatusFilter)
+    : "all";
+}
+
+function getPublicationStatusFilterValue(target: {
+  status: string;
+  lastPublishedAt?: string | Date | null;
+}): PublicationStatusFilter {
+  if (target.status === "active" && target.lastPublishedAt) return "active";
+  if (target.status === "needs_sync") return "needs_sync";
+  if (target.status === "failed") return "failed";
+  if (target.status === "removed" || target.status === "removal_pending") {
+    return "removed";
+  }
+  return "draft";
+}
 
 function getPostStatusChip(status: string) {
   if (status === "active") {
@@ -259,15 +375,7 @@ const TARGET_STATUS_LABELS: Record<string, string> = {
 };
 
 function getTargetStatusTone(target: TargetInfo) {
-  if (!target.enabled) {
-    return {
-      label: "Desativado",
-      className: "border-slate-200 bg-white text-slate-500 hover:bg-white",
-      icon: XCircle,
-    };
-  }
-
-  if (target.status === "active") {
+  if (target.status === "active" && target.lastPublishedAt) {
     return {
       label: "Publicado",
       className:
@@ -322,12 +430,12 @@ function getExpiresAt(
 type TargetInfo = {
   id: string;
   channel: string;
-  enabled: boolean;
   status: string;
   lastPublishedAt: string | null;
   removedAt: string | null;
   updatedAt: string | null;
   canPublishDirect?: boolean;
+  canUnpublish?: boolean;
 };
 
 function ChannelActionButton({
@@ -377,6 +485,60 @@ function ChannelActionButton({
   );
 }
 
+function DuplicatePostButton({ postId }: { postId: string }) {
+  const fetcher = useFetcher();
+  const busy = fetcher.state !== "idle";
+
+  return (
+    <fetcher.Form method="post" onClick={(e) => e.stopPropagation()}>
+      <input type="hidden" name="_intent" value="duplicate-post" />
+      <input type="hidden" name="contentPostId" value={postId} />
+      <button
+        type="submit"
+        disabled={busy}
+        className="inline-flex h-6 items-center gap-1.5 rounded-full border border-slate-200 bg-white px-2.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50"
+        onClick={(e) => {
+          e.stopPropagation();
+          if (!confirm("Duplicar esta publicação como rascunho?")) {
+            e.preventDefault();
+          }
+        }}
+        title="Duplicar publicação"
+      >
+        <Copy className="h-3.5 w-3.5" aria-hidden="true" />
+        {busy ? "Copiando..." : "Duplicar"}
+      </button>
+    </fetcher.Form>
+  );
+}
+
+function DeletePostButton({ postId }: { postId: string }) {
+  const fetcher = useFetcher();
+  const busy = fetcher.state !== "idle";
+
+  return (
+    <fetcher.Form method="post" onClick={(e) => e.stopPropagation()}>
+      <input type="hidden" name="_intent" value="delete-post" />
+      <input type="hidden" name="contentPostId" value={postId} />
+      <button
+        type="submit"
+        disabled={busy}
+        className="inline-flex h-6 items-center gap-1.5 rounded-full border border-rose-200 bg-white px-2.5 text-xs font-semibold text-rose-600 transition hover:bg-rose-50 disabled:opacity-50"
+        onClick={(e) => {
+          e.stopPropagation();
+          if (!confirm("Eliminar esta publicação?")) {
+            e.preventDefault();
+          }
+        }}
+        title="Eliminar publicação"
+      >
+        <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+        {busy ? "Eliminando..." : "Eliminar"}
+      </button>
+    </fetcher.Form>
+  );
+}
+
 function ChannelStatusPill({ target }: { target: TargetInfo }) {
   const statusTone = getTargetStatusTone(target);
 
@@ -390,35 +552,14 @@ function ChannelStatusPill({ target }: { target: TargetInfo }) {
   );
 }
 
-function ChannelRow({
-  target,
-  postId,
-  interactive = true,
-}: {
-  target: TargetInfo;
-  postId: string;
-  interactive?: boolean;
-}) {
-  const displayPublishedAt = fmtDate(
-    target.channel === CONTENT_POST_CHANNELS.CARDAPIO_FEATURED &&
-      target.status === "active"
-      ? target.lastPublishedAt || target.updatedAt
-      : target.lastPublishedAt
-  );
+function ChannelRow({ target }: { target: TargetInfo }) {
+  const displayPublishedAt =
+    target.status === "active" ? fmtDate(target.lastPublishedAt) : null;
   const expiresAt = target.lastPublishedAt
     ? getExpiresAt(target.channel, target.lastPublishedAt)
     : null;
   const isExpired = expiresAt ? expiresAt < new Date() : false;
   const ttl = CHANNEL_TTL_HOURS[target.channel];
-  const canDisableCardapio =
-    interactive &&
-    target.enabled &&
-    target.channel === CONTENT_POST_CHANNELS.CARDAPIO_FEATURED;
-  const canClearWhatsapp =
-    interactive &&
-    target.channel === CONTENT_POST_CHANNELS.WHATSAPP_STATUS &&
-    (Boolean(target.lastPublishedAt) || target.status === "active");
-  const canPublishDirect = interactive && Boolean(target.canPublishDirect);
   const expirationLabel =
     ttl === null
       ? "Expira"
@@ -429,84 +570,91 @@ function ChannelRow({
       : null;
   const expirationValue =
     ttl === null ? "Sem expiração" : expiresAt ? fmtDate(expiresAt) : null;
-  const hasDetails = target.enabled && displayPublishedAt;
-  const hasActions = canPublishDirect || canDisableCardapio || canClearWhatsapp;
+  const hasDetails = Boolean(displayPublishedAt);
+
+  if (!hasDetails) return null;
 
   return (
-    <div className="space-y-3">
-      {hasDetails ? (
-        <div className="grid grid-cols-2 gap-3 text-left">
+    <div className="space-y-3 pt-3">
+      <Separator className="bg-slate-200/70" />
+      <div className="grid grid-cols-2 gap-3 text-left">
+        <div className="min-w-0">
+          <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+            Publicação
+          </div>
+          <div className="mt-0.5 truncate text-xs font-medium text-slate-600">
+            {displayPublishedAt}
+          </div>
+        </div>
+        {expirationLabel && expirationValue ? (
           <div className="min-w-0">
             <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
-              Publicação
+              {expirationLabel}
             </div>
-            <div className="mt-0.5 truncate text-xs font-medium text-slate-600">
-              {displayPublishedAt}
+            <div
+              className={`mt-0.5 truncate text-xs font-medium ${
+                ttl === null
+                  ? "text-slate-500"
+                  : isExpired
+                  ? "text-rose-600"
+                  : "text-amber-600"
+              }`}
+            >
+              {expirationValue}
             </div>
           </div>
-          {expirationLabel && expirationValue ? (
-            <div className="min-w-0">
-              <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
-                {expirationLabel}
-              </div>
-              <div
-                className={`mt-0.5 truncate text-xs font-medium ${
-                  ttl === null
-                    ? "text-slate-500"
-                    : isExpired
-                    ? "text-rose-600"
-                    : "text-amber-600"
-                }`}
-              >
-                {expirationValue}
-              </div>
-            </div>
-          ) : null}
-        </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+const PUBLISH_INTENT_BY_CHANNEL: Record<string, string> = {
+  [CONTENT_POST_CHANNELS.CARDAPIO_FEATURED]: "publish-cardapio",
+  [CONTENT_POST_CHANNELS.WHATSAPP_STATUS]: "publish-whatsapp",
+  [CONTENT_POST_CHANNELS.INSTAGRAM_STORY]: "publish-instagram",
+};
+
+function ChannelActions({
+  target,
+  postId,
+}: {
+  target: TargetInfo;
+  postId: string;
+}) {
+  const canPublishDirect = Boolean(target.canPublishDirect);
+  const canUnpublish = Boolean(target.canUnpublish);
+
+  if (!canPublishDirect && !canUnpublish) {
+    return null;
+  }
+
+  return (
+    <div className="flex shrink-0 flex-wrap justify-end gap-2">
+      {canPublishDirect ? (
+        <ChannelActionButton
+          postId={postId}
+          channel={target.channel}
+          intent={PUBLISH_INTENT_BY_CHANNEL[target.channel] ?? "publish"}
+          label="Publicar"
+          confirmMessage={`Publicar esta publicação no ${
+            CHANNEL_LABELS[target.channel] ?? target.channel
+          } agora?`}
+          icon={Send}
+          tone="success"
+        />
       ) : null}
-      {hasDetails && hasActions ? (
-        <Separator className="bg-slate-200/70" />
-      ) : null}
-      {hasActions ? (
-        <div className="flex justify-end gap-2 pt-1">
-          {canPublishDirect ? (
-            <ChannelActionButton
-              postId={postId}
-              channel={target.channel}
-              intent={
-                target.channel === CONTENT_POST_CHANNELS.CARDAPIO_FEATURED
-                  ? "publish-cardapio"
-                  : "publish-whatsapp"
-              }
-              label="Publicar"
-              confirmMessage={`Publicar esta publicação no ${
-                CHANNEL_LABELS[target.channel] ?? target.channel
-              } agora?`}
-              icon={Send}
-              tone="success"
-            />
-          ) : null}
-          {canDisableCardapio ? (
-            <ChannelActionButton
-              postId={postId}
-              channel={target.channel}
-              intent="disable-cardapio"
-              label="Desabilitar"
-              confirmMessage="Desabilitar esta publicação no Cardápio?"
-              icon={XCircle}
-            />
-          ) : null}
-          {canClearWhatsapp ? (
-            <ChannelActionButton
-              postId={postId}
-              channel={target.channel}
-              intent="clear-whatsapp-publication"
-              label="Limpar publicação"
-              confirmMessage="Limpar os dados desta publicação do WhatsApp? Use quando o status já foi removido no dispositivo."
-              icon={RefreshCw}
-            />
-          ) : null}
-        </div>
+      {canUnpublish ? (
+        <ChannelActionButton
+          postId={postId}
+          channel={target.channel}
+          intent="unpublish"
+          label="Despublicar"
+          confirmMessage={`Despublicar esta publicação do ${
+            CHANNEL_LABELS[target.channel] ?? target.channel
+          }?`}
+          icon={RefreshCw}
+        />
       ) : null}
     </div>
   );
@@ -530,16 +678,21 @@ function ChannelList({
             key={ch}
             className="min-h-20 rounded-lg bg-slate-50/70 px-3 py-2.5"
           >
-            <div className="mb-2 flex items-center justify-between gap-2">
-              <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-                {label}
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0 space-y-1">
+                <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                  {label}
+                </div>
+                {t ? <ChannelStatusPill target={t} /> : null}
               </div>
-              {t ? <ChannelStatusPill target={t} /> : null}
+              {t ? <ChannelActions target={t} postId={postId} /> : null}
             </div>
             {t ? (
-              <ChannelRow target={t} postId={postId} />
+              <ChannelRow target={t} />
             ) : (
-              <span className="text-xs text-slate-300">Sem canal</span>
+              <span className="mt-2 block text-xs text-slate-300">
+                Sem canal
+              </span>
             )}
           </div>
         );
@@ -549,7 +702,7 @@ function ChannelList({
 }
 
 export default function ContentPostsIndex() {
-  const { posts, q } = useLoaderData<typeof loader>();
+  const { posts, q, publicationStatus } = useLoaderData<typeof loader>();
 
   return (
     <div className="flex flex-col gap-3">
@@ -571,6 +724,21 @@ export default function ContentPostsIndex() {
             <SlidersHorizontal className="h-4 w-4" />
           </button>
         </div>
+        <label className="flex items-center gap-2 text-sm text-slate-600">
+          <span className="whitespace-nowrap">Status da publicação</span>
+          <Select name="publicationStatus" defaultValue={publicationStatus}>
+            <SelectTrigger className="h-9 w-[220px] bg-white text-sm text-slate-700">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {PUBLICATION_STATUS_FILTERS.map((filter) => (
+                <SelectItem key={filter.value} value={filter.value}>
+                  {filter.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </label>
         <button className="inline-flex items-center gap-1 text-sm text-slate-600 hover:text-slate-900">
           Filtrar
         </button>
@@ -603,12 +771,16 @@ export default function ContentPostsIndex() {
                   <div className="truncate text-xs text-slate-500">
                     {post.key}
                   </div>
+                  <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                    <PostStatusBadge status={post.status} />
+                    <Badge className="w-max bg-blue-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-blue-700 hover:bg-blue-100">
+                      {post._count.Media} mídia(s)
+                    </Badge>
+                  </div>
                 </div>
                 <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
-                  <PostStatusBadge status={post.status} />
-                  <Badge className="w-max bg-blue-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-blue-700 hover:bg-blue-100">
-                    {post._count.Media} mídia(s)
-                  </Badge>
+                  <DuplicatePostButton postId={post.id} />
+                  <DeletePostButton postId={post.id} />
                 </div>
               </div>
 

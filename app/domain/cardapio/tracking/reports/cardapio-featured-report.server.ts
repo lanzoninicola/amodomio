@@ -45,7 +45,6 @@ export async function readCardapioFeaturedReport({
       },
       select: {
         id: true,
-        enabled: true,
         status: true,
         ContentPost: {
           select: { title: true, key: true },
@@ -102,7 +101,7 @@ export async function readCardapioFeaturedReport({
     id: section.id,
     title: section.ContentPost.title,
     key: section.ContentPost.key,
-    published: section.enabled && section.status === "active",
+    published: section.status === "active",
   }));
   const sectionMap = new Map(
     normalizedSections.map((section) => [section.key, section])

@@ -7,6 +7,7 @@ export type ContentPostMediaInput = {
   alt?: string | null;
   linkUrl?: string | null;
   linkText?: string | null;
+  linkMenuItemId?: string | null;
   linkBackgroundColor?: string | null;
   linkTextColor?: string | null;
   linkPosition?: string | null;
@@ -34,25 +35,42 @@ export function parseContentPostMediaForm(
     .split(/\r?\n/g)
     .map((url) => url.trim());
 
-  return mediaUrls.map((mediaUrl, index) => ({
-    key: String(index),
-    title: `${title} — mídia ${index + 1}`,
-    kind: /\.(mp4|mov|webm)(?:$|\?)/i.test(mediaUrl) ? "video" : "image",
-    mediaUrl,
-    fullscreenMediaUrl: fullscreenUrls[index]?.trim() || mediaUrl,
-    alt: `${title}, mídia ${index + 1}`,
-    linkUrl: String(form.get(`linkUrl_${index}`) || "").trim() || null,
-    linkText: String(form.get(`linkText_${index}`) || "").trim() || null,
-    linkBackgroundColor: normalizeHexColor(
-      String(form.get(`linkBackgroundColor_${index}`) || ""),
-      DEFAULT_CONTENT_LINK_BACKGROUND_COLOR
-    ),
-    linkTextColor: normalizeHexColor(
-      String(form.get(`linkTextColor_${index}`) || ""),
-      DEFAULT_CONTENT_LINK_TEXT_COLOR
-    ),
-    linkPosition: String(form.get(`linkPosition_${index}`) || "top") === "bottom" ? "bottom" : "top",
-    linkNewTab: form.get(`linkNewTab_${index}`) !== "false",
-    sortOrder: index,
-  }));
+  return mediaUrls.map((mediaUrl, index) => {
+    const linkMode =
+      String(form.get(`linkMode_${index}`) || "free") === "item"
+        ? "item"
+        : "free";
+    const linkMenuItemId =
+      linkMode === "item"
+        ? String(form.get(`linkMenuItemId_${index}`) || "").trim() || null
+        : null;
+
+    return {
+      key: String(index),
+      title: `${title} — mídia ${index + 1}`,
+      kind: /\.(mp4|mov|webm)(?:$|\?)/i.test(mediaUrl) ? "video" : "image",
+      mediaUrl,
+      fullscreenMediaUrl: fullscreenUrls[index]?.trim() || mediaUrl,
+      alt: `${title}, mídia ${index + 1}`,
+      linkUrl: linkMenuItemId
+        ? null
+        : String(form.get(`linkUrl_${index}`) || "").trim() || null,
+      linkText: String(form.get(`linkText_${index}`) || "").trim() || null,
+      linkMenuItemId,
+      linkBackgroundColor: normalizeHexColor(
+        String(form.get(`linkBackgroundColor_${index}`) || ""),
+        DEFAULT_CONTENT_LINK_BACKGROUND_COLOR
+      ),
+      linkTextColor: normalizeHexColor(
+        String(form.get(`linkTextColor_${index}`) || ""),
+        DEFAULT_CONTENT_LINK_TEXT_COLOR
+      ),
+      linkPosition:
+        String(form.get(`linkPosition_${index}`) || "top") === "bottom"
+          ? "bottom"
+          : "top",
+      linkNewTab: form.get(`linkNewTab_${index}`) !== "false",
+      sortOrder: index,
+    };
+  });
 }

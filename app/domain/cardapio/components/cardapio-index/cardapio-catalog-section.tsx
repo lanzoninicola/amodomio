@@ -256,12 +256,23 @@ export function CardapioCatalogSection({
               href="https://www.fifa.com/pt/tournaments/mens/worldcup/canadamexicousa2026/teams/brazil/fixtures"
               target="_blank"
               rel="noopener noreferrer"
-              className="mx-4 flex items-center justify-between rounded-lg bg-green-600 px-3 py-1.5 text-white shadow-md"
+              className="mx-4 rounded-lg bg-[linear-gradient(90deg,#e1251b,#0072ce,#16a34a)] p-[1.5px] shadow-md"
             >
-              <span className="font-neue text-[11px] uppercase font-semibold tracking-tight">🇧🇷 Brasil no Mundial 2026</span>
-              <div className="flex items-center gap-x-2">
-                <span className="font-neue text-[10px] ">Ver jogos</span>
-                <ArrowRight size={14} />
+              <div className="flex items-center justify-between rounded-[7px] bg-white px-3 py-1.5 text-zinc-950">
+                <span className="flex items-center gap-2 font-neue text-[11px] font-semibold uppercase tracking-tight leading-none">
+                  <img
+                    src="/images/world-cup-26/world-cup-ball.webp"
+                    alt=""
+                    aria-hidden="true"
+                    className="h-5 w-5 rounded-full object-cover"
+                    loading="lazy"
+                  />
+                  Acompanha o Mundial de 2026
+                </span>
+                <div className="flex items-center gap-x-2 zinc-950 uppercase">
+
+                  <ArrowRight size={16} />
+                </div>
               </div>
             </a>
           )}
@@ -557,8 +568,8 @@ export function CardapioItemsGrid({
       : null;
   const initialExpandedId = initialHash
     ? (items.find(
-        (item) => item.slug === initialHash || item.id === initialHash
-      )?.id ?? null)
+      (item) => item.slug === initialHash || item.id === initialHash
+    )?.id ?? null)
     : null;
 
   const [expandedItemId, setExpandedItemId] = useState<string | null>(
@@ -583,7 +594,7 @@ export function CardapioItemsGrid({
       requestAnimationFrame(() => scrollToItemTop(initialExpandedId));
     });
     return () => cancelAnimationFrame(raf1);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const trackInterest = useCallback(

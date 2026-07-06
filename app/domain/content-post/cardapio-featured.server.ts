@@ -1,4 +1,5 @@
 import prismaClient from "~/lib/prisma/client.server";
+import { getCardapioItemAnchorHref } from "~/domain/cardapio/cardapio-index.shared";
 import {
   CONTENT_POST_CHANNELS,
   parseCardapioFeaturedConfig,
@@ -36,8 +37,8 @@ export async function findPublishedCardapioFeatured(): Promise<
   const targets = await prismaClient.contentPublicationTarget.findMany({
     where: {
       channel: CONTENT_POST_CHANNELS.CARDAPIO_FEATURED,
-      enabled: true,
       status: "active",
+      lastPublishedAt: { not: null },
       deletedAt: null,
       ContentPost: {
         status: "active",
@@ -57,7 +58,11 @@ export async function findPublishedCardapioFeatured(): Promise<
       ContentPost: {
         include: {
           Media: {
-            where: { active: true, deletedAt: null, kind: { in: ["image", "video"] } },
+            where: {
+              active: true,
+              deletedAt: null,
+              kind: { in: ["image", "video"] },
+            },
             orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
           },
         },
@@ -65,6 +70,26 @@ export async function findPublishedCardapioFeatured(): Promise<
     },
     take: 5,
   });
+
+  const linkMenuItemIds = Array.from(
+    new Set(
+      targets
+        .flatMap((target) => target.ContentPost.Media)
+        .map((media) => media.linkMenuItemId)
+        .filter((id): id is string => Boolean(id))
+    )
+  );
+  const linkMenuItems = linkMenuItemIds.length
+    ? await prismaClient.item.findMany({
+        where: { id: { in: linkMenuItemIds } },
+        select: { id: true, ItemSellingInfo: { select: { slug: true } } },
+      })
+    : [];
+  const slugByMenuItemId = new Map(
+    linkMenuItems
+      .filter((item) => item.ItemSellingInfo?.slug)
+      .map((item) => [item.id, item.ItemSellingInfo!.slug as string])
+  );
 
   return targets
     .map((target) => {
@@ -75,19 +100,27 @@ export async function findPublishedCardapioFeatured(): Promise<
         title: target.ContentPost.title,
         subtitle: target.ContentPost.subtitle,
         ...config,
-        images: target.ContentPost.Media.map((media) => ({
-          id: media.id,
-          kind: media.kind,
-          imageUrl: media.mediaUrl,
-          fullscreenImageUrl: media.fullscreenMediaUrl || media.mediaUrl,
-          alt: media.alt,
-          linkUrl: media.linkUrl,
-          linkText: media.linkText,
-          linkBackgroundColor: media.linkBackgroundColor,
-          linkTextColor: media.linkTextColor,
-          linkPosition: media.linkPosition,
-          linkNewTab: media.linkNewTab,
-        })),
+        images: target.ContentPost.Media.map((media) => {
+          const linkedSlug = media.linkMenuItemId
+            ? slugByMenuItemId.get(media.linkMenuItemId)
+            : null;
+
+          return {
+            id: media.id,
+            kind: media.kind,
+            imageUrl: media.mediaUrl,
+            fullscreenImageUrl: media.fullscreenMediaUrl || media.mediaUrl,
+            alt: media.alt,
+            linkUrl: linkedSlug
+              ? getCardapioItemAnchorHref({ slug: linkedSlug })
+              : media.linkUrl,
+            linkText: media.linkText,
+            linkBackgroundColor: media.linkBackgroundColor,
+            linkTextColor: media.linkTextColor,
+            linkPosition: media.linkPosition,
+            linkNewTab: media.linkNewTab,
+          };
+        }),
       };
     })
     .filter((featured) => featured.images.length > 0);

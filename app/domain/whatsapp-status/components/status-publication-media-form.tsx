@@ -1,8 +1,9 @@
-import { Clock3, Copy, Eye, Send } from "lucide-react";
+import { Clock3, Copy, Eye, Send, Undo2 } from "lucide-react";
 import { useState } from "react";
 import type { ReactNode } from "react";
 import { Button } from "~/components/ui/button";
 import { Label } from "~/components/ui/label";
+import { Separator } from "~/components/ui/separator";
 import { Textarea } from "~/components/ui/textarea";
 import { buildDokployPublishScript } from "~/domain/whatsapp-status/whatsapp-status-publication.shared";
 
@@ -51,6 +52,7 @@ export function StatusPublicationMediaForm({
   feedback,
   submitting,
   publishBlockedReason,
+  canUnpublish,
 }: {
   title?: string;
   description?: string;
@@ -63,6 +65,7 @@ export function StatusPublicationMediaForm({
   feedback?: { ok: boolean; message: string } | null;
   submitting?: boolean;
   publishBlockedReason?: string | null;
+  canUnpublish?: boolean;
 }) {
   const [copied, setCopied] = useState(false);
   const selected = new Set(selectedKeys);
@@ -101,12 +104,13 @@ export function StatusPublicationMediaForm({
           <Button
             type="submit"
             name="_intent"
-            value="save"
+            value="unpublish"
             variant="outline"
             size="sm"
-            disabled={submitting}
+            disabled={submitting || !canUnpublish}
           >
-            Salvar
+            <Undo2 className="mr-2 h-4 w-4" />
+            Despublicar
           </Button>
           <Button
             type="submit"
@@ -119,6 +123,22 @@ export function StatusPublicationMediaForm({
             Publicar
           </Button>
         </div>
+      </div>
+
+      <Separator className="my-1" />
+
+      <div className="flex items-center justify-between gap-4">
+        <div className="text-sm font-semibold">Configuração</div>
+        <Button
+          type="submit"
+          name="_intent"
+          value="save"
+          variant="outline"
+          size="sm"
+          disabled={submitting}
+        >
+          Salvar
+        </Button>
       </div>
 
       {publishBlockedReason ? (

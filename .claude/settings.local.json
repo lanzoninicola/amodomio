@@ -71,7 +71,22 @@
       "Bash(~/.nvm/versions/node/v20.19.0/bin/node /home/lanzo/Documents/Coding/amodomio/node_modules/prisma/build/index.js generate)",
       "WebFetch(domain:developer.z-api.io)",
       "WebSearch",
-      "Bash(sed -n '1,200p' /home/lanzo/Documents/Coding/amodomio/app/routes/admin.marketing.publicacoes.\\\\$id.canais.tsx)"
+      "Bash(sed -n '1,200p' /home/lanzo/Documents/Coding/amodomio/app/routes/admin.marketing.publicacoes.\\\\$id.canais.tsx)",
+      "Bash(git diff *)",
+      "Bash(npx eslint *)",
+      "Bash(rm /home/lanzo/Documents/Coding/amodomio/app/routes/admin.marketing.publicacoes.\\\\$id.canais.tsx && echo done)",
+      "Bash(grep -v \"\\\\.prisma$\")",
+      "Bash(grep -n \"enabled\" /home/lanzo/Documents/Coding/amodomio/app/routes/api.content-publication-targets.\\\\$id.publish.tsx)",
+      "Bash(grep -rn \"target\\\\.enabled\\\\|targets\\\\.enabled\\\\|\\\\.enabled ==\\\\|enabled: true,\\\\|enabled: false,\\\\|enabled,$\" /home/lanzo/Documents/Coding/amodomio/app)",
+      "Bash(npx prisway *)",
+      "Bash(grep -rn \"id={\\\\`item-\\\\|item-\\\\${\" app/domain/cardapio/ app/routes/cardapio._index.tsx)",
+      "Bash(grep -n \"linkUrl\" /home/lanzo/Documents/Coding/amodomio/app/routes/admin.marketing.publicacoes.\\\\$id.midias.tsx)",
+      "Bash(grep -n \"Select\\\\|searchable\\\\|itemId\\\\|menuItemId\\\\|MenuItem\" /home/lanzo/Documents/Coding/amodomio/app/routes/admin.marketing.publicacoes.\\\\$id.cardapio.tsx | head -60)",
+      "Bash(grep -n \"loader\\\\|Media\\\\|menuItem\\\\|CardapioIndexItem\\\\|import\\\\|export default\" /home/lanzo/Documents/Coding/amodomio/app/routes/admin.marketing.publicacoes.\\\\$id.cardapio.tsx | head -40)",
+      "Bash(grep -n \"SearchableSelect\\\\|options\\\\|itemId\\\\|MenuItem\" /home/lanzo/Documents/Coding/amodomio/app/routes/admin.item-cost-sheets.\\\\$id.custos.tsx | head -60)",
+      "Bash(xargs -I{} sh -c 'grep -l \"SearchableSelect\\\\|Select\\\\b\" {}')",
+      "Bash(git -C /home/lanzo/Documents/Coding/amodomio diff --stat prisma/schema.prisma)",
+      "Bash(/home/lanzo/.local/share/pipx/venvs/graphifyy/bin/python -c \"from graphify.watch import _rebuild_code; print\\('ok'\\)\")"
     ],
     "additionalDirectories": [
       "/home/lanzo/Documents/Coding/amodomio/app/routes"

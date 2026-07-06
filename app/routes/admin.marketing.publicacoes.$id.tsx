@@ -30,7 +30,6 @@ import {
   getContentPost,
   softDeleteContentPost,
 } from "~/domain/content-post/content-post.server";
-import { CONTENT_POST_CHANNELS } from "~/domain/content-post/content-post.shared";
 import { invalidateCardapioIndexCache } from "~/domain/cardapio/cardapio-cache.server";
 
 export const meta: MetaFunction<typeof loader> = ({ data }) => [
@@ -40,7 +39,9 @@ export const meta: MetaFunction<typeof loader> = ({ data }) => [
 const navigation = [
   { label: "Conteúdo", to: "conteudo" },
   { label: "Mídias", to: "midias" },
-  { label: "Canais ativados", to: "canais" },
+  { label: "Cardápio", to: "cardapio" },
+  { label: "WhatsApp", to: "whatsapp" },
+  { label: "Instagram", to: "instagram" },
 ];
 
 export async function loader({ params }: LoaderFunctionArgs) {
@@ -66,23 +67,6 @@ const statusLabel: Record<string, string> = {
 export default function ContentPostLayout() {
   const { post } = useLoaderData<typeof loader>();
   const navigationState = useNavigation();
-  const enabledChannels = new Set(
-    post.Targets.filter((target) => target.enabled).map(
-      (target) => target.channel
-    )
-  );
-  const visibleNavigation = [
-    ...navigation,
-    ...(enabledChannels.has(CONTENT_POST_CHANNELS.CARDAPIO_FEATURED)
-      ? [{ label: "Cardápio", to: "cardapio" }]
-      : []),
-    ...(enabledChannels.has(CONTENT_POST_CHANNELS.WHATSAPP_STATUS)
-      ? [{ label: "WhatsApp", to: "whatsapp" }]
-      : []),
-    ...(enabledChannels.has(CONTENT_POST_CHANNELS.INSTAGRAM_STORY)
-      ? [{ label: "Instagram", to: "instagram" }]
-      : []),
-  ];
 
   return (
     <div className="flex min-w-0 max-w-5xl flex-col gap-5 pb-12 sm:gap-6">
@@ -143,7 +127,7 @@ export default function ContentPostLayout() {
 
       <nav className="-mx-3 overflow-x-auto border-b px-3 sm:mx-0 sm:px-0">
         <div className="flex min-w-max gap-5">
-          {visibleNavigation.map((item) => (
+          {navigation.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}

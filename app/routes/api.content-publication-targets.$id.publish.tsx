@@ -39,7 +39,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
     if (!target || target.deletedAt) {
       return json({ error: "target_not_found" }, { status: 404 });
     }
-    if (!target.enabled || target.ContentPost.status !== "active") {
+    if (target.ContentPost.status !== "active") {
       return json({ error: "target_inactive" }, { status: 409 });
     }
     if (target.status === "needs_sync") {
