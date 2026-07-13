@@ -86,35 +86,53 @@ function MediaLinkFields({
     linkUrl: string | null;
     linkText: string | null;
     linkMenuItemId: string | null;
+    chipAction: string | null;
+    chipModalTitle: string | null;
+    chipModalBody: string | null;
   };
   itemOptions: SearchableSelectOption[];
 }) {
-  const [mode, setMode] = useState<"free" | "item">(
-    media.linkMenuItemId ? "item" : "free"
+  const [mode, setMode] = useState<"external" | "internal" | "item" | "modal">(
+    media.chipAction === "modal"
+      ? "modal"
+      : media.linkMenuItemId
+      ? "item"
+      : media.linkUrl?.startsWith("/")
+      ? "internal"
+      : "external"
   );
   const [menuItemId, setMenuItemId] = useState(media.linkMenuItemId || "");
   const [linkText, setLinkText] = useState(media.linkText || "");
+  const isItemLink = mode === "item";
 
   return (
     <>
       <div className="grid gap-2">
-        <Label>Tipo de link</Label>
+        <Label>Tipo de chip</Label>
         <Select
           name={`linkMode_${index}`}
           value={mode}
-          onValueChange={(value) => setMode(value === "item" ? "item" : "free")}
+          onValueChange={(value) => {
+            if (value === "item" || value === "internal" || value === "modal") {
+              setMode(value);
+              return;
+            }
+            setMode("external");
+          }}
         >
           <SelectTrigger>
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="free">Link livre</SelectItem>
             <SelectItem value="item">Item do cardápio</SelectItem>
+            <SelectItem value="internal">Link interno</SelectItem>
+            <SelectItem value="external">Link externo</SelectItem>
+            <SelectItem value="modal">Modal</SelectItem>
           </SelectContent>
         </Select>
       </div>
 
-      {mode === "item" ? (
+      {isItemLink ? (
         <div className="grid gap-2">
           <Label>Item do cardápio</Label>
           <input
@@ -136,14 +154,48 @@ function MediaLinkFields({
             triggerClassName="w-full max-w-none"
           />
         </div>
+      ) : mode === "modal" ? (
+        <>
+          <div className="grid gap-2">
+            <Label htmlFor={`chipModalTitle_${index}`}>Título do modal</Label>
+            <Input
+              id={`chipModalTitle_${index}`}
+              name={`chipModalTitle_${index}`}
+              defaultValue={media.chipModalTitle || ""}
+              placeholder="Regulamento do combo"
+            />
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor={`chipModalBody_${index}`}>Texto do modal</Label>
+            <Textarea
+              id={`chipModalBody_${index}`}
+              name={`chipModalBody_${index}`}
+              defaultValue={media.chipModalBody || ""}
+              rows={5}
+              placeholder="Descreva período, regras, itens inclusos e exceções."
+            />
+          </div>
+        </>
       ) : (
         <div className="grid gap-2">
-          <Label htmlFor={`linkUrl_${index}`}>Link</Label>
+          <Label htmlFor={`linkUrl_${index}`}>
+            {mode === "internal" ? "Link interno" : "Link externo"}
+          </Label>
           <Input
             id={`linkUrl_${index}`}
             name={`linkUrl_${index}`}
+            placeholder={
+              mode === "internal"
+                ? "/cardapio/dicas"
+                : "https://www.exemplo.com"
+            }
             defaultValue={media.linkUrl || ""}
           />
+          <p className="text-xs text-slate-500">
+            {mode === "internal"
+              ? "Use caminhos do site, como /cardapio ou /cardapio/dicas."
+              : "Use uma URL completa começando com https://."}
+          </p>
         </div>
       )}
 
@@ -432,7 +484,10 @@ export default function ContentPostMediaPage() {
                   </SelectContent>
                 </Select>
               </div>
-              {(media.linkUrl || media.linkMenuItemId) && media.linkText ? (
+              {(media.linkUrl ||
+                media.linkMenuItemId ||
+                media.chipAction === "modal") &&
+              media.linkText ? (
                 <span className="inline-flex items-center gap-1 text-xs text-slate-500">
                   <LinkIcon className="h-3 w-3" /> {media.linkText}
                 </span>

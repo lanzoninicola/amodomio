@@ -17,6 +17,9 @@ export type CardapioFeaturedMedia = {
   linkTextColor?: string | null;
   linkPosition?: string | null;
   linkNewTab?: boolean;
+  chipAction?: string | null;
+  chipModalTitle?: string | null;
+  chipModalBody?: string | null;
 };
 
 export type CardapioFeatured = {
@@ -119,6 +122,9 @@ export async function findPublishedCardapioFeatured(): Promise<
             linkTextColor: media.linkTextColor,
             linkPosition: media.linkPosition,
             linkNewTab: media.linkNewTab,
+            chipAction: media.chipAction,
+            chipModalTitle: media.chipModalTitle,
+            chipModalBody: media.chipModalBody,
           };
         }),
       };

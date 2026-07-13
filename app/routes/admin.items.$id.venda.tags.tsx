@@ -1,13 +1,20 @@
 import { Tag } from "@prisma/client";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import { Form, useActionData, useLoaderData } from "@remix-run/react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import SubmitButton from "~/components/primitives/submit-button/submit-button";
 import { Input } from "~/components/ui/input";
+import { Label } from "~/components/ui/label";
 import { Separator } from "~/components/ui/separator";
+import { Switch } from "~/components/ui/switch";
+import { Textarea } from "~/components/ui/textarea";
 import { toast } from "~/components/ui/use-toast";
 import { buildAdminItemsMeta } from "~/domain/item/admin-items-meta";
-import { associateItemTag, listItemTags, removeItemTag } from "~/domain/item/item-tags.server";
+import {
+  associateItemTag,
+  listItemTags,
+  removeItemTag,
+} from "~/domain/item/item-tags.server";
 import BadgeTag from "~/domain/tags/components/badge-tag";
 import { tagPrismaEntity } from "~/domain/tags/tag.prisma.entity.server";
 import prismaClient from "~/lib/prisma/client.server";
@@ -58,29 +65,61 @@ export async function action({ request, params }: ActionFunctionArgs) {
     if (_action === "tag-create") {
       const tagName = String(values?.tagName || "").trim();
       if (!tagName) return badRequest("Nome da tag inválido");
+      const description = String(values?.description || "").trim();
+      const isPublic = values?.public === "on";
+      const clickable = values?.clickable === "on";
 
       const tagFound = await prismaClient.tag.findFirst({
         where: { name: tagName },
       });
 
-      if (tagFound) return ok({ message: "Tag já cadastrada", action: "tag-create" });
+      if (tagFound)
+        return ok({ message: "Tag já cadastrada", action: "tag-create" });
 
       const [err] = await tryit(
         tagPrismaEntity.create({
           name: tagName,
-          public: false,
           createdAt: new Date(),
           updatedAt: new Date(),
           deletedAt: null,
           colorHEX: "#FFFFFF",
           featuredFilter: false,
           sortOrderIndex: 0,
+          description: description || null,
+          clickable,
+          public: isPublic,
         })
       );
 
       if (err) return badRequest(err);
 
       return ok({ message: "Tag cadastrada", action: "tag-create" });
+    }
+
+    if (_action === "tag-update") {
+      const tagId = String(values?.tagId || "").trim();
+      const tagName = String(values?.tagName || "").trim();
+      const description = String(values?.description || "").trim();
+      const isPublic = values?.public === "on";
+      const clickable = values?.clickable === "on";
+      if (!tagId) return badRequest("Tag inválida");
+      if (!tagName) return badRequest("Nome da tag inválido");
+
+      const tagFound = await prismaClient.tag.findFirst({
+        where: { id: tagId },
+        select: { id: true },
+      });
+
+      if (!tagFound) return badRequest("Tag não encontrada");
+
+      await tagPrismaEntity.update(tagId, {
+        name: tagName,
+        description: description || null,
+        public: isPublic,
+        clickable,
+      });
+
+      return ok({ message: "Tag atualizada", action: "tag-update" });
     }
 
     if (_action === "tag-remove") {
@@ -104,7 +143,10 @@ export async function action({ request, params }: ActionFunctionArgs) {
       if (!tagSelected?.id) return badRequest("Tag não informada");
 
       await associateItemTag(itemId, tagSelected.id);
-      return ok({ message: "Tag associada ao item", action: "item-tag-association" });
+      return ok({
+        message: "Tag associada ao item",
+        action: "item-tag-association",
+      });
     }
 
     if (_action === "item-tag-dissociate") {
@@ -156,21 +198,55 @@ export default function AdminItemVendaTagsRoute() {
 
   const [currentTags, setCurrentTags] = useState(allTags);
 
+  useEffect(() => {
+    setCurrentTags(allTags);
+  }, [allTags]);
+
   if (!item) {
-    return <div className="text-sm text-muted-foreground">Item não encontrado.</div>;
+    return (
+      <div className="text-sm text-muted-foreground">Item não encontrado.</div>
+    );
   }
 
   return (
     <div className="flex flex-col gap-4">
       <div className="grid gap-8 md:grid-cols-8">
-        <Form method="post" className="md:col-span-3">
-          <Input
-            type="text"
-            name="tagName"
-            className="mb-2"
-            placeholder="Criar tag"
+        <Form method="post" className="space-y-3 md:col-span-3">
+          <div className="space-y-1">
+            <Label htmlFor="tagName">Nova tag</Label>
+            <Input
+              id="tagName"
+              type="text"
+              name="tagName"
+              placeholder="Criar tag"
+            />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="description">Descrição pública</Label>
+            <Textarea
+              id="description"
+              name="description"
+              rows={3}
+              placeholder="Texto exibido na modal do cardápio"
+            />
+          </div>
+          <div className="flex flex-wrap gap-4">
+            <Label className="flex items-center gap-2 text-sm">
+              <Switch name="public" />
+              Pública
+            </Label>
+            <Label className="flex items-center gap-2 text-sm">
+              <Switch name="clickable" />
+              Clicável
+            </Label>
+          </div>
+          <SubmitButton
+            actionName="tag-create"
+            labelClassName="text-xs"
+            variant="outline"
+            tabIndex={0}
+            iconColor="black"
           />
-          <SubmitButton actionName="tag-create" labelClassName="text-xs" variant="outline" tabIndex={0} iconColor="black" />
         </Form>
 
         <div className="border rounded-lg p-4 flex flex-col md:col-span-5">
@@ -179,7 +255,9 @@ export default function AdminItemVendaTagsRoute() {
               <span className="text-xs font-semibold text-muted-foreground">
                 {`Tags disponíveis (${currentTags.length})`}
               </span>
-              <span className="text-xs text-muted-foreground">Clique na tag para associar ao item.</span>
+              <span className="text-xs text-muted-foreground">
+                Clique na tag para associar ao item.
+              </span>
             </div>
 
             <Input
@@ -188,7 +266,11 @@ export default function AdminItemVendaTagsRoute() {
               className="md:col-span-2"
               onChange={(e) => {
                 const value = e.target.value.toLowerCase();
-                setCurrentTags(allTags.filter((tag) => tag.name.toLowerCase().includes(value)));
+                setCurrentTags(
+                  allTags.filter((tag) =>
+                    tag.name.toLowerCase().includes(value)
+                  )
+                );
               }}
             />
           </div>
@@ -197,12 +279,82 @@ export default function AdminItemVendaTagsRoute() {
             {currentTags.map((tag) => (
               <Form method="post" key={tag.id}>
                 <input type="hidden" name="tag" value={jsonStringify(tag)} />
-                <button type="submit" name="_action" value="item-tag-association" className="hover:underline">
-                  <BadgeTag tag={tag} classNameLabel="text-sm" allowRemove={false} />
+                <button
+                  type="submit"
+                  name="_action"
+                  value="item-tag-association"
+                  className="hover:underline"
+                >
+                  <BadgeTag
+                    tag={tag}
+                    classNameLabel="text-sm"
+                    allowRemove={false}
+                  />
                 </button>
               </Form>
             ))}
           </div>
+        </div>
+      </div>
+
+      <Separator className="my-4" />
+
+      <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-1">
+          <span className="text-xs font-semibold text-muted-foreground">
+            Configuração pública das tags
+          </span>
+          <span className="text-xs text-muted-foreground">
+            Tags públicas aparecem no cardápio. Tags clicáveis com descrição
+            abrem a modal no card do sabor.
+          </span>
+        </div>
+        <div className="grid gap-3 md:grid-cols-2">
+          {allTags.map((tag) => (
+            <Form key={tag.id} method="post" className="rounded-lg border p-3">
+              <input type="hidden" name="tagId" value={tag.id} />
+              <div className="grid gap-3">
+                <div className="space-y-1">
+                  <Label htmlFor={`tag-name-${tag.id}`}>Nome</Label>
+                  <Input
+                    id={`tag-name-${tag.id}`}
+                    name="tagName"
+                    defaultValue={tag.name}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor={`tag-description-${tag.id}`}>Descrição</Label>
+                  <Textarea
+                    id={`tag-description-${tag.id}`}
+                    name="description"
+                    rows={3}
+                    defaultValue={(tag as any).description || ""}
+                    placeholder="Descrição exibida ao cliente"
+                  />
+                </div>
+                <div className="flex flex-wrap gap-4">
+                  <Label className="flex items-center gap-2 text-sm">
+                    <Switch name="public" defaultChecked={tag.public} />
+                    Pública
+                  </Label>
+                  <Label className="flex items-center gap-2 text-sm">
+                    <Switch
+                      name="clickable"
+                      defaultChecked={Boolean((tag as any).clickable)}
+                    />
+                    Clicável
+                  </Label>
+                </div>
+                <SubmitButton
+                  actionName="tag-update"
+                  labelClassName="text-xs"
+                  variant="outline"
+                  tabIndex={0}
+                  iconColor="black"
+                />
+              </div>
+            </Form>
+          ))}
         </div>
       </div>
 

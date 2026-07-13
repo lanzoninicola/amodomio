@@ -5,6 +5,7 @@ import { Suspense, useMemo, useState } from "react";
 
 import Loading from "~/components/loading/loading";
 import type { CardapioIndexItem } from "~/domain/cardapio/cardapio-index.shared";
+import { getCardapioTagName } from "~/domain/cardapio/cardapio-index.shared";
 import { CardapioItemsGrid } from "~/domain/cardapio/components/cardapio-index/cardapio-index-sections";
 import { findAllCardapioItemsLight } from "~/domain/cardapio/cardapio-items-source.server";
 import { tagPrismaEntity } from "~/domain/tags/tag.prisma.entity.server";
@@ -89,9 +90,10 @@ function CardapioSearchContent({
       const searchableText = [
         item.name,
         item.description,
+        item.baseIngredients,
         item.ingredients,
-        ...(item.tags?.public ?? []),
-        ...(item.tags?.all ?? []),
+        ...(item.tags?.public ?? []).map(getCardapioTagName),
+        ...(item.tags?.all ?? []).map(getCardapioTagName),
       ]
         .filter(Boolean)
         .map((value) => normalizeSearchText(String(value)))

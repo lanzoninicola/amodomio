@@ -12,6 +12,9 @@ import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { cn } from "~/lib/utils";
 import {
+  formatUnsupportedMediaUploadMessage,
+  getUnsupportedMediaUploadMessages,
+  getUploadAccept,
   normalizePath,
   type LibraryPayload,
   type UploadKind,
@@ -51,12 +54,6 @@ function getKindIcon(kind: UploadKind) {
   return FileImage;
 }
 
-function getUploadAccept(kind: UploadKind) {
-  if (kind === "video") return "video/*";
-  if (kind === "audio") return "audio/*";
-  return "image/*";
-}
-
 function buildUploadDebug(params: {
   assetPath: string;
   file: File;
@@ -67,6 +64,15 @@ function buildUploadDebug(params: {
   status?: number;
   statusText?: string;
 }) {
+  let responseDebug = params.responseDebug || null;
+  if (typeof responseDebug === "string") {
+    try {
+      responseDebug = JSON.parse(responseDebug);
+    } catch {
+      responseDebug = params.responseDebug;
+    }
+  }
+
   return JSON.stringify(
     {
       message: params.message,
@@ -80,7 +86,7 @@ function buildUploadDebug(params: {
         type: params.file.type || null,
         lastModified: params.file.lastModified || null,
       },
-      responseDebug: params.responseDebug || null,
+      responseDebug,
       responseText: params.responseText || null,
       userAgent:
         typeof navigator === "undefined" ? null : navigator.userAgent || null,
@@ -215,6 +221,23 @@ export default function MediaUploadPanel({
       setErrorMessage("Selecione ao menos um arquivo.");
       return;
     }
+    const unsupportedFiles = getUnsupportedMediaUploadMessages(
+      selectedFiles,
+      uploadKind
+    );
+    if (unsupportedFiles.length > 0) {
+      setErrorMessage(formatUnsupportedMediaUploadMessage(unsupportedFiles));
+      setUploadQueue(
+        unsupportedFiles.map((file, index) => ({
+          id: `${Date.now()}-unsupported-${index}-${file.fileName}`,
+          fileName: file.fileName,
+          progress: 100,
+          status: "error",
+          message: file.message,
+        }))
+      );
+      return;
+    }
 
     const queue: UploadProgressItem[] = selectedFiles.map((file, index) => ({
       id: `${Date.now()}-${index}-${file.name}`,
@@ -318,6 +341,13 @@ export default function MediaUploadPanel({
             );
           })}
         </div>
+      ) : null}
+
+      {uploadKind === "video" ? (
+        <p className="text-xs text-muted-foreground">
+          Envie vídeos em MP4 ou WebM. Arquivos MOV/QuickTime do iPhone devem
+          ser convertidos para MP4 ou vinculados pela aba Link externo.
+        </p>
       ) : null}
 
       <div className="flex flex-wrap items-center gap-2">

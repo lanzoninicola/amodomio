@@ -12,6 +12,9 @@ export type ContentPostMediaInput = {
   linkTextColor?: string | null;
   linkPosition?: string | null;
   linkNewTab?: boolean;
+  chipAction?: string | null;
+  chipModalTitle?: string | null;
+  chipModalBody?: string | null;
   sortOrder: number;
 };
 
@@ -36,14 +39,14 @@ export function parseContentPostMediaForm(
     .map((url) => url.trim());
 
   return mediaUrls.map((mediaUrl, index) => {
+    const rawLinkMode = String(form.get(`linkMode_${index}`) || "external");
     const linkMode =
-      String(form.get(`linkMode_${index}`) || "free") === "item"
-        ? "item"
-        : "free";
+      rawLinkMode === "item" || rawLinkMode === "modal" ? rawLinkMode : "free";
     const linkMenuItemId =
       linkMode === "item"
         ? String(form.get(`linkMenuItemId_${index}`) || "").trim() || null
         : null;
+    const chipAction = linkMode === "modal" ? "modal" : "link";
 
     return {
       key: String(index),
@@ -53,6 +56,8 @@ export function parseContentPostMediaForm(
       fullscreenMediaUrl: fullscreenUrls[index]?.trim() || mediaUrl,
       alt: `${title}, mídia ${index + 1}`,
       linkUrl: linkMenuItemId
+        ? null
+        : chipAction === "modal"
         ? null
         : String(form.get(`linkUrl_${index}`) || "").trim() || null,
       linkText: String(form.get(`linkText_${index}`) || "").trim() || null,
@@ -70,6 +75,15 @@ export function parseContentPostMediaForm(
           ? "bottom"
           : "top",
       linkNewTab: form.get(`linkNewTab_${index}`) !== "false",
+      chipAction,
+      chipModalTitle:
+        chipAction === "modal"
+          ? String(form.get(`chipModalTitle_${index}`) || "").trim() || null
+          : null,
+      chipModalBody:
+        chipAction === "modal"
+          ? String(form.get(`chipModalBody_${index}`) || "").trim() || null
+          : null,
       sortOrder: index,
     };
   });

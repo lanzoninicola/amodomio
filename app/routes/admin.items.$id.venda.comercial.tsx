@@ -6,7 +6,7 @@ import {
   useOutletContext,
 } from "@remix-run/react";
 import { Copy, MessageCircle, Wand2 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "~/components/ui/button";
 import { Label } from "~/components/ui/label";
 import {
@@ -38,11 +38,14 @@ function formatCurrency(value: number | null | undefined) {
 
 function buildCardapioWhatsappMessage(params: {
   itemName: string;
+  baseIngredients: string | null;
   ingredients: string | null;
   priceLines: string[];
 }) {
+  const baseIngredientsText =
+    params.baseIngredients?.trim() || "base ainda nao preenchida";
   const ingredientsText =
-    params.ingredients?.trim() || "ingredientes ainda nao preenchidos";
+    params.ingredients?.trim() || "ingredientes do sabor ainda nao preenchidos";
   const priceText =
     params.priceLines.length > 0
       ? params.priceLines.join("\n")
@@ -52,7 +55,8 @@ function buildCardapioWhatsappMessage(params: {
     "Oi! Por favor, adicionar o novo sabor no cardapio:",
     "",
     `*Nome*: ${params.itemName}`,
-    `*Ingredientes*: ${ingredientsText}`,
+    `*Base*: ${baseIngredientsText}`,
+    `*Ingredientes do sabor*: ${ingredientsText}`,
     "",
     "Precos de venda por tamanho:",
     priceText,
@@ -73,6 +77,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
           ItemSellingInfo: {
             select: {
               id: true,
+              baseIngredients: true,
               ingredients: true,
               longDescription: true,
               categoryId: true,
@@ -141,6 +146,9 @@ export async function action({ request, params }: ActionFunctionArgs) {
     }
 
     const ingredients = String(formData.get("ingredients") || "").trim();
+    const baseIngredients = String(
+      formData.get("baseIngredients") || ""
+    ).trim();
     const longDescriptionRaw = String(
       formData.get("longDescription") || ""
     ).trim();
@@ -219,6 +227,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
     await (prismaClient as any).itemSellingInfo.upsert({
       where: { itemId },
       update: {
+        baseIngredients: baseIngredients || null,
         ingredients: ingredients || null,
         longDescription: longDescriptionRaw || null,
         notesPublic: notesPublicRaw || null,
@@ -228,6 +237,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
       },
       create: {
         itemId,
+        baseIngredients: baseIngredients || null,
         ingredients: ingredients || null,
         longDescription: longDescriptionRaw || null,
         notesPublic: notesPublicRaw || null,
@@ -247,12 +257,14 @@ export default function AdminItemVendaComercialRoute() {
   const loaderData = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const { sellingMatrix } = useOutletContext<AdminItemVendaOutletContext>();
+  const formRef = useRef<HTMLFormElement>(null);
   const payload = (loaderData?.payload || {}) as {
     item?: {
       id: string;
       name: string;
       ItemSellingInfo?: {
         id: string;
+        baseIngredients: string | null;
         ingredients: string | null;
         longDescription: string | null;
         notesPublic: string | null;
@@ -295,6 +307,9 @@ export default function AdminItemVendaComercialRoute() {
   const [groupIdValue, setGroupIdValue] = useState(
     sellingInfo?.itemGroupId || ""
   );
+  const [baseIngredientsValue, setBaseIngredientsValue] = useState(
+    sellingInfo?.baseIngredients || ""
+  );
   const [ingredientsValue, setIngredientsValue] = useState(
     sellingInfo?.ingredients || ""
   );
@@ -317,8 +332,10 @@ export default function AdminItemVendaComercialRoute() {
   useEffect(() => {
     setCategoryIdValue(sellingInfo?.categoryId || "");
     setGroupIdValue(sellingInfo?.itemGroupId || "");
+    setBaseIngredientsValue(sellingInfo?.baseIngredients || "");
     setIngredientsValue(sellingInfo?.ingredients || "");
   }, [
+    sellingInfo?.baseIngredients,
     sellingInfo?.categoryId,
     sellingInfo?.ingredients,
     sellingInfo?.itemGroupId,
@@ -347,6 +364,7 @@ export default function AdminItemVendaComercialRoute() {
     setWhatsappMessage(
       buildCardapioWhatsappMessage({
         itemName: item.name,
+        baseIngredients: baseIngredientsValue,
         ingredients: ingredientsValue,
         priceLines: cardapioPriceLines,
       })
@@ -371,11 +389,78 @@ export default function AdminItemVendaComercialRoute() {
     });
   }
 
+  function copyCommercialJson() {
+    if (!navigator?.clipboard || !formRef.current) {
+      toast({
+        title: "Erro",
+        description: "Não foi possível copiar os dados.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const formData = new FormData(formRef.current);
+    const selectedCategory = categories.find(
+      (category) => category.id === categoryIdValue
+    );
+    const selectedGroup = groups.find((group) => group.id === groupIdValue);
+    const commercialData = {
+      item: {
+        id: item.id,
+        name: item.name,
+      },
+      baseIngredients: String(formData.get("baseIngredients") || ""),
+      ingredients: String(formData.get("ingredients") || ""),
+      longDescription: String(formData.get("longDescription") || ""),
+      notesPublic: String(formData.get("notesPublic") || ""),
+      slug: String(formData.get("slug") || ""),
+      category: {
+        id: categoryIdValue || null,
+        name: selectedCategory?.name || null,
+      },
+      group: {
+        id: groupIdValue || null,
+        name: selectedGroup?.name || null,
+      },
+    };
+
+    void navigator.clipboard
+      .writeText(JSON.stringify(commercialData, null, 2))
+      .then(() => {
+        toast({
+          title: "JSON copiado",
+          description: "Os dados comerciais foram copiados.",
+        });
+      })
+      .catch(() => {
+        toast({
+          title: "Erro",
+          description: "Não foi possível copiar os dados.",
+          variant: "destructive",
+        });
+      });
+  }
+
   return (
-    <Form method="post" className="space-y-6">
+    <Form ref={formRef} method="post" className="space-y-6">
       <input type="hidden" name="_action" value="update-commercial-info" />
       <input type="hidden" name="categoryId" value={categoryIdValue} />
       <input type="hidden" name="itemGroupId" value={groupIdValue} />
+
+      <section className="flex flex-wrap items-center justify-end gap-3">
+        <Button
+          type="button"
+          variant="outline"
+          className="gap-2"
+          onClick={copyCommercialJson}
+        >
+          <Copy size={16} />
+          Copiar JSON
+        </Button>
+        <Button type="submit" className="bg-slate-900 hover:bg-slate-700">
+          Salvar informações comerciais
+        </Button>
+      </section>
 
       <section className="space-y-4">
         <div>
@@ -386,8 +471,23 @@ export default function AdminItemVendaComercialRoute() {
 
         <div className="grid gap-4 lg:grid-cols-2">
           <div className="space-y-2">
+            <Label htmlFor="baseIngredients">Base da pizza</Label>
+            <Textarea
+              id="baseIngredients"
+              name="baseIngredients"
+              value={baseIngredientsValue}
+              onChange={(event) => setBaseIngredientsValue(event.target.value)}
+              placeholder="Ex.: molho de tomate, muçarela..."
+              className="min-h-32"
+            />
+            <p className="text-xs text-slate-500">
+              Ingredientes fixos que entram na pizza antes do sabor.
+            </p>
+          </div>
+
+          <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <Label htmlFor="ingredients">Lista ingredientes</Label>
+              <Label htmlFor="ingredients">Ingredientes do sabor</Label>
               {recipeIngredientNames.length > 0 && (
                 <Button
                   type="button"
@@ -408,11 +508,16 @@ export default function AdminItemVendaComercialRoute() {
               name="ingredients"
               value={ingredientsValue}
               onChange={(event) => setIngredientsValue(event.target.value)}
-              placeholder="Ex.: molho de tomate, muçarela, manjericão..."
+              placeholder="Ex.: manjericão, tomate cereja, parmesão..."
               className="min-h-32"
             />
+            <p className="text-xs text-slate-500">
+              Ingredientes que diferenciam este sabor da base padrão.
+            </p>
           </div>
+        </div>
 
+        <div className="grid gap-4 lg:grid-cols-2">
           <div className="space-y-2">
             <Label htmlFor="longDescription">Descrição extensa</Label>
             <Textarea
@@ -558,15 +663,6 @@ export default function AdminItemVendaComercialRoute() {
             </Button>
           </div>
         ) : null}
-      </section>
-
-      <section className="flex flex-wrap items-center justify-between gap-4 border-t border-slate-100 pt-8">
-        <div className="text-sm text-slate-600">
-          <div className="font-medium text-slate-900">{item.name}</div>
-        </div>
-        <Button type="submit" className="bg-slate-900 hover:bg-slate-700">
-          Salvar informações comerciais
-        </Button>
       </section>
     </Form>
   );

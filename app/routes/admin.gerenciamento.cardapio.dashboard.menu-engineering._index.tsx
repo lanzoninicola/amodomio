@@ -1,61 +1,150 @@
-import { json, type LoaderFunctionArgs, type MetaFunction } from "@remix-run/node";
-import { Form, Link, useLoaderData } from "@remix-run/react";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { HelpCircle } from "lucide-react";
-import { menuItemSellingPriceHandler } from "~/domain/cardapio/menu-item-selling-price-handler.server";
-import { menuItemSizePrismaEntity } from "~/domain/cardapio/menu-item-size.entity.server";
-import { itemSellingChannelPrismaEntity } from "~/domain/cardapio/menu-item-selling-channel.entity.server";
+import {
+  json,
+  type ActionFunctionArgs,
+  type LoaderFunctionArgs,
+  type MetaFunction,
+} from "@remix-run/node";
+import {
+  Form,
+  Link,
+  useActionData,
+  useLoaderData,
+  useNavigation,
+} from "@remix-run/react";
+import { useMemo, useState } from "react";
+import { ArrowRight, CheckCircle2, Maximize2, Tag } from "lucide-react";
 import prismaClient from "~/lib/prisma/client.server";
 import formatDecimalPlaces from "~/utils/format-decimal-places";
 import formatMoneyString from "~/utils/format-money-string";
 import { Button } from "~/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "~/components/ui/card";
 import { Badge } from "~/components/ui/badge";
+import { Separator } from "~/components/ui/separator";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "~/components/ui/dialog";
+import {
+  MENU_ENGINEERING_QUADRANT_TAGS,
+  MENU_ENGINEERING_TAG_NAMES,
+  type MenuEngineeringQuadrant,
+  type MenuEngineeringTagDisplay,
+  resolveMenuEngineeringTag,
+} from "~/domain/menu-engineering/menu-engineering-tags";
 
 export const meta: MetaFunction = () => [
   { title: "Menu Engineering Matrix" },
   { name: "robots", content: "noindex" },
 ];
 
-type MatrixQuadrant = "stars" | "plowhorses" | "puzzles" | "dogs";
+type MatrixQuadrant = MenuEngineeringQuadrant;
+
+type ImportItem = {
+  id: string;
+  topping: string;
+  quantity: number;
+  value: number;
+};
+
+type ImportPeriod = {
+  id: string;
+  month: number;
+  year: number;
+  periodStart: string;
+  periodEnd: string;
+  source: string | null;
+  totalItemsSold: number;
+  totalRevenue: number;
+  totalPizzas: number;
+  pizzaRevenue: number;
+  items: ImportItem[];
+};
 
 type MatrixItem = {
-  id: string;
+  key: string;
+  itemId: string | null;
   name: string;
-  groupName: string | null;
-  categoryName: string | null;
-  salesQty: number;
-  priceAmount: number;
-  profitActualPerc: number;
-  marginAmount: number;
+  quantity: number;
+  value: number;
+  averageValue: number;
+  shareQuantity: number;
+  shareValue: number;
   quadrant: MatrixQuadrant;
+  compareQuantity: number;
+  compareValue: number;
+  quantityDelta: number | null;
+  valueDelta: number | null;
+  menuEngineeringTag: MenuEngineeringTagDisplay | null;
+};
+
+type PeriodSummary = {
+  importsCount: number;
+  flavorsCount: number;
+  totalQuantity: number;
+  totalValue: number;
+  totalItemsSold: number;
+  totalRevenue: number;
+  totalPizzas: number;
+  pizzaRevenue: number;
+};
+
+type ExcludedSummary = {
+  flavorsCount: number;
+  totalQuantity: number;
+  totalValue: number;
+};
+
+type MonthlyRow = {
+  id: string;
+  label: string;
+  period: string;
+  totalQuantity: number;
+  totalValue: number;
+  totalPizzas: number;
+  pizzaRevenue: number;
+  flavorsCount: number;
+  topFlavor: string | null;
+  topFlavorQuantity: number;
 };
 
 type LoaderData = {
   filters: {
-    sizeKey: string;
-    channelKey: string;
-    salesImportIds: string[];
+    year: string;
+    periodIds: string[];
+    comparePeriodIds: string[];
   };
+  years: string[];
+  imports: ImportPeriod[];
+  selectedImports: ImportPeriod[];
+  compareImports: ImportPeriod[];
+  summary: PeriodSummary;
+  compareSummary: PeriodSummary;
+  excludedSummary: ExcludedSummary;
   thresholds: {
-    popularityAvg: number;
-    marginAvgAmount: number;
+    quantityAvg: number;
+    valueAvg: number;
   };
-  summary: {
-    totalItems: number;
-    itemsWithPricing: number;
-    totalSalesQty: number;
-    matchedSalesQty: number;
-    unmatchedSalesQty: number;
-    unmatchedCount: number;
-  };
-  sizes: { id: string; key: string; name: string }[];
-  channels: { id: string; key: string; name: string }[];
-  imports: { id: string; month: number; year: number; source: string | null }[];
-  activeImports: { id: string; month: number; year: number; source: string | null }[];
   quadrants: Record<MatrixQuadrant, MatrixItem[]>;
-  unpricedItems: { id: string; name: string }[];
-  unmatched: { name: string; quantity: number }[];
+  monthlyRows: MonthlyRow[];
+};
+
+type ActionData = {
+  ok: boolean;
+  message: string;
+};
+
+type TagAssignmentInput = {
+  itemId: string;
+  quadrant: MatrixQuadrant;
 };
 
 const normalize = (value: string) =>
@@ -67,268 +156,203 @@ const normalize = (value: string) =>
     .replace(/\s+/g, " ")
     .trim();
 
-const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-
 const pad2 = (value: number) => String(value).padStart(2, "0");
 
-export async function loader({ request }: LoaderFunctionArgs) {
-  const url = new URL(request.url);
-  const sizes = await menuItemSizePrismaEntity.findAll();
-  const channels = await itemSellingChannelPrismaEntity.findAll();
-  const imports = await prismaClient.menuEngineeringImport.findMany({
-    select: { id: true, month: true, year: true, source: true },
-    orderBy: [{ year: "desc" }, { month: "desc" }],
-  });
-
-  const requestedSizeKey = url.searchParams.get("size") ?? "pizza-medium";
-  const requestedChannelKey = url.searchParams.get("channel") ?? "cardapio";
-  const requestedImportIds = url.searchParams
-    .getAll("salesImport")
-    .filter((value) => value.trim().length > 0);
-
-  const resolvedSizeKey =
-    sizes.find((size) => size.key === requestedSizeKey)?.key ?? sizes[0]?.key ?? "";
-  const resolvedChannelKey =
-    channels.find((channel) => channel.key === requestedChannelKey)?.key ??
-    channels[0]?.key ??
-    "";
-
-  const validRequestedImportIds = requestedImportIds.filter((id) =>
-    imports.some((importItem) => importItem.id === id)
-  );
-
-  const resolvedImportIds =
-    validRequestedImportIds.length > 0
-      ? validRequestedImportIds
-      : imports[0]?.id
-      ? [imports[0].id]
-      : [];
-
-  const activeImports =
-    resolvedImportIds.length > 0
-      ? await prismaClient.menuEngineeringImport.findMany({
-          where: {
-            id: {
-              in: resolvedImportIds,
-            },
-          },
-          select: { id: true, month: true, year: true, source: true, items: true },
-          orderBy: [{ year: "desc" }, { month: "desc" }],
-        })
-      : [];
-
-  const items = await menuItemSellingPriceHandler.loadMany({
-    channelKey: resolvedChannelKey,
-    sizeKey: resolvedSizeKey,
-  });
-
-  const importedToppings = activeImports.flatMap((importItem) => importItem.items ?? []);
-
-  const sizeTokens = sizes
-    .flatMap((size) => [size.name, size.key])
-    .map(normalize)
-    .filter((token) => token.length >= 3);
-
-  const normalizedMenuItems = items.map((item) => ({
-    id: item.menuItemId,
-    name: item.name,
-    normalizedName: normalize(item.name),
-  }));
-
-  const nameIndex = new Map(
-    normalizedMenuItems.map((item) => [item.normalizedName, item.id])
-  );
-
-  const salesByItem = new Map<string, number>();
-  const unmatchedMap = new Map<string, number>();
-
-  importedToppings.forEach((toppingRow) => {
-    const rawName = toppingRow.topping ?? "";
-    const normalized = normalize(rawName);
-    let cleaned = normalized;
-
-    sizeTokens.forEach((token) => {
-      const regex = new RegExp(`\\b${escapeRegExp(token)}\\b`, "g");
-      cleaned = cleaned.replace(regex, " ").replace(/\s+/g, " ").trim();
-    });
-
-    if (!cleaned) cleaned = normalized;
-
-    let matchedId = nameIndex.get(cleaned);
-
-    if (!matchedId && cleaned.length >= 3) {
-      const candidates = normalizedMenuItems.filter(
-        (item) =>
-          cleaned.includes(item.normalizedName) ||
-          item.normalizedName.includes(cleaned)
-      );
-      if (candidates.length > 0) {
-        matchedId = candidates.sort(
-          (a, b) => b.normalizedName.length - a.normalizedName.length
-        )[0]?.id;
-      }
-    }
-
-    if (matchedId) {
-      salesByItem.set(
-        matchedId,
-        (salesByItem.get(matchedId) ?? 0) + (toppingRow.quantity ?? 0)
-      );
-    } else {
-      const key = rawName.trim() || "(sem nome)";
-      unmatchedMap.set(key, (unmatchedMap.get(key) ?? 0) + (toppingRow.quantity ?? 0));
-    }
-  });
-
-  const itemsWithPricing = items
-    .filter((item) => item.active && item.visible)
-    .map((item) => {
-      const variation = item.sellPriceVariations.find(
-        (v) => v.sizeKey === resolvedSizeKey && v.channelKey === resolvedChannelKey
-      );
-
-      return {
-        item,
-        variation,
-        salesQty: salesByItem.get(item.menuItemId) ?? 0,
-      };
-    });
-
-  const pricedItems = itemsWithPricing.filter((entry) => Boolean(entry.variation));
-  const unpricedItems = itemsWithPricing
-    .filter((entry) => !entry.variation)
-    .map((entry) => ({ id: entry.item.menuItemId, name: entry.item.name }));
-
-  const matchedSalesQty = itemsWithPricing.reduce((sum, entry) => sum + entry.salesQty, 0);
-  const unmatchedSalesQty = Array.from(unmatchedMap.values()).reduce((sum, qty) => sum + qty, 0);
-  const totalSalesQty = matchedSalesQty + unmatchedSalesQty;
-
-  const popularityAvg = pricedItems.length
-    ? pricedItems.reduce((sum, entry) => sum + entry.salesQty, 0) / pricedItems.length
-    : 0;
-
-  const marginAvgAmount = pricedItems.length
-    ? pricedItems.reduce((sum, entry) => {
-        const profitActualPerc = Number(entry.variation?.profitActualPerc ?? 0);
-        const priceAmount = Number(entry.variation?.priceAmount ?? 0);
-        return sum + priceAmount * (profitActualPerc / 100);
-      }, 0) / pricedItems.length
-    : 0;
-
-  const quadrants: Record<MatrixQuadrant, MatrixItem[]> = {
-    stars: [],
-    plowhorses: [],
-    puzzles: [],
-    dogs: [],
-  };
-
-  pricedItems.forEach((entry) => {
-    const profitActualPerc = Number(entry.variation?.profitActualPerc ?? 0);
-    const priceAmount = Number(entry.variation?.priceAmount ?? 0);
-    const marginAmount = priceAmount * (profitActualPerc / 100);
-    const highPopularity = entry.salesQty >= popularityAvg;
-    const highMargin = marginAmount >= marginAvgAmount;
-
-    const quadrant: MatrixQuadrant = highPopularity
-      ? highMargin
-        ? "stars"
-        : "plowhorses"
-      : highMargin
-      ? "puzzles"
-      : "dogs";
-
-    quadrants[quadrant].push({
-      id: entry.item.menuItemId,
-      name: entry.item.name,
-      groupName: entry.item.group?.name ?? null,
-      categoryName: entry.item.category?.name ?? null,
-      salesQty: entry.salesQty,
-      priceAmount,
-      profitActualPerc,
-      marginAmount,
-      quadrant,
-    });
-  });
-
-  (Object.keys(quadrants) as MatrixQuadrant[]).forEach((key) => {
-    quadrants[key] = quadrants[key].sort((a, b) => b.salesQty - a.salesQty);
-  });
-
-  const unmatched = Array.from(unmatchedMap.entries())
-    .map(([name, quantity]) => ({ name, quantity }))
-    .sort((a, b) => b.quantity - a.quantity)
-    .slice(0, 20);
-
-  return json<LoaderData>({
-    filters: {
-      sizeKey: resolvedSizeKey,
-      channelKey: resolvedChannelKey,
-      salesImportIds: resolvedImportIds,
-    },
-    thresholds: {
-      popularityAvg,
-      marginAvgAmount,
-    },
-    summary: {
-      totalItems: itemsWithPricing.length,
-      itemsWithPricing: pricedItems.length,
-      totalSalesQty,
-      matchedSalesQty,
-      unmatchedSalesQty,
-      unmatchedCount: unmatchedMap.size,
-    },
-    sizes: sizes.map((size) => ({ id: size.id, key: size.key, name: size.name })),
-    channels: channels.map((channel) => ({ id: channel.id, key: channel.key, name: channel.name })),
-    imports,
-    activeImports: activeImports.map((importItem) => ({
-      id: importItem.id,
-      month: importItem.month,
-      year: importItem.year,
-      source: importItem.source ?? null,
-    })),
-    quadrants,
-    unpricedItems,
-    unmatched,
-  });
-}
-
-const quadrantMeta: Record<MatrixQuadrant, { title: string; note: string; badge: string }> = {
-  stars: {
-    title: "Stars (Estrelas)",
-    note: "Alta venda + Alta margem — manter, destacar e promover",
-    badge: "text-emerald-700 bg-emerald-100",
-  },
-  plowhorses: {
-    title: "Plowhorses (Cavalos de carga)",
-    note: "Alta venda + Baixa margem — rever preço, porção ou custo",
-    badge: "text-amber-700 bg-amber-100",
-  },
-  puzzles: {
-    title: "Puzzles (Quebra-cabeças)",
-    note: "Baixa venda + Alta margem — trabalhar marketing e posicionamento",
-    badge: "text-blue-700 bg-blue-100",
-  },
-  dogs: {
-    title: "Dogs (Abacaxis)",
-    note: "Baixa venda + Baixa margem — remover ou reformular",
-    badge: "text-rose-700 bg-rose-100",
-  },
-};
-
-const quadrantOrder: MatrixQuadrant[] = ["stars", "puzzles", "plowhorses", "dogs"];
-
-const quadrantColors: Record<MatrixQuadrant, { fill: string; stroke: string }> = {
-  stars: { fill: "#5AC48B", stroke: "#2B8C5F" },
-  puzzles: { fill: "#F6C453", stroke: "#C2892E" },
-  plowhorses: { fill: "#F39A4B", stroke: "#C66C1F" },
-  dogs: { fill: "#EF5A5A", stroke: "#C53535" },
-};
+const dateFormatter = new Intl.DateTimeFormat("pt-BR", { timeZone: "UTC" });
 
 const formatCurrency = (value: number) => {
   const abs = Math.abs(value);
   const formatted = formatMoneyString(abs);
   return `${value < 0 ? "-R$ " : "R$ "}${formatted}`;
 };
+
+const formatPercent = (value: number | null) => {
+  if (value === null || !Number.isFinite(value)) return "-";
+  const prefix = value > 0 ? "+" : "";
+  return `${prefix}${formatDecimalPlaces(value, 1)}%`;
+};
+
+const periodLabel = (
+  period: Pick<ImportPeriod, "periodStart" | "periodEnd">
+) => {
+  const start = new Date(period.periodStart);
+  const end = new Date(period.periodEnd);
+  return `${dateFormatter.format(start)} ate ${dateFormatter.format(end)}`;
+};
+
+const shortPeriodLabel = (period: ImportPeriod) => {
+  const start = new Date(period.periodStart);
+  const end = new Date(period.periodEnd);
+  const sameMonth =
+    start.getUTCFullYear() === end.getUTCFullYear() &&
+    start.getUTCMonth() === end.getUTCMonth();
+
+  if (sameMonth)
+    return `${pad2(start.getUTCMonth() + 1)}/${start.getUTCFullYear()}`;
+  return periodLabel(period);
+};
+
+const yearsForPeriod = (
+  period: Pick<ImportPeriod, "periodStart" | "periodEnd">
+) => {
+  const startYear = new Date(period.periodStart).getUTCFullYear();
+  const endYear = new Date(period.periodEnd).getUTCFullYear();
+  return Array.from(
+    { length: Math.max(0, endYear - startYear + 1) },
+    (_, index) => String(startYear + index)
+  );
+};
+
+const periodOverlapsYear = (
+  period: Pick<ImportPeriod, "periodStart" | "periodEnd">,
+  year: string
+) => {
+  const numericYear = Number(year);
+  if (!Number.isFinite(numericYear)) return false;
+
+  const yearStart = Date.UTC(numericYear, 0, 1, 0, 0, 0);
+  const yearEnd = Date.UTC(numericYear, 11, 31, 23, 59, 59);
+  const periodStart = new Date(period.periodStart).getTime();
+  const periodEnd = new Date(period.periodEnd).getTime();
+
+  return periodStart <= yearEnd && periodEnd >= yearStart;
+};
+
+const percentDelta = (current: number, previous: number) => {
+  if (!previous) return current ? null : 0;
+  return ((current - previous) / previous) * 100;
+};
+
+const emptySummary = (): PeriodSummary => ({
+  importsCount: 0,
+  flavorsCount: 0,
+  totalQuantity: 0,
+  totalValue: 0,
+  totalItemsSold: 0,
+  totalRevenue: 0,
+  totalPizzas: 0,
+  pizzaRevenue: 0,
+});
+
+const emptyExcludedSummary = (): ExcludedSummary => ({
+  flavorsCount: 0,
+  totalQuantity: 0,
+  totalValue: 0,
+});
+
+const aggregateImports = (imports: ImportPeriod[]) => {
+  const byFlavor = new Map<
+    string,
+    { name: string; quantity: number; value: number }
+  >();
+  const summary = emptySummary();
+
+  imports.forEach((importPeriod) => {
+    summary.importsCount += 1;
+    summary.totalItemsSold += importPeriod.totalItemsSold;
+    summary.totalRevenue += importPeriod.totalRevenue;
+    summary.totalPizzas += importPeriod.totalPizzas;
+    summary.pizzaRevenue += importPeriod.pizzaRevenue;
+
+    importPeriod.items.forEach((item) => {
+      const key = normalize(item.topping);
+      const current = byFlavor.get(key) ?? {
+        name: item.topping,
+        quantity: 0,
+        value: 0,
+      };
+      current.quantity += item.quantity;
+      current.value += item.value;
+      byFlavor.set(key, current);
+    });
+  });
+
+  summary.flavorsCount = byFlavor.size;
+  summary.totalQuantity = Array.from(byFlavor.values()).reduce(
+    (sum, item) => sum + item.quantity,
+    0
+  );
+  summary.totalValue = Array.from(byFlavor.values()).reduce(
+    (sum, item) => sum + item.value,
+    0
+  );
+
+  return { byFlavor, summary };
+};
+
+const filterImportsByCurrentCardapio = (
+  imports: ImportPeriod[],
+  allowedFlavorKeys: Set<string>
+) => {
+  const excludedByFlavor = new Map<
+    string,
+    { quantity: number; value: number }
+  >();
+
+  const filteredImports = imports.map((importPeriod) => ({
+    ...importPeriod,
+    items: importPeriod.items.filter((item) => {
+      const key = normalize(item.topping);
+      const allowed = allowedFlavorKeys.has(key);
+
+      if (!allowed) {
+        const current = excludedByFlavor.get(key) ?? { quantity: 0, value: 0 };
+        current.quantity += item.quantity;
+        current.value += item.value;
+        excludedByFlavor.set(key, current);
+      }
+
+      return allowed;
+    }),
+  }));
+
+  const excludedSummary = Array.from(excludedByFlavor.values()).reduce(
+    (summary, item) => {
+      summary.totalQuantity += item.quantity;
+      summary.totalValue += item.value;
+      return summary;
+    },
+    {
+      ...emptyExcludedSummary(),
+      flavorsCount: excludedByFlavor.size,
+    }
+  );
+
+  return { filteredImports, excludedSummary };
+};
+
+const buildMonthlyRows = (imports: ImportPeriod[]): MonthlyRow[] =>
+  [...imports]
+    .sort(
+      (a, b) =>
+        new Date(a.periodStart).getTime() - new Date(b.periodStart).getTime()
+    )
+    .map((importPeriod) => {
+      const totalQuantity = importPeriod.items.reduce(
+        (sum, item) => sum + item.quantity,
+        0
+      );
+      const totalValue = importPeriod.items.reduce(
+        (sum, item) => sum + item.value,
+        0
+      );
+      const topFlavor = [...importPeriod.items].sort(
+        (a, b) => b.quantity - a.quantity
+      )[0];
+
+      return {
+        id: importPeriod.id,
+        label: shortPeriodLabel(importPeriod),
+        period: periodLabel(importPeriod),
+        totalQuantity,
+        totalValue,
+        totalPizzas: importPeriod.totalPizzas,
+        pizzaRevenue: importPeriod.pizzaRevenue,
+        flavorsCount: importPeriod.items.length,
+        topFlavor: topFlavor?.topping ?? null,
+        topFlavorQuantity: topFlavor?.quantity ?? 0,
+      };
+    });
 
 const buildTicks = (min: number, max: number, count: number) => {
   if (count <= 1) return [min];
@@ -342,108 +366,448 @@ const toPointLabel = (name: string) => {
   return (compact.slice(0, 4) || name.slice(0, 4)).toUpperCase();
 };
 
-export default function AdminGerenciamentoCardapioMenuEngineering() {
-  const data = useLoaderData<typeof loader>();
-  const [guideOpen, setGuideOpen] = useState(false);
-  const guideRef = useRef<HTMLDivElement | null>(null);
-  const promptText = `Você é um pipeline de ETL determinístico para pizzarias.
+const isMatrixQuadrant = (value: string): value is MatrixQuadrant =>
+  Object.prototype.hasOwnProperty.call(MENU_ENGINEERING_QUADRANT_TAGS, value);
 
-Objetivo:
-Converter o relatório Saipos em um JSON consolidado por sabor
-para o sistema de Engenharia de Cardápio da A Modo Mio,
-com resultado 100% reproduzível entre execuções.
+async function ensureMenuEngineeringTags() {
+  const now = new Date();
+  const existingTags = await prismaClient.tag.findMany({
+    where: {
+      name: { in: MENU_ENGINEERING_TAG_NAMES },
+      deletedAt: null,
+    },
+    select: { id: true, name: true, public: true, colorHEX: true },
+  });
+  const tagsByName = new Map(existingTags.map((tag) => [tag.name, tag]));
 
-ENTRADAS OBRIGATÓRIAS:
-- Relatório Saipos de itens vendidos (competência fechada)
-- JSON de preços de venda (snapshot único do período)
-
-REGRAS FECHADAS (NÃO INFERIR, NÃO SUPOR):
-
-1) Parsing de sabores
-- Separadores válidos: "/", "+", " e ", " meio a meio "
-- Remover duplicatas
-- Normalizar nomes (trim, espaços simples)
-- Ordenar sabores alfabeticamente (ASC) antes de qualquer cálculo
-
-2) Inclusão
-- Considerar vendas diretas, meio a meio, combinações e Diversos
-- Sempre que um sabor aparecer, ele entra no cálculo
-
-3) Quantidade (rateio fixo)
-- 1 sabor  → 1.000
-- 2 sabores → 0.500
-- 3 sabores → 0.333333
-- 4 sabores → 0.250
-- Somar quantidades brutas
-- Arredondar quantidade FINAL para 2 casas
-
-4) Preços (regra crítica)
-- Usar EXCLUSIVAMENTE o JSON de preços fornecido
-- O preço considerado é o preço de tabela do sabor no tamanho vendido
-- Se PrecoSabor == 0 → ABORTAR execução com erro explícito
-- Não usar fallback
-- Não estimar
-- Não interpolar
-
-5) Regra comercial
-- Em pizzas com mix, o preço cobrado é o do sabor mais caro
-- O preço cobrado NÃO interfere no rateio
-- Rateio sempre proporcional aos preços de tabela
-
-6) Valor (critério oficial)
-PesoSabor = PrecoSabor / SomaPrecos
-ValorAtribuido = ValorVendaReal × PesoSabor
-- Não arredondar por pedido
-- Somar valores brutos
-- Arredondar valor FINAL para 2 casas
-
-7) Consolidação
-- Consolidar TODOS os sabores
-- Não gerar ranking
-- Não separar venda direta e mix
-- Ordem final dos sabores: alfabética ASC
-
-8) Saída (obrigatória)
-- Gerar APENAS JSON válido e parseável (strict)
-- Não gerar explicações
-- Não gerar texto fora do JSON
-
-Formato obrigatório de saída:
-
-{
-  "month": "MM",
-  "year": "YYYY",
-  "toppings": [
-    {
-      "topping": "string",
-      "quantity": number,
-      "value": number
+  for (const config of Object.values(MENU_ENGINEERING_QUADRANT_TAGS)) {
+    const existingTag = tagsByName.get(config.tagName);
+    if (!existingTag) {
+      const created = await prismaClient.tag.create({
+        data: {
+          name: config.tagName,
+          public: false,
+          colorHEX: config.colorHEX,
+          featuredFilter: false,
+          sortOrderIndex: config.sortOrderIndex,
+          createdAt: now,
+          updatedAt: now,
+          deletedAt: null,
+        },
+        select: { id: true, name: true, public: true, colorHEX: true },
+      });
+      tagsByName.set(config.tagName, created);
+      continue;
     }
-  ]
+
+    if (existingTag.public || existingTag.colorHEX !== config.colorHEX) {
+      const updated = await prismaClient.tag.update({
+        where: { id: existingTag.id },
+        data: {
+          public: false,
+          colorHEX: config.colorHEX,
+        },
+        select: { id: true, name: true, public: true, colorHEX: true },
+      });
+      tagsByName.set(config.tagName, updated);
+    }
+  }
+
+  return tagsByName;
 }
 
-Garantia:
-- Mesmo input → mesmo output
-- Execução determinística`;
+export async function loader({ request }: LoaderFunctionArgs) {
+  const url = new URL(request.url);
+  const [imports, currentCardapioItems] = await Promise.all([
+    prismaClient.menuEngineeringImport.findMany({
+      select: {
+        id: true,
+        month: true,
+        year: true,
+        periodStart: true,
+        periodEnd: true,
+        source: true,
+        totalItemsSold: true,
+        totalRevenue: true,
+        totalPizzas: true,
+        pizzaRevenue: true,
+        items: {
+          select: { id: true, topping: true, quantity: true, value: true },
+          orderBy: { quantity: "desc" },
+        },
+      },
+      orderBy: [{ periodStart: "desc" }, { periodEnd: "desc" }],
+    }),
+    prismaClient.item.findMany({
+      where: {
+        active: true,
+        canSell: true,
+        ItemSellingInfo: {
+          is: {
+            upcoming: false,
+          },
+        },
+        ItemSellingChannelItem: {
+          some: {
+            visible: true,
+            ItemSellingChannel: {
+              key: "cardapio",
+            },
+          },
+        },
+      },
+      select: {
+        id: true,
+        name: true,
+        ItemTag: {
+          where: {
+            deletedAt: null,
+            Tag: {
+              name: { in: MENU_ENGINEERING_TAG_NAMES },
+              deletedAt: null,
+            },
+          },
+          select: {
+            Tag: {
+              select: {
+                name: true,
+                colorHEX: true,
+              },
+            },
+          },
+        },
+      },
+    }),
+  ]);
 
-  useEffect(() => {
-    if (!guideOpen) return;
-    const handleClickOutside = (event: MouseEvent) => {
-      if (guideRef.current && !guideRef.current.contains(event.target as Node)) {
-        setGuideOpen(false);
+  const currentCardapioFlavorByKey = new Map(
+    currentCardapioItems.map((item) => {
+      const tag = item.ItemTag.map((row) =>
+        resolveMenuEngineeringTag(row.Tag?.name, row.Tag?.colorHEX)
+      ).find(Boolean);
+      return [
+        normalize(item.name),
+        {
+          id: String(item.id),
+          name: item.name,
+          menuEngineeringTag: tag ?? null,
+        },
+      ];
+    })
+  );
+  const currentCardapioFlavorKeys = new Set(currentCardapioFlavorByKey.keys());
+
+  const serializedImports: ImportPeriod[] = imports.map((importPeriod) => ({
+    ...importPeriod,
+    periodStart: importPeriod.periodStart.toISOString(),
+    periodEnd: importPeriod.periodEnd.toISOString(),
+  }));
+
+  const years = Array.from(
+    new Set(
+      serializedImports.flatMap((importPeriod) => yearsForPeriod(importPeriod))
+    )
+  ).sort((a, b) => Number(b) - Number(a));
+
+  const requestedYear = url.searchParams.get("year");
+  const resolvedYear =
+    requestedYear && years.includes(requestedYear)
+      ? requestedYear
+      : years[0] ?? "";
+  const requestedPeriodIds = url.searchParams
+    .getAll("period")
+    .filter((value) =>
+      serializedImports.some((importPeriod) => importPeriod.id === value)
+    );
+  const requestedComparePeriodIds = url.searchParams
+    .getAll("comparePeriod")
+    .filter((value) =>
+      serializedImports.some((importPeriod) => importPeriod.id === value)
+    );
+
+  const importsInYear = serializedImports.filter((importPeriod) =>
+    resolvedYear ? periodOverlapsYear(importPeriod, resolvedYear) : false
+  );
+  const selectedImports =
+    requestedPeriodIds.length > 0
+      ? serializedImports.filter((importPeriod) =>
+          requestedPeriodIds.includes(importPeriod.id)
+        )
+      : importsInYear;
+  const compareImports =
+    requestedComparePeriodIds.length > 0
+      ? serializedImports.filter((importPeriod) =>
+          requestedComparePeriodIds.includes(importPeriod.id)
+        )
+      : [];
+
+  const { filteredImports: selectedVisibleImports, excludedSummary } =
+    filterImportsByCurrentCardapio(selectedImports, currentCardapioFlavorKeys);
+  const { filteredImports: compareVisibleImports } =
+    filterImportsByCurrentCardapio(compareImports, currentCardapioFlavorKeys);
+
+  const currentAggregate = aggregateImports(selectedVisibleImports);
+  const compareAggregate = aggregateImports(compareVisibleImports);
+  const items = Array.from(currentAggregate.byFlavor.entries()).map(
+    ([key, item]) => {
+      const compare = compareAggregate.byFlavor.get(key);
+      const currentItem = currentCardapioFlavorByKey.get(key) ?? null;
+      return {
+        key,
+        itemId: currentItem?.id ?? null,
+        name: currentItem?.name ?? item.name,
+        quantity: item.quantity,
+        value: item.value,
+        compareQuantity: compare?.quantity ?? 0,
+        compareValue: compare?.value ?? 0,
+        menuEngineeringTag: currentItem?.menuEngineeringTag ?? null,
+      };
+    }
+  );
+
+  const quantityAvg = items.length
+    ? items.reduce((sum, item) => sum + item.quantity, 0) / items.length
+    : 0;
+  const valueAvg = items.length
+    ? items.reduce((sum, item) => sum + item.value, 0) / items.length
+    : 0;
+
+  const quadrants: Record<MatrixQuadrant, MatrixItem[]> = {
+    champions: [],
+    volume: [],
+    potential: [],
+    lowPriority: [],
+  };
+
+  items.forEach((item) => {
+    const highQuantity = item.quantity >= quantityAvg;
+    const highValue = item.value >= valueAvg;
+    const quadrant: MatrixQuadrant = highQuantity
+      ? highValue
+        ? "champions"
+        : "volume"
+      : highValue
+      ? "potential"
+      : "lowPriority";
+
+    quadrants[quadrant].push({
+      ...item,
+      averageValue: item.quantity ? item.value / item.quantity : 0,
+      shareQuantity: currentAggregate.summary.totalQuantity
+        ? (item.quantity / currentAggregate.summary.totalQuantity) * 100
+        : 0,
+      shareValue: currentAggregate.summary.totalValue
+        ? (item.value / currentAggregate.summary.totalValue) * 100
+        : 0,
+      quadrant,
+      quantityDelta: percentDelta(item.quantity, item.compareQuantity),
+      valueDelta: percentDelta(item.value, item.compareValue),
+    });
+  });
+
+  (Object.keys(quadrants) as MatrixQuadrant[]).forEach((key) => {
+    quadrants[key] = quadrants[key].sort((a, b) => b.quantity - a.quantity);
+  });
+
+  return json<LoaderData>({
+    filters: {
+      year: resolvedYear,
+      periodIds: selectedImports.map((importPeriod) => importPeriod.id),
+      comparePeriodIds: compareImports.map((importPeriod) => importPeriod.id),
+    },
+    years,
+    imports: serializedImports,
+    selectedImports: selectedVisibleImports,
+    compareImports: compareVisibleImports,
+    summary: currentAggregate.summary,
+    compareSummary: compareAggregate.summary,
+    excludedSummary,
+    thresholds: {
+      quantityAvg,
+      valueAvg,
+    },
+    quadrants,
+    monthlyRows: buildMonthlyRows(selectedVisibleImports),
+  });
+}
+
+export async function action({ request }: ActionFunctionArgs) {
+  const formData = await request.formData();
+  const actionName = String(formData.get("_action") || "").trim();
+
+  if (actionName !== "apply-menu-engineering-tags") {
+    return json<ActionData>(
+      { ok: false, message: "Acao invalida." },
+      { status: 400 }
+    );
+  }
+
+  let assignmentsInput: unknown = null;
+  try {
+    assignmentsInput = JSON.parse(String(formData.get("assignments") || "[]"));
+  } catch {
+    return json<ActionData>(
+      { ok: false, message: "Lista de vinculos invalida." },
+      { status: 400 }
+    );
+  }
+
+  if (!Array.isArray(assignmentsInput)) {
+    return json<ActionData>(
+      { ok: false, message: "Lista de vinculos invalida." },
+      { status: 400 }
+    );
+  }
+
+  const uniqueAssignments = new Map<string, TagAssignmentInput>();
+  assignmentsInput.forEach((assignment) => {
+    const itemId = String((assignment as any)?.itemId || "").trim();
+    const quadrant = String((assignment as any)?.quadrant || "").trim();
+    if (!itemId || !isMatrixQuadrant(quadrant)) return;
+    uniqueAssignments.set(itemId, { itemId, quadrant });
+  });
+
+  const assignments = Array.from(uniqueAssignments.values());
+  if (assignments.length === 0) {
+    return json<ActionData>({
+      ok: true,
+      message: "Nenhum sabor pendente para vincular.",
+    });
+  }
+
+  const items = await prismaClient.item.findMany({
+    where: {
+      id: {
+        in: assignments.map((assignment) => assignment.itemId),
+      },
+    },
+    select: { id: true },
+  });
+  const validItemIds = new Set(items.map((item) => item.id));
+  const validAssignments = assignments.filter((assignment) =>
+    validItemIds.has(assignment.itemId)
+  );
+
+  if (validAssignments.length === 0) {
+    return json<ActionData>(
+      { ok: false, message: "Nenhum sabor valido encontrado." },
+      { status: 400 }
+    );
+  }
+
+  const tagsByName = await ensureMenuEngineeringTags();
+  const tagIds = Array.from(tagsByName.values()).map((tag) => tag.id);
+  const now = new Date();
+  let appliedCount = 0;
+
+  for (const assignment of validAssignments) {
+    const config = MENU_ENGINEERING_QUADRANT_TAGS[assignment.quadrant];
+    const tag = tagsByName.get(config.tagName);
+    if (!tag) continue;
+
+    await prismaClient.itemTag.deleteMany({
+      where: {
+        itemId: assignment.itemId,
+        tagId: {
+          in: tagIds.filter((tagId) => tagId !== tag.id),
+        },
+      },
+    });
+
+    const existingItemTag = await prismaClient.itemTag.findFirst({
+      where: {
+        itemId: assignment.itemId,
+        tagId: tag.id,
+      },
+      select: { id: true, deletedAt: true },
+    });
+
+    if (existingItemTag) {
+      if (existingItemTag.deletedAt) {
+        await prismaClient.itemTag.update({
+          where: { id: existingItemTag.id },
+          data: { deletedAt: null, updatedAt: now },
+        });
       }
-    };
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setGuideOpen(false);
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    document.addEventListener("keydown", handleKeyDown);
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-      document.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [guideOpen]);
+    } else {
+      await prismaClient.itemTag.create({
+        data: {
+          itemId: assignment.itemId,
+          tagId: tag.id,
+          createdAt: now,
+          updatedAt: now,
+        },
+      });
+    }
+
+    appliedCount += 1;
+  }
+
+  return json<ActionData>({
+    ok: true,
+    message: `${appliedCount} sabor(es) sincronizado(s) com esta analise.`,
+  });
+}
+
+const quadrantMeta: Record<
+  MatrixQuadrant,
+  { title: string; note: string; badge: string }
+> = {
+  champions: {
+    title: MENU_ENGINEERING_QUADRANT_TAGS.champions.title,
+    note: MENU_ENGINEERING_QUADRANT_TAGS.champions.note,
+    badge: MENU_ENGINEERING_QUADRANT_TAGS.champions.badgeClassName,
+  },
+  volume: {
+    title: MENU_ENGINEERING_QUADRANT_TAGS.volume.title,
+    note: MENU_ENGINEERING_QUADRANT_TAGS.volume.note,
+    badge: MENU_ENGINEERING_QUADRANT_TAGS.volume.badgeClassName,
+  },
+  potential: {
+    title: MENU_ENGINEERING_QUADRANT_TAGS.potential.title,
+    note: MENU_ENGINEERING_QUADRANT_TAGS.potential.note,
+    badge: MENU_ENGINEERING_QUADRANT_TAGS.potential.badgeClassName,
+  },
+  lowPriority: {
+    title: MENU_ENGINEERING_QUADRANT_TAGS.lowPriority.title,
+    note: MENU_ENGINEERING_QUADRANT_TAGS.lowPriority.note,
+    badge: MENU_ENGINEERING_QUADRANT_TAGS.lowPriority.badgeClassName,
+  },
+};
+
+const quadrantOrder: MatrixQuadrant[] = [
+  "champions",
+  "potential",
+  "volume",
+  "lowPriority",
+];
+
+const quadrantColors: Record<MatrixQuadrant, { fill: string; stroke: string }> =
+  {
+    champions: {
+      fill: MENU_ENGINEERING_QUADRANT_TAGS.champions.fill,
+      stroke: MENU_ENGINEERING_QUADRANT_TAGS.champions.stroke,
+    },
+    potential: {
+      fill: MENU_ENGINEERING_QUADRANT_TAGS.potential.fill,
+      stroke: MENU_ENGINEERING_QUADRANT_TAGS.potential.stroke,
+    },
+    volume: {
+      fill: MENU_ENGINEERING_QUADRANT_TAGS.volume.fill,
+      stroke: MENU_ENGINEERING_QUADRANT_TAGS.volume.stroke,
+    },
+    lowPriority: {
+      fill: MENU_ENGINEERING_QUADRANT_TAGS.lowPriority.fill,
+      stroke: MENU_ENGINEERING_QUADRANT_TAGS.lowPriority.stroke,
+    },
+  };
+
+export default function AdminGerenciamentoCardapioMenuEngineering() {
+  const data = useLoaderData<typeof loader>();
+  const actionData = useActionData<typeof action>();
+  const navigation = useNavigation();
   const [hovered, setHovered] = useState<MatrixItem | null>(null);
+  const [chartDialogOpen, setChartDialogOpen] = useState(false);
 
   const allItems = useMemo(
     () => quadrantOrder.flatMap((key) => data.quadrants[key]),
@@ -451,36 +815,62 @@ Garantia:
   );
   const defaultHighlight = useMemo(() => {
     if (allItems.length === 0) return null;
-    return [...allItems].sort((a, b) => b.salesQty - a.salesQty)[0] ?? null;
+    return [...allItems].sort((a, b) => b.quantity - a.quantity)[0] ?? null;
   }, [allItems]);
+  const comparedItems = useMemo(
+    () =>
+      [...allItems]
+        .filter((item) => item.compareQuantity > 0 || item.compareValue > 0)
+        .sort(
+          (a, b) => Math.abs(b.valueDelta ?? 0) - Math.abs(a.valueDelta ?? 0)
+        )
+        .slice(0, 12),
+    [allItems]
+  );
+  const pendingTagItems = useMemo(
+    () =>
+      allItems.filter((item) => {
+        if (!item.itemId) return false;
+        const suggestedTag = MENU_ENGINEERING_QUADRANT_TAGS[item.quadrant];
+        return item.menuEngineeringTag?.tagName !== suggestedTag.tagName;
+      }),
+    [allItems]
+  );
+  const tagAssignmentsJson = useMemo(
+    () =>
+      JSON.stringify(
+        pendingTagItems.map((item) => ({
+          itemId: item.itemId,
+          quadrant: item.quadrant,
+        }))
+      ),
+    [pendingTagItems]
+  );
 
   const chart = useMemo(() => {
     const width = 1000;
     const height = 560;
-    const padding = { top: 30, right: 30, bottom: 70, left: 70 };
+    const padding = { top: 30, right: 30, bottom: 70, left: 90 };
     const plotWidth = width - padding.left - padding.right;
     const plotHeight = height - padding.top - padding.bottom;
 
-    const xValues = allItems.map((item) => item.marginAmount);
-    const yValues = allItems.map((item) => item.salesQty);
-    const minX = Math.min(0, ...xValues);
-    const maxX = Math.max(0, ...xValues);
+    const xValues = allItems.map((item) => item.value);
+    const yValues = allItems.map((item) => item.quantity);
+    const minX = 0;
+    const maxX = Math.max(1, ...xValues);
     const minY = 0;
     const maxY = Math.max(1, ...yValues);
-
-    const xRange = maxX - minX || 1;
-    const yRange = maxY - minY || 1;
-    const xPadding = xRange * 0.1;
-    const yPadding = yRange * 0.1;
-
-    const xMin = minX - xPadding;
+    const xPadding = maxX * 0.1;
+    const yPadding = maxY * 0.1;
     const xMax = maxX + xPadding;
     const yMax = maxY + yPadding;
 
     const scaleX = (value: number) =>
-      padding.left + ((value - xMin) / (xMax - xMin || 1)) * plotWidth;
+      padding.left + ((value - minX) / (xMax - minX || 1)) * plotWidth;
     const scaleY = (value: number) =>
-      padding.top + plotHeight - ((value - minY) / (yMax - minY || 1)) * plotHeight;
+      padding.top +
+      plotHeight -
+      ((value - minY) / (yMax - minY || 1)) * plotHeight;
 
     return {
       width,
@@ -488,7 +878,6 @@ Garantia:
       padding,
       plotWidth,
       plotHeight,
-      xMin,
       xMax,
       yMax,
       scaleX,
@@ -496,375 +885,431 @@ Garantia:
     };
   }, [allItems]);
 
-  const xTicks = useMemo(() => buildTicks(chart.xMin, chart.xMax, 5), [chart]);
+  const xTicks = useMemo(() => buildTicks(0, chart.xMax, 5), [chart]);
   const yTicks = useMemo(() => buildTicks(0, chart.yMax, 5), [chart]);
-  const activePeriodLabel = useMemo(() => {
-    if (data.activeImports.length === 0) return "Sem importação";
-    const labels = data.activeImports.map((item) => `${pad2(item.month)}/${item.year}`);
-    if (labels.length === 1) return labels[0];
-    return `${labels.length} meses (${labels[labels.length - 1]} até ${labels[0]})`;
-  }, [data.activeImports]);
+  const selectedLabel =
+    data.selectedImports.length === 0
+      ? "Sem periodo"
+      : data.selectedImports.length === 1
+      ? periodLabel(data.selectedImports[0])
+      : `${data.selectedImports.length} periodos selecionados`;
+  const maxMonthlyQuantity = Math.max(
+    1,
+    ...data.monthlyRows.map((row) => row.totalQuantity)
+  );
+  const applyingTags =
+    navigation.state !== "idle" &&
+    navigation.formData?.get("_action") === "apply-menu-engineering-tags";
+  const sectionClassName = "border-0 bg-transparent shadow-none";
+  const renderFlavorMatrixChart = (className: string) => (
+    <svg
+      viewBox={`0 0 ${chart.width} ${chart.height}`}
+      className={className}
+      role="img"
+      aria-label="Scatter plot da matriz de sabores"
+    >
+      <rect
+        x={chart.padding.left}
+        y={chart.padding.top}
+        width={chart.plotWidth}
+        height={chart.plotHeight}
+        rx="8"
+        fill="#F8F9FB"
+      />
+
+      {xTicks.map((value) => {
+        const x = chart.scaleX(value);
+        return (
+          <g key={`x-${value}`}>
+            <line
+              x1={x}
+              y1={chart.padding.top}
+              x2={x}
+              y2={chart.padding.top + chart.plotHeight}
+              stroke="#E5E7EB"
+              strokeDasharray="4 6"
+            />
+            <text
+              x={x}
+              y={chart.padding.top + chart.plotHeight + 32}
+              textAnchor="middle"
+              fontSize="12"
+              fill="#6B7280"
+            >
+              {formatCurrency(value)}
+            </text>
+          </g>
+        );
+      })}
+
+      {yTicks.map((value) => {
+        const y = chart.scaleY(value);
+        return (
+          <g key={`y-${value}`}>
+            <line
+              x1={chart.padding.left}
+              y1={y}
+              x2={chart.padding.left + chart.plotWidth}
+              y2={y}
+              stroke="#E5E7EB"
+              strokeDasharray="4 6"
+            />
+            <text
+              x={chart.padding.left - 12}
+              y={y + 4}
+              textAnchor="end"
+              fontSize="12"
+              fill="#6B7280"
+            >
+              {formatDecimalPlaces(value, 0)}
+            </text>
+          </g>
+        );
+      })}
+
+      <line
+        x1={chart.scaleX(data.thresholds.valueAvg)}
+        y1={chart.padding.top}
+        x2={chart.scaleX(data.thresholds.valueAvg)}
+        y2={chart.padding.top + chart.plotHeight}
+        stroke="#111827"
+        strokeDasharray="6 8"
+        opacity="0.35"
+      />
+      <line
+        x1={chart.padding.left}
+        y1={chart.scaleY(data.thresholds.quantityAvg)}
+        x2={chart.padding.left + chart.plotWidth}
+        y2={chart.scaleY(data.thresholds.quantityAvg)}
+        stroke="#111827"
+        strokeDasharray="6 8"
+        opacity="0.35"
+      />
+
+      {allItems.map((item) => {
+        const cx = chart.scaleX(item.value);
+        const cy = chart.scaleY(item.quantity);
+        const color = quadrantColors[item.quadrant];
+        return (
+          <g
+            key={item.key}
+            onMouseEnter={() => setHovered(item)}
+            onMouseLeave={() => setHovered(null)}
+            onFocus={() => setHovered(item)}
+            onBlur={() => setHovered(null)}
+            tabIndex={0}
+            style={{ cursor: "pointer" }}
+          >
+            <circle
+              cx={cx}
+              cy={cy}
+              r={7.5}
+              fill={color.fill}
+              stroke={color.stroke}
+              strokeWidth={1}
+              opacity={hovered && hovered.key === item.key ? 1 : 0.85}
+            />
+            <text
+              x={cx + 10}
+              y={cy + 4}
+              fontSize="11"
+              fill="#111827"
+              opacity={hovered && hovered.key === item.key ? 1 : 0.85}
+            >
+              {toPointLabel(item.name)}
+            </text>
+          </g>
+        );
+      })}
+
+      <text
+        x={chart.padding.left + chart.plotWidth / 2}
+        y={chart.height - 18}
+        textAnchor="middle"
+        fontSize="14"
+        fill="#374151"
+      >
+        Faturamento por sabor
+      </text>
+      <text
+        x={16}
+        y={chart.padding.top + chart.plotHeight / 2}
+        textAnchor="middle"
+        fontSize="14"
+        fill="#374151"
+        transform={`rotate(-90 16 ${chart.padding.top + chart.plotHeight / 2})`}
+      >
+        Quantidade vendida
+      </text>
+    </svg>
+  );
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-8">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex flex-col gap-2">
           <h1 className="text-2xl font-semibold">Menu Engineering Matrix</h1>
           <p className="text-sm text-muted-foreground">
-            Popularidade (vendas) × Margem de contribuição (lucro). Baseado nas vendas importadas.
+            Quantidade vendida x faturamento por sabor, usando os JSONs
+            importados da extensao.
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Button asChild variant="outline">
-            <a
-              href="https://chatgpt.com/g/g-6980b87c6d088191b652865a42fecd60-etl-saipos-engenharia-de-cardapio-a-modo-mio"
-              target="_blank"
-              rel="noreferrer"
-            >
-              Abrir GPTs (ETL Saipos)
-            </a>
-          </Button>
-          <Button asChild variant="outline">
-            <Link to="/admin/gerenciamento/cardapio/dashboard/menu-engineering/import">
-              Importar vendas
-            </Link>
-          </Button>
-          <div className="relative" ref={guideRef}>
-            <Button
-              type="button"
-              className="bg-yellow-300 text-black hover:bg-yellow-400"
-              onClick={() => setGuideOpen((prev) => !prev)}
-            >
-              <HelpCircle className="mr-2 h-4 w-4" />
-              Guia de atualização
-            </Button>
-            {guideOpen ? (
-              <div className="absolute right-0 z-20 mt-2 w-[380px] rounded-xl border border-border bg-white p-4 shadow-lg">
-                <div className="flex items-start justify-between gap-2">
-                  <h3 className="text-sm font-semibold">Atualizar Gráfico de Engenharia de Cardápio</h3>
-                  <Button type="button" size="sm" variant="ghost" onClick={() => setGuideOpen(false)}>
-                    Fechar
-                  </Button>
-                </div>
-                <p className="mt-2 text-xs text-muted-foreground">
-                  Este processo consolida automaticamente os dados de vendas do Saipos para atualizar o
-                  gráfico de Engenharia de Cardápio.
-                </p>
-                <ol className="mt-3 list-decimal space-y-1 pl-4 text-xs text-muted-foreground">
-                  <li>Exporte o relatório mensal do Saipos: Saipos → Relatórios → Itens vendidos</li>
-                  <li>
-                    Exporte a tabela de preços por sabor e tamanho: Sistema A Modo Mio → Precificação →
-                    Preços de Venda → Cardápio → Tabela de Preço → Exportar dados
-                  </li>
-                  <li>Envie ambos os arquivos no ChatGPT</li>
-                  <li>Execute o prompt padrão de consolidação</li>
-                </ol>
-                <div className="mt-3 flex items-center justify-between">
-                  <span className="text-xs font-semibold text-muted-foreground">Prompt padrão</span>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    onClick={async () => {
-                      await navigator.clipboard.writeText(promptText);
-                      setGuideOpen(false);
-                    }}
-                  >
-                    Copiar prompt
-                  </Button>
-                </div>
-                <pre className="mt-2 max-h-64 overflow-auto rounded-md bg-slate-900 p-3 text-[11px] text-slate-100">
-{promptText}
-                </pre>
-              </div>
-            ) : null}
-          </div>
-        </div>
+        <Button asChild variant="outline">
+          <Link to="/admin/gerenciamento/cardapio/dashboard/menu-engineering/import">
+            Importar vendas
+          </Link>
+        </Button>
       </div>
 
-      <Card>
-        <CardHeader>
+      {actionData?.message ? (
+        <div
+          className={`rounded-md px-4 py-3 text-sm ${
+            actionData.ok
+              ? "bg-emerald-50 text-emerald-800"
+              : "bg-red-50 text-red-700"
+          }`}
+        >
+          {actionData.message}
+        </div>
+      ) : null}
+
+      <Separator />
+
+      <Card className={sectionClassName}>
+        <CardHeader className="px-0">
           <CardTitle>Filtros</CardTitle>
           <CardDescription>
-            Ajuste o canal, tamanho e um ou mais períodos para recalcular a matriz acumulada.
+            Selecione um ano completo, periodos especificos e um grupo de
+            comparacao.
           </CardDescription>
         </CardHeader>
-        <CardContent>
-          <Form method="get" className="grid gap-4 md:grid-cols-4">
+        <CardContent className="px-0">
+          <Form
+            method="get"
+            className="grid gap-4 lg:grid-cols-[180px_minmax(0,1fr)_minmax(0,1fr)]"
+          >
             <label className="flex flex-col gap-1 text-sm">
-              Canal
+              Ano rapido
               <select
-                name="channel"
-                defaultValue={data.filters.channelKey}
+                name="year"
+                defaultValue={data.filters.year}
                 className="h-10 rounded-md border border-input bg-background px-3"
               >
-                {data.channels.map((channel) => (
-                  <option key={channel.id} value={channel.key}>
-                    {channel.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label className="flex flex-col gap-1 text-sm">
-              Tamanho
-              <select
-                name="size"
-                defaultValue={data.filters.sizeKey}
-                className="h-10 rounded-md border border-input bg-background px-3"
-              >
-                {data.sizes.map((size) => (
-                  <option key={size.id} value={size.key}>
-                    {size.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label className="flex flex-col gap-1 text-sm md:col-span-2">
-              Vendas (Mês/Ano) - selecione um ou mais meses
-              <select
-                name="salesImport"
-                multiple
-                defaultValue={data.filters.salesImportIds}
-                className="min-h-[132px] rounded-md border border-input bg-background px-3 py-2"
-              >
-                {data.imports.length === 0 ? (
-                  <option value="" disabled>
-                    Sem importações
-                  </option>
+                {data.years.length === 0 ? (
+                  <option value="">Sem importacoes</option>
                 ) : (
-                  data.imports.map((imp) => (
-                    <option key={imp.id} value={imp.id}>
-                      {pad2(imp.month)}/{imp.year}
-                      {imp.source ? ` · ${imp.source}` : ""}
+                  data.years.map((year) => (
+                    <option key={year} value={year}>
+                      {year}
                     </option>
                   ))
                 )}
               </select>
+            </label>
+
+            <label className="flex flex-col gap-1 text-sm">
+              Periodos analisados
+              <select
+                name="period"
+                multiple
+                defaultValue={data.filters.periodIds}
+                className="min-h-[132px] rounded-md border border-input bg-background px-3 py-2"
+              >
+                {data.imports.map((importPeriod) => (
+                  <option key={importPeriod.id} value={importPeriod.id}>
+                    {shortPeriodLabel(importPeriod)}
+                    {importPeriod.source ? ` · ${importPeriod.source}` : ""}
+                  </option>
+                ))}
+              </select>
               <span className="text-xs text-muted-foreground">
-                Use Ctrl (Windows) ou Command (Mac) para selecionar vários períodos.
+                Sem selecao manual, o ano rapido carrega todos os periodos
+                daquele ano.
               </span>
             </label>
 
-            <div className="md:col-span-4">
+            <label className="flex flex-col gap-1 text-sm">
+              Comparar com
+              <select
+                name="comparePeriod"
+                multiple
+                defaultValue={data.filters.comparePeriodIds}
+                className="min-h-[132px] rounded-md border border-input bg-background px-3 py-2"
+              >
+                {data.imports.map((importPeriod) => (
+                  <option key={importPeriod.id} value={importPeriod.id}>
+                    {shortPeriodLabel(importPeriod)}
+                    {importPeriod.source ? ` · ${importPeriod.source}` : ""}
+                  </option>
+                ))}
+              </select>
+              <span className="text-xs text-muted-foreground">
+                Use Ctrl ou Command para selecionar varios periodos.
+              </span>
+            </label>
+
+            <div className="lg:col-span-3">
               <Button type="submit">Aplicar filtros</Button>
             </div>
           </Form>
         </CardContent>
       </Card>
 
-      <Card className="overflow-hidden">
-        <CardHeader className="border-b border-border/60">
+      <Separator />
+
+      <div className="grid gap-3 md:grid-cols-4">
+        <Card className={sectionClassName}>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Periodos</CardTitle>
+            <CardDescription>{selectedLabel}</CardDescription>
+          </CardHeader>
+          <CardContent className="pt-0 text-xl font-semibold">
+            {data.summary.importsCount}
+          </CardContent>
+        </Card>
+        <Card className={sectionClassName}>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Sabores</CardTitle>
+            <CardDescription>Sabores unicos no consolidado</CardDescription>
+          </CardHeader>
+          <CardContent className="pt-0 text-xl font-semibold">
+            {data.summary.flavorsCount}
+          </CardContent>
+        </Card>
+        <Card className={sectionClassName}>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Quantidade</CardTitle>
+            <CardDescription>Soma de qtd_total</CardDescription>
+          </CardHeader>
+          <CardContent className="pt-0 text-xl font-semibold">
+            {formatDecimalPlaces(data.summary.totalQuantity, 2)}
+          </CardContent>
+        </Card>
+        <Card className={sectionClassName}>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Faturamento</CardTitle>
+            <CardDescription>Soma de valor_total</CardDescription>
+          </CardHeader>
+          <CardContent className="pt-0 text-xl font-semibold">
+            {formatCurrency(data.summary.totalValue)}
+          </CardContent>
+        </Card>
+      </div>
+
+      {data.excludedSummary.flavorsCount > 0 ? (
+        <div className="rounded-md bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          {data.excludedSummary.flavorsCount} sabores importados nao aparecem no
+          cardapio atual e foram ocultados da visualizacao. Quantidade ocultada:{" "}
+          {formatDecimalPlaces(data.excludedSummary.totalQuantity, 2)} · Valor:
+          {formatCurrency(data.excludedSummary.totalValue)}
+        </div>
+      ) : null}
+
+      <Separator />
+
+      <Card className={sectionClassName}>
+        <CardHeader className="px-0">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div className="flex flex-col gap-1">
-              <CardTitle className="text-xl">Menu Engineering</CardTitle>
-              <CardDescription>Avg Gross Profit × Total Transactions</CardDescription>
+              <CardTitle className="text-xl">Matriz de sabores</CardTitle>
+              <CardDescription>
+                Faturamento total x quantidade vendida
+              </CardDescription>
             </div>
             <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-              <span>Canal: {data.filters.channelKey}</span>
-              <span>Tamanho: {data.filters.sizeKey}</span>
-              <span>Vendas: {activePeriodLabel}</span>
-              {data.activeImports.length > 0 ? (
-                <span>
-                  Fontes:{" "}
-                  {Array.from(
-                    new Set(
-                      data.activeImports
-                        .map((importItem) => importItem.source)
-                        .filter((source): source is string => Boolean(source))
-                    )
-                  ).join(", ") || "Sem fonte"}
-                </span>
-              ) : null}
+              <span>
+                Quantidade media:{" "}
+                {formatDecimalPlaces(data.thresholds.quantityAvg, 2)}
+              </span>
+              <span>
+                Faturamento medio: {formatCurrency(data.thresholds.valueAvg)}
+              </span>
             </div>
           </div>
         </CardHeader>
-        <CardContent className="grid gap-5 xl:grid-cols-[220px_minmax(0,1fr)]">
-          <div className="rounded-2xl border border-border bg-white/90 p-4 shadow-sm">
+        <CardContent className="grid gap-5 px-0 xl:grid-cols-[220px_minmax(0,1fr)]">
+          <div className="rounded-md bg-white/90 p-4">
             <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               Legenda
             </p>
             <div className="grid gap-3">
-              {quadrantOrder.map((key, index) => (
+              {quadrantOrder.map((key) => (
                 <div key={key} className="flex items-center gap-3">
                   <span
                     className="h-3 w-3 rounded-full"
                     style={{ backgroundColor: quadrantColors[key].fill }}
                   />
                   <div className="text-sm">
-                    <p className="font-medium">
-                      {index + 1}. {quadrantMeta[key].title.split(" ")[0]}
+                    <p className="font-medium">{quadrantMeta[key].title}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {quadrantMeta[key].note}
                     </p>
-                    <p className="text-xs text-muted-foreground">{quadrantMeta[key].note}</p>
                   </div>
                 </div>
               ))}
             </div>
           </div>
 
-          <div className="relative w-full overflow-hidden rounded-2xl border border-border bg-white/80 p-4 shadow-sm">
-            <svg
-              viewBox={`0 0 ${chart.width} ${chart.height}`}
-              className="h-[620px] w-full"
-              role="img"
-              aria-label="Scatter plot da matriz de engenharia de cardápio"
+          <div className="relative w-full overflow-hidden rounded-md bg-white/80 p-4">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="absolute right-4 top-4 z-10 bg-white"
+              onClick={() => setChartDialogOpen(true)}
             >
-              <rect
-                x={chart.padding.left}
-                y={chart.padding.top}
-                width={chart.plotWidth}
-                height={chart.plotHeight}
-                rx="16"
-                fill="#F8F9FB"
-              />
-
-              {xTicks.map((value) => {
-                const x = chart.scaleX(value);
-                return (
-                  <g key={`x-${value}`}>
-                    <line
-                      x1={x}
-                      y1={chart.padding.top}
-                      x2={x}
-                      y2={chart.padding.top + chart.plotHeight}
-                      stroke="#E5E7EB"
-                      strokeDasharray="4 6"
-                    />
-                    <text
-                      x={x}
-                      y={chart.padding.top + chart.plotHeight + 32}
-                      textAnchor="middle"
-                      fontSize="12"
-                      fill="#6B7280"
-                    >
-                      {formatCurrency(value)}
-                    </text>
-                  </g>
-                );
-              })}
-
-              {yTicks.map((value) => {
-                const y = chart.scaleY(value);
-                return (
-                  <g key={`y-${value}`}>
-                    <line
-                      x1={chart.padding.left}
-                      y1={y}
-                      x2={chart.padding.left + chart.plotWidth}
-                      y2={y}
-                      stroke="#E5E7EB"
-                      strokeDasharray="4 6"
-                    />
-                    <text
-                      x={chart.padding.left - 12}
-                      y={y + 4}
-                      textAnchor="end"
-                      fontSize="12"
-                      fill="#6B7280"
-                    >
-                      {Math.round(value)}
-                    </text>
-                  </g>
-                );
-              })}
-
-              <line
-                x1={chart.scaleX(data.thresholds.marginAvgAmount)}
-                y1={chart.padding.top}
-                x2={chart.scaleX(data.thresholds.marginAvgAmount)}
-                y2={chart.padding.top + chart.plotHeight}
-                stroke="#111827"
-                strokeDasharray="6 8"
-                opacity="0.35"
-              />
-              <line
-                x1={chart.padding.left}
-                y1={chart.scaleY(data.thresholds.popularityAvg)}
-                x2={chart.padding.left + chart.plotWidth}
-                y2={chart.scaleY(data.thresholds.popularityAvg)}
-                stroke="#111827"
-                strokeDasharray="6 8"
-                opacity="0.35"
-              />
-
-              {allItems.map((item) => {
-                const cx = chart.scaleX(item.marginAmount);
-                const cy = chart.scaleY(item.salesQty);
-                const color = quadrantColors[item.quadrant];
-                return (
-                  <g
-                    key={item.id}
-                    onMouseEnter={() => setHovered(item)}
-                    onMouseLeave={() => setHovered(null)}
-                    onFocus={() => setHovered(item)}
-                    onBlur={() => setHovered(null)}
-                    tabIndex={0}
-                    style={{ cursor: "pointer" }}
-                  >
-                    <circle
-                      cx={cx}
-                      cy={cy}
-                      r={7.5}
-                      fill={color.fill}
-                      stroke={color.stroke}
-                      strokeWidth={1}
-                      opacity={hovered && hovered.id === item.id ? 1 : 0.85}
-                    />
-                    <text
-                      x={cx + 10}
-                      y={cy + 4}
-                      fontSize="11"
-                      fill="#111827"
-                      opacity={hovered && hovered.id === item.id ? 1 : 0.85}
-                    >
-                      {toPointLabel(item.name)}
-                    </text>
-                  </g>
-                );
-              })}
-
-              <text
-                x={chart.padding.left + chart.plotWidth / 2}
-                y={chart.height - 18}
-                textAnchor="middle"
-                fontSize="14"
-                fill="#374151"
-              >
-                Avg Gross Profit
-              </text>
-              <text
-                x={16}
-                y={chart.padding.top + chart.plotHeight / 2}
-                textAnchor="middle"
-                fontSize="14"
-                fill="#374151"
-                transform={`rotate(-90 16 ${chart.padding.top + chart.plotHeight / 2})`}
-              >
-                Total Transactions
-              </text>
-            </svg>
+              <Maximize2 className="mr-2 h-4 w-4" />
+              Ampliar grafico
+            </Button>
+            {renderFlavorMatrixChart("h-[620px] w-full")}
           </div>
 
-          <div className="grid gap-3 rounded-2xl border border-border bg-white/90 p-4 shadow-sm md:grid-cols-4 xl:col-span-2">
+          <Dialog open={chartDialogOpen} onOpenChange={setChartDialogOpen}>
+            <DialogContent className="h-[92dvh] w-[96vw] max-w-none grid-rows-[auto_minmax(0,1fr)] gap-4 overflow-hidden p-5">
+              <DialogHeader className="pr-8">
+                <DialogTitle>Matriz de sabores</DialogTitle>
+                <DialogDescription>
+                  Faturamento total x quantidade vendida no periodo selecionado.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="min-h-0 overflow-hidden rounded-md bg-white">
+                {renderFlavorMatrixChart("h-full w-full")}
+              </div>
+            </DialogContent>
+          </Dialog>
+
+          <div className="grid gap-3 rounded-md bg-white/90 p-4 md:grid-cols-4 xl:col-span-2">
             <div className="space-y-1">
-              <p className="text-xs font-semibold text-muted-foreground">Detalhes</p>
+              <p className="text-xs font-semibold text-muted-foreground">
+                Detalhes
+              </p>
               {hovered ? (
-                <span className="text-xs text-muted-foreground">Hover ativo</span>
+                <span className="text-xs text-muted-foreground">
+                  Hover ativo
+                </span>
               ) : (
-                <span className="text-xs text-muted-foreground">Passe o mouse no gráfico</span>
+                <span className="text-xs text-muted-foreground">
+                  Passe o mouse no grafico
+                </span>
               )}
             </div>
             <div className="space-y-1 text-sm">
-              <p className="text-xs text-muted-foreground">Avg de margem</p>
-              <p className="font-semibold">{formatCurrency(data.thresholds.marginAvgAmount)}</p>
+              <p className="text-xs text-muted-foreground">Quantidade</p>
+              <p className="font-semibold">
+                {formatDecimalPlaces(
+                  (hovered ?? defaultHighlight)?.quantity ?? 0,
+                  2
+                )}
+              </p>
             </div>
             <div className="space-y-1 text-sm">
-              <p className="text-xs text-muted-foreground">Total transações</p>
-              <p className="font-semibold">{data.summary.totalSalesQty}</p>
+              <p className="text-xs text-muted-foreground">Faturamento</p>
+              <p className="font-semibold">
+                {formatCurrency((hovered ?? defaultHighlight)?.value ?? 0)}
+              </p>
             </div>
             <div className="space-y-1 text-sm">
-              <p className="text-xs text-muted-foreground">Produto em destaque</p>
+              <p className="text-xs text-muted-foreground">Sabor em destaque</p>
               <p className="font-semibold text-slate-900">
                 {(hovered ?? defaultHighlight)?.name ?? "Nenhum item"}
               </p>
@@ -873,59 +1318,227 @@ Garantia:
                   className="h-2.5 w-2.5 rounded-full"
                   style={{
                     backgroundColor:
-                      quadrantColors[(hovered ?? defaultHighlight)?.quadrant ?? "stars"].fill,
+                      quadrantColors[
+                        (hovered ?? defaultHighlight)?.quadrant ?? "champions"
+                      ].fill,
                   }}
                 />
-                {(hovered ?? defaultHighlight)
+                {hovered ?? defaultHighlight
                   ? quadrantMeta[(hovered ?? defaultHighlight)!.quadrant].title
-                  : "—"}
+                  : "-"}
               </span>
             </div>
           </div>
-
         </CardContent>
       </Card>
 
-      <div className="grid gap-3 md:grid-cols-4">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base">Total de itens</CardTitle>
-            <CardDescription>Itens ativos e visíveis</CardDescription>
-          </CardHeader>
-          <CardContent className="pt-0 text-xl font-semibold">
-            {data.summary.totalItems}
-          </CardContent>
-        </Card>
+      <Separator />
 
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base">Com precificação</CardTitle>
-            <CardDescription>Itens usados na matriz</CardDescription>
-          </CardHeader>
-          <CardContent className="pt-0 text-xl font-semibold">
-            {data.summary.itemsWithPricing}
-          </CardContent>
-        </Card>
+      <Card className={sectionClassName}>
+        <CardHeader className="px-0">
+          <CardTitle>Visualizacao por mes</CardTitle>
+          <CardDescription>
+            Historico dos periodos selecionados.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-3 px-0">
+          {data.monthlyRows.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              Nenhum periodo selecionado.
+            </p>
+          ) : (
+            data.monthlyRows.map((row) => (
+              <div
+                key={row.id}
+                className="grid gap-3 rounded-md bg-slate-50 p-3 md:grid-cols-[130px_minmax(0,1fr)_220px]"
+              >
+                <div>
+                  <p className="font-semibold">{row.label}</p>
+                  <p className="text-xs text-muted-foreground">{row.period}</p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="h-3 flex-1 rounded-full bg-slate-100">
+                    <div
+                      className="h-3 rounded-full bg-emerald-500"
+                      style={{
+                        width: `${Math.max(
+                          4,
+                          (row.totalQuantity / maxMonthlyQuantity) * 100
+                        )}%`,
+                      }}
+                    />
+                  </div>
+                  <span className="w-20 text-right text-sm font-medium">
+                    {formatDecimalPlaces(row.totalQuantity, 2)}
+                  </span>
+                </div>
+                <div className="text-sm text-muted-foreground">
+                  <p className="font-medium text-slate-900">
+                    {formatCurrency(row.totalValue)}
+                  </p>
+                  <p>
+                    Top: {row.topFlavor ?? "-"} (
+                    {formatDecimalPlaces(row.topFlavorQuantity, 2)})
+                  </p>
+                </div>
+              </div>
+            ))
+          )}
+        </CardContent>
+      </Card>
 
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base">Média de vendas</CardTitle>
-            <CardDescription>Limite de popularidade</CardDescription>
-          </CardHeader>
-          <CardContent className="pt-0 text-xl font-semibold">
-            {formatDecimalPlaces(data.thresholds.popularityAvg, 1)}
-          </CardContent>
-        </Card>
+      {data.compareImports.length > 0 ? (
+        <>
+          <Separator />
+          <Card className={sectionClassName}>
+            <CardHeader className="px-0">
+              <CardTitle>Comparacao entre periodos</CardTitle>
+              <CardDescription>
+                Variacao dos sabores presentes no periodo analisado contra o
+                grupo de comparacao.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="grid gap-3 px-0 text-sm">
+              <div className="grid gap-3 md:grid-cols-4">
+                <div className="rounded-md bg-slate-50 p-3">
+                  <p className="text-xs text-muted-foreground">
+                    Faturamento atual
+                  </p>
+                  <p className="font-semibold">
+                    {formatCurrency(data.summary.totalValue)}
+                  </p>
+                </div>
+                <div className="rounded-md bg-slate-50 p-3">
+                  <p className="text-xs text-muted-foreground">
+                    Faturamento comparado
+                  </p>
+                  <p className="font-semibold">
+                    {formatCurrency(data.compareSummary.totalValue)}
+                  </p>
+                </div>
+                <div className="rounded-md bg-slate-50 p-3">
+                  <p className="text-xs text-muted-foreground">
+                    Variacao faturamento
+                  </p>
+                  <p className="font-semibold">
+                    {formatPercent(
+                      percentDelta(
+                        data.summary.totalValue,
+                        data.compareSummary.totalValue
+                      )
+                    )}
+                  </p>
+                </div>
+                <div className="rounded-md bg-slate-50 p-3">
+                  <p className="text-xs text-muted-foreground">
+                    Variacao quantidade
+                  </p>
+                  <p className="font-semibold">
+                    {formatPercent(
+                      percentDelta(
+                        data.summary.totalQuantity,
+                        data.compareSummary.totalQuantity
+                      )
+                    )}
+                  </p>
+                </div>
+              </div>
 
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base">Média de margem</CardTitle>
-            <CardDescription>Limite de lucro (R$)</CardDescription>
-          </CardHeader>
-          <CardContent className="pt-0 text-xl font-semibold">
-            {formatCurrency(data.thresholds.marginAvgAmount)}
-          </CardContent>
-        </Card>
+              {comparedItems.length === 0 ? (
+                <p className="text-muted-foreground">
+                  Sem sabores em comum para comparar.
+                </p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[720px] text-left text-sm">
+                    <thead className="text-xs text-muted-foreground">
+                      <tr>
+                        <th className="py-2 pr-3 font-medium">Sabor</th>
+                        <th className="py-2 pr-3 text-right font-medium">
+                          Qtd atual
+                        </th>
+                        <th className="py-2 pr-3 text-right font-medium">
+                          Qtd comp.
+                        </th>
+                        <th className="py-2 pr-3 text-right font-medium">
+                          Var. qtd
+                        </th>
+                        <th className="py-2 pr-3 text-right font-medium">
+                          Valor atual
+                        </th>
+                        <th className="py-2 pr-3 text-right font-medium">
+                          Valor comp.
+                        </th>
+                        <th className="py-2 text-right font-medium">
+                          Var. valor
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {comparedItems.map((item) => (
+                        <tr
+                          key={item.key}
+                          className="border-t border-border/60"
+                        >
+                          <td className="py-2 pr-3 font-medium">{item.name}</td>
+                          <td className="py-2 pr-3 text-right">
+                            {formatDecimalPlaces(item.quantity, 2)}
+                          </td>
+                          <td className="py-2 pr-3 text-right">
+                            {formatDecimalPlaces(item.compareQuantity, 2)}
+                          </td>
+                          <td className="py-2 pr-3 text-right">
+                            {formatPercent(item.quantityDelta)}
+                          </td>
+                          <td className="py-2 pr-3 text-right">
+                            {formatCurrency(item.value)}
+                          </td>
+                          <td className="py-2 pr-3 text-right">
+                            {formatCurrency(item.compareValue)}
+                          </td>
+                          <td className="py-2 text-right">
+                            {formatPercent(item.valueDelta)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </>
+      ) : null}
+
+      <Separator />
+
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-md bg-slate-50 px-4 py-3">
+        <div className="space-y-1">
+          <p className="text-sm font-semibold text-slate-900">
+            Vinculos de Menu Engineering
+          </p>
+          <p className="text-xs text-muted-foreground">
+            {pendingTagItems.length > 0
+              ? `${pendingTagItems.length} sabor(es) com tag diferente da analise atual.`
+              : "Todos os sabores vinculados ja acompanham esta analise."}
+          </p>
+        </div>
+        <Form method="post">
+          <input
+            type="hidden"
+            name="_action"
+            value="apply-menu-engineering-tags"
+          />
+          <input type="hidden" name="assignments" value={tagAssignmentsJson} />
+          <Button
+            type="submit"
+            disabled={pendingTagItems.length === 0 || applyingTags}
+            className="h-9 gap-2"
+          >
+            <Tag className="h-4 w-4" />
+            {applyingTags ? "Vinculando..." : "Vincular tags da analise"}
+          </Button>
+        </Form>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
@@ -933,107 +1546,118 @@ Garantia:
           const quadrant = quadrantMeta[key];
           const items = data.quadrants[key];
           return (
-            <Card key={key} className="flex flex-col">
-              <CardHeader className="gap-1">
+            <Card key={key} className={`flex flex-col ${sectionClassName}`}>
+              <CardHeader className="gap-1 px-0">
                 <div className="flex items-center justify-between">
                   <CardTitle>{quadrant.title}</CardTitle>
-                  <Badge className={quadrant.badge}>{items.length} itens</Badge>
+                  <Badge className={quadrant.badge}>
+                    {items.length} sabores
+                  </Badge>
                 </div>
                 <CardDescription>{quadrant.note}</CardDescription>
               </CardHeader>
-              <CardContent className="flex flex-col gap-3">
+              <CardContent className="flex flex-col gap-3 px-0">
                 {items.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">Nenhum item neste quadrante.</p>
+                  <p className="text-sm text-muted-foreground">
+                    Nenhum sabor neste quadrante.
+                  </p>
                 ) : (
-                  items.map((item) => (
-                    <div key={item.id} className="rounded-md border border-border p-3">
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <span className="font-medium">{item.name}</span>
-                        <span className="text-xs text-muted-foreground">
-                          {item.groupName || item.categoryName || "Sem grupo"}
-                        </span>
+                  items.map((item) => {
+                    const suggestedTag =
+                      MENU_ENGINEERING_QUADRANT_TAGS[item.quadrant];
+                    const tagChanged =
+                      item.menuEngineeringTag?.tagName !== suggestedTag.tagName;
+
+                    return (
+                      <div
+                        key={item.key}
+                        className={`rounded-md p-3 ${
+                          tagChanged
+                            ? "bg-amber-50 ring-1 ring-amber-200"
+                            : "bg-slate-50"
+                        }`}
+                      >
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <span className="font-medium">{item.name}</span>
+                          <div className="flex flex-wrap items-center gap-2">
+                            {tagChanged ? (
+                              <Badge
+                                variant="outline"
+                                className="border-amber-200 bg-white text-amber-700"
+                              >
+                                mudou
+                              </Badge>
+                            ) : (
+                              <Badge
+                                variant="outline"
+                                className="border-emerald-200 bg-white text-emerald-700"
+                              >
+                                <CheckCircle2 className="mr-1 h-3 w-3" />
+                                igual
+                              </Badge>
+                            )}
+                            <span className="text-xs text-muted-foreground">
+                              {formatDecimalPlaces(item.shareQuantity, 1)}% da
+                              quantidade
+                            </span>
+                          </div>
+                        </div>
+                        <div className="mt-2 flex flex-wrap gap-3 text-xs text-muted-foreground">
+                          <span>
+                            Qtd: {formatDecimalPlaces(item.quantity, 2)}
+                          </span>
+                          <span>Valor: {formatCurrency(item.value)}</span>
+                          <span>
+                            Media/un.: {formatCurrency(item.averageValue)}
+                          </span>
+                          <span>
+                            {formatDecimalPlaces(item.shareValue, 1)}% do valor
+                          </span>
+                        </div>
+                        <div className="mt-3 grid gap-2 text-xs sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] sm:items-center">
+                          <div className="space-y-1">
+                            <p className="font-medium text-muted-foreground">
+                              Tag atual
+                            </p>
+                            {item.menuEngineeringTag ? (
+                              <Badge
+                                variant="outline"
+                                className="border-transparent bg-white"
+                                style={{
+                                  color: item.menuEngineeringTag.colorHEX,
+                                }}
+                              >
+                                {item.menuEngineeringTag.title}
+                              </Badge>
+                            ) : (
+                              <span className="text-slate-400">
+                                Sem tag vinculada
+                              </span>
+                            )}
+                          </div>
+                          <ArrowRight className="hidden h-4 w-4 text-slate-400 sm:block" />
+                          <div className="space-y-1">
+                            <p className="font-medium text-muted-foreground">
+                              Tag da analise
+                            </p>
+                            <Badge
+                              variant="outline"
+                              className="border-transparent bg-white"
+                              style={{ color: suggestedTag.colorHEX }}
+                            >
+                              {suggestedTag.title}
+                            </Badge>
+                          </div>
+                        </div>
                       </div>
-                      <div className="mt-2 flex flex-wrap gap-3 text-xs text-muted-foreground">
-                        <span>Vendas: {item.salesQty}</span>
-                        <span>Preço: R$ {formatMoneyString(item.priceAmount)}</span>
-                        <span>
-                          Margem: {formatDecimalPlaces(item.profitActualPerc, 1)}% (R${" "}
-                          {formatMoneyString(item.marginAmount)})
-                        </span>
-                      </div>
-                    </div>
-                  ))
+                    );
+                  })
                 )}
               </CardContent>
             </Card>
           );
         })}
       </div>
-
-      <div className="grid gap-4 md:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle>Itens sem precificação</CardTitle>
-            <CardDescription>
-              Não possuem variação de preço para o canal/tamanho selecionado.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-2 text-sm">
-            {data.unpricedItems.length === 0 ? (
-              <p className="text-muted-foreground">Nenhum item sem precificação.</p>
-            ) : (
-              data.unpricedItems.map((item) => (
-                <div key={item.id} className="rounded-md border border-border px-3 py-2">
-                  {item.name}
-                </div>
-              ))
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Itens não encontrados nas vendas</CardTitle>
-            <CardDescription>
-              {data.summary.unmatchedCount} nomes diferentes sem match automático. Top 20 por
-              volume.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-2 text-sm">
-            {data.unmatched.length === 0 ? (
-              <p className="text-muted-foreground">Sem itens não mapeados.</p>
-            ) : (
-              data.unmatched.map((item) => (
-                <div key={item.name} className="flex items-center justify-between">
-                  <span className="max-w-[70%] truncate">{item.name}</span>
-                  <span className="text-xs text-muted-foreground">{item.quantity}</span>
-                </div>
-              ))
-            )}
-          </CardContent>
-        </Card>
-      </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Resumo de vendas</CardTitle>
-          <CardDescription>Visão geral do volume consolidado.</CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-3 text-sm md:grid-cols-3">
-          <div className="rounded-md border border-border p-3">
-            <p className="text-xs text-muted-foreground">Total de vendas (itens)</p>
-            <p className="text-base font-semibold">{data.summary.totalSalesQty}</p>
-          </div>
-          <div className="rounded-md border border-border p-3">
-            <p className="text-xs text-muted-foreground">Vendas mapeadas</p>
-            <p className="text-base font-semibold">{data.summary.matchedSalesQty}</p>
-          </div>
-          <div className="rounded-md border border-border p-3">
-            <p className="text-xs text-muted-foreground">Vendas sem match</p>
-            <p className="text-base font-semibold">{data.summary.unmatchedSalesQty}</p>
-          </div>
-        </CardContent>
-      </Card>
     </div>
   );
 }

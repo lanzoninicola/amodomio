@@ -21,6 +21,7 @@ import {
   Download,
   ListFilter,
   ListOrdered,
+  PencilLine,
   Pizza,
   RefreshCw,
   Search,
@@ -51,6 +52,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "~/components/ui/select";
+import { RadioGroup, RadioGroupItem } from "~/components/ui/radio-group";
 import {
   Table,
   TableBody,
@@ -61,6 +63,11 @@ import {
 } from "~/components/ui/table";
 import { menuItemSellingPriceUtilityEntity } from "~/domain/cardapio/menu-item-selling-price-utility.entity";
 import { pickLatestActiveSheet } from "~/domain/item/item-selling-price-calculation.server";
+import {
+  MENU_ENGINEERING_TAG_NAMES,
+  type MenuEngineeringTagDisplay,
+  resolveMenuEngineeringTag,
+} from "~/domain/menu-engineering/menu-engineering-tags";
 import { toast } from "~/components/ui/use-toast";
 import prismaClient from "~/lib/prisma/client.server";
 import { badRequest, ok, serverError } from "~/utils/http-response.server";
@@ -68,6 +75,7 @@ import { badRequest, ok, serverError } from "~/utils/http-response.server";
 const PAGE_SIZE = 20;
 const ITEM_STATUS_FILTERS = ["active", "inactive", "all"] as const;
 const EXPORT_VISIBILITY_FILTERS = ["all", "visible", "hidden"] as const;
+const EXPORT_FORMATS = ["all", "commercial"] as const;
 const LIST_SORT_OPTIONS = [
   "channelOrder",
   "cardapio",
@@ -96,6 +104,7 @@ type TagFilterOption = {
 };
 
 type ExportVisibilityFilter = (typeof EXPORT_VISIBILITY_FILTERS)[number];
+type ExportFormat = (typeof EXPORT_FORMATS)[number];
 type ListSortOption = (typeof LIST_SORT_OPTIONS)[number];
 
 type SellingRow = {
@@ -128,6 +137,7 @@ type SellingRow = {
   updatedBy: string | null;
   commerciallyReady: boolean;
   sortOrderIndex: number;
+  menuEngineeringTag: MenuEngineeringTagDisplay | null;
 };
 
 type FlavorLookupMatch = {
@@ -346,8 +356,9 @@ function buildPageHref(params: {
     searchParams.set("page", String(params.page));
   const queryString = searchParams.toString();
   const channel = params.channel || "cardapio";
-  return `/admin/vendas/itens-vendidos/${channel}${queryString ? `?${queryString}` : ""
-    }`;
+  return `/admin/vendas/itens-vendidos/${channel}${
+    queryString ? `?${queryString}` : ""
+  }`;
 }
 
 function buildExportHref(params: {
@@ -357,6 +368,7 @@ function buildExportHref(params: {
   tagId: string;
   sort: ListSortOption;
   exportVisibility?: ExportVisibilityFilter;
+  exportFormat?: ExportFormat;
 }) {
   const searchParams = new URLSearchParams();
   if (params.q) searchParams.set("q", params.q);
@@ -367,6 +379,9 @@ function buildExportHref(params: {
     searchParams.set("sort", params.sort);
   if (params.exportVisibility && params.exportVisibility !== "all") {
     searchParams.set("exportVisibility", params.exportVisibility);
+  }
+  if (params.exportFormat && params.exportFormat !== "all") {
+    searchParams.set("exportFormat", params.exportFormat);
   }
   return `/admin/vendas/itens-vendidos/export?${searchParams.toString()}`;
 }
@@ -384,8 +399,8 @@ function mapSellingRow(
     ) || null;
   const cardapioChannelLink = cardapioChannelId
     ? channelLinks.find(
-      (row: any) => String(row.itemSellingChannelId) === cardapioChannelId
-    ) || null
+        (row: any) => String(row.itemSellingChannelId) === cardapioChannelId
+      ) || null
     : null;
   const prices = item.ItemSellingPriceVariation || [];
   const referencePrice =
@@ -397,11 +412,11 @@ function mapSellingRow(
   );
   const activeReferenceSheet = referenceVariationId
     ? pickLatestActiveSheet(
-      (item.ItemCostSheet || []).filter(
-        (sheet: any) =>
-          String(sheet.itemVariationId || "") === referenceVariationId
+        (item.ItemCostSheet || []).filter(
+          (sheet: any) =>
+            String(sheet.itemVariationId || "") === referenceVariationId
+        )
       )
-    )
     : null;
   const fallbackActiveSheet = item.ItemCostSheet?.[0] || null;
   const displayActiveSheet = activeReferenceSheet || fallbackActiveSheet;
@@ -413,11 +428,11 @@ function mapSellingRow(
     : null;
   const referenceCostPercentage =
     referenceBaseCostAmount != null &&
-      referencePriceAmount != null &&
-      referencePriceAmount > 0
+    referencePriceAmount != null &&
+    referencePriceAmount > 0
       ? Number(
-        ((referenceBaseCostAmount / referencePriceAmount) * 100).toFixed(1)
-      )
+          ((referenceBaseCostAmount / referencePriceAmount) * 100).toFixed(1)
+        )
       : null;
   const referenceDnaAmount =
     referencePriceAmount != null
@@ -438,6 +453,12 @@ function mapSellingRow(
     channelVisible &&
     !upcoming &&
     prices.length > 0;
+  const menuEngineeringTag =
+    (item.ItemTag || [])
+      .map((row: any) =>
+        resolveMenuEngineeringTag(row.Tag?.name, row.Tag?.colorHEX)
+      )
+      .find(Boolean) || null;
 
   return {
     id: String(item.id),
@@ -470,6 +491,7 @@ function mapSellingRow(
     updatedBy: referencePrice?.updatedBy || null,
     commerciallyReady,
     sortOrderIndex,
+    menuEngineeringTag,
   };
 }
 
@@ -493,8 +515,7 @@ function compareByCostPercentage(a: SellingRow, b: SellingRow) {
   if (b.referenceCostPercentage == null) return -1;
 
   return (
-    b.referenceCostPercentage - a.referenceCostPercentage ||
-    compareByName(a, b)
+    b.referenceCostPercentage - a.referenceCostPercentage || compareByName(a, b)
   );
 }
 
@@ -619,8 +640,8 @@ function FlavorLookupDialog({
   const result = fetcher.data?.payload;
   const hasResult = Boolean(
     fetcher.data?.status === 200 &&
-    result &&
-    result.query.toLowerCase() === flavorName.trim().toLowerCase()
+      result &&
+      result.query.toLowerCase() === flavorName.trim().toLowerCase()
   );
   const totalMatches = result
     ? result.items.length + result.recipes.length + result.costSheets.length
@@ -879,8 +900,8 @@ export async function action({ request }: ActionFunctionArgs) {
           [
             formatClassificationLabel(item.classification),
             item.ItemSellingInfo?.ItemGroup?.name ||
-            item.ItemSellingInfo?.Category?.name ||
-            item.Category?.name,
+              item.ItemSellingInfo?.Category?.name ||
+              item.Category?.name,
             item.ItemSellingInfo?.slug ? `/${item.ItemSellingInfo.slug}` : null,
           ]
             .filter(Boolean)
@@ -1058,7 +1079,8 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         : "cardapio";
       const queryString = url.searchParams.toString();
       return redirect(
-        `/admin/vendas/itens-vendidos/${fallbackChannel}${queryString ? `?${queryString}` : ""
+        `/admin/vendas/itens-vendidos/${fallbackChannel}${
+          queryString ? `?${queryString}` : ""
         }`
       );
     }
@@ -1168,6 +1190,23 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
             Variation: {
               select: {
                 name: true,
+              },
+            },
+          },
+        },
+        ItemTag: {
+          where: {
+            deletedAt: null,
+            Tag: {
+              name: { in: MENU_ENGINEERING_TAG_NAMES },
+              deletedAt: null,
+            },
+          },
+          select: {
+            Tag: {
+              select: {
+                name: true,
+                colorHEX: true,
               },
             },
           },
@@ -1370,18 +1409,20 @@ export default function AdminVendasItensVendidosPage() {
   );
   const [exportVisibility, setExportVisibility] =
     useState<ExportVisibilityFilter>("all");
+  const [exportFormat, setExportFormat] = useState<ExportFormat>("all");
   const [isExporting, setIsExporting] = useState(false);
   const selectedExportTab =
     tabs.find((tab) => tab.key === exportChannel) || tabs[0] || null;
   const exportHref = selectedExportTab
     ? buildExportHref({
-      q: filters.q || "",
-      status: currentStatus,
-      channel: selectedExportTab.key,
-      tagId: currentTagId,
-      sort: currentSort,
-      exportVisibility,
-    })
+        q: filters.q || "",
+        status: currentStatus,
+        channel: selectedExportTab.key,
+        tagId: currentTagId,
+        sort: currentSort,
+        exportVisibility,
+        exportFormat,
+      })
     : "";
   const handleExportJson = async () => {
     if (!exportHref || isExporting) return;
@@ -1449,8 +1490,24 @@ export default function AdminVendasItensVendidosPage() {
               Procurar sabor
             </Button>
             <Link
-              to={`/admin/vendas/itens-vendidos/${currentChannel || tabs[0]?.key || "cardapio"
-                }/ordenar`}
+              to={`/admin/vendas/itens-vendidos/${
+                currentChannel || tabs[0]?.key || "cardapio"
+              }/textos`}
+            >
+              <Button
+                type="button"
+                variant="outline"
+                className="h-9 w-fit gap-2 border-slate-200 text-slate-700 hover:bg-slate-50"
+                disabled={tabs.length === 0}
+              >
+                <PencilLine className="h-4 w-4" />
+                Editar informações comerciais
+              </Button>
+            </Link>
+            <Link
+              to={`/admin/vendas/itens-vendidos/${
+                currentChannel || tabs[0]?.key || "cardapio"
+              }/ordenar`}
             >
               <Button
                 type="button"
@@ -1469,6 +1526,7 @@ export default function AdminVendasItensVendidosPage() {
               onClick={() => {
                 setExportChannel(currentChannel || tabs[0]?.key || "");
                 setExportVisibility("all");
+                setExportFormat("all");
                 setExportDialogOpen(true);
               }}
               disabled={tabs.length === 0}
@@ -1490,8 +1548,8 @@ export default function AdminVendasItensVendidosPage() {
           <DialogHeader>
             <DialogTitle>Exportar itens vendidos</DialogTitle>
             <DialogDescription>
-              Selecione o canal de venda para gerar um JSON com os filtros
-              atuais.
+              Selecione o canal e o tipo de dados para gerar um JSON com os
+              filtros atuais.
             </DialogDescription>
           </DialogHeader>
 
@@ -1514,6 +1572,57 @@ export default function AdminVendasItensVendidosPage() {
                 ))}
               </SelectContent>
             </Select>
+          </div>
+
+          <div className="space-y-3">
+            <div className="text-sm font-medium text-slate-700">
+              Conteúdo do JSON
+            </div>
+            <RadioGroup
+              value={exportFormat}
+              onValueChange={(value) => setExportFormat(value as ExportFormat)}
+              className="grid gap-2"
+            >
+              <label
+                htmlFor="export-format-all"
+                className="flex cursor-pointer items-start gap-3 rounded-md border border-slate-200 p-3 text-sm hover:bg-slate-50"
+              >
+                <RadioGroupItem
+                  id="export-format-all"
+                  value="all"
+                  className="mt-0.5"
+                />
+                <span className="space-y-1">
+                  <span className="block font-medium text-slate-900">
+                    Todas as informações
+                  </span>
+                  <span className="block text-xs text-slate-500">
+                    Mantém o JSON completo com preços, variações, receitas e
+                    ingredientes técnicos.
+                  </span>
+                </span>
+              </label>
+              <label
+                htmlFor="export-format-commercial"
+                className="flex cursor-pointer items-start gap-3 rounded-md border border-slate-200 p-3 text-sm hover:bg-slate-50"
+              >
+                <RadioGroupItem
+                  id="export-format-commercial"
+                  value="commercial"
+                  className="mt-0.5"
+                />
+                <span className="space-y-1">
+                  <span className="block font-medium text-slate-900">
+                    Somente informações comerciais
+                  </span>
+                  <span className="block text-xs text-slate-500">
+                    Exporta dados publicáveis e de venda: descrição,
+                    ingredientes comerciais, categoria, grupo, slug,
+                    visibilidade e preços.
+                  </span>
+                </span>
+              </label>
+            </RadioGroup>
           </div>
 
           <div className="space-y-2">
@@ -1539,8 +1648,8 @@ export default function AdminVendasItensVendidosPage() {
               </SelectContent>
             </Select>
             <p className="text-xs text-slate-500">
-              O arquivo inclui itens, variações, preços do canal e metadados
-              para análise.
+              O arquivo respeita a seleção de conteúdo acima e os filtros ativos
+              da tela.
             </p>
           </div>
 
@@ -1612,12 +1721,12 @@ export default function AdminVendasItensVendidosPage() {
                   {currentSort === "updatedAt"
                     ? "última atualização"
                     : currentSort === "name"
-                      ? "nome"
-                      : currentSort === "channelOrder"
-                        ? "ordem do canal"
-                        : currentSort === "costPercentage"
-                          ? "% ficha / venda"
-                        : "visibilidade no cardápio"}
+                    ? "nome"
+                    : currentSort === "channelOrder"
+                    ? "ordem do canal"
+                    : currentSort === "costPercentage"
+                    ? "% ficha / venda"
+                    : "visibilidade no cardápio"}
                 </SelectValue>
               </SelectTrigger>
               <SelectContent>
@@ -1642,8 +1751,8 @@ export default function AdminVendasItensVendidosPage() {
                 {currentStatus === "active"
                   ? "produtos ativos"
                   : currentStatus === "inactive"
-                    ? "produtos inativos"
-                    : "todos os produtos"}
+                  ? "produtos inativos"
+                  : "todos os produtos"}
               </SelectValue>
             </SelectTrigger>
             <SelectContent>
@@ -1705,18 +1814,21 @@ export default function AdminVendasItensVendidosPage() {
                     tagId: currentTagId,
                     sort: currentSort,
                   })}
-                  className={`relative flex flex-col items-start px-4 py-3 text-sm transition-colors ${isActive
+                  className={`relative flex flex-col items-start px-4 py-3 text-sm transition-colors ${
+                    isActive
                       ? `border-b-2 ${color.activeBorder} ${color.activeText}`
                       : "text-slate-400 hover:text-slate-600"
-                    }`}
+                  }`}
                 >
                   <span
-                    className={`inline-flex items-center gap-1.5 ${isActive ? "font-semibold" : "font-medium"
-                      }`}
+                    className={`inline-flex items-center gap-1.5 ${
+                      isActive ? "font-semibold" : "font-medium"
+                    }`}
                   >
                     <span
-                      className={`h-2 w-2 rounded-full ${color.dot} ${isActive ? "" : "opacity-50"
-                        }`}
+                      className={`h-2 w-2 rounded-full ${color.dot} ${
+                        isActive ? "" : "opacity-50"
+                      }`}
                     />
                     {tab.name} ({tab.count})
                   </span>
@@ -1734,10 +1846,11 @@ export default function AdminVendasItensVendidosPage() {
         </div>
 
         <div className="overflow-hidden bg-white">
-          <Table className="min-w-[1080px]">
+          <Table className="min-w-[1220px]">
             <TableHeader className="bg-slate-50/90">
               <TableRow className="hover:bg-slate-50/90">
                 <TableHead>Item</TableHead>
+                <TableHead>Menu Engineering</TableHead>
                 <TableHead>Canal</TableHead>
                 <TableHead>Preço referência</TableHead>
                 <TableHead>Ficha técnica</TableHead>
@@ -1751,7 +1864,7 @@ export default function AdminVendasItensVendidosPage() {
               {rows.length === 0 ? (
                 <TableRow>
                   <TableCell
-                    colSpan={8}
+                    colSpan={9}
                     className="h-28 text-center text-sm text-slate-500"
                   >
                     Nenhum item encontrado para este canal com os filtros
@@ -1800,6 +1913,22 @@ export default function AdminVendasItensVendidosPage() {
                         {row.slug ? ` · /${row.slug}` : ""}
                       </div>
                     </div>
+                  </TableCell>
+
+                  <TableCell>
+                    {row.menuEngineeringTag ? (
+                      <Badge
+                        variant="outline"
+                        className="border-transparent bg-slate-50"
+                        style={{
+                          color: row.menuEngineeringTag.colorHEX,
+                        }}
+                      >
+                        {row.menuEngineeringTag.title}
+                      </Badge>
+                    ) : (
+                      <span className="text-sm text-slate-400">-</span>
+                    )}
                   </TableCell>
 
                   <TableCell>
@@ -1854,10 +1983,11 @@ export default function AdminVendasItensVendidosPage() {
                     <div className="space-y-2">
                       <Link
                         to={`/admin/items/${row.id}/item-cost-sheets`}
-                        className={`inline-flex items-center gap-2 px-2.5 py-1.5 text-sm font-medium transition hover:bg-slate-50 ${row.hasActiveCostSheet
+                        className={`inline-flex items-center gap-2 px-2.5 py-1.5 text-sm font-medium transition hover:bg-slate-50 ${
+                          row.hasActiveCostSheet
                             ? "border-emerald-200 text-emerald-700"
                             : "border-amber-200  text-red-500"
-                          }`}
+                        }`}
                         title={
                           row.hasActiveCostSheet
                             ? "Ficha técnica ativa encontrada"
@@ -1898,10 +2028,10 @@ export default function AdminVendasItensVendidosPage() {
                       </div>
                       <div className="text-xs text-slate-500">
                         {row.referenceBaseCostAmount != null &&
-                          row.referencePriceAmount != null
+                        row.referencePriceAmount != null
                           ? `${formatMoney(
-                            row.referenceBaseCostAmount
-                          )} / ${formatMoney(row.referencePriceAmount)}`
+                              row.referenceBaseCostAmount
+                            )} / ${formatMoney(row.referencePriceAmount)}`
                           : "Sem custo/preço"}
                       </div>
                     </div>
@@ -1967,8 +2097,9 @@ export default function AdminVendasItensVendidosPage() {
                       sort: currentSort,
                       page: 1,
                     })}
-                    className={`h-8 w-8 rounded-md border border-slate-200 bg-white p-0 text-slate-600 hover:bg-slate-50 ${filters.page <= 1 ? "pointer-events-none opacity-40" : ""
-                      }`}
+                    className={`h-8 w-8 rounded-md border border-slate-200 bg-white p-0 text-slate-600 hover:bg-slate-50 ${
+                      filters.page <= 1 ? "pointer-events-none opacity-40" : ""
+                    }`}
                     aria-label="Primeira página"
                   >
                     <ChevronsLeft size={16} />
@@ -1985,8 +2116,9 @@ export default function AdminVendasItensVendidosPage() {
                       sort: currentSort,
                       page: Math.max(1, filters.page - 1),
                     })}
-                    className={`h-8 w-8 rounded-md border border-slate-200 bg-white p-0 text-slate-600 hover:bg-slate-50 ${filters.page <= 1 ? "pointer-events-none opacity-40" : ""
-                      }`}
+                    className={`h-8 w-8 rounded-md border border-slate-200 bg-white p-0 text-slate-600 hover:bg-slate-50 ${
+                      filters.page <= 1 ? "pointer-events-none opacity-40" : ""
+                    }`}
                     aria-label="Página anterior"
                   >
                     <ChevronLeft size={16} />
@@ -2027,10 +2159,11 @@ export default function AdminVendasItensVendidosPage() {
                       sort: currentSort,
                       page: Math.min(filters.totalPages, filters.page + 1),
                     })}
-                    className={`h-8 w-8 rounded-md border border-slate-200 bg-white p-0 text-slate-600 hover:bg-slate-50 ${filters.page >= filters.totalPages
+                    className={`h-8 w-8 rounded-md border border-slate-200 bg-white p-0 text-slate-600 hover:bg-slate-50 ${
+                      filters.page >= filters.totalPages
                         ? "pointer-events-none opacity-40"
                         : ""
-                      }`}
+                    }`}
                     aria-label="Próxima página"
                   >
                     <ChevronsRight size={16} />

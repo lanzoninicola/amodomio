@@ -277,6 +277,13 @@ const ADMIN_NAVIGATION_LINKS: WebsiteNavigationConfig = {
               tags: ["combo", "promocao", "conjunto", "pacote", "kit"],
             },
             {
+              title: "Desativacao de sabores",
+              href: "/admin/vendas/desativacao-sabores",
+              items: [],
+              disabled: false,
+              tags: ["sabores", "visibilidade", "whatsapp", "lote", "canais"],
+            },
+            {
               title: "Análise cardápio concorrência",
               href: "/admin/vendas/analise-cardapio-concorrencia/pesquisar/resultados",
               items: [],

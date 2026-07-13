@@ -61,8 +61,20 @@ type QuickSellPriceVariation = MenuItemWithAssociations["MenuItemSellingPriceVar
 };
 
 type QuickSellPriceItem = MenuItemWithAssociations & {
+  baseIngredients?: string | null;
   MenuItemSellingPriceVariation: QuickSellPriceVariation[];
 };
+
+type CardapioFlavorItem = MenuItemWithAssociations & {
+  baseIngredients?: string | null;
+};
+
+function formatFlavorIngredients(item: CardapioFlavorItem) {
+  return [item.baseIngredients, item.ingredients]
+    .map((value) => String(value || "").trim())
+    .filter(Boolean)
+    .join(", ");
+}
 
 async function enrichCardapioItemsWithQuickPriceCosts(
   itemsPromise: Promise<MenuItemWithAssociations[]>
@@ -369,13 +381,13 @@ export default function AdminAtendimentoListaSabores() {
 
 
 
-            const [items] = useState<MenuItemWithAssociations[]>(cardapioItems) // original completo
+            const [items] = useState<CardapioFlavorItem[]>(cardapioItems) // original completo
             const [includeUpcoming, setIncludeUpcoming] = useState(false)
             const activeItems = items.filter(item => item.active === true)
             const activeItemsForDisplay = activeItems.filter((item) =>
               includeUpcoming ? true : item.upcoming !== true
             )
-            const [filteredItems, setFilteredItems] = useState<MenuItemWithAssociations[]>(
+            const [filteredItems, setFilteredItems] = useState<CardapioFlavorItem[]>(
               activeItemsForDisplay.filter((item) => item.visible === true)
             )
             const [profitRanges, setProfitRanges] = useState({
@@ -394,7 +406,7 @@ export default function AdminAtendimentoListaSabores() {
 
             const hasProfitFilter = Object.values(profitRanges).some(Boolean)
 
-            const applyProfitFilter = (list: MenuItemWithAssociations[]) => {
+            const applyProfitFilter = (list: CardapioFlavorItem[]) => {
               if (!hasProfitFilter) return list
 
               return list.filter((item) => {
@@ -581,7 +593,7 @@ export default function AdminAtendimentoListaSabores() {
 
 
 interface CardapioItemProps {
-  item: MenuItemWithAssociations
+  item: CardapioFlavorItem
   visible: boolean,
   setVisible: React.Dispatch<React.SetStateAction<boolean>>
   active: boolean
@@ -593,6 +605,7 @@ interface CardapioItemProps {
 function CardapioItem({ item, setVisible, visible, active, setActive, showExpandButton = true, isSearching = false }: CardapioItemProps) {
   const profitPerc = getProfitPercForItem(item);
   const profitBadge = getProfitBadgeConfig(profitPerc);
+  const ingredientsText = formatFlavorIngredients(item);
   const [isQuickPriceDialogOpen, setIsQuickPriceDialogOpen] = useState(false);
 
   return (
@@ -662,7 +675,7 @@ function CardapioItem({ item, setVisible, visible, active, setActive, showExpand
                 // label="Copiar elenco para imprimir"
                 classNameLabel="text-sm md:text-xs "
                 classNameButton="border-none text-sm md:text-xs p-1 mr-0 h-max hover:bg-black/20 hover:text-white"
-                textToCopy={`*${item.name}*: ${item.ingredients}`}
+                textToCopy={`*${item.name}*: ${ingredientsText}`}
                 variant="outline"
               />
             ) : (
@@ -700,7 +713,7 @@ function CardapioItem({ item, setVisible, visible, active, setActive, showExpand
         onOpenChange={setIsQuickPriceDialogOpen}
       />
 
-      <p className="text-xs text-muted-foreground line-clamp-2 text-left">{item.ingredients}</p>
+      <p className="text-xs text-muted-foreground line-clamp-2 text-left">{ingredientsText}</p>
       <Separator className="my-3" />
 
       <div className="flex justify-end">
@@ -720,7 +733,7 @@ type GalleryAsset = {
   isPrimary: boolean;
 };
 
-function CardapioItemGalleryDialog({ item }: { item: MenuItemWithAssociations }) {
+function CardapioItemGalleryDialog({ item }: { item: CardapioFlavorItem }) {
   const assets = getGalleryAssets(item);
   const [showVideos, setShowVideos] = useState(false);
   const visibleAssets = assets.filter((asset) => showVideos || asset.kind !== "video");
@@ -1084,7 +1097,7 @@ function getProfitBadgeConfig(profitPerc: number | null) {
   };
 }
 
-function getGalleryAssets(item: MenuItemWithAssociations): GalleryAsset[] {
+function getGalleryAssets(item: CardapioFlavorItem): GalleryAsset[] {
   const visibleAssets = (item.MenuItemGalleryImage ?? [])
     .filter((asset) => asset.visible !== false && Boolean(asset.secureUrl))
     .sort((a, b) => {
@@ -1130,7 +1143,7 @@ function buildAssetFilename(itemName: string, asset: GalleryAsset) {
   return `${safeItemName || "item"}-${asset.id.slice(0, 8)}.${extFromUrl}`;
 }
 
-function getProfitPercForItem(item: MenuItemWithAssociations) {
+function getProfitPercForItem(item: CardapioFlavorItem) {
   const profitVariation = item.MenuItemSellingPriceVariation?.find(
     (variation) => getVariationAbbreviation(variation) === "ME"
   );
@@ -1205,7 +1218,7 @@ interface CardapioItemDialogProps {
   triggerComponent?: React.ReactNode;
 }
 
-function HiddenFlavorCopyWarningDialog({ item }: { item: MenuItemWithAssociations }) {
+function HiddenFlavorCopyWarningDialog({ item }: { item: CardapioFlavorItem }) {
   const isUpcoming = item.upcoming === true
 
   return (
@@ -1278,10 +1291,10 @@ function CardapioItemSearch({
   setFilteredItems,
   setIsSearching,
 }: {
-  items: MenuItemWithAssociations[],
+  items: CardapioFlavorItem[],
   includeUpcoming: boolean,
   setIncludeUpcoming: React.Dispatch<React.SetStateAction<boolean>>,
-  setFilteredItems: React.Dispatch<React.SetStateAction<MenuItemWithAssociations[]>>,
+  setFilteredItems: React.Dispatch<React.SetStateAction<CardapioFlavorItem[]>>,
   setIsSearching: React.Dispatch<React.SetStateAction<boolean>>
 }) {
   const [search, setSearch] = useState("")
@@ -1312,7 +1325,7 @@ function CardapioItemSearch({
 
         return (
           item.name?.toLowerCase().includes(value.toLowerCase()) ||
-          item.ingredients?.toLowerCase().includes(value.toLowerCase()) ||
+          formatFlavorIngredients(item).toLowerCase().includes(value.toLowerCase()) ||
           item.description?.toLowerCase().includes(value.toLowerCase()) ||
           tags.some(t => t?.toLowerCase().includes(value.toLowerCase()))
         )
