@@ -124,8 +124,8 @@ export function CardapioCatalogSection({
     () =>
       groupedItems.length
         ? [...groupedItems].sort(
-            (a, b) => (a.sortOrderIndex ?? 0) - (b.sortOrderIndex ?? 0)
-          )
+          (a, b) => (a.sortOrderIndex ?? 0) - (b.sortOrderIndex ?? 0)
+        )
         : [],
     [groupedItems]
   );
@@ -138,8 +138,8 @@ export function CardapioCatalogSection({
       orderedGroups.length
         ? orderedGroups.flatMap((group) => getGroupedItemsList(group))
         : isGrouped(currentItems)
-        ? []
-        : (currentItems as CardapioIndexItem[]),
+          ? []
+          : (currentItems as CardapioIndexItem[]),
     [currentItems, orderedGroups]
   );
   const visibleActiveItemId =
@@ -151,9 +151,49 @@ export function CardapioCatalogSection({
 
   useEffect(() => {
     if (!visibleCatalogItems.length) return;
-    if (typeof IntersectionObserver === "undefined") return;
     const catalogElement = catalogRef.current;
     if (!catalogElement) return;
+
+    const isDesktop = window.matchMedia("(min-width: 768px)").matches;
+
+    if (!isDesktop) {
+      const updateActiveItemFromScroll = () => {
+        const rect = catalogElement.getBoundingClientRect();
+        const documentElement = document.documentElement;
+        const isAtPageBottom =
+          window.scrollY + window.innerHeight >= documentElement.scrollHeight - 8;
+
+        if (isAtPageBottom) {
+          setActiveItemId(visibleCatalogItems[visibleCatalogItems.length - 1].id);
+          return;
+        }
+
+        const scrollableCatalogHeight = Math.max(
+          1,
+          rect.height - window.innerHeight + 160
+        );
+        const rawProgress = (-rect.top + 96) / scrollableCatalogHeight;
+        const progress = Math.max(0, Math.min(1, rawProgress));
+        const activeIndex = Math.round(
+          progress * (visibleCatalogItems.length - 1)
+        );
+
+        setActiveItemId(visibleCatalogItems[activeIndex]?.id ?? null);
+      };
+
+      updateActiveItemFromScroll();
+      window.addEventListener("scroll", updateActiveItemFromScroll, {
+        passive: true,
+      });
+      window.addEventListener("resize", updateActiveItemFromScroll);
+
+      return () => {
+        window.removeEventListener("scroll", updateActiveItemFromScroll);
+        window.removeEventListener("resize", updateActiveItemFromScroll);
+      };
+    }
+
+    if (typeof IntersectionObserver === "undefined") return;
 
     const visibleItemIds = new Set(visibleCatalogItems.map((item) => item.id));
     const itemElements = Array.from(
@@ -163,9 +203,9 @@ export function CardapioCatalogSection({
     );
     if (!itemElements.length) return;
 
-    const desktopScrollRoot = window.matchMedia("(min-width: 768px)").matches
-      ? catalogElement.closest('[data-element="cardapio-index"]')
-      : null;
+    const desktopScrollRoot = catalogElement.closest(
+      '[data-element="cardapio-index"]'
+    );
 
     const observer = new IntersectionObserver(
       (entries) => {
@@ -261,7 +301,7 @@ export function CardapioCatalogSection({
       className={cn(
         "flex flex-col m-4",
         desktopFeedLayout &&
-          "md:mx-auto md:my-0 md:w-full md:max-w-[700px] md:px-6 md:py-6"
+        "md:mx-auto md:my-0 md:w-full md:max-w-[700px] md:px-6 md:py-6"
       )}
     >
       {filterViewMode === "stories" ? (
@@ -294,7 +334,7 @@ export function CardapioCatalogSection({
         <div
           id="cardapio-tag-filters"
           className={cn(
-            "fixed left-4 right-4 top-[calc(4.75rem+env(safe-area-inset-top))] z-40 mb-2 max-h-[50vh] overflow-y-auto rounded-2xl border border-black/10 bg-white/95 p-3 shadow-[0_10px_35px_rgba(0,0,0,0.2)] backdrop-blur-xl md:static md:mx-0 md:mb-4 md:block md:max-h-none md:overflow-visible md:rounded-none md:border-0 md:bg-transparent md:p-0 md:shadow-none md:backdrop-blur-none",
+            "fixed left-4 right-4 top-[calc(7.25rem+env(safe-area-inset-top))] z-40 mb-2 max-h-[46vh] overflow-y-auto rounded-2xl border border-black/10 bg-white/95 p-3 shadow-[0_10px_35px_rgba(0,0,0,0.2)] backdrop-blur-xl md:static md:mx-0 md:mb-4 md:block md:max-h-none md:overflow-visible md:rounded-none md:border-0 md:bg-transparent md:p-0 md:shadow-none md:backdrop-blur-none",
             showMobileTags ? "block" : "hidden"
           )}
         >
@@ -313,7 +353,7 @@ export function CardapioCatalogSection({
                 onCurrentTagSelected(null);
               }}
               className={cn(
-                "rounded-full border px-3 py-1.5 font-neue text-xs font-bold uppercase tracking-wide shadow-sm transition-colors md:rounded-none md:border-0 md:px-0 md:py-0 md:font-semibold md:tracking-widest md:shadow-none",
+                "rounded-full border px-4 py-2 font-neue text-[13px] font-bold uppercase leading-none tracking-wide shadow-sm transition-colors md:rounded-none md:border-0 md:px-0 md:py-0 md:text-xs md:font-semibold md:leading-normal md:tracking-widest md:shadow-none",
                 !currentFilterTag
                   ? "border-zinc-950 bg-zinc-950 text-white md:bg-transparent md:text-black md:underline md:underline-offset-4"
                   : "border-black/10 bg-white text-black active:bg-zinc-100 md:border-0 md:bg-transparent md:text-zinc-400 md:hover:text-black"
@@ -334,7 +374,7 @@ export function CardapioCatalogSection({
                   onCurrentTagSelected(tag);
                 }}
                 className={cn(
-                  "rounded-full border px-3 py-1.5 font-neue text-xs font-bold uppercase tracking-wide shadow-sm transition-colors md:rounded-none md:border-0 md:px-0 md:py-0 md:font-semibold md:tracking-widest md:shadow-none",
+                  "rounded-full border px-4 py-2 font-neue text-[13px] font-bold uppercase leading-none tracking-wide shadow-sm transition-colors md:rounded-none md:border-0 md:px-0 md:py-0 md:text-xs md:font-semibold md:leading-normal md:tracking-widest md:shadow-none",
                   currentFilterTag?.id === tag.id
                     ? "border-zinc-950 bg-zinc-950 text-white md:bg-transparent md:text-black md:underline md:underline-offset-4"
                     : "border-black/10 bg-white text-black active:bg-zinc-100 md:border-0 md:bg-transparent md:text-zinc-400 md:hover:text-black"
@@ -343,6 +383,20 @@ export function CardapioCatalogSection({
                 {tag.name}
               </button>
             ))}
+          </div>
+          <div className="sticky bottom-0 -mb-1 mt-3 flex justify-end bg-gradient-to-t from-white/95 via-white/95 to-transparent pt-3 md:hidden">
+            <button
+              type="button"
+              onClick={() => {
+                trackFilterClick("filter_toggle", "fechar", "mobile_panel");
+                setShowMobileTags(false);
+              }}
+              className="inline-flex items-center gap-1.5 rounded-full bg-slate-50  px-3 py-2 font-neue text-[12px] font-bold uppercase leading-none tracking-wide text-zinc-950 shadow-sm transition active:bg-zinc-100"
+            >
+
+              <X className="h-4 w-4" />
+              Fechar
+            </button>
           </div>
         </div>
       )}
@@ -498,12 +552,12 @@ function StoryFilter({
   const symbol = /veg|salad|verde/.test(normalizedLabel)
     ? "leaf"
     : /doce|sobremesa|chocolate/.test(normalizedLabel)
-    ? "sparkle"
-    : /picante|apiment/.test(normalizedLabel)
-    ? "flame"
-    : /nov|destaque|promo/.test(normalizedLabel)
-    ? "star"
-    : "slice";
+      ? "sparkle"
+      : /picante|apiment/.test(normalizedLabel)
+        ? "flame"
+        : /nov|destaque|promo/.test(normalizedLabel)
+          ? "star"
+          : "slice";
 
   return (
     <button
@@ -599,6 +653,22 @@ function CardapioItemPositionRail({
   activeItemId: string | null;
   onSelect: (item: CardapioIndexItem) => void;
 }) {
+  const activeIndex = Math.max(
+    0,
+    items.findIndex((item) => item.id === activeItemId)
+  );
+  const mobileVisibleDots = 13;
+  const mobileStartIndex = Math.max(
+    0,
+    Math.min(
+      activeIndex - Math.floor(mobileVisibleDots / 2),
+      items.length - mobileVisibleDots
+    )
+  );
+  const mobileItems = items
+    .map((item, index) => ({ item, index }))
+    .slice(mobileStartIndex, mobileStartIndex + mobileVisibleDots);
+
   const railItems = (showLabels: boolean) => (
     <ol className="flex max-h-[46dvh] flex-col items-end justify-center gap-1.5 overflow-hidden md:max-h-[58vh] md:gap-2">
       {items.map((item, index) => {
@@ -619,7 +689,45 @@ function CardapioItemPositionRail({
             <button
               type="button"
               onClick={() => onSelect(item)}
-              className="flex h-4 w-9 items-center justify-end md:h-5 md:w-12"
+              className={cn(
+                "flex items-center",
+                showLabels
+                  ? "h-5 w-12 justify-end"
+                  : "h-4 w-4 justify-center"
+              )}
+              aria-label={`Ir para ${item.name}`}
+              aria-current={isActive ? "location" : undefined}
+            >
+              <span
+                className={cn(
+                  "block rounded-full shadow-[0_1px_5px_rgba(255,255,255,0.75)] transition-all duration-200",
+                  showLabels
+                    ? isActive
+                      ? "h-[3px] w-12 bg-black"
+                      : "h-[2px] w-6 bg-zinc-300 group-hover:w-10 group-hover:bg-zinc-600"
+                    : isActive
+                      ? "h-2.5 w-2.5 bg-black"
+                      : "h-1.5 w-1.5 bg-zinc-300/80 group-hover:h-2 group-hover:w-2 group-hover:bg-zinc-500"
+                )}
+              />
+            </button>
+          </li>
+        );
+      })}
+    </ol>
+  );
+
+  const mobileRailItems = (
+    <ol className="flex flex-col items-center justify-center gap-1.5">
+      {mobileItems.map(({ item, index }) => {
+        const isActive = index === activeIndex;
+
+        return (
+          <li key={item.id} className="flex h-4 w-4 items-center justify-center">
+            <button
+              type="button"
+              onClick={() => onSelect(item)}
+              className="flex h-4 w-4 items-center justify-center"
               aria-label={`Ir para ${item.name}`}
               aria-current={isActive ? "location" : undefined}
             >
@@ -627,8 +735,8 @@ function CardapioItemPositionRail({
                 className={cn(
                   "block rounded-full shadow-[0_1px_5px_rgba(255,255,255,0.75)] transition-all duration-200",
                   isActive
-                    ? "h-[3px] w-9 bg-black md:w-12"
-                    : "h-[2px] w-4 bg-zinc-300 group-hover:w-7 group-hover:bg-zinc-600 md:w-6 md:group-hover:w-10"
+                    ? "h-2.5 w-2.5 bg-black"
+                    : "h-1.5 w-1.5 bg-zinc-300/80"
                 )}
               />
             </button>
@@ -641,17 +749,17 @@ function CardapioItemPositionRail({
   return (
     <>
       <nav
-        className="rounded-full bg-white/80 px-1.5 py-2 shadow-[0_8px_24px_rgba(15,23,42,0.12)] ring-1 ring-black/5 backdrop-blur-sm md:hidden"
+        className="px-0.5 py-1  md:hidden"
         style={{
           position: "fixed",
-          right: 8,
+          right: 4,
           top: "50%",
           transform: "translateY(-50%)",
           zIndex: 2147483647,
         }}
         aria-label="Posição no cardápio"
       >
-        {railItems(false)}
+        {mobileRailItems}
       </nav>
       <nav
         className="fixed right-6 top-1/2 z-30 hidden -translate-y-1/2 md:block lg:right-8"
@@ -783,7 +891,7 @@ export function CardapioItemsGrid({
       : null;
   const initialExpandedId = initialHash
     ? items.find((item) => item.slug === initialHash || item.id === initialHash)
-        ?.id ?? null
+      ?.id ?? null
     : null;
 
   const [expandedItemId, setExpandedItemId] = useState<string | null>(
@@ -898,7 +1006,7 @@ export function CardapioItemsGrid({
       className={cn(
         "mt-4 columns-2 gap-4 md:grid md:grid-cols-3 md:columns-auto md:gap-3 lg:grid-cols-4 xl:grid-cols-4",
         desktopFeedLayout &&
-          "md:grid-cols-2 md:gap-5 lg:grid-cols-2 xl:grid-cols-2"
+        "md:grid-cols-2 md:gap-5 lg:grid-cols-2 xl:grid-cols-2"
       )}
     >
       {items.map((item, index) => (
@@ -954,7 +1062,7 @@ function CardapioGridItem({
     featuredImage?.thumbnailUrl || item.imagePlaceholderURL || "";
   const featuredMediaKind =
     featuredImage?.kind === "video" ||
-    /\.(mp4|mov|webm|m4v|ogg|ogv)(\?|$)/i.test(featuredMediaUrl)
+      /\.(mp4|mov|webm|m4v|ogg|ogv)(\?|$)/i.test(featuredMediaUrl)
       ? "video"
       : "image";
   const featuredMediaSrcSet = buildImageSrcSet(featuredImage?.variants);
@@ -1182,8 +1290,8 @@ function CardapioGridItem({
               {priceRange.minimum === priceRange.maximum
                 ? formatMoneyString(priceRange.minimum)
                 : `De ${formatMoneyString(
-                    priceRange.minimum
-                  )} a ${formatMoneyString(priceRange.maximum)}`}
+                  priceRange.minimum
+                )} a ${formatMoneyString(priceRange.maximum)}`}
             </span>
 
             {isDesktop ? (
