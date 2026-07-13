@@ -42,6 +42,7 @@ export type CardapioIndexItem = {
   slug?: string | null;
   name: string;
   description?: string | null;
+  longDescription?: string | null;
   baseIngredients?: string | null;
   ingredients?: string | null;
   imagePlaceholderURL?: string | null;

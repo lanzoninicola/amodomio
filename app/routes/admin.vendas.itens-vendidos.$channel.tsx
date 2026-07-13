@@ -14,6 +14,7 @@ import {
 import {
   AlertTriangle,
   ArrowUpDown,
+  BarChart3,
   ChevronLeft,
   ChevronsLeft,
   ChevronsRight,
@@ -138,6 +139,7 @@ type SellingRow = {
   commerciallyReady: boolean;
   sortOrderIndex: number;
   menuEngineeringTag: MenuEngineeringTagDisplay | null;
+  menuEngineeringLinkedElapsedLabel: string | null;
 };
 
 type FlavorLookupMatch = {
@@ -210,6 +212,54 @@ function formatDate(value: string | null) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "-";
   return date.toLocaleString("pt-BR");
+}
+
+const menuEngineeringLinkedDateFormatter = new Intl.DateTimeFormat("pt-BR", {
+  timeZone: "America/Sao_Paulo",
+  day: "2-digit",
+  month: "2-digit",
+  year: "2-digit",
+});
+
+function formatElapsedSince(date: Date | string | null | undefined) {
+  if (!date) return null;
+
+  const linkedAt = new Date(date);
+  const elapsedMs = Date.now() - linkedAt.getTime();
+  if (!Number.isFinite(elapsedMs)) return null;
+
+  const elapsedMinutes = Math.max(0, Math.floor(elapsedMs / 60000));
+  if (elapsedMinutes < 60) {
+    return elapsedMinutes <= 1 ? "há 1 min" : `há ${elapsedMinutes} min`;
+  }
+
+  const elapsedHours = Math.floor(elapsedMinutes / 60);
+  if (elapsedHours < 48) {
+    return elapsedHours === 1 ? "há 1 hora" : `há ${elapsedHours} horas`;
+  }
+
+  const elapsedDays = Math.floor(elapsedHours / 24);
+  if (elapsedDays < 60) {
+    return elapsedDays === 1 ? "há 1 dia" : `há ${elapsedDays} dias`;
+  }
+
+  const elapsedMonths = Math.floor(elapsedDays / 30);
+  if (elapsedMonths < 24) {
+    return elapsedMonths === 1 ? "há 1 mês" : `há ${elapsedMonths} meses`;
+  }
+
+  const elapsedYears = Math.floor(elapsedDays / 365);
+  return elapsedYears <= 1 ? "há 1 ano" : `há ${elapsedYears} anos`;
+}
+
+function formatMenuEngineeringLinkedLabel(
+  date: Date | string | null | undefined
+) {
+  const elapsed = formatElapsedSince(date);
+  if (!date || !elapsed) return null;
+  return `Vínculo da análise ${elapsed} (${menuEngineeringLinkedDateFormatter.format(
+    new Date(date)
+  )})`;
 }
 
 function getClassificationBadgeClass(value?: string | null) {
@@ -455,10 +505,11 @@ function mapSellingRow(
     prices.length > 0;
   const menuEngineeringTag =
     (item.ItemTag || [])
-      .map((row: any) =>
-        resolveMenuEngineeringTag(row.Tag?.name, row.Tag?.colorHEX)
-      )
-      .find(Boolean) || null;
+      .map((row: any) => ({
+        tag: resolveMenuEngineeringTag(row.Tag?.name, row.Tag?.colorHEX),
+        linkedAt: row.menuEngineeringLinkedAt,
+      }))
+      .find((row: any) => row.tag) || null;
 
   return {
     id: String(item.id),
@@ -491,7 +542,10 @@ function mapSellingRow(
     updatedBy: referencePrice?.updatedBy || null,
     commerciallyReady,
     sortOrderIndex,
-    menuEngineeringTag,
+    menuEngineeringTag: menuEngineeringTag?.tag ?? null,
+    menuEngineeringLinkedElapsedLabel: formatMenuEngineeringLinkedLabel(
+      menuEngineeringTag?.linkedAt
+    ),
   };
 }
 
@@ -1203,6 +1257,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
             },
           },
           select: {
+            menuEngineeringLinkedAt: true,
             Tag: {
               select: {
                 name: true,
@@ -1480,6 +1535,16 @@ export default function AdminVendasItensVendidosPage() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
+            <Link to="/admin/gerenciamento/cardapio/dashboard/menu-engineering">
+              <Button
+                type="button"
+                variant="outline"
+                className="h-9 w-fit gap-2 border-slate-200 text-slate-700 hover:bg-slate-50"
+              >
+                <BarChart3 className="h-4 w-4" />
+                Menu Engineering
+              </Button>
+            </Link>
             <Button
               type="button"
               variant="outline"
@@ -1917,15 +1982,22 @@ export default function AdminVendasItensVendidosPage() {
 
                   <TableCell>
                     {row.menuEngineeringTag ? (
-                      <Badge
-                        variant="outline"
-                        className="border-transparent bg-slate-50"
-                        style={{
-                          color: row.menuEngineeringTag.colorHEX,
-                        }}
-                      >
-                        {row.menuEngineeringTag.title}
-                      </Badge>
+                      <>
+                        <Badge
+                          variant="outline"
+                          className="border-transparent bg-slate-50"
+                          style={{
+                            color: row.menuEngineeringTag.colorHEX,
+                          }}
+                        >
+                          {row.menuEngineeringTag.title}
+                        </Badge>
+                        {row.menuEngineeringLinkedElapsedLabel ? (
+                          <div className="mt-1 text-[11px] text-slate-500">
+                            {row.menuEngineeringLinkedElapsedLabel}
+                          </div>
+                        ) : null}
+                      </>
                     ) : (
                       <span className="text-sm text-slate-400">-</span>
                     )}

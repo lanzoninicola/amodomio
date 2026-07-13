@@ -84,6 +84,7 @@ type MatrixItem = {
   quantityDelta: number | null;
   valueDelta: number | null;
   menuEngineeringTag: MenuEngineeringTagDisplay | null;
+  menuEngineeringLinkedElapsedLabel: string | null;
 };
 
 type PeriodSummary = {
@@ -159,6 +160,12 @@ const normalize = (value: string) =>
 const pad2 = (value: number) => String(value).padStart(2, "0");
 
 const dateFormatter = new Intl.DateTimeFormat("pt-BR", { timeZone: "UTC" });
+const menuEngineeringLinkedDateFormatter = new Intl.DateTimeFormat("pt-BR", {
+  timeZone: "America/Sao_Paulo",
+  day: "2-digit",
+  month: "2-digit",
+  year: "2-digit",
+});
 
 const formatCurrency = (value: number) => {
   const abs = Math.abs(value);
@@ -170,6 +177,47 @@ const formatPercent = (value: number | null) => {
   if (value === null || !Number.isFinite(value)) return "-";
   const prefix = value > 0 ? "+" : "";
   return `${prefix}${formatDecimalPlaces(value, 1)}%`;
+};
+
+const formatElapsedSince = (date: Date | string | null | undefined) => {
+  if (!date) return null;
+
+  const linkedAt = new Date(date);
+  const elapsedMs = Date.now() - linkedAt.getTime();
+  if (!Number.isFinite(elapsedMs)) return null;
+
+  const elapsedMinutes = Math.max(0, Math.floor(elapsedMs / 60000));
+  if (elapsedMinutes < 60) {
+    return elapsedMinutes <= 1 ? "há 1 min" : `há ${elapsedMinutes} min`;
+  }
+
+  const elapsedHours = Math.floor(elapsedMinutes / 60);
+  if (elapsedHours < 48) {
+    return elapsedHours === 1 ? "há 1 hora" : `há ${elapsedHours} horas`;
+  }
+
+  const elapsedDays = Math.floor(elapsedHours / 24);
+  if (elapsedDays < 60) {
+    return elapsedDays === 1 ? "há 1 dia" : `há ${elapsedDays} dias`;
+  }
+
+  const elapsedMonths = Math.floor(elapsedDays / 30);
+  if (elapsedMonths < 24) {
+    return elapsedMonths === 1 ? "há 1 mês" : `há ${elapsedMonths} meses`;
+  }
+
+  const elapsedYears = Math.floor(elapsedDays / 365);
+  return elapsedYears <= 1 ? "há 1 ano" : `há ${elapsedYears} anos`;
+};
+
+const formatMenuEngineeringLinkedLabel = (
+  date: Date | string | null | undefined
+) => {
+  const elapsed = formatElapsedSince(date);
+  if (!date || !elapsed) return null;
+  return `Vínculo da análise ${elapsed} (${menuEngineeringLinkedDateFormatter.format(
+    new Date(date)
+  )})`;
 };
 
 const periodLabel = (
@@ -468,6 +516,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
             },
           },
           select: {
+            menuEngineeringLinkedAt: true,
             Tag: {
               select: {
                 name: true,
@@ -482,15 +531,18 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   const currentCardapioFlavorByKey = new Map(
     currentCardapioItems.map((item) => {
-      const tag = item.ItemTag.map((row) =>
-        resolveMenuEngineeringTag(row.Tag?.name, row.Tag?.colorHEX)
-      ).find(Boolean);
+      const tagRow = item.ItemTag.map((row) => ({
+        tag: resolveMenuEngineeringTag(row.Tag?.name, row.Tag?.colorHEX),
+        linkedAt: row.menuEngineeringLinkedAt,
+      })).find((row) => row.tag);
       return [
         normalize(item.name),
         {
           id: String(item.id),
           name: item.name,
-          menuEngineeringTag: tag ?? null,
+          menuEngineeringTag: tagRow?.tag ?? null,
+          menuEngineeringLinkedElapsedLabel:
+            formatMenuEngineeringLinkedLabel(tagRow?.linkedAt) ?? null,
         },
       ];
     })
@@ -561,6 +613,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
         compareQuantity: compare?.quantity ?? 0,
         compareValue: compare?.value ?? 0,
         menuEngineeringTag: currentItem?.menuEngineeringTag ?? null,
+        menuEngineeringLinkedElapsedLabel:
+          currentItem?.menuEngineeringLinkedElapsedLabel ?? null,
       };
     }
   );
@@ -726,7 +780,19 @@ export async function action({ request }: ActionFunctionArgs) {
       if (existingItemTag.deletedAt) {
         await prismaClient.itemTag.update({
           where: { id: existingItemTag.id },
-          data: { deletedAt: null, updatedAt: now },
+          data: {
+            deletedAt: null,
+            menuEngineeringLinkedAt: now,
+            updatedAt: now,
+          },
+        });
+      } else {
+        await prismaClient.itemTag.update({
+          where: { id: existingItemTag.id },
+          data: {
+            menuEngineeringLinkedAt: now,
+            updatedAt: now,
+          },
         });
       }
     } else {
@@ -734,6 +800,7 @@ export async function action({ request }: ActionFunctionArgs) {
         data: {
           itemId: assignment.itemId,
           tagId: tag.id,
+          menuEngineeringLinkedAt: now,
           createdAt: now,
           updatedAt: now,
         },
@@ -1620,15 +1687,22 @@ export default function AdminGerenciamentoCardapioMenuEngineering() {
                               Tag atual
                             </p>
                             {item.menuEngineeringTag ? (
-                              <Badge
-                                variant="outline"
-                                className="border-transparent bg-white"
-                                style={{
-                                  color: item.menuEngineeringTag.colorHEX,
-                                }}
-                              >
-                                {item.menuEngineeringTag.title}
-                              </Badge>
+                              <>
+                                <Badge
+                                  variant="outline"
+                                  className="border-transparent bg-white"
+                                  style={{
+                                    color: item.menuEngineeringTag.colorHEX,
+                                  }}
+                                >
+                                  {item.menuEngineeringTag.title}
+                                </Badge>
+                                {item.menuEngineeringLinkedElapsedLabel ? (
+                                  <p className="text-[11px] text-muted-foreground">
+                                    {item.menuEngineeringLinkedElapsedLabel}
+                                  </p>
+                                ) : null}
+                              </>
                             ) : (
                               <span className="text-slate-400">
                                 Sem tag vinculada

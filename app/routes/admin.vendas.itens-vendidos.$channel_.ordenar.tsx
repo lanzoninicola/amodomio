@@ -11,15 +11,7 @@ import {
   useLoaderData,
   useNavigate,
 } from "@remix-run/react";
-import {
-  closestCenter,
-  DndContext,
-  type DragEndEvent,
-  PointerSensor,
-  TouchSensor,
-  useSensor,
-  useSensors,
-} from "@dnd-kit/core";
+import { closestCenter, DndContext, type DragEndEvent } from "@dnd-kit/core";
 import {
   arrayMove,
   SortableContext,
@@ -70,10 +62,23 @@ type SortableSellingItem = {
   canSell: boolean;
   visible: boolean;
   upcoming: boolean;
+  groupId: string;
   groupName: string | null;
+  groupDescription: string | null;
+  groupSortOrderIndex: number;
   categoryName: string | null;
   sortOrderIndex: number;
 };
+
+type SortableSellingGroup = {
+  id: string;
+  name: string;
+  description: string | null;
+  sortOrderIndex: number;
+  items: SortableSellingItem[];
+};
+
+const UNGROUPED_GROUP_ID = "__sem_grupo__";
 
 function normalizeChannelKey(value: string | null) {
   return String(value || "")
@@ -86,6 +91,20 @@ function compareOrderRows(a: SortableSellingItem, b: SortableSellingItem) {
     Number(a.sortOrderIndex || 0) - Number(b.sortOrderIndex || 0) ||
     a.name.localeCompare(b.name, "pt-BR") ||
     a.id.localeCompare(b.id)
+  );
+}
+
+function compareGroupedOrderRows(
+  a: SortableSellingItem,
+  b: SortableSellingItem
+) {
+  return (
+    Number(a.groupSortOrderIndex || 0) - Number(b.groupSortOrderIndex || 0) ||
+    String(a.groupName || "Sem grupo").localeCompare(
+      String(b.groupName || "Sem grupo"),
+      "pt-BR"
+    ) ||
+    compareOrderRows(a, b)
   );
 }
 
@@ -271,7 +290,14 @@ export async function loader({ params }: LoaderFunctionArgs) {
               select: {
                 upcoming: true,
                 Category: { select: { name: true } },
-                ItemGroup: { select: { name: true } },
+                ItemGroup: {
+                  select: {
+                    id: true,
+                    name: true,
+                    description: true,
+                    sortOrderIndex: true,
+                  },
+                },
               },
             },
           },
@@ -288,14 +314,22 @@ export async function loader({ params }: LoaderFunctionArgs) {
         canSell: Boolean(row.Item?.canSell),
         visible: row.visible === true,
         upcoming: row.Item?.ItemSellingInfo?.upcoming === true,
+        groupId: row.Item?.ItemSellingInfo?.ItemGroup?.id || UNGROUPED_GROUP_ID,
         groupName: row.Item?.ItemSellingInfo?.ItemGroup?.name || null,
+        groupDescription:
+          row.Item?.ItemSellingInfo?.ItemGroup?.description || null,
+        groupSortOrderIndex:
+          typeof row.Item?.ItemSellingInfo?.ItemGroup?.sortOrderIndex ===
+          "number"
+            ? row.Item.ItemSellingInfo.ItemGroup.sortOrderIndex
+            : Number.MAX_SAFE_INTEGER,
         categoryName:
           row.Item?.ItemSellingInfo?.Category?.name ||
           row.Item?.Category?.name ||
           null,
         sortOrderIndex: Number(row.sortOrderIndex || 0),
       }))
-      .sort(compareOrderRows);
+      .sort(compareGroupedOrderRows);
 
     return ok({ channels, selectedChannel, items });
   } catch (error) {
@@ -514,10 +548,6 @@ export default function AdminVendasItensVendidosOrdenarPage() {
   const [sourceChannelId, setSourceChannelId] = useState(
     sourceChannels[0]?.id || ""
   );
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
-    useSensor(TouchSensor)
-  );
   const orderedIds = useMemo(
     () => items.map((item) => item.id).join(","),
     [items]
@@ -535,8 +565,8 @@ export default function AdminVendasItensVendidosOrdenarPage() {
     if (viewMode === "all") return items;
     return visibleItems;
   }, [hiddenItems, items, viewMode, visibleItems]);
-  const scopedItemIds = useMemo(
-    () => scopedItems.map((item) => item.id),
+  const scopedGroups = useMemo(
+    () => groupSellingItemsForDisplay(scopedItems),
     [scopedItems]
   );
 
@@ -552,7 +582,11 @@ export default function AdminVendasItensVendidosOrdenarPage() {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
     setItems((currentItems) => {
-      return moveItemInScope(currentItems, String(active.id), String(over.id));
+      return moveItemWithinGroup(
+        currentItems,
+        String(active.id),
+        String(over.id)
+      );
     });
   }
 
@@ -566,21 +600,28 @@ export default function AdminVendasItensVendidosOrdenarPage() {
   ) {
     setItems((currentItems) => {
       const scope = resolveScopeItems(currentItems, viewMode);
-      const currentScopeIndex = scope.findIndex((item) => item.id === itemId);
+      const sourceItem = currentItems.find((item) => item.id === itemId);
+      if (!sourceItem) return currentItems;
+      const groupScope = scope.filter(
+        (item) => item.groupId === sourceItem.groupId
+      );
+      const currentScopeIndex = groupScope.findIndex(
+        (item) => item.id === itemId
+      );
       if (currentScopeIndex < 0) return currentItems;
 
       const targetScopeIndex =
         direction === "top"
           ? 0
           : direction === "bottom"
-          ? scope.length - 1
+          ? groupScope.length - 1
           : direction === "up"
           ? currentScopeIndex - 1
           : currentScopeIndex + 1;
 
-      const targetItem = scope[targetScopeIndex];
+      const targetItem = groupScope[targetScopeIndex];
       if (!targetItem || targetItem.id === itemId) return currentItems;
-      return moveItemInScope(currentItems, itemId, targetItem.id);
+      return moveItemWithinGroup(currentItems, itemId, targetItem.id);
     });
   }
 
@@ -644,6 +685,19 @@ export default function AdminVendasItensVendidosOrdenarPage() {
               ? `${selectedChannel.name} · ${visibleItems.length} visível(is) · ${hiddenItems.length} oculto(s)`
               : "Nenhum canal cadastrado"}
           </p>
+          <p className="max-w-3xl text-xs leading-relaxed text-slate-500">
+            No cardápio público, os itens aparecem primeiro pela ordem do grupo
+            e depois pela ordem do item dentro do canal. Esta tela separa as
+            seções para evitar uma ordem global que não existe na visualização
+            final. A ordem das seções é editada em{" "}
+            <Link
+              to="/admin/gerenciamento/cardapio/groups"
+              className="font-medium text-slate-700 underline underline-offset-2 hover:text-slate-950"
+            >
+              grupos do cardápio
+            </Link>
+            .
+          </p>
         </div>
       </section>
 
@@ -702,11 +756,7 @@ export default function AdminVendasItensVendidosOrdenarPage() {
         </Form>
       </section>
 
-      <DndContext
-        sensors={sensors}
-        collisionDetection={closestCenter}
-        onDragEnd={handleDragEnd}
-      >
+      <DndContext collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="inline-flex rounded-md border border-slate-200 bg-white p-1">
             <Button
@@ -741,32 +791,60 @@ export default function AdminVendasItensVendidosOrdenarPage() {
           </div>
         </div>
 
-        <SortableContext
-          items={scopedItemIds}
-          strategy={verticalListSortingStrategy}
-        >
-          <ol className="overflow-hidden rounded-md border border-slate-200 bg-white">
-            {scopedItems.map((item, index) => (
-              <SortableItemRow
-                key={item.id}
-                item={item}
-                position={items.findIndex((row) => row.id === item.id) + 1}
-                visiblePosition={index + 1}
-                scopeTotal={scopedItems.length}
-                onMove={handleMoveItem}
-              />
-            ))}
-            {scopedItems.length === 0 ? (
-              <li className="px-4 py-10 text-center text-sm text-slate-400">
-                {viewMode === "hidden"
-                  ? "Nenhum item oculto neste canal."
-                  : viewMode === "visible"
-                  ? "Nenhum item visível neste canal."
-                  : "Nenhum item vinculado a este canal."}
-              </li>
-            ) : null}
-          </ol>
-        </SortableContext>
+        <div className="space-y-4">
+          {scopedGroups.map((group) => (
+            <section
+              key={group.id}
+              className="overflow-hidden rounded-md border border-slate-200 bg-white"
+            >
+              <div className="border-b border-slate-200 bg-slate-50 px-4 py-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    <h2 className="truncate text-sm font-semibold text-slate-950">
+                      {group.name}
+                    </h2>
+                    {group.description ? (
+                      <p className="mt-0.5 line-clamp-2 text-xs text-slate-500">
+                        {group.description}
+                      </p>
+                    ) : null}
+                  </div>
+                  <div className="shrink-0 text-xs text-slate-500">
+                    {group.items.length} item(ns)
+                  </div>
+                </div>
+              </div>
+
+              <SortableContext
+                items={group.items.map((item) => item.id)}
+                strategy={verticalListSortingStrategy}
+              >
+                <ol>
+                  {group.items.map((item, index) => (
+                    <SortableItemRow
+                      key={item.id}
+                      item={item}
+                      position={index + 1}
+                      visiblePosition={index + 1}
+                      scopeTotal={group.items.length}
+                      onMove={handleMoveItem}
+                    />
+                  ))}
+                </ol>
+              </SortableContext>
+            </section>
+          ))}
+
+          {scopedItems.length === 0 ? (
+            <div className="rounded-md border border-slate-200 bg-white px-4 py-10 text-center text-sm text-slate-400">
+              {viewMode === "hidden"
+                ? "Nenhum item oculto neste canal."
+                : viewMode === "visible"
+                ? "Nenhum item visível neste canal."
+                : "Nenhum item vinculado a este canal."}
+            </div>
+          ) : null}
+        </div>
       </DndContext>
     </div>
   );
@@ -781,7 +859,36 @@ function resolveScopeItems(
   return items.filter((item) => item.visible);
 }
 
-function moveItemInScope(
+function groupSellingItemsForDisplay(items: SortableSellingItem[]) {
+  const groups = items.reduce((acc, item) => {
+    const groupId = item.groupId || UNGROUPED_GROUP_ID;
+    if (!acc.has(groupId)) {
+      acc.set(groupId, {
+        id: groupId,
+        name: item.groupName || "Sem grupo",
+        description: item.groupDescription || null,
+        sortOrderIndex: item.groupSortOrderIndex,
+        items: [],
+      });
+    }
+
+    acc.get(groupId)?.items.push(item);
+    return acc;
+  }, new Map<string, SortableSellingGroup>());
+
+  return Array.from(groups.values())
+    .sort(
+      (a, b) =>
+        Number(a.sortOrderIndex || 0) - Number(b.sortOrderIndex || 0) ||
+        a.name.localeCompare(b.name, "pt-BR")
+    )
+    .map((group) => ({
+      ...group,
+      items: [...group.items],
+    }));
+}
+
+function moveItemWithinGroup(
   items: SortableSellingItem[],
   sourceItemId: string,
   targetItemId: string
@@ -789,5 +896,6 @@ function moveItemInScope(
   const oldIndex = items.findIndex((item) => item.id === sourceItemId);
   const newIndex = items.findIndex((item) => item.id === targetItemId);
   if (oldIndex < 0 || newIndex < 0) return items;
+  if (items[oldIndex].groupId !== items[newIndex].groupId) return items;
   return arrayMove(items, oldIndex, newIndex);
 }

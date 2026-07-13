@@ -178,6 +178,13 @@ const ADMIN_NAVIGATION_LINKS: WebsiteNavigationConfig = {
               ],
             },
             {
+              title: "Tags",
+              href: "/admin/gerenciamento/cardapio/tags",
+              items: [],
+              disabled: false,
+              tags: ["tag", "tags", "selo", "cardapio", "filtro", "publico"],
+            },
+            {
               title: "Tamanhos",
               href: "/admin/gerenciamento/cardapio/sizes",
               items: [],

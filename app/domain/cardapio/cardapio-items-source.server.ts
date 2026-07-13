@@ -470,6 +470,7 @@ function toCardapioIndexItem(item: CardapioCompatItem): CardapioIndexItem {
     slug: item.slug || null,
     name: item.name,
     description: item.description || null,
+    longDescription: item.longDescription || null,
     baseIngredients: item.baseIngredients || null,
     ingredients: item.ingredients || null,
     imagePlaceholderURL: item.imagePlaceholderURL || null,
