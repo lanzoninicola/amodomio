@@ -41,7 +41,9 @@ type MetricRow = {
   key: string;
   label: string;
   kind: "money" | "percent";
-  getValue: (close: NormalizedMonthlyClose | null) => number | string | null | undefined;
+  getValue: (
+    close: NormalizedMonthlyClose | null
+  ) => number | string | null | undefined;
 };
 
 type ExportMetricValue = {
@@ -78,36 +80,93 @@ const MONTH_OPTIONS = [
 ];
 
 const TOP_METRICS: MetricRow[] = [
-  { key: "receitaLiquida", label: "Receita líquida", kind: "money", getValue: (c) => c?.receitaLiquida },
-  { key: "faturamento", label: "Faturamento (informativo)", kind: "money", getValue: (c) => c?.faturamentoMensalAmount },
+  {
+    key: "receitaLiquida",
+    label: "Receita líquida",
+    kind: "money",
+    getValue: (c) => c?.receitaLiquida,
+  },
+  {
+    key: "faturamento",
+    label: "Faturamento (informativo)",
+    kind: "money",
+    getValue: (c) => c?.faturamentoMensalAmount,
+  },
 ];
 
 const MAIN_METRICS: MetricRow[] = [
   // Receitas
-  { key: "receitaBruta", label: "Receita bruta (caixa)", kind: "money", getValue: (c) => c?.receitaBruta },
+  {
+    key: "receitaBruta",
+    label: "Receita bruta (caixa)",
+    kind: "money",
+    getValue: (c) => c?.receitaBruta,
+  },
   // Custos variáveis
-  { key: "custoVariavel", label: "Custo variável total", kind: "money", getValue: (c) => c?.custoVariavelTotal },
+  {
+    key: "custoVariavel",
+    label: "Custo variável total",
+    kind: "money",
+    getValue: (c) => c?.custoVariavelTotal,
+  },
 
   // Margem de contribuição
-  { key: "margemContrib", label: "Margem de contribuição", kind: "money", getValue: (c) => c?.margemContrib },
+  {
+    key: "margemContrib",
+    label: "Margem de contribuição",
+    kind: "money",
+    getValue: (c) => c?.margemContrib,
+  },
   // Custos fixos
-  { key: "custoFixo", label: "Custo fixo total", kind: "money", getValue: (c) => c?.custoFixoTotal },
-  // Resultado não operacional (entra antes do resultado líquido)
+  {
+    key: "custoFixo",
+    label: "Custo fixo total",
+    kind: "money",
+    getValue: (c) => c?.custoFixoTotal,
+  },
+  // Resultado não operacional (fica fora do resultado líquido)
   {
     key: "resultadoNaoOperacional",
-    label: "Resultado não operacional",
+    label: "Saldo movimentos não operacionais",
     kind: "money",
-    getValue: (c) => (c ? (c.entradasNaoOperacionais ?? 0) - (c.saidasNaoOperacionais ?? 0) : null),
+    getValue: (c) => c?.saldoMovimentosNaoOperacionais,
   },
   // Resultado
-  { key: "resultadoLiquido", label: "Resultado líquido", kind: "money", getValue: (c) => c?.resultadoLiquido },
+  {
+    key: "resultadoLiquido",
+    label: "Resultado líquido",
+    kind: "money",
+    getValue: (c) => c?.resultadoLiquido,
+  },
+  {
+    key: "saldoInvestimento",
+    label: "Saldo do investimento",
+    kind: "money",
+    getValue: (c) => c?.saldoInvestimento,
+  },
+  {
+    key: "resultadoCaixaGlobal",
+    label: "Resultado de caixa global",
+    kind: "money",
+    getValue: (c) => c?.resultadoCaixaGlobal,
+  },
   // Ponto de equilíbrio
-  { key: "pontoEquilibrio", label: "Ponto de equilíbrio", kind: "money", getValue: (c) => c?.pontoEquilibrio },
+  {
+    key: "pontoEquilibrio",
+    label: "Ponto de equilíbrio",
+    kind: "money",
+    getValue: (c) => c?.pontoEquilibrio,
+  },
   {
     key: "coberturaPe",
     label: "Cobertura do PE (%)",
     kind: "percent",
-    getValue: (c) => (c ? (c.pontoEquilibrio > 0 ? (c.receitaBruta / c.pontoEquilibrio) * 100 : 0) : null),
+    getValue: (c) =>
+      c
+        ? c.pontoEquilibrio > 0
+          ? (c.receitaBruta / c.pontoEquilibrio) * 100
+          : 0
+        : null,
   },
 ];
 
@@ -139,17 +198,19 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const yearNumber = yearParam ? Number(yearParam) : undefined;
 
   const allCloses = await monthlyCloseRepo.findMany({
-    orderBy: [
-      { referenceYear: "desc" },
-      { referenceMonth: "asc" },
-    ],
+    orderBy: [{ referenceYear: "desc" }, { referenceMonth: "asc" }],
   });
 
-  const years = Array.from(new Set(allCloses.map((c) => c.referenceYear))).sort((a, b) => b - a);
-  const selectedYear = Number.isFinite(yearNumber) && years.includes(Number(yearNumber))
-    ? Number(yearNumber)
-    : years[0] ?? null;
-  const closes = selectedYear ? allCloses.filter((c) => c.referenceYear === selectedYear) : [];
+  const years = Array.from(new Set(allCloses.map((c) => c.referenceYear))).sort(
+    (a, b) => b - a
+  );
+  const selectedYear =
+    Number.isFinite(yearNumber) && years.includes(Number(yearNumber))
+      ? Number(yearNumber)
+      : years[0] ?? null;
+  const closes = selectedYear
+    ? allCloses.filter((c) => c.referenceYear === selectedYear)
+    : [];
 
   return json<LoaderData>({
     selectedYear,
@@ -174,7 +235,7 @@ function normalizeMonthlyClose(close: FinancialMonthlyClose) {
 
 function formatCellValue(
   value: number | string | null | undefined,
-  kind: MetricRow["kind"],
+  kind: MetricRow["kind"]
 ) {
   if (value == null) return "—";
   if (kind === "text") {
@@ -185,7 +246,10 @@ function formatCellValue(
   return formatMoneyString(value, 2);
 }
 
-function getNumericValue(value: number | string | null | undefined, kind: MetricRow["kind"]) {
+function getNumericValue(
+  value: number | string | null | undefined,
+  kind: MetricRow["kind"]
+) {
   if (value == null) return null;
   if (typeof value === "number") return Number.isFinite(value) ? value : null;
   if (kind === "percent") {
@@ -196,13 +260,16 @@ function getNumericValue(value: number | string | null | undefined, kind: Metric
 }
 
 export default function AdminFinanceiroFechamentoMensalVisualizar() {
-  const { closes, years, selectedYear, monthlyCloseRepoMissing, allCloses } = useLoaderData<typeof loader>();
+  const { closes, years, selectedYear, monthlyCloseRepoMissing, allCloses } =
+    useLoaderData<typeof loader>();
   const submit = useSubmit();
   const { toast } = useToast();
 
   const monthlyData = React.useMemo(() => {
     const map: Record<number, NormalizedMonthlyClose | null> = {};
-    MONTH_OPTIONS.forEach((m) => { map[m.value] = null; });
+    MONTH_OPTIONS.forEach((m) => {
+      map[m.value] = null;
+    });
     closes.forEach((close) => {
       map[close.referenceMonth] = normalizeMonthlyClose(close);
     });
@@ -212,7 +279,8 @@ export default function AdminFinanceiroFechamentoMensalVisualizar() {
   const monthsWithData = closes.map((c) => c.referenceMonth);
   const hasData = closes.length > 0 && selectedYear != null;
   const [showNumericDiffs, setShowNumericDiffs] = React.useState(false);
-  const [diffViewMode, setDiffViewMode] = React.useState<DiffViewMode>("prevMonth");
+  const [diffViewMode, setDiffViewMode] =
+    React.useState<DiffViewMode>("prevMonth");
 
   const normalizedAll = React.useMemo(() => {
     const map: Record<string, NormalizedMonthlyClose> = {};
@@ -223,21 +291,44 @@ export default function AdminFinanceiroFechamentoMensalVisualizar() {
     return map;
   }, [allCloses]);
 
-  const getDiffs = (
-    month: number,
-    metric: MetricRow,
-  ) => {
-    if (!selectedYear) return { prevMonth: null, prevYear: null, prevMonthBase: null, prevYearBase: null };
-    const prevMonthKey = month === 1 ? `${selectedYear - 1}-12` : `${selectedYear}-${month - 1}`;
+  const getDiffs = (month: number, metric: MetricRow) => {
+    if (!selectedYear)
+      return {
+        prevMonth: null,
+        prevYear: null,
+        prevMonthBase: null,
+        prevYearBase: null,
+      };
+    const prevMonthKey =
+      month === 1 ? `${selectedYear - 1}-12` : `${selectedYear}-${month - 1}`;
     const prevYearKey = `${selectedYear - 1}-${month}`;
 
-    const currentValue = getNumericValue(metric.getValue(monthlyData[month]), metric.kind);
-    const prevMonthValue = getNumericValue(normalizedAll[prevMonthKey] ? metric.getValue(normalizedAll[prevMonthKey]) : null, metric.kind);
-    const prevYearValue = getNumericValue(normalizedAll[prevYearKey] ? metric.getValue(normalizedAll[prevYearKey]) : null, metric.kind);
+    const currentValue = getNumericValue(
+      metric.getValue(monthlyData[month]),
+      metric.kind
+    );
+    const prevMonthValue = getNumericValue(
+      normalizedAll[prevMonthKey]
+        ? metric.getValue(normalizedAll[prevMonthKey])
+        : null,
+      metric.kind
+    );
+    const prevYearValue = getNumericValue(
+      normalizedAll[prevYearKey]
+        ? metric.getValue(normalizedAll[prevYearKey])
+        : null,
+      metric.kind
+    );
 
     return {
-      prevMonth: currentValue != null && prevMonthValue != null ? currentValue - prevMonthValue : null,
-      prevYear: currentValue != null && prevYearValue != null ? currentValue - prevYearValue : null,
+      prevMonth:
+        currentValue != null && prevMonthValue != null
+          ? currentValue - prevMonthValue
+          : null,
+      prevYear:
+        currentValue != null && prevYearValue != null
+          ? currentValue - prevYearValue
+          : null,
       prevMonthBase: prevMonthValue ?? null,
       prevYearBase: prevYearValue ?? null,
     };
@@ -251,13 +342,23 @@ export default function AdminFinanceiroFechamentoMensalVisualizar() {
 
     const months = MONTH_OPTIONS.map((month) => {
       const close = monthlyData[month.value];
-      const metrics = METRICS_WITH_SECTION.reduce<Record<string, ExportMetricValue>>((acc, metric) => {
+      const metrics = METRICS_WITH_SECTION.reduce<
+        Record<string, ExportMetricValue>
+      >((acc, metric) => {
         const rawValue = metric.getValue(close);
-        const inlinePercent = inlinePercentForRow(metric.key, month.value, monthlyData);
-        const { prevMonth, prevYear, prevMonthBase, prevYearBase } = getDiffs(month.value, metric);
-        const numericValue = metric.kind === "percent"
-          ? inlinePercent ?? getNumericValue(rawValue, metric.kind)
-          : getNumericValue(rawValue, metric.kind);
+        const inlinePercent = inlinePercentForRow(
+          metric.key,
+          month.value,
+          monthlyData
+        );
+        const { prevMonth, prevYear, prevMonthBase, prevYearBase } = getDiffs(
+          month.value,
+          metric
+        );
+        const numericValue =
+          metric.kind === "percent"
+            ? inlinePercent ?? getNumericValue(rawValue, metric.kind)
+            : getNumericValue(rawValue, metric.kind);
 
         acc[metric.key] = {
           value: numericValue,
@@ -286,21 +387,29 @@ export default function AdminFinanceiroFechamentoMensalVisualizar() {
         selectedYear,
         monthsWithData,
         generatedAt: new Date().toISOString(),
-        description: "Dados usados na página de visualização de fechamento mensal.",
+        description:
+          "Dados usados na página de visualização de fechamento mensal.",
       },
       schema: {
         months: MONTH_OPTIONS,
-        metrics: METRICS_WITH_SECTION.map(({ getValue, section, ...metric }) => ({
-          ...metric,
-          section,
-        })),
+        metrics: METRICS_WITH_SECTION.map(
+          ({ getValue, section, ...metric }) => ({
+            ...metric,
+            section,
+          })
+        ),
         fields: {
-          value: "Valor numérico do indicador (money em moeda, percent como número).",
-          inlinePercent: "Percentual exibido junto ao valor quando calculado na visão.",
+          value:
+            "Valor numérico do indicador (money em moeda, percent como número).",
+          inlinePercent:
+            "Percentual exibido junto ao valor quando calculado na visão.",
           diffPrevMonth: "Diferença absoluta em relação ao mês anterior.",
-          diffPrevYear: "Diferença absoluta em relação ao mesmo mês no ano anterior.",
-          prevMonthBase: "Valor base do mês anterior usado para o cálculo da diferença.",
-          prevYearBase: "Valor base do ano anterior usado para o cálculo da diferença.",
+          diffPrevYear:
+            "Diferença absoluta em relação ao mesmo mês no ano anterior.",
+          prevMonthBase:
+            "Valor base do mês anterior usado para o cálculo da diferença.",
+          prevYearBase:
+            "Valor base do ano anterior usado para o cálculo da diferença.",
         },
       },
       months,
@@ -331,12 +440,15 @@ export default function AdminFinanceiroFechamentoMensalVisualizar() {
         const url = URL.createObjectURL(blob);
         const link = document.createElement("a");
         link.href = url;
-        link.download = `fechamento-${exportPayload.meta.selectedYear ?? "sem-ano"}.json`;
+        link.download = `fechamento-${
+          exportPayload.meta.selectedYear ?? "sem-ano"
+        }.json`;
         link.click();
         URL.revokeObjectURL(url);
         toast({
           title: "Download gerado",
-          description: "Copiar para a área de transferência não funcionou, salvamos o arquivo.",
+          description:
+            "Copiar para a área de transferência não funcionou, salvamos o arquivo.",
         });
       } catch (error) {
         console.error(error);
@@ -354,7 +466,8 @@ export default function AdminFinanceiroFechamentoMensalVisualizar() {
       <Alert variant="destructive" className="max-w-3xl">
         <AlertTitle>Não foi possível carregar os fechamentos</AlertTitle>
         <AlertDescription>
-          Tabela de fechamento mensal não encontrada. Rode `prisma migrate dev` e `prisma generate`.
+          Tabela de fechamento mensal não encontrada. Rode `prisma migrate dev`
+          e `prisma generate`.
         </AlertDescription>
       </Alert>
     );
@@ -363,10 +476,13 @@ export default function AdminFinanceiroFechamentoMensalVisualizar() {
   return (
     <div className="space-y-6">
       <div className="space-y-1">
-        <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Fechamentos mensais</p>
+        <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
+          Fechamentos mensais
+        </p>
         <h1 className="text-2xl font-semibold">Visualização por mês</h1>
         <p className="text-sm text-muted-foreground">
-          Compare rapidamente os indicadores de cada fechamento. Selecione um ano e veja os meses em linha.
+          Compare rapidamente os indicadores de cada fechamento. Selecione um
+          ano e veja os meses em linha.
         </p>
       </div>
 
@@ -380,17 +496,23 @@ export default function AdminFinanceiroFechamentoMensalVisualizar() {
               </p>
             </div>
             <Badge variant="secondary" className="w-fit">
-              {years.length} {years.length === 1 ? "ano disponível" : "anos disponíveis"}
+              {years.length}{" "}
+              {years.length === 1 ? "ano disponível" : "anos disponíveis"}
             </Badge>
           </div>
         </CardHeader>
         <CardContent>
           {years.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Nenhum fechamento registrado ainda.</p>
+            <p className="text-sm text-muted-foreground">
+              Nenhum fechamento registrado ainda.
+            </p>
           ) : (
             <div className="space-y-3">
               <Form method="get" className="flex flex-wrap items-center gap-3">
-                <label className="text-sm font-medium text-muted-foreground" htmlFor="year-select">
+                <label
+                  className="text-sm font-medium text-muted-foreground"
+                  htmlFor="year-select"
+                >
                   Ano
                 </label>
                 <select
@@ -401,7 +523,9 @@ export default function AdminFinanceiroFechamentoMensalVisualizar() {
                   className="h-10 rounded-md border bg-background px-3 text-sm shadow-sm focus-visible:border-foreground"
                 >
                   {years.map((year) => (
-                    <option key={year} value={year}>{year}</option>
+                    <option key={year} value={year}>
+                      {year}
+                    </option>
                   ))}
                 </select>
               </Form>
@@ -420,11 +544,17 @@ export default function AdminFinanceiroFechamentoMensalVisualizar() {
                     <span>Comparar diffs</span>
                     <select
                       value={diffViewMode}
-                      onChange={(event) => setDiffViewMode(event.currentTarget.value as DiffViewMode)}
+                      onChange={(event) =>
+                        setDiffViewMode(
+                          event.currentTarget.value as DiffViewMode
+                        )
+                      }
                       className="h-8 rounded-md border bg-background px-2 text-xs shadow-sm focus-visible:border-foreground"
                     >
                       {DIFF_VIEW_OPTIONS.map((option) => (
-                        <option key={option.value} value={option.value}>{option.label}</option>
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
                       ))}
                     </select>
                   </div>
@@ -449,21 +579,30 @@ export default function AdminFinanceiroFechamentoMensalVisualizar() {
       <Card>
         <CardHeader className="pb-2">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <CardTitle className="text-base">Fechamentos de {selectedYear ?? "—"}</CardTitle>
+            <CardTitle className="text-base">
+              Fechamentos de {selectedYear ?? "—"}
+            </CardTitle>
             <div className="flex flex-wrap items-center gap-3">
               {hasData ? (
                 <p className="text-xs text-muted-foreground">
-                  {monthsWithData.length} {monthsWithData.length === 1 ? "mês preenchido" : "meses preenchidos"}
+                  {monthsWithData.length}{" "}
+                  {monthsWithData.length === 1
+                    ? "mês preenchido"
+                    : "meses preenchidos"}
                 </p>
               ) : (
-                <p className="text-xs text-muted-foreground">Nenhum fechamento salvo para este ano.</p>
+                <p className="text-xs text-muted-foreground">
+                  Nenhum fechamento salvo para este ano.
+                </p>
               )}
             </div>
           </div>
         </CardHeader>
         <CardContent>
           {!hasData ? (
-            <p className="text-sm text-muted-foreground">Salve fechamentos para ver os valores nesta visão.</p>
+            <p className="text-sm text-muted-foreground">
+              Salve fechamentos para ver os valores nesta visão.
+            </p>
           ) : (
             <>
               <MetricsTable
@@ -484,7 +623,9 @@ export default function AdminFinanceiroFechamentoMensalVisualizar() {
 
               <Separator className="my-4" />
               <p className="text-xs text-muted-foreground">
-                Valores exibem os mesmos cálculos do fechamento mensal. Diferenças comparam o mês anterior e o mesmo mês do ano anterior, quando disponíveis.
+                Valores exibem os mesmos cálculos do fechamento mensal.
+                Diferenças comparam o mês anterior e o mesmo mês do ano
+                anterior, quando disponíveis.
               </p>
             </>
           )}
@@ -503,7 +644,15 @@ function MetricsTable({
 }: {
   metrics: MetricRow[];
   monthlyData: Record<number, NormalizedMonthlyClose | null>;
-  getDiffs: (month: number, metric: MetricRow) => { prevMonth: number | null; prevYear: number | null; prevMonthBase: number | null; prevYearBase: number | null };
+  getDiffs: (
+    month: number,
+    metric: MetricRow
+  ) => {
+    prevMonth: number | null;
+    prevYear: number | null;
+    prevMonthBase: number | null;
+    prevYearBase: number | null;
+  };
   showNumeric: boolean;
   diffViewMode: DiffViewMode;
 }) {
@@ -521,7 +670,9 @@ function MetricsTable({
                 className="sticky top-0 z-20 border-b border-slate-200 bg-slate-50/95 text-center"
               >
                 <div className="flex flex-col items-center gap-1">
-                  <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">{month.label}</span>
+                  <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+                    {month.label}
+                  </span>
                 </div>
               </TableHead>
             ))}
@@ -538,72 +689,140 @@ function MetricsTable({
             const receitaBrutaTotals = isResultado
               ? calculateMetricTotals(MAIN_METRICS[0], monthlyData)
               : null;
-            const rowTone = isMargem || isResultado
-              ? "bg-slate-50/80"
-              : "odd:bg-white even:bg-slate-50/35";
+            const rowTone =
+              isMargem || isResultado
+                ? "bg-slate-50/80"
+                : "odd:bg-white even:bg-slate-50/35";
             return (
-              <TableRow key={row.key} className={`transition-colors hover:bg-slate-100/70 ${rowTone}`}>
-                <TableCell className={`sticky left-0 z-10 border-b border-slate-200/80 text-sm shadow-[1px_0_0_0_rgba(226,232,240,0.7)] ${isMargem || isResultado ? "bg-slate-100 font-semibold text-slate-950" : "bg-inherit text-slate-800"}`}>
+              <TableRow
+                key={row.key}
+                className={`transition-colors hover:bg-slate-100/70 ${rowTone}`}
+              >
+                <TableCell
+                  className={`sticky left-0 z-10 border-b border-slate-200/80 text-sm shadow-[1px_0_0_0_rgba(226,232,240,0.7)] ${
+                    isMargem || isResultado
+                      ? "bg-slate-100 font-semibold text-slate-950"
+                      : "bg-inherit text-slate-800"
+                  }`}
+                >
                   {row.label}
                 </TableCell>
                 {MONTH_OPTIONS.map((month) => {
                   const close = monthlyData[month.value];
                   const rawValue = row.getValue(close);
-                  const { prevMonth, prevYear, prevMonthBase, prevYearBase } = getDiffs(month.value, row);
-                  const inlinePercent = inlinePercentForRow(row.key, month.value, monthlyData);
+                  const { prevMonth, prevYear, prevMonthBase, prevYearBase } =
+                    getDiffs(month.value, row);
+                  const inlinePercent = inlinePercentForRow(
+                    row.key,
+                    month.value,
+                    monthlyData
+                  );
                   const isCobertura = row.key === "coberturaPe";
                   const isMargemRow = row.key === "margemContrib";
                   const isResultadoRow = row.key === "resultadoLiquido";
                   const isHighlightRow = isMargemRow || isResultadoRow;
                   const numericValue = getNumericValue(rawValue, row.kind);
-                  const isNegativeResult = isResultadoRow && numericValue != null && numericValue < 0;
-                  const marginStatus = isMargemRow ? getMarginContribStatus(inlinePercent) : null;
-                  const valueTone = isMargemRow && marginStatus
-                    ? marginStatus.valueTone
-                    : isNegativeResult
+                  const isNegativeResult =
+                    isResultadoRow && numericValue != null && numericValue < 0;
+                  const marginStatus = isMargemRow
+                    ? getMarginContribStatus(inlinePercent)
+                    : null;
+                  const valueTone =
+                    isMargemRow && marginStatus
+                      ? marginStatus.valueTone
+                      : isNegativeResult
                       ? "text-red-600"
                       : "text-foreground";
-                  const shouldShowPrevMonth = diffViewMode === "both" || diffViewMode === "prevMonth";
-                  const shouldShowPrevYear = diffViewMode === "both" || diffViewMode === "prevYear";
-                  const showDiffs = (!inlinePercent || isResultadoRow) && !isCobertura && !isMargemRow && (shouldShowPrevMonth || shouldShowPrevYear);
-                  const invertTone = ["custoVariavel", "custoFixo", "pontoEquilibrio"].includes(row.key);
-                  const displayValue = row.kind === "percent" && inlinePercent != null
-                    ? `${inlinePercent.toFixed(2)}%`
-                    : formatCellValue(rawValue, row.kind);
-                  const showInlinePercentBelow = inlinePercent != null && row.kind !== "percent" && (isMargemRow || isResultadoRow);
+                  const shouldShowPrevMonth =
+                    diffViewMode === "both" || diffViewMode === "prevMonth";
+                  const shouldShowPrevYear =
+                    diffViewMode === "both" || diffViewMode === "prevYear";
+                  const showDiffs =
+                    (!inlinePercent || isResultadoRow) &&
+                    !isCobertura &&
+                    !isMargemRow &&
+                    (shouldShowPrevMonth || shouldShowPrevYear);
+                  const invertTone = [
+                    "custoVariavel",
+                    "custoFixo",
+                    "pontoEquilibrio",
+                  ].includes(row.key);
+                  const displayValue =
+                    row.kind === "percent" && inlinePercent != null
+                      ? `${inlinePercent.toFixed(2)}%`
+                      : formatCellValue(rawValue, row.kind);
+                  const showInlinePercentBelow =
+                    inlinePercent != null &&
+                    row.kind !== "percent" &&
+                    (isMargemRow || isResultadoRow);
                   return (
                     <TableCell
                       key={`${row.key}-${month.value}`}
-                      className={`border-b border-slate-200/70 text-right ${isHighlightRow ? "bg-slate-50/60" : ""}`}
+                      className={`border-b border-slate-200/70 text-right ${
+                        isHighlightRow ? "bg-slate-50/60" : ""
+                      }`}
                     >
                       <div className="flex flex-col items-end gap-1">
                         <div className="flex items-center gap-2">
-                          <span className={`font-mono tabular-nums ${valueTone} ${isHighlightRow ? "text-[15px] font-semibold" : "font-medium"}`}>
+                          <span
+                            className={`font-mono tabular-nums ${valueTone} ${
+                              isHighlightRow
+                                ? "text-[15px] font-semibold"
+                                : "font-medium"
+                            }`}
+                          >
                             {displayValue}
                           </span>
-                          {!showInlinePercentBelow && !isMargemRow && inlinePercent != null && row.kind !== "percent" && (
-                            <span className={`font-mono tabular-nums text-[11px] text-slate-500 ${isHighlightRow ? "font-semibold" : ""}`}>
-                              {inlinePercent.toFixed(2)}%
-                            </span>
-                          )}
+                          {!showInlinePercentBelow &&
+                            !isMargemRow &&
+                            inlinePercent != null &&
+                            row.kind !== "percent" && (
+                              <span
+                                className={`font-mono tabular-nums text-[11px] text-slate-500 ${
+                                  isHighlightRow ? "font-semibold" : ""
+                                }`}
+                              >
+                                {inlinePercent.toFixed(2)}%
+                              </span>
+                            )}
                         </div>
                         {showInlinePercentBelow && (
-                          <span className={`font-mono tabular-nums text-sm font-semibold leading-tight ${isMargemRow && marginStatus ? marginStatus.valueTone : valueTone}`}>
+                          <span
+                            className={`font-mono tabular-nums text-sm font-semibold leading-tight ${
+                              isMargemRow && marginStatus
+                                ? marginStatus.valueTone
+                                : valueTone
+                            }`}
+                          >
                             {inlinePercent.toFixed(2)}%
                           </span>
                         )}
                         {isMargemRow && marginStatus?.note && (
-                          <span className={`max-w-[10rem] text-[11px] text-right leading-snug ${marginStatus.noteTone}`}>
+                          <span
+                            className={`max-w-[10rem] text-[11px] text-right leading-snug ${marginStatus.noteTone}`}
+                          >
                             {marginStatus.note}
                           </span>
                         )}
                         {showDiffs && (
                           <div className="mt-1 flex flex-col items-end gap-1 text-[11px]">
                             {shouldShowPrevMonth && (
-                              <DiffPill diff={prevMonth} base={prevMonthBase} kind={row.kind} invert={invertTone} showNumeric={showNumeric} />
+                              <DiffPill
+                                diff={prevMonth}
+                                base={prevMonthBase}
+                                kind={row.kind}
+                                invert={invertTone}
+                                showNumeric={showNumeric}
+                              />
                             )}
                             {shouldShowPrevYear && (
-                              <DiffPill diff={prevYear} base={prevYearBase} kind={row.kind} invert={invertTone} showNumeric={showNumeric} />
+                              <DiffPill
+                                diff={prevYear}
+                                base={prevYearBase}
+                                kind={row.kind}
+                                invert={invertTone}
+                                showNumeric={showNumeric}
+                              />
                             )}
                           </div>
                         )}
@@ -611,27 +830,48 @@ function MetricsTable({
                     </TableCell>
                   );
                 })}
-                <TableCell className="border-b border-slate-200/80 bg-slate-50/70 text-right shadow-[-1px_0_0_0_rgba(226,232,240,0.7)]" key={`${row.key}-totals`}>
-                  <div className={`ml-auto flex w-full max-w-[13rem] flex-col items-end gap-1 rounded-lg border px-3 py-2 ${isMargem || isResultado ? "border-slate-300 bg-white/90" : "border-slate-200/80 bg-white/70"}`}>
-                    <span className={`font-mono tabular-nums ${isMargem || isResultado ? "text-[15px] font-semibold" : "font-medium"} ${isResultado && totals.total != null && totals.total < 0 ? "text-red-600" : "text-foreground"}`}>
+                <TableCell
+                  className="border-b border-slate-200/80 bg-slate-50/70 text-right shadow-[-1px_0_0_0_rgba(226,232,240,0.7)]"
+                  key={`${row.key}-totals`}
+                >
+                  <div
+                    className={`ml-auto flex w-full max-w-[13rem] flex-col items-end gap-1 rounded-lg border px-3 py-2 ${
+                      isMargem || isResultado
+                        ? "border-slate-300 bg-white/90"
+                        : "border-slate-200/80 bg-white/70"
+                    }`}
+                  >
+                    <span
+                      className={`font-mono tabular-nums ${
+                        isMargem || isResultado
+                          ? "text-[15px] font-semibold"
+                          : "font-medium"
+                      } ${
+                        isResultado && totals.total != null && totals.total < 0
+                          ? "text-red-600"
+                          : "text-foreground"
+                      }`}
+                    >
                       {formatCellValue(totals.total, row.kind)}
                     </span>
                     <span className="font-mono tabular-nums text-[11px] text-slate-500">
-                      Média: {totals.average != null
+                      Média:{" "}
+                      {totals.average != null
                         ? formatAverageWithReferencePercent(
-                          totals.average,
-                          row.kind,
-                          receitaBrutaTotals?.average ?? null,
-                        )
+                            totals.average,
+                            row.kind,
+                            receitaBrutaTotals?.average ?? null
+                          )
                         : "—"}
                     </span>
                     <span className="font-mono tabular-nums text-[11px] text-slate-500">
-                      Média 3m: {totals.lastThreeAverage != null
+                      Média 3m:{" "}
+                      {totals.lastThreeAverage != null
                         ? formatAverageWithReferencePercent(
-                          totals.lastThreeAverage,
-                          row.kind,
-                          receitaBrutaTotals?.lastThreeAverage ?? null,
-                        )
+                            totals.lastThreeAverage,
+                            row.kind,
+                            receitaBrutaTotals?.lastThreeAverage ?? null
+                          )
                         : "—"}
                     </span>
                   </div>
@@ -653,43 +893,66 @@ type DiffPillProps = {
   showNumeric?: boolean;
 };
 
-const DiffPill = React.forwardRef<HTMLSpanElement, DiffPillProps>(({ diff, kind, invert, base, showNumeric = true }, ref) => {
-  if (diff == null) {
-    return <span ref={ref} className="text-muted-foreground">—</span>;
-  }
-  const positive = diff > 0;
-  const negative = diff < 0;
-  const tonePositive = invert ? "text-red-700 bg-red-50" : "text-emerald-700 bg-emerald-50";
-  const toneNegative = invert ? "text-emerald-700 bg-emerald-50" : "text-red-700 bg-red-50";
-  const tone = positive ? tonePositive : negative ? toneNegative : "text-muted-foreground bg-muted";
-  const arrow = positive ? "▲" : negative ? "▼" : "•";
-  const formatted = kind === "percent" ? `${diff.toFixed(2)}%` : formatMoneyString(diff, 2);
-  // Use absolute base to avoid flipping the sign when comparing with a negative prior value (e.g. -2k -> +7k).
-  const percentChange = base != null && base !== 0 ? (diff / Math.abs(base)) * 100 : null;
-  const percentTone = percentChange != null
-    ? percentChange > 0
-      ? tonePositive
-      : percentChange < 0
-        ? toneNegative
-        : "text-muted-foreground bg-muted"
-    : "text-muted-foreground bg-muted";
-  return (
-    <span ref={ref} className={`inline-flex items-center gap-1 rounded-md px-2 py-1 ${tone}`}>
-      <span aria-hidden>{arrow}</span>
-      {showNumeric && (
-        <span className="font-mono font-semibold">{formatted}</span>
-      )}
-      {percentChange != null && (
-        <span className={`text-[11px] rounded px-1 py-[1px] font-mono font-semibold ${percentTone}`}>
-          {percentChange > 0 ? "+" : ""}{percentChange.toFixed(1)}%
+const DiffPill = React.forwardRef<HTMLSpanElement, DiffPillProps>(
+  ({ diff, kind, invert, base, showNumeric = true }, ref) => {
+    if (diff == null) {
+      return (
+        <span ref={ref} className="text-muted-foreground">
+          —
         </span>
-      )}
-      {!showNumeric && percentChange == null && (
-        <span className="text-[11px] text-muted-foreground">—</span>
-      )}
-    </span>
-  );
-});
+      );
+    }
+    const positive = diff > 0;
+    const negative = diff < 0;
+    const tonePositive = invert
+      ? "text-red-700 bg-red-50"
+      : "text-emerald-700 bg-emerald-50";
+    const toneNegative = invert
+      ? "text-emerald-700 bg-emerald-50"
+      : "text-red-700 bg-red-50";
+    const tone = positive
+      ? tonePositive
+      : negative
+      ? toneNegative
+      : "text-muted-foreground bg-muted";
+    const arrow = positive ? "▲" : negative ? "▼" : "•";
+    const formatted =
+      kind === "percent" ? `${diff.toFixed(2)}%` : formatMoneyString(diff, 2);
+    // Use absolute base to avoid flipping the sign when comparing with a negative prior value (e.g. -2k -> +7k).
+    const percentChange =
+      base != null && base !== 0 ? (diff / Math.abs(base)) * 100 : null;
+    const percentTone =
+      percentChange != null
+        ? percentChange > 0
+          ? tonePositive
+          : percentChange < 0
+          ? toneNegative
+          : "text-muted-foreground bg-muted"
+        : "text-muted-foreground bg-muted";
+    return (
+      <span
+        ref={ref}
+        className={`inline-flex items-center gap-1 rounded-md px-2 py-1 ${tone}`}
+      >
+        <span aria-hidden>{arrow}</span>
+        {showNumeric && (
+          <span className="font-mono font-semibold">{formatted}</span>
+        )}
+        {percentChange != null && (
+          <span
+            className={`text-[11px] rounded px-1 py-[1px] font-mono font-semibold ${percentTone}`}
+          >
+            {percentChange > 0 ? "+" : ""}
+            {percentChange.toFixed(1)}%
+          </span>
+        )}
+        {!showNumeric && percentChange == null && (
+          <span className="text-[11px] text-muted-foreground">—</span>
+        )}
+      </span>
+    );
+  }
+);
 DiffPill.displayName = "DiffPill";
 
 type MetricTotals = {
@@ -701,13 +964,12 @@ type MetricTotals = {
 function formatAverageWithReferencePercent(
   value: number | null,
   kind: MetricRow["kind"],
-  referenceValue: number | null,
+  referenceValue: number | null
 ) {
   if (value == null) return "—";
 
-  const formattedValue = kind === "percent"
-    ? `${value.toFixed(2)}%`
-    : formatMoneyString(value, 2);
+  const formattedValue =
+    kind === "percent" ? `${value.toFixed(2)}%` : formatMoneyString(value, 2);
 
   if (kind !== "money" || referenceValue == null || referenceValue === 0) {
     return formattedValue;
@@ -719,19 +981,23 @@ function formatAverageWithReferencePercent(
 function inlinePercentForRow(
   rowKey: string,
   month: number,
-  data: Record<number, NormalizedMonthlyClose | null>,
+  data: Record<number, NormalizedMonthlyClose | null>
 ): number | null {
   const close = data[month];
   if (!close) return null;
   if (rowKey === "margemContrib") return close.margemContribPerc ?? null;
-  if (rowKey === "resultadoLiquido") return close.resultadoLiquidoPercBruta ?? null;
-  if (rowKey === "coberturaPe") return close.pontoEquilibrio > 0 ? (close.receitaBruta / close.pontoEquilibrio) * 100 : null;
+  if (rowKey === "resultadoLiquido")
+    return close.resultadoLiquidoPercBruta ?? null;
+  if (rowKey === "coberturaPe")
+    return close.pontoEquilibrio > 0
+      ? (close.receitaBruta / close.pontoEquilibrio) * 100
+      : null;
   return null;
 }
 
 function calculateMetricTotals(
   row: MetricRow,
-  monthlyData: Record<number, NormalizedMonthlyClose | null>,
+  monthlyData: Record<number, NormalizedMonthlyClose | null>
 ): MetricTotals {
   let total = 0;
   let count = 0;
@@ -739,11 +1005,16 @@ function calculateMetricTotals(
   const valuesForAverage: number[] = [];
 
   MONTH_OPTIONS.forEach((month) => {
-    const inlinePercent = inlinePercentForRow(row.key, month.value, monthlyData);
+    const inlinePercent = inlinePercentForRow(
+      row.key,
+      month.value,
+      monthlyData
+    );
     const rawValue = row.getValue(monthlyData[month.value]);
-    const value = row.kind === "percent"
-      ? inlinePercent ?? getNumericValue(rawValue, row.kind)
-      : getNumericValue(rawValue, row.kind);
+    const value =
+      row.kind === "percent"
+        ? inlinePercent ?? getNumericValue(rawValue, row.kind)
+        : getNumericValue(rawValue, row.kind);
 
     if (value == null) return;
     hasValue = true;
@@ -753,9 +1024,10 @@ function calculateMetricTotals(
   });
 
   const recentValues = valuesForAverage.slice(-3);
-  const recentAverage = recentValues.length > 0
-    ? recentValues.reduce((acc, val) => acc + val, 0) / recentValues.length
-    : null;
+  const recentAverage =
+    recentValues.length > 0
+      ? recentValues.reduce((acc, val) => acc + val, 0) / recentValues.length
+      : null;
 
   return {
     total: hasValue ? total : null,
