@@ -9,6 +9,7 @@ import {
 type CardapioCompatItem = MenuItemWithAssociations & {
   sourceType?: "native";
   sourceItemId?: string;
+  baseIngredients?: string | null;
   publicPriceVariations?: PublicCardapioVariation[];
 };
 
@@ -403,6 +404,7 @@ function toCompatCardapioItem(item: NativeCardapioRow): CardapioCompatItem {
     name: item.name,
     description: normalizeText(item.description),
     longDescription: normalizeText(sellingInfo?.longDescription) || null,
+    baseIngredients: normalizeText(sellingInfo?.baseIngredients) || null,
     ingredients: normalizeText(sellingInfo?.ingredients),
     categoryId: category.id || "",
     Category: category as any,
@@ -418,8 +420,20 @@ function toCompatCardapioItem(item: NativeCardapioRow): CardapioCompatItem {
     deletedAt: null,
     deletedBy: null,
     tags: {
-      all: allTags.map((tag) => tag.name || ""),
-      public: publicTags.map((tag) => tag.name || ""),
+      all: allTags.map((tag) => ({
+        id: tag.id,
+        name: tag.name || "",
+        colorHEX: tag.colorHEX || null,
+        description: (tag as any).description || null,
+        clickable: Boolean((tag as any).clickable),
+      })),
+      public: publicTags.map((tag) => ({
+        id: tag.id,
+        name: tag.name || "",
+        colorHEX: tag.colorHEX || null,
+        description: (tag as any).description || null,
+        clickable: Boolean((tag as any).clickable),
+      })),
       models: allTags as any,
     },
     MenuItemLike: [] as any,
@@ -456,6 +470,8 @@ function toCardapioIndexItem(item: CardapioCompatItem): CardapioIndexItem {
     slug: item.slug || null,
     name: item.name,
     description: item.description || null,
+    longDescription: item.longDescription || null,
+    baseIngredients: item.baseIngredients || null,
     ingredients: item.ingredients || null,
     imagePlaceholderURL: item.imagePlaceholderURL || null,
     mediaAssets: (item.MenuItemGalleryImage || []) as any,
@@ -470,13 +486,28 @@ function toCardapioIndexItem(item: CardapioCompatItem): CardapioIndexItem {
   };
 }
 
-function buildNativeCardapioItemWhere(
+export function buildNativeCardapioItemWhere(
   params: MenuItemEntityFindAllParams = {}
 ) {
   const legacyWhere = (params.where || {}) as Record<string, unknown>;
   const sellingChannelKey = params.sellingChannelKey || "cardapio";
   const where: Record<string, unknown> = {
     canSell: true,
+    ItemSellingInfo: {
+      ItemGroup: {
+        ProductLine: {
+          active: true,
+          ProductLineSellingChannel: {
+            some: {
+              visible: true,
+              ItemSellingChannel: {
+                key: sellingChannelKey,
+              },
+            },
+          },
+        },
+      },
+    },
     ItemSellingChannelItem: {
       some: {
         ItemSellingChannel: {
@@ -518,6 +549,7 @@ async function listNativeCardapioItems(
       ItemSellingInfo: {
         select: {
           id: true,
+          baseIngredients: true,
           ingredients: true,
           longDescription: true,
           notesPublic: true,
@@ -574,7 +606,16 @@ async function listNativeCardapioItems(
         where: { deletedAt: null },
         select: {
           id: true,
-          Tag: { select: { id: true, name: true, public: true } },
+          Tag: {
+            select: {
+              id: true,
+              name: true,
+              public: true,
+              colorHEX: true,
+              description: true,
+              clickable: true,
+            },
+          },
         },
       },
       ItemLike: {

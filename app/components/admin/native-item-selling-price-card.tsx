@@ -1,25 +1,17 @@
 import { Form, Link } from "@remix-run/react";
-import { useMemo, useState } from "react";
-import { Dialog, DialogContent, DialogTrigger } from "~/components/ui/dialog";
+import { useMemo, useState, type ReactNode } from "react";
+import { CircleHelp } from "lucide-react";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "~/components/ui/dialog";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Separator } from "~/components/ui/separator";
 import { MoneyInput } from "~/components/money-input/MoneyInput";
 import type { ComputedSellingPriceBreakdown } from "~/domain/cardapio/menu-item-selling-price-utility.entity";
 import { DnaHelpLink } from "~/components/admin/dna-help-link";
-import { calculateBreakEvenComposition } from "~/domain/item/item-selling-price-review";
+import { calculateSellingPriceProfit } from "~/domain/item/item-selling-price-review";
 import formatDecimalPlaces from "~/utils/format-decimal-places";
 
 const PROFIT_CALCULATOR_PRESETS = [5, 10, 15, 20, 25];
-
-function detailRow(label: string, value: number) {
-  return (
-    <>
-      <span>{label}</span>
-      <span className="font-mono text-right">{formatDecimalPlaces(value)}</span>
-    </>
-  );
-}
 
 function roundPriceUpToFiveCents(value: number) {
   return formatDecimalPlaces(Math.ceil(value / 0.05) * 0.05);
@@ -46,7 +38,12 @@ function calculatePriceForProfit(params: {
   );
 }
 
-function ProfitPriceCalculatorDialog(props: {
+function calculateProfitAmountForPrice(priceAmount: number | null, profitPerc: number) {
+  if (priceAmount == null) return null;
+  return (Number(priceAmount || 0) * Number(profitPerc || 0)) / 100;
+}
+
+export function ProfitPriceCalculatorDialog(props: {
   baseCostAmount: number;
   dnaPerc: number;
   channelTaxPerc: number;
@@ -78,6 +75,10 @@ function ProfitPriceCalculatorDialog(props: {
         targetProfitPerc: customProfitNumber,
       })
     : null;
+  const customProfitAmount = calculateProfitAmountForPrice(
+    customPriceAmount,
+    customProfitNumber
+  );
 
   return (
     <Dialog>
@@ -133,16 +134,24 @@ function ProfitPriceCalculatorDialog(props: {
 
           {view === "presets" ? (
             <div className="overflow-hidden rounded-md border border-slate-200">
-              <div className="grid grid-cols-2 bg-slate-50 px-3 py-2 text-[11px] font-semibold uppercase text-slate-500">
+              <div className="grid grid-cols-3 bg-slate-50 px-3 py-2 text-[11px] font-semibold uppercase text-slate-500">
                 <span>Lucro</span>
+                <span className="text-right">Lucro R$</span>
                 <span className="text-right">Preço de venda</span>
               </div>
               {presetRows.map((row) => (
                 <div
                   key={row.profitPerc}
-                  className="grid grid-cols-2 border-t border-slate-100 px-3 py-2 text-sm"
+                  className="grid grid-cols-3 border-t border-slate-100 px-3 py-2 text-sm"
                 >
                   <span className="text-slate-600">{row.profitPerc}%</span>
+                  <span className="text-right font-mono text-slate-950">
+                    {row.priceAmount == null
+                      ? "Indisponível"
+                      : `R$ ${formatDecimalPlaces(
+                          calculateProfitAmountForPrice(row.priceAmount, row.profitPerc) || 0
+                        )}`}
+                  </span>
                   <span className="text-right font-mono text-slate-950">
                     {row.priceAmount == null
                       ? "Indisponível"
@@ -176,12 +185,312 @@ function ProfitPriceCalculatorDialog(props: {
                     ? "Indisponível"
                     : `R$ ${formatDecimalPlaces(customPriceAmount)}`}
                 </div>
+                <div className="mt-2 grid grid-cols-2 text-xs">
+                  <span className="text-slate-500">Lucro em reais</span>
+                  <span className="text-right font-mono font-semibold text-slate-950">
+                    {customProfitAmount == null
+                      ? "Indisponível"
+                      : `R$ ${formatDecimalPlaces(customProfitAmount)}`}
+                  </span>
+                </div>
               </div>
             </div>
           )}
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function ProfitMathDialog(props: {
+  priceAmount: number;
+  baseCostAmount: number;
+  dnaAmount: number;
+  channelTaxAmount: number;
+  operationalCostAmount: number;
+  profitAmount: number;
+  profitPerc: number;
+  isMarketplace: boolean;
+}) {
+  return (
+    <Dialog>
+      <DialogTrigger asChild>
+        <button
+          type="button"
+          className="ml-1 inline-flex h-4 w-4 items-center justify-center rounded-full text-current opacity-70 transition hover:bg-white/20 hover:opacity-100"
+          aria-label="Ver cálculo do lucro atual"
+        >
+          <CircleHelp className="h-3.5 w-3.5" />
+        </button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Cálculo do lucro atual</DialogTitle>
+          <DialogDescription>
+            Breakdown da operação usada para chegar no lucro em reais e na margem percentual.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-3 text-sm">
+          <div className="grid grid-cols-2 gap-y-1 text-xs">
+            <span className="text-slate-500">Preço de venda atual</span>
+            <span className="text-right font-mono text-slate-900">R$ {formatDecimalPlaces(props.priceAmount)}</span>
+            <span className="text-slate-500">(-) Custo operacional</span>
+            <span className="text-right font-mono text-slate-900">R$ {formatDecimalPlaces(props.operationalCostAmount)}</span>
+            <span className="font-medium text-slate-700">(=) Lucro atual</span>
+            <span className="text-right font-mono font-semibold text-slate-900">R$ {formatDecimalPlaces(props.profitAmount)}</span>
+          </div>
+
+          <Separator />
+
+          <div className="grid grid-cols-2 gap-y-1 text-xs">
+            <span className="text-slate-500">Custo da ficha técnica</span>
+            <span className="text-right font-mono">R$ {formatDecimalPlaces(props.baseCostAmount)}</span>
+            <span className="text-slate-500">(+) DNA</span>
+            <span className="text-right font-mono">R$ {formatDecimalPlaces(props.dnaAmount)}</span>
+            {props.isMarketplace ? (
+              <>
+                <span className="text-slate-500">(+) Taxa canal</span>
+                <span className="text-right font-mono">R$ {formatDecimalPlaces(props.channelTaxAmount)}</span>
+              </>
+            ) : null}
+            <span className="font-medium text-slate-700">(=) Custo operacional</span>
+            <span className="text-right font-mono font-semibold">R$ {formatDecimalPlaces(props.operationalCostAmount)}</span>
+          </div>
+
+          <Separator />
+
+          <div className="grid grid-cols-2 gap-y-1 text-xs">
+            <span className="text-slate-500">Margem</span>
+            <span className="text-right font-mono">
+              R$ {formatDecimalPlaces(props.profitAmount)} / R$ {formatDecimalPlaces(props.priceAmount)}
+            </span>
+            <span className="font-medium text-slate-700">(=) Lucro percentual</span>
+            <span className="text-right font-mono font-semibold">{formatDecimalPlaces(props.profitPerc)}%</span>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function OperationalCostHelpDialog() {
+  return (
+    <Dialog>
+      <DialogTrigger asChild>
+        <button
+          type="button"
+          className="ml-1 inline-flex h-4 w-4 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+          aria-label="Entender valor reservado para custos"
+        >
+          <CircleHelp className="h-3.5 w-3.5" />
+        </button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Valor reservado para custos</DialogTitle>
+          <DialogDescription>
+            Este valor representa a parte do preço de venda já comprometida com custos, antes de sobrar qualquer lucro.
+          </DialogDescription>
+        </DialogHeader>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function BreakEvenHelpDialog() {
+  return (
+    <Dialog>
+      <DialogTrigger asChild>
+        <button
+          type="button"
+          className="ml-1 inline-flex h-4 w-4 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+          aria-label="Entender break even"
+        >
+          <CircleHelp className="h-3.5 w-3.5" />
+        </button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Break even</DialogTitle>
+          <DialogDescription>
+            Preço mínimo para não ter prejuízo.
+          </DialogDescription>
+        </DialogHeader>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+export function NativeSellingPriceSchema(props: {
+  priceAmount: number;
+  computedSellingPriceBreakdown: ComputedSellingPriceBreakdown;
+  activeSheetId?: string | null;
+  activeSheetName?: string | null;
+  dnaHelpUrl?: string | null;
+  profitPriceHelpUrl?: string | null;
+  showBreakEvenLine?: boolean;
+  showMissingSheetWarning?: boolean;
+  recommendedPriceControl: ReactNode;
+}) {
+  const breakdown = props.computedSellingPriceBreakdown;
+  const custoFT = Number(breakdown.custoFichaTecnica || 0);
+  const profitSummary = calculateSellingPriceProfit({
+    priceAmount: props.priceAmount,
+    breakdown,
+  });
+  const custoTotal = profitSummary.baseCostAmount;
+  const dnaPerc = profitSummary.dnaPerc;
+  const dnaValor = profitSummary.dnaAmount;
+  const channelTaxPerc = profitSummary.channelTaxPerc;
+  const isMarketplace = Boolean(breakdown.channel?.isMarketplace);
+  const taxaCanal = profitSummary.channelTaxAmount;
+  const lucroValor = profitSummary.profitAmount;
+  const lucroPerc = profitSummary.profitPerc;
+  const operationalCostAmount = profitSummary.operationalCostAmount;
+  const breakEvenPrice = Number(
+    breakdown.minimumPrice?.priceAmount?.breakEven || 0
+  );
+  const targetMarginPerc = Number(breakdown.channel?.targetMarginPerc || 0);
+  const hasActiveSheet = custoFT > 0 || Boolean(props.activeSheetName);
+  const showBreakEvenLine = props.showBreakEvenLine ?? true;
+  const showMissingSheetWarning = props.showMissingSheetWarning ?? true;
+  const profitMathDialog = (
+    <ProfitMathDialog
+      priceAmount={props.priceAmount}
+      baseCostAmount={custoTotal}
+      dnaAmount={dnaValor}
+      channelTaxAmount={taxaCanal}
+      operationalCostAmount={operationalCostAmount}
+      profitAmount={lucroValor}
+      profitPerc={lucroPerc}
+      isMarketplace={isMarketplace}
+    />
+  );
+
+  return (
+    <>
+      {showBreakEvenLine ? (
+        <>
+          <div className="flex items-center justify-between text-[11px]">
+            <span className="inline-flex items-center font-medium text-slate-700">
+              Break even
+              <BreakEvenHelpDialog />
+            </span>
+            <span className="font-mono font-semibold text-slate-900">
+              R$ {formatDecimalPlaces(breakEvenPrice)}
+            </span>
+          </div>
+
+          <Separator />
+        </>
+      ) : null}
+
+      <div className="flex items-center justify-between gap-2 text-[11px]">
+        <DnaHelpLink
+          label={`PV com lucro ${targetMarginPerc}%`}
+          url={props.profitPriceHelpUrl}
+          className="font-medium text-slate-700"
+        />
+        <div className="flex items-center gap-1">
+          <ProfitPriceCalculatorDialog
+            baseCostAmount={custoTotal}
+            dnaPerc={dnaPerc}
+            channelTaxPerc={channelTaxPerc}
+            isMarketplace={isMarketplace}
+          />
+          {props.recommendedPriceControl}
+        </div>
+      </div>
+
+      <Separator />
+
+      {lucroPerc < 0 ? (
+        <div className="rounded-md bg-red-600 px-2 py-1.5 text-[11px] font-semibold text-white">
+          Preço atual com prejuízo:{" "}
+          <span className="inline-flex items-center font-mono">
+            {formatDecimalPlaces(lucroPerc)}% | R${" "}
+            {formatDecimalPlaces(lucroValor)}
+            {profitMathDialog}
+          </span>
+        </div>
+      ) : lucroPerc <= 5 ? (
+        <div className="rounded-md bg-orange-500 px-2 py-1.5 text-[11px] font-semibold text-white">
+          Preço atual com lucro baixo:{" "}
+          <span className="inline-flex items-center font-mono">
+            {formatDecimalPlaces(lucroPerc)}% | R${" "}
+            {formatDecimalPlaces(lucroValor)}
+            {profitMathDialog}
+          </span>
+        </div>
+      ) : (
+        <div
+          className={`text-[11px] ${
+            lucroPerc < targetMarginPerc ? "text-orange-400" : "text-slate-500"
+          }`}
+        >
+          Preço atual:{" "}
+          <span className="inline-flex items-center font-mono">
+            {formatDecimalPlaces(lucroPerc)}% | R${" "}
+            {formatDecimalPlaces(lucroValor)}
+            {profitMathDialog}
+          </span>
+        </div>
+      )}
+
+      <Separator />
+
+      <div className="grid grid-cols-2 gap-y-1 text-[11px]">
+        <span className="inline-flex items-center text-slate-500">
+          Custo da ficha técnica
+          {props.activeSheetId ? (
+            <Link
+              to={`/admin/item-cost-sheets/${props.activeSheetId}/custos`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="ml-1 inline-flex h-4 w-4 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+              aria-label="Abrir ficha técnica"
+            >
+              <CircleHelp className="h-3.5 w-3.5" />
+            </Link>
+          ) : null}
+        </span>
+        <span className="text-right font-mono">
+          R$ {formatDecimalPlaces(custoTotal)}
+        </span>
+        <DnaHelpLink
+          label={`(+) DNA (${formatDecimalPlaces(dnaPerc)}%)`}
+          url={props.dnaHelpUrl}
+          className="text-slate-500"
+        />
+        <span className="text-right font-mono">
+          R$ {formatDecimalPlaces(dnaValor)}
+        </span>
+        {isMarketplace ? (
+          <>
+            <span className="text-slate-500">{`(+) Taxa canal (${formatDecimalPlaces(
+              channelTaxPerc
+            )}%)`}</span>
+            <span className="text-right font-mono">
+              R$ {formatDecimalPlaces(taxaCanal)}
+            </span>
+          </>
+        ) : null}
+        <span className="inline-flex items-center leading-tight font-medium text-slate-700">
+          Valor reservado para custos
+          <OperationalCostHelpDialog />
+        </span>
+        <span className="inline-flex items-center justify-end font-mono font-semibold text-slate-900">
+          R$ {formatDecimalPlaces(operationalCostAmount)}
+        </span>
+      </div>
+
+      {showMissingSheetWarning && !hasActiveSheet ? (
+        <div className="mb-2 rounded-md border border-amber-200 bg-amber-50 px-2 py-1.5 text-[11px] text-amber-800">
+          Sem ficha técnica ativa vinculada para esta variação.
+        </div>
+      ) : null}
+    </>
   );
 }
 
@@ -213,34 +522,32 @@ export function NativeItemSellingPriceCard(props: {
   const actualPrice = Number(props.currentRow?.priceAmount || 0);
   const previousPrice = Number(props.currentRow?.previousPriceAmount || 0);
   const breakdown = props.computedSellingPriceBreakdown;
-  const custoFT = Number(breakdown.custoFichaTecnica || 0);
-  const custoDesperdicio = Number(breakdown.wasteCost || 0);
-  const custoMassa = Number(breakdown.doughCostAmount || 0);
-  const custoEmbalagem = Number(breakdown.packagingCostAmount || 0);
-  const breakEvenComposition = calculateBreakEvenComposition({ breakdown });
-  const custoTotal = breakEvenComposition.baseCostAmount;
-  const dnaPerc = Number(breakdown.dnaPercentage || 0);
-  const dnaValor = (actualPrice * dnaPerc) / 100;
-  const custoComDna = custoTotal + dnaValor;
-  const channelTaxPerc = Number(breakdown.channel?.taxPerc || 0);
-  const isMarketplace = Boolean(breakdown.channel?.isMarketplace);
-  const taxaCanal = isMarketplace ? (actualPrice * channelTaxPerc) / 100 : 0;
-  const lucroValor = actualPrice - custoComDna - taxaCanal;
-  const lucroPerc = actualPrice > 0 ? (lucroValor / actualPrice) * 100 : 0;
+  const cardProfitPerc = calculateSellingPriceProfit({
+    priceAmount: actualPrice,
+    breakdown,
+  }).profitPerc;
   const recommendedPrice = Number(
     breakdown.minimumPrice?.priceAmount?.withProfit || 0
   );
-  const breakEvenPrice = Number(
-    breakdown.minimumPrice?.priceAmount?.breakEven || 0
-  );
-  const dnaBreakEvenValue = breakEvenComposition.dnaAmount;
-  const custoComDnaBreakEven = breakEvenComposition.totalAmount;
-  const targetMarginPerc = Number(breakdown.channel?.targetMarginPerc || 0);
-  const hasActiveSheet = custoFT > 0 || Boolean(props.activeSheetName);
   const inputName = props.priceInputName || "priceAmount";
   const showSingleSubmitButton = props.showSingleSubmitButton ?? true;
   const showPublishedToggle = props.showPublishedToggle ?? true;
   const recommendedPriceMode = props.recommendedPriceMode || "submit";
+  const recommendedPriceControl =
+    recommendedPriceMode === "submit" ? (
+      <button
+        type="submit"
+        name="_intent"
+        value="apply-recommended"
+        className="rounded bg-slate-100 px-2 py-1 font-mono text-slate-900 transition hover:bg-slate-200"
+      >
+        R$ {formatDecimalPlaces(recommendedPrice)}
+      </button>
+    ) : (
+      <span className="rounded bg-slate-100 px-2 py-1 font-mono text-slate-900">
+        R$ {formatDecimalPlaces(recommendedPrice)}
+      </span>
+    );
 
   const content = (
     <div className="space-y-2">
@@ -271,21 +578,31 @@ export function NativeItemSellingPriceCard(props: {
         </>
       ) : null}
 
-      <div className="grid grid-cols-[1fr_auto] gap-2">
-        <MoneyInput
-          name={inputName}
-          form={props.formId}
-          defaultValue={actualPrice}
-          className="h-10 w-full font-mono"
-        />
-        {showSingleSubmitButton ? (
-          <button
-            type="submit"
-            className="h-10 rounded border border-slate-200 px-3 text-[11px] font-semibold uppercase tracking-wide text-slate-800 transition hover:bg-slate-50"
-          >
-            Salvar
-          </button>
-        ) : null}
+      <div className="grid grid-cols-[1fr_auto] items-start gap-2">
+        <div className="flex flex-col justify-center">
+          <span className="text-[9px] uppercase tracking-wide text-slate-400">
+            PV anterior
+          </span>
+          <span className="font-mono text-xs text-slate-600">
+            R$ {formatDecimalPlaces(previousPrice)}
+          </span>
+        </div>
+        <div className="flex items-center justify-end gap-1">
+          <MoneyInput
+            name={inputName}
+            form={props.formId}
+            defaultValue={actualPrice}
+            className="h-8 w-28 font-mono text-sm"
+          />
+          {showSingleSubmitButton ? (
+            <button
+              type="submit"
+              className="h-8 rounded border border-slate-200 px-2 text-[10px] font-semibold uppercase tracking-wide text-slate-700 transition hover:bg-slate-50"
+            >
+              Salvar
+            </button>
+          ) : null}
+        </div>
       </div>
 
       {showPublishedToggle ? (
@@ -299,177 +616,26 @@ export function NativeItemSellingPriceCard(props: {
         </label>
       ) : null}
 
-      {lucroPerc < 0 ? (
-        <div className="rounded-md bg-red-600 px-2 py-1.5 text-[11px] font-semibold text-white">
-          Lucro negativo:{" "}
-          <span className="font-mono">
-            {formatDecimalPlaces(lucroPerc)}% | R${" "}
-            {formatDecimalPlaces(lucroValor)}
-          </span>
-        </div>
-      ) : (
-        <div
-          className={`text-[11px] ${
-            lucroPerc < targetMarginPerc ? "text-orange-400" : "text-slate-500"
-          }`}
-        >
-          Lucro atual:{" "}
-          <span className="font-mono">
-            {formatDecimalPlaces(lucroPerc)}% | R${" "}
-            {formatDecimalPlaces(lucroValor)}
-          </span>
-        </div>
-      )}
-
       <Separator />
 
-      <div className="flex items-center justify-between text-[11px]">
-        <DnaHelpLink
-          label={`PV com lucro ${targetMarginPerc}%`}
-          url={props.profitPriceHelpUrl}
-          className="text-slate-500"
-        />
-        <div className="flex items-center gap-1">
-          <ProfitPriceCalculatorDialog
-            baseCostAmount={custoTotal}
-            dnaPerc={dnaPerc}
-            channelTaxPerc={channelTaxPerc}
-            isMarketplace={isMarketplace}
-          />
-          {recommendedPriceMode === "submit" ? (
-            <button
-              type="submit"
-              name="_intent"
-              value="apply-recommended"
-              className="rounded bg-slate-100 px-2 py-1 font-mono text-slate-900 transition hover:bg-slate-200"
-            >
-              R$ {formatDecimalPlaces(recommendedPrice)}
-            </button>
-          ) : (
-            <span className="rounded bg-slate-100 px-2 py-1 font-mono text-slate-900">
-              R$ {formatDecimalPlaces(recommendedPrice)}
-            </span>
-          )}
-        </div>
-      </div>
+      <NativeSellingPriceSchema
+        priceAmount={actualPrice}
+        computedSellingPriceBreakdown={breakdown}
+        activeSheetId={props.activeSheetId}
+        activeSheetName={props.activeSheetName}
+        dnaHelpUrl={props.dnaHelpUrl}
+        profitPriceHelpUrl={props.profitPriceHelpUrl}
+        showBreakEvenLine
+        recommendedPriceControl={recommendedPriceControl}
+      />
 
-      {!hasActiveSheet ? (
-        <div className="mb-2 rounded-md border border-amber-200 bg-amber-50 px-2 py-1.5 text-[11px] text-amber-800">
-          Sem ficha técnica ativa vinculada para esta variação.
-        </div>
-      ) : null}
-      <Separator />
-
-      <div className="flex items-center justify-between text-[11px]">
-        <span className="text-slate-500">Mínimo (Break-even):</span>
-        <span className="font-mono">
-          R$ {formatDecimalPlaces(breakEvenPrice)}
-        </span>
-      </div>
-
-      <Separator />
-
-      <Dialog>
-        <div className="flex items-center justify-between text-[11px]">
-          <DialogTrigger asChild>
-            <button type="button" className="text-slate-500 underline">
-              Custo base (detalhes)
-            </button>
-          </DialogTrigger>
-          <span className="font-mono">
-            R$ {formatDecimalPlaces(custoTotal)}
-          </span>
-        </div>
-
-        <DialogContent className="sm:max-w-[420px]">
-          <div className="flex flex-col gap-2">
-            <h4 className="text-sm font-semibold">Detalhamento de custos</h4>
-            {props.activeSheetName ? (
-              <div className="text-[11px] text-slate-500">
-                Ficha ativa: {props.activeSheetName}
-              </div>
-            ) : null}
-
-            <div className="grid grid-cols-2 gap-y-1 text-[12px]">
-              <span>
-                {props.activeSheetId ? (
-                  <Link
-                    to={`/admin/item-cost-sheets/${props.activeSheetId}`}
-                    className="underline hover:text-slate-900"
-                  >
-                    Ficha Técnica
-                  </Link>
-                ) : (
-                  "Ficha Técnica"
-                )}
-              </span>
-              <span className="font-mono text-right">
-                {formatDecimalPlaces(custoFT)}
-              </span>
-              {detailRow("Desperdício", custoDesperdicio)}
-              {detailRow("Custo Massa", custoMassa)}
-              {detailRow("Custo Embalagem", custoEmbalagem)}
-            </div>
-
-            <Separator className="my-2" />
-
-            <div className="grid grid-cols-2 gap-y-1 text-[12px]">
-              {detailRow("Custo total", custoTotal)}
-            </div>
-
-            <Separator className="my-2" />
-
-            <div className="grid grid-cols-2 gap-y-1 text-[12px]">
-              <DnaHelpLink
-                label={`DNA (${formatDecimalPlaces(dnaPerc)}%)`}
-                url={props.dnaHelpUrl}
-              />
-              <span className="font-mono text-right">
-                {formatDecimalPlaces(dnaBreakEvenValue)}
-              </span>
-              {detailRow("Custo base + DNA", custoComDnaBreakEven)}
-            </div>
-
-            <Separator className="my-2" />
-
-            <div className="grid grid-cols-2 gap-y-1 text-[12px]">
-              <span className="font-semibold">Preço de venda</span>
-              <span />
-              {detailRow(
-                `Com lucro recomendado (${targetMarginPerc}%)`,
-                recommendedPrice
-              )}
-              {detailRow("Break-even (lucro R$ 0)", breakEvenPrice)}
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      <div className="grid grid-cols-2 gap-y-1 text-[11px]">
-        <DnaHelpLink
-          label={`DNA (${formatDecimalPlaces(dnaPerc)}%)`}
-          url={props.dnaHelpUrl}
-          className="text-slate-500"
-        />
-        <span className="text-right font-mono">
-          R$ {formatDecimalPlaces(dnaBreakEvenValue)}
-        </span>
-        <span className="text-slate-500">Custo base + DNA</span>
-        <span className="text-right font-mono">
-          R$ {formatDecimalPlaces(custoComDnaBreakEven)}
-        </span>
-        <span className="text-slate-500">Anterior</span>
-        <span className="text-right font-mono">
-          R$ {formatDecimalPlaces(previousPrice)}
-        </span>
-      </div>
     </div>
   );
 
   return (
     <div
       className={`rounded-lg border p-3 ${
-        lucroPerc < 0 ? "border-red-400 bg-red-50" : "border-slate-200 bg-white"
+        cardProfitPerc < 0 ? "border-red-400 bg-red-50" : "border-slate-200 bg-white"
       }`}
     >
       <div className="mb-2 flex items-center justify-between gap-2">

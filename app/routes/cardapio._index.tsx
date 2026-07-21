@@ -30,6 +30,7 @@ import CardapioOrderCtaButton from "~/domain/cardapio/components/cardapio-order-
 import CardapioDesktopSidebarHeader from "~/domain/cardapio/components/cardapio-desktop-sidebar-header";
 import { trackCardapioFacebookPixelTrigger } from "~/domain/cardapio/facebook-pixel.client";
 import { trackCardapioFeatured } from "~/domain/cardapio/tracking/cardapio-tracking.client";
+import { cn } from "~/lib/utils";
 import {
   Carousel,
   CarouselContent,
@@ -43,6 +44,7 @@ import {
   DialogClose,
   DialogContent,
   DialogTitle,
+  DialogTrigger,
 } from "~/components/ui/dialog";
 import {
   ArrowLeft,
@@ -143,7 +145,9 @@ export default function CardapioWebIndex() {
     menuItemInterestEnabled,
     likesEnabled,
     filterViewMode,
-    worldCupBannerEnabled,
+    bannerEnabled = true,
+    bannerText = "Confira nossas novidades",
+    bannerUrl = "https://www.amodomio.com.br",
     featuredSections = [],
   } = useLoaderData<typeof loader>();
   const [showLikeCelebration, setShowLikeCelebration] = useState(false);
@@ -181,7 +185,12 @@ export default function CardapioWebIndex() {
 
   return (
     <section
-      className="mb-20 flex flex-col pt-[calc(7rem+env(safe-area-inset-top))] md:fixed md:inset-0 md:z-20 md:mb-0 md:block md:overflow-y-auto md:bg-white md:pt-0"
+      className={cn(
+        "mb-20 flex flex-col md:fixed md:inset-0 md:z-20 md:mb-0 md:block md:overflow-y-auto md:bg-white md:pt-0",
+        bannerEnabled
+          ? "pt-[calc(7rem+env(safe-area-inset-top))]"
+          : "pt-[calc(4.5rem+env(safe-area-inset-top))]"
+      )}
       data-element="cardapio-index"
     >
       <LikeCelebrationOverlay
@@ -235,7 +244,9 @@ export default function CardapioWebIndex() {
                     likesEnabled={likesEnabled}
                     desktopFeedLayout
                     filterViewMode={filterViewMode}
-                    worldCupBannerEnabled={worldCupBannerEnabled}
+                    bannerEnabled={bannerEnabled}
+                    bannerText={bannerText}
+                    bannerUrl={bannerUrl}
                   />
                 </main>
 
@@ -671,38 +682,75 @@ function PromotionLinkSticker({
   imageIndex: number;
   placement: "card" | "mobile_modal" | "desktop_modal";
 }) {
-  if (!image.linkUrl || !image.linkText) return null;
+  if (!image.linkText) return null;
 
   const isBottom = image.linkPosition === "bottom";
   const opensNewTab = image.linkNewTab !== false;
+  const chipClassName = `absolute left-1/2 z-20 inline-flex max-w-[88%] -translate-x-1/2 items-center gap-2 rounded-2xl px-4 py-2.5 font-neue text-base leading-none shadow-xl transition hover:scale-[1.02] focus:outline-none focus:ring-2 focus:ring-black/30 md:text-sm ${
+    isBottom
+      ? placement === "mobile_modal"
+        ? "bottom-16"
+        : "bottom-5 md:bottom-6"
+      : "top-5 md:top-6"
+  }`;
+  const chipStyle = {
+    backgroundColor: image.linkBackgroundColor || "#ffffff",
+    color: image.linkTextColor || "#111111",
+  };
+
+  function trackClick() {
+    trackCardapioFeatured({
+      action: "cta_click",
+      sectionKey,
+      imageIndex,
+      placement:
+        placement === "card" ? getCardapioFeaturedCardPlacement() : placement,
+    });
+  }
+
+  if (image.chipAction === "modal") {
+    if (!image.chipModalBody) return null;
+
+    return (
+      <Dialog>
+        <DialogTrigger asChild>
+          <button
+            type="button"
+            className={chipClassName}
+            style={chipStyle}
+            onClick={(event) => {
+              event.stopPropagation();
+              trackClick();
+            }}
+          >
+            <LinkIcon className="h-5 w-5 shrink-0 md:h-4 md:w-4" />
+            <span className="min-w-0 truncate">{image.linkText}</span>
+          </button>
+        </DialogTrigger>
+        <DialogContent className="max-h-[82dvh] w-[calc(100vw-2rem)] overflow-y-auto rounded-2xl bg-white font-neue sm:max-w-lg">
+          <DialogTitle className="pr-8 font-lora text-xl font-bold text-zinc-950">
+            {image.chipModalTitle || image.linkText}
+          </DialogTitle>
+          <div className="whitespace-pre-line text-sm leading-relaxed text-zinc-700">
+            {image.chipModalBody}
+          </div>
+        </DialogContent>
+      </Dialog>
+    );
+  }
+
+  if (!image.linkUrl) return null;
 
   return (
     <a
       href={image.linkUrl}
       target={opensNewTab ? "_blank" : "_self"}
       rel={opensNewTab ? "noreferrer" : undefined}
-      className={`absolute left-1/2 z-20 inline-flex max-w-[88%] -translate-x-1/2 items-center gap-2 rounded-2xl px-4 py-2.5 font-neue text-base leading-none shadow-xl transition hover:scale-[1.02] focus:outline-none focus:ring-2 focus:ring-black/30 md:text-sm ${
-        isBottom
-          ? placement === "mobile_modal"
-            ? "bottom-16"
-            : "bottom-5 md:bottom-6"
-          : "top-5 md:top-6"
-      }`}
-      style={{
-        backgroundColor: image.linkBackgroundColor || "#ffffff",
-        color: image.linkTextColor || "#111111",
-      }}
+      className={chipClassName}
+      style={chipStyle}
       onClick={(event) => {
         event.stopPropagation();
-        trackCardapioFeatured({
-          action: "cta_click",
-          sectionKey,
-          imageIndex,
-          placement:
-            placement === "card"
-              ? getCardapioFeaturedCardPlacement()
-              : placement,
-        });
+        trackClick();
       }}
     >
       <LinkIcon className="h-5 w-5 shrink-0 md:h-4 md:w-4" />

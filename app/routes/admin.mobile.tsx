@@ -1,5 +1,6 @@
 import { Link, Outlet, useLocation } from "@remix-run/react";
 import {
+  BookOpen,
   CalendarDays,
   Camera,
   Images,
@@ -44,6 +45,7 @@ export default function AdminMobileLayout() {
   const isPurchaseOrderByProducts = pathname.startsWith(
     "/admin/mobile/pedido-compra/por-produtos"
   );
+  const isRecipes = pathname.startsWith("/admin/mobile/receitas");
   const pageTitle = isEstoque
     ? "Estoque de massa"
     : isProgramacao
@@ -68,6 +70,8 @@ export default function AdminMobileLayout() {
     ? "Lista de compras"
     : isPurchaseOrder
     ? "Pedido de compra"
+    : isRecipes
+    ? "Receitas"
     : "Atalhos";
   const backUrl =
     isPurchaseOrder && pathname !== "/admin/mobile/pedido-compra"
@@ -112,6 +116,23 @@ export default function AdminMobileLayout() {
 
         {isHome ? (
           <main className="grid grid-cols-2 gap-3">
+            <Link
+              to="/admin/mobile/receitas"
+              className="grid grid-cols-[auto_1fr] items-center gap-x-2 gap-y-1.5 rounded-xl border border-slate-200 bg-white p-3 shadow-sm"
+            >
+              <span className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-violet-100 text-violet-700">
+                <BookOpen className="h-5 w-5" />
+              </span>
+              <span className="contents">
+                <span className="text-xs font-semibold leading-tight text-slate-900">
+                  Receitas
+                </span>
+                <span className="col-span-2 text-[11px] leading-snug text-slate-600">
+                  Consultar ingredientes e preparo
+                </span>
+              </span>
+            </Link>
+
             <Link
               to="/admin/mobile/estoque-massa"
               className="grid grid-cols-[auto_1fr] items-center gap-x-2 gap-y-1.5 rounded-xl border border-slate-200 bg-white p-3 shadow-sm"

@@ -1,6 +1,11 @@
 import { json, type ActionFunctionArgs } from "@remix-run/node";
 import { authenticator } from "~/domain/auth/google.server";
 import {
+  formatUnsupportedMediaUploadMessage,
+  getMediaUploadFailureMessage,
+  getMediaUploadPartialFailureMessage,
+  getMediaUploadFailureStatus,
+  getUnsupportedMediaUploadMessages,
   isSafePath,
   normalizePath,
   type LibraryPayload,
@@ -81,6 +86,18 @@ export async function action({ request }: ActionFunctionArgs) {
       );
     }
 
+    const unsupportedFiles = getUnsupportedMediaUploadMessages(files, kind);
+    if (unsupportedFiles.length > 0) {
+      return json<UploadActionData>(
+        {
+          ok: false,
+          message: formatUnsupportedMediaUploadMessage(unsupportedFiles),
+          debug: JSON.stringify({ unsupportedFiles }, null, 2),
+        },
+        { status: 415 }
+      );
+    }
+
     const mediaService = await import("~/domain/media/media.service.server");
     const { successCount, failedFiles, failureDetails, payload } =
       await mediaService.uploadFilesToExternalService({
@@ -93,20 +110,24 @@ export async function action({ request }: ActionFunctionArgs) {
       return json<UploadActionData>(
         {
           ok: false,
-          message: "Falha no upload em lote. Nenhum arquivo foi enviado.",
+          message: getMediaUploadFailureMessage({
+            failedFiles,
+            failureDetails,
+          }),
           debug: JSON.stringify({ failedFiles, failureDetails }, null, 2),
         },
-        { status: 502 }
+        { status: getMediaUploadFailureStatus({ failureDetails }) }
       );
     }
 
-    const failureMessage = failedFiles.length
-      ? ` Falharam: ${failedFiles.join(", ")}.`
-      : "";
+    const failureMessage = getMediaUploadPartialFailureMessage({
+      failedFiles,
+      failureDetails,
+    });
 
     return json<UploadActionData>({
       ok: true,
-      message: `Upload em lote concluído. Sucesso: ${successCount}/${files.length}.${failureMessage}`,
+      message: `Upload concluído. Enviados: ${successCount}/${files.length}.${failureMessage}`,
       payload,
     });
   } catch (error) {

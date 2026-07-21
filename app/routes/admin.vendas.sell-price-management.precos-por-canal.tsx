@@ -35,7 +35,7 @@ import prismaClient from "~/lib/prisma/client.server";
 import { badRequest, ok, serverError } from "~/utils/http-response.server";
 import formatDecimalPlaces from "~/utils/format-decimal-places";
 import type { ComputedSellingPriceBreakdown } from "~/domain/cardapio/menu-item-selling-price-utility.entity";
-import { DnaHelpLink } from "~/components/admin/dna-help-link";
+import { NativeSellingPriceSchema } from "~/components/admin/native-item-selling-price-card";
 
 export const meta: MetaFunction = () => [
   { title: "Vendas | Preços por canal" },
@@ -515,6 +515,7 @@ function ChannelPriceCell({
   itemId,
   itemVariationId,
   channelData,
+  activeSheetId,
   userEmail,
   isTargetChannel = false,
   dnaHelpUrl,
@@ -523,6 +524,7 @@ function ChannelPriceCell({
   itemId: string;
   itemVariationId: string;
   channelData: ChannelData;
+  activeSheetId: string | null;
   userEmail: string | null;
   isTargetChannel?: boolean;
   dnaHelpUrl?: string | null;
@@ -543,20 +545,21 @@ function ChannelPriceCell({
     priceAmount,
     breakdown: channelData.computedBreakdown,
   });
-  const lucroValor = profitSummary.profitAmount;
   const lucroPerc = profitSummary.profitPerc;
-  const targetMarginPerc = Number(channelData.computedBreakdown.channel?.targetMarginPerc || 0);
   const recommendedPrice = Number(
     channelData.computedBreakdown.minimumPrice?.priceAmount?.withProfit || 0
   );
-
-  const dnaPerc = profitSummary.dnaPerc;
-  const dnaValor = profitSummary.dnaAmount;
-  const custoComDna = profitSummary.baseCostAmount + profitSummary.dnaAmount;
-  const isMarketplace = Boolean(channelData.computedBreakdown.channel?.isMarketplace);
-  const taxPerc = profitSummary.channelTaxPerc;
-  const taxaCanal = profitSummary.channelTaxAmount;
   const previousPrice = Number(channelData.currentRow?.previousPriceAmount || 0);
+  const recommendedPriceControl = (
+    <button
+      type="submit"
+      name="_intent"
+      value="apply-recommended"
+      className="rounded bg-slate-100 px-2 py-1 font-mono text-slate-900 transition hover:bg-slate-200"
+    >
+      R$ {formatDecimalPlaces(recommendedPrice)}
+    </button>
+  );
 
   return (
     <td
@@ -604,63 +607,16 @@ function ChannelPriceCell({
 
         <Separator />
 
-        {lucroPerc < 0 ? (
-          <div className="rounded-md bg-red-600 px-2 py-1 text-[11px] font-semibold text-white">
-            Lucro negativo: <span className="font-mono">{formatDecimalPlaces(lucroPerc)}% | R$ {formatDecimalPlaces(lucroValor)}</span>
-          </div>
-        ) : lucroPerc <= 5 ? (
-          <div className="rounded-md bg-orange-500 px-2 py-1 text-[11px] font-semibold text-white">
-            Lucro baixo: <span className="font-mono">{formatDecimalPlaces(lucroPerc)}% | R$ {formatDecimalPlaces(lucroValor)}</span>
-          </div>
-        ) : (
-          <div className={`text-[11px] ${lucroPerc < targetMarginPerc ? "text-orange-400" : "text-slate-500"}`}>
-            Lucro atual: <span className="font-mono">{formatDecimalPlaces(lucroPerc)}% | R$ {formatDecimalPlaces(lucroValor)}</span>
-          </div>
-        )}
-
-        <Separator />
-
-        <div className="flex items-center justify-between text-[11px]">
-          <DnaHelpLink
-            label={`PV com lucro ${targetMarginPerc}%`}
-            url={profitPriceHelpUrl}
-            className="text-slate-500"
-          />
-          <button
-            type="submit"
-            name="_intent"
-            value="apply-recommended"
-            className="rounded bg-slate-100 px-2 py-1 font-mono text-slate-900 transition hover:bg-slate-200"
-          >
-            R$ {formatDecimalPlaces(recommendedPrice)}
-          </button>
-        </div>
-
-        <Separator />
-
-        <div className="grid grid-cols-2 gap-y-1 text-[11px]">
-          <DnaHelpLink
-            label={`DNA (${formatDecimalPlaces(dnaPerc)}%)`}
-            url={dnaHelpUrl}
-            className="text-slate-500"
-          />
-          <span className="text-right font-mono">R$ {formatDecimalPlaces(dnaValor)}</span>
-          <span className="text-slate-500">Custo base + DNA</span>
-          <span className="text-right font-mono">R$ {formatDecimalPlaces(custoComDna)}</span>
-          {isMarketplace && (
-            <>
-              <span className="text-slate-500">{`Taxa canal (${formatDecimalPlaces(taxPerc)}%)`}</span>
-              <span className="text-right font-mono">R$ {formatDecimalPlaces(taxaCanal)}</span>
-            </>
-          )}
-        </div>
-
-        <Separator />
-
-        <div className="flex items-center justify-between text-[11px]">
-          <span className="font-medium text-slate-700">Custo operacional</span>
-          <span className="font-mono font-semibold text-slate-900">R$ {formatDecimalPlaces(custoComDna + taxaCanal)}</span>
-        </div>
+        <NativeSellingPriceSchema
+          priceAmount={priceAmount}
+          computedSellingPriceBreakdown={channelData.computedBreakdown}
+          activeSheetId={activeSheetId}
+          dnaHelpUrl={dnaHelpUrl}
+          profitPriceHelpUrl={profitPriceHelpUrl}
+          showBreakEvenLine={false}
+          showMissingSheetWarning={false}
+          recommendedPriceControl={recommendedPriceControl}
+        />
 
       </Form>
     </td>
@@ -906,9 +862,6 @@ export default function AdminGerenciamentoCardapioSellPriceManagementAllChannels
                   Variação
                 </th>
                 <th className="px-3 py-2 text-right text-[11px] font-semibold uppercase tracking-wide text-slate-500 border-r border-slate-200 whitespace-nowrap">
-                  Custo base
-                </th>
-                <th className="px-3 py-2 text-right text-[11px] font-semibold uppercase tracking-wide text-slate-500 border-r border-slate-200 whitespace-nowrap">
                   Break-even
                 </th>
                 {channels.map((channel) => (
@@ -931,7 +884,7 @@ export default function AdminGerenciamentoCardapioSellPriceManagementAllChannels
                 <React.Fragment key={row.id}>
                   <tr className="border-b border-slate-200 bg-slate-100">
                     <td
-                      colSpan={3 + channels.length}
+                      colSpan={2 + channels.length}
                       className="px-3 py-1.5"
                     >
                       <div className="flex items-center gap-2">
@@ -957,9 +910,6 @@ export default function AdminGerenciamentoCardapioSellPriceManagementAllChannels
                     </td>
                   </tr>
                   {row.variations.map((variation) => {
-                  const custoBase =
-                    Number(variation.channelData[0]?.computedBreakdown.custoFichaTecnica || 0) +
-                    Number(variation.channelData[0]?.computedBreakdown.wasteCost || 0);
                   const breakEven = Number(
                     variation.channelData[0]?.computedBreakdown.minimumPrice?.priceAmount
                       ?.breakEven || 0
@@ -1007,10 +957,6 @@ export default function AdminGerenciamentoCardapioSellPriceManagementAllChannels
                       </td>
 
                       <td className="px-3 py-2 text-right border-r border-slate-200 text-xs font-mono text-slate-700 align-top whitespace-nowrap">
-                        R$ {formatDecimalPlaces(custoBase)}
-                      </td>
-
-                      <td className="px-3 py-2 text-right border-r border-slate-200 text-xs font-mono text-slate-700 align-top whitespace-nowrap">
                         R$ {formatDecimalPlaces(breakEven)}
                       </td>
 
@@ -1020,6 +966,7 @@ export default function AdminGerenciamentoCardapioSellPriceManagementAllChannels
                           itemId={row.id}
                           itemVariationId={variation.id}
                           channelData={cd}
+                          activeSheetId={variation.activeSheetId}
                           userEmail={payload.userEmail || null}
                           dnaHelpUrl={payload.dnaHelpUrl || null}
                           profitPriceHelpUrl={payload.profitPriceHelpUrl || null}

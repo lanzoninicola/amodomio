@@ -1,6 +1,31 @@
 import { describe, expect, it } from "vitest";
 
-import { buildPublicPriceVariations } from "./cardapio-items-source.server";
+import {
+  buildNativeCardapioItemWhere,
+  buildPublicPriceVariations,
+} from "./cardapio-items-source.server";
+
+describe("buildNativeCardapioItemWhere", () => {
+  it("exige que a linha de produto esteja visivel no canal consultado", () => {
+    expect(
+      buildNativeCardapioItemWhere({ sellingChannelKey: "cardapio" })
+    ).toMatchObject({
+      ItemSellingInfo: {
+        ItemGroup: {
+          ProductLine: {
+            active: true,
+            ProductLineSellingChannel: {
+              some: {
+                visible: true,
+                ItemSellingChannel: { key: "cardapio" },
+              },
+            },
+          },
+        },
+      },
+    });
+  });
+});
 
 describe("buildPublicPriceVariations", () => {
   it("mapeia o cardapio publico pelas variacoes nativas do item", () => {

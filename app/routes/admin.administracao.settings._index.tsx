@@ -78,8 +78,12 @@ import { ensureAdminNavigationMenuLayoutSetting } from "~/domain/website-navigat
 import {
   CARDAPIO_FILTER_VIEW_SETTING_NAME,
   DEFAULT_CARDAPIO_FILTER_VIEW_MODE,
-  WORLD_CUP_BANNER_SETTING_NAME,
-  DEFAULT_WORLD_CUP_BANNER_ENABLED,
+  CARDAPIO_BANNER_ENABLED_SETTING_NAME,
+  DEFAULT_CARDAPIO_BANNER_ENABLED,
+  CARDAPIO_BANNER_TEXT_SETTING_NAME,
+  DEFAULT_CARDAPIO_BANNER_TEXT,
+  CARDAPIO_BANNER_URL_SETTING_NAME,
+  DEFAULT_CARDAPIO_BANNER_URL,
 } from "~/domain/cardapio/cardapio-index.server";
 import {
   CARDAPIO_CONTINGENCY_SETTINGS_CONTEXT,
@@ -144,7 +148,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
     stockPhotoChatGptReturnUrlSetting,
     costReviewWhatsappEnabledSetting,
     costReviewWhatsappPhoneSetting,
-    worldCupBannerSetting,
+    bannerEnabledSetting,
+    bannerTextSetting,
+    bannerUrlSetting,
   ] = await Promise.all([
     prismaClient.setting.findFirst({
       where: { context: ENGAGEMENT_SETTINGS_CONTEXT, name: LIKE_SETTING_NAME },
@@ -232,7 +238,18 @@ export async function loader({ request }: LoaderFunctionArgs) {
       orderBy: [{ createdAt: "desc" }],
     }),
     prismaClient.setting.findFirst({
-      where: { context: "cardapio", name: WORLD_CUP_BANNER_SETTING_NAME },
+      where: {
+        context: "cardapio",
+        name: CARDAPIO_BANNER_ENABLED_SETTING_NAME,
+      },
+      orderBy: [{ createdAt: "desc" }],
+    }),
+    prismaClient.setting.findFirst({
+      where: { context: "cardapio", name: CARDAPIO_BANNER_TEXT_SETTING_NAME },
+      orderBy: [{ createdAt: "desc" }],
+    }),
+    prismaClient.setting.findFirst({
+      where: { context: "cardapio", name: CARDAPIO_BANNER_URL_SETTING_NAME },
       orderBy: [{ createdAt: "desc" }],
     }),
   ]);
@@ -393,13 +410,37 @@ export async function loader({ request }: LoaderFunctionArgs) {
     });
   }
 
-  if (!worldCupBannerSetting) {
+  if (!bannerEnabledSetting) {
     await prismaClient.setting.create({
       data: {
         context: "cardapio",
-        name: WORLD_CUP_BANNER_SETTING_NAME,
+        name: CARDAPIO_BANNER_ENABLED_SETTING_NAME,
         type: "boolean",
-        value: String(DEFAULT_WORLD_CUP_BANNER_ENABLED),
+        value: String(DEFAULT_CARDAPIO_BANNER_ENABLED),
+        createdAt: new Date(),
+      },
+    });
+  }
+
+  if (!bannerTextSetting) {
+    await prismaClient.setting.create({
+      data: {
+        context: "cardapio",
+        name: CARDAPIO_BANNER_TEXT_SETTING_NAME,
+        type: "string",
+        value: DEFAULT_CARDAPIO_BANNER_TEXT,
+        createdAt: new Date(),
+      },
+    });
+  }
+
+  if (!bannerUrlSetting) {
+    await prismaClient.setting.create({
+      data: {
+        context: "cardapio",
+        name: CARDAPIO_BANNER_URL_SETTING_NAME,
+        type: "string",
+        value: DEFAULT_CARDAPIO_BANNER_URL,
         createdAt: new Date(),
       },
     });

@@ -313,8 +313,19 @@ function NoveltiesHeroSection({ items }: { items: CardapioIndexItem[] }) {
                 <h3 className="font-lora text-2xl font-bold text-zinc-950 transition-opacity group-hover:opacity-60">
                     {activeItem.name}
                 </h3>
+                {activeItem.baseIngredients ? (
+                    <p className="mt-1 font-neue text-xs text-zinc-500">
+                        <span className="font-semibold">Base</span> · {activeItem.baseIngredients}
+                    </p>
+                ) : null}
                 <p className="mt-1 font-neue text-sm text-zinc-500">
-                    {capitalize(activeItem.ingredients || "Novo sabor no cardápio.")}
+                    {activeItem.ingredients ? (
+                        <>
+                            <span className="font-semibold">Recheio</span> · {capitalize(activeItem.ingredients)}
+                        </>
+                    ) : (
+                        "Novo sabor no cardápio."
+                    )}
                 </p>
                 {activePrice ? (
                     <p className="mt-2 font-neue text-sm text-zinc-400">
@@ -654,9 +665,16 @@ function SuggestionMiniCarousel({ items }: { items: CardapioIndexItem[] }) {
                 <h3 className="font-lora text-lg font-bold text-zinc-950 transition-opacity group-hover:opacity-60">
                     {activeItem.name}
                 </h3>
-                <p className="mt-1 font-neue text-sm text-zinc-500">
-                    {capitalize(activeItem.ingredients || "")}
-                </p>
+                {activeItem.baseIngredients ? (
+                    <p className="mt-1 font-neue text-xs text-zinc-500">
+                        <span className="font-semibold">Base</span> · {activeItem.baseIngredients}
+                    </p>
+                ) : null}
+                {activeItem.ingredients ? (
+                    <p className="mt-1 font-neue text-sm text-zinc-500">
+                        <span className="font-semibold">Recheio</span> · {capitalize(activeItem.ingredients)}
+                    </p>
+                ) : null}
                 {activePrice ? (
                     <p className="mt-1 font-neue text-xs text-zinc-400">
                         {formatMoneyString(activePrice.priceAmount)}

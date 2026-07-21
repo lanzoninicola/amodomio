@@ -2,11 +2,42 @@ import Redis from "ioredis";
 
 declare global {
   var __redisClient__: Redis | undefined;
+  var __redisUnavailableUntil__: number | undefined;
+}
+
+const REDIS_COMMAND_TIMEOUT_MS = Number(
+  process.env.REDIS_COMMAND_TIMEOUT_MS ?? 250
+);
+const REDIS_UNAVAILABLE_COOLDOWN_MS = Number(
+  process.env.REDIS_UNAVAILABLE_COOLDOWN_MS ?? 30_000
+);
+
+function markRedisUnavailable(error: unknown) {
+  const cooldownMs = Number.isFinite(REDIS_UNAVAILABLE_COOLDOWN_MS)
+    ? Math.max(1_000, REDIS_UNAVAILABLE_COOLDOWN_MS)
+    : 30_000;
+  globalThis.__redisUnavailableUntil__ = Date.now() + cooldownMs;
+
+  if (globalThis.__redisClient__) {
+    globalThis.__redisClient__.disconnect();
+    globalThis.__redisClient__ = undefined;
+  }
+
+  console.error("[redis] unavailable, using source fallback", error);
 }
 
 function getRedisClient() {
   const redisUrl = process.env.REDIS_URL;
   if (!redisUrl) return undefined;
+
+  if (
+    globalThis.__redisUnavailableUntil__ &&
+    globalThis.__redisUnavailableUntil__ > Date.now()
+  ) {
+    return undefined;
+  }
+
+  globalThis.__redisUnavailableUntil__ = undefined;
 
   if (globalThis.__redisClient__?.status === "end") {
     globalThis.__redisClient__ = undefined;
@@ -16,6 +47,9 @@ function getRedisClient() {
     const client = new Redis(redisUrl, {
       maxRetriesPerRequest: 1,
       connectTimeout: 1200,
+      commandTimeout: Number.isFinite(REDIS_COMMAND_TIMEOUT_MS)
+        ? Math.max(50, REDIS_COMMAND_TIMEOUT_MS)
+        : 250,
       keepAlive: 10_000,
       enableAutoPipelining: true,
       retryStrategy(times) {
@@ -25,7 +59,7 @@ function getRedisClient() {
     });
 
     client.on("error", (error) => {
-      console.error("[redis] client error", error);
+      markRedisUnavailable(error);
     });
 
     client.once("end", () => {
@@ -44,12 +78,20 @@ export async function redisGetJson<T>(key: string): Promise<T | undefined> {
   const client = getRedisClient();
   if (!client) return undefined;
 
+  let result: string | null;
   try {
-    const result = await client.get(key);
-    if (!result) return undefined;
+    result = await client.get(key);
+  } catch (error) {
+    markRedisUnavailable({ key, error });
+    return undefined;
+  }
+
+  if (!result) return undefined;
+
+  try {
     return JSON.parse(result) as T;
   } catch (error) {
-    console.error("[redis] GET failed", { key, error });
+    console.error("[redis] invalid JSON payload", { key, error });
     return undefined;
   }
 }
@@ -69,7 +111,7 @@ export async function redisSetJson(
   try {
     await client.set(key, serialized, "EX", ttl);
   } catch (error) {
-    console.error("[redis] SETEX failed", { key, error });
+    markRedisUnavailable({ key, error });
   }
 }
 
@@ -80,7 +122,7 @@ export async function redisDel(key: string) {
   try {
     await client.del(key);
   } catch (error) {
-    console.error("[redis] DEL failed", { key, error });
+    markRedisUnavailable({ key, error });
   }
 }
 
@@ -92,7 +134,7 @@ export async function redisGetString(key: string): Promise<string | undefined> {
     const result = await client.get(key);
     return result ?? undefined;
   } catch (error) {
-    console.error("[redis] GET(string) failed", { key, error });
+    markRedisUnavailable({ key, error });
     return undefined;
   }
 }
@@ -104,7 +146,7 @@ export async function redisSetString(key: string, value: string) {
   try {
     await client.set(key, value);
   } catch (error) {
-    console.error("[redis] SET(string) failed", { key, error });
+    markRedisUnavailable({ key, error });
   }
 }
 
@@ -123,6 +165,6 @@ export async function redisSetStringEx(
   try {
     await client.set(key, value, "EX", ttl);
   } catch (error) {
-    console.error("[redis] SETEX(string) failed", { key, error });
+    markRedisUnavailable({ key, error });
   }
 }

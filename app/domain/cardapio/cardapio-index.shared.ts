@@ -16,7 +16,19 @@ export type CardapioMedia = {
   kind?: string | null;
 };
 
-export function buildImageSrcSet(variants: Record<string, string> | null | undefined): string {
+export type CardapioPublicTag = {
+  id?: string | null;
+  name: string;
+  colorHEX?: string | null;
+  description?: string | null;
+  clickable?: boolean | null;
+};
+
+export type CardapioTagValue = string | CardapioPublicTag;
+
+export function buildImageSrcSet(
+  variants: Record<string, string> | null | undefined
+): string {
   if (!variants) return "";
   return Object.entries(variants)
     .filter(([w, url]) => /^\d+$/.test(w) && Boolean(url))
@@ -30,13 +42,15 @@ export type CardapioIndexItem = {
   slug?: string | null;
   name: string;
   description?: string | null;
+  longDescription?: string | null;
+  baseIngredients?: string | null;
   ingredients?: string | null;
   imagePlaceholderURL?: string | null;
   mediaAssets?: CardapioMedia[] | null;
   publicPriceVariations?: CardapioPriceVariation[] | null;
   tags?: {
-    all?: string[] | null;
-    public?: string[] | null;
+    all?: CardapioTagValue[] | null;
+    public?: CardapioTagValue[] | null;
   } | null;
   likes?: {
     amount?: number | null;
@@ -86,8 +100,22 @@ export function itemHasPublicTag(
 ) {
   const normalized = tagName.trim().toLocaleLowerCase();
   return [...(item.tags?.public || []), ...(item.tags?.all || [])].some(
-    (tag) => tag?.trim().toLocaleLowerCase() === normalized
+    (tag) => getCardapioTagName(tag).toLocaleLowerCase() === normalized
   );
+}
+
+export function getCardapioTagName(tag: CardapioTagValue | null | undefined) {
+  if (!tag) return "";
+  return typeof tag === "string" ? tag.trim() : tag.name?.trim() || "";
+}
+
+export function getCardapioPublicTag(
+  tag: CardapioTagValue | null | undefined
+): CardapioPublicTag | null {
+  if (!tag || typeof tag === "string") return null;
+  const name = tag.name?.trim();
+  if (!name) return null;
+  return { ...tag, name };
 }
 
 export function isGrouped(

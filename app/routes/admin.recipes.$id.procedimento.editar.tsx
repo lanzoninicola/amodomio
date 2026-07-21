@@ -15,9 +15,108 @@ import { Textarea } from "~/components/ui/textarea";
 import type { AdminRecipeOutletContext } from "./admin.recipes.$id";
 export { action } from "./admin.recipes.$id";
 
+function ThermalPhaseForm({
+  recipeId,
+  title,
+  description,
+  action,
+  phase,
+  withSeparator = false,
+}: {
+  recipeId: string;
+  title: string;
+  description: string;
+  action: "recipe-preheating-update" | "recipe-baking-update";
+  phase?: {
+    upperTemperatureCelsius?: number | null;
+    lowerTemperatureCelsius?: number | null;
+    durationMinutes?: number | null;
+    notes?: string | null;
+  } | null;
+  withSeparator?: boolean;
+}) {
+  return (
+    <Form
+      method="post"
+      action="."
+      className={withSeparator ? "border-b border-slate-200 pb-8" : undefined}
+    >
+      <input type="hidden" name="recipeId" value={recipeId} />
+      <input type="hidden" name="tab" value="procedimento" />
+      <div className="space-y-1 border-b border-slate-100 pb-3">
+        <h3 className="text-sm font-semibold text-slate-900">{title}</h3>
+        <p className="text-xs leading-5 text-slate-500">{description}</p>
+      </div>
+      <div className="mt-4 grid gap-4 sm:grid-cols-3">
+        <div className="space-y-2">
+          <Label htmlFor={`${action}-upperTemperatureCelsius`}>
+            Temperatura superior (°C)
+          </Label>
+          <DecimalInput
+            id={`${action}-upperTemperatureCelsius`}
+            name="upperTemperatureCelsius"
+            defaultValue={phase?.upperTemperatureCelsius ?? null}
+            placeholder="Ex: 250"
+            fractionDigits={1}
+            className="h-10"
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor={`${action}-lowerTemperatureCelsius`}>
+            Temperatura inferior (°C)
+          </Label>
+          <DecimalInput
+            id={`${action}-lowerTemperatureCelsius`}
+            name="lowerTemperatureCelsius"
+            defaultValue={phase?.lowerTemperatureCelsius ?? null}
+            placeholder="Ex: 220"
+            fractionDigits={1}
+            className="h-10"
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor={`${action}-durationMinutes`}>Tempo (min)</Label>
+          <DecimalInput
+            id={`${action}-durationMinutes`}
+            name="durationMinutes"
+            defaultValue={phase?.durationMinutes ?? null}
+            placeholder="Ex: 15"
+            fractionDigits={0}
+            className="h-10"
+          />
+        </div>
+      </div>
+      <div className="mt-4 space-y-2">
+        <Label htmlFor={`${action}-notes`}>Observações da fase</Label>
+        <Textarea
+          id={`${action}-notes`}
+          name="notes"
+          defaultValue={phase?.notes || ""}
+          className="min-h-28 bg-white text-sm leading-7"
+          placeholder="Equipamento, carga, posição no forno, movimentação, ponto visual e demais cuidados."
+        />
+      </div>
+      <div className="mt-4 flex justify-end">
+        <Button
+          type="submit"
+          name="_action"
+          value={action}
+          size="sm"
+          className="gap-2"
+        >
+          <SaveIcon size={14} />
+          Salvar {title.toLowerCase()}
+        </Button>
+      </div>
+    </Form>
+  );
+}
+
 export default function AdminRecipeProcedimentoEditar() {
   const { recipe, unitOptions } = useOutletContext<AdminRecipeOutletContext>();
   const procedure = String((recipe as any)?.productionProcedure || "").trim();
+  const preheating = (recipe as any)?.RecipePreheating || null;
+  const baking = (recipe as any)?.RecipeBaking || null;
   const productionNotes = String((recipe as any)?.productionNotes || "").trim();
   const yieldQuantity =
     (recipe as any)?.yieldQuantity == null
@@ -28,21 +127,17 @@ export default function AdminRecipeProcedimentoEditar() {
   ).toUpperCase();
 
   return (
-    <div className="grid gap-4 xl:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
-      <Form
-        method="post"
-        action="."
-        className="rounded-md border border-slate-200 bg-white p-4"
-      >
+    <div className="space-y-4">
+      <Form method="post" action="." className="border-b border-slate-200 pb-6">
         <input type="hidden" name="recipeId" value={recipe.id} />
         <input type="hidden" name="tab" value="procedimento" />
-        <div className="space-y-1 border-b border-slate-100 pb-3">
-          <h3 className="text-sm font-semibold text-slate-900">Rendimento</h3>
-          <p className="text-xs leading-5 text-slate-500">
-            Quantidade final usada como referência para padronizar a produção.
-          </p>
-        </div>
-        <div className="mt-4 space-y-4">
+        <div className="grid items-end gap-4 md:grid-cols-[minmax(12rem,1fr)_minmax(14rem,0.8fr)_minmax(14rem,0.8fr)_auto]">
+          <div className="space-y-1 self-center">
+            <h3 className="text-sm font-semibold text-slate-900">Rendimento</h3>
+            <p className="text-xs leading-5 text-slate-500">
+              Quantidade final usada como referência para padronizar a produção.
+            </p>
+          </div>
           <Fieldset className="grid-cols-3">
             <Label htmlFor="yieldQuantity">Quantidade</Label>
             <DecimalInput
@@ -73,8 +168,6 @@ export default function AdminRecipeProcedimentoEditar() {
               </SelectContent>
             </Select>
           </Fieldset>
-        </div>
-        <div className="mt-4 flex justify-end">
           <Button
             type="submit"
             name="_action"
@@ -88,12 +181,8 @@ export default function AdminRecipeProcedimentoEditar() {
         </div>
       </Form>
 
-      <div className="space-y-4">
-        <Form
-          method="post"
-          action="."
-          className="rounded-md border border-slate-200 bg-white p-4"
-        >
+      <div className="grid gap-8 lg:grid-cols-2 lg:gap-0 lg:divide-x lg:divide-slate-200">
+        <Form method="post" action="." className="lg:pr-8">
           <input type="hidden" name="recipeId" value={recipe.id} />
           <input type="hidden" name="tab" value="procedimento" />
           <div className="space-y-1 border-b border-slate-100 pb-3">
@@ -125,41 +214,57 @@ export default function AdminRecipeProcedimentoEditar() {
           </div>
         </Form>
 
-        <Form
-          method="post"
-          action="."
-          className="rounded-md border border-slate-200 bg-white p-4"
-        >
-          <input type="hidden" name="recipeId" value={recipe.id} />
-          <input type="hidden" name="tab" value="procedimento" />
-          <div className="space-y-1 border-b border-slate-100 pb-3">
-            <h3 className="text-sm font-semibold text-slate-900">
-              Observações
-            </h3>
-            <p className="text-xs leading-5 text-slate-500">
-              Alertas, variações aceitas, conservação e pontos de atenção.
-            </p>
-          </div>
-          <Textarea
-            id="productionNotes"
-            name="productionNotes"
-            defaultValue={productionNotes}
-            className="mt-4 min-h-40 bg-white text-sm leading-7"
-            placeholder="Observações de produção, conservação, ajustes aceitos ou cuidados especiais."
+        <div className="space-y-8 lg:pl-8">
+          <ThermalPhaseForm
+            recipeId={recipe.id}
+            title="Pré-aquecimento"
+            description="Configuração inicial do forno antes de receber a produção."
+            action="recipe-preheating-update"
+            phase={preheating}
+            withSeparator
           />
-          <div className="mt-4 flex justify-end">
-            <Button
-              type="submit"
-              name="_action"
-              value="recipe-procedure-notes-update"
-              size="sm"
-              className="gap-2"
-            >
-              <SaveIcon size={14} />
-              Salvar observações
-            </Button>
-          </div>
-        </Form>
+
+          <ThermalPhaseForm
+            recipeId={recipe.id}
+            title="Assamento"
+            description="Parâmetros aplicados durante a cocção da produção."
+            action="recipe-baking-update"
+            phase={baking}
+            withSeparator
+          />
+
+          <Form method="post" action=".">
+            <input type="hidden" name="recipeId" value={recipe.id} />
+            <input type="hidden" name="tab" value="procedimento" />
+            <div className="space-y-1 border-b border-slate-100 pb-3">
+              <h3 className="text-sm font-semibold text-slate-900">
+                Observações
+              </h3>
+              <p className="text-xs leading-5 text-slate-500">
+                Alertas, variações aceitas, conservação e pontos de atenção.
+              </p>
+            </div>
+            <Textarea
+              id="productionNotes"
+              name="productionNotes"
+              defaultValue={productionNotes}
+              className="mt-4 min-h-40 bg-white text-sm leading-7"
+              placeholder="Observações de produção, conservação, ajustes aceitos ou cuidados especiais."
+            />
+            <div className="mt-4 flex justify-end">
+              <Button
+                type="submit"
+                name="_action"
+                value="recipe-procedure-notes-update"
+                size="sm"
+                className="gap-2"
+              >
+                <SaveIcon size={14} />
+                Salvar observações
+              </Button>
+            </div>
+          </Form>
+        </div>
       </div>
     </div>
   );

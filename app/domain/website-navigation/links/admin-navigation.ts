@@ -178,6 +178,13 @@ const ADMIN_NAVIGATION_LINKS: WebsiteNavigationConfig = {
               ],
             },
             {
+              title: "Tags",
+              href: "/admin/gerenciamento/cardapio/tags",
+              items: [],
+              disabled: false,
+              tags: ["tag", "tags", "selo", "cardapio", "filtro", "publico"],
+            },
+            {
               title: "Tamanhos",
               href: "/admin/gerenciamento/cardapio/sizes",
               items: [],
@@ -277,6 +284,13 @@ const ADMIN_NAVIGATION_LINKS: WebsiteNavigationConfig = {
               tags: ["combo", "promocao", "conjunto", "pacote", "kit"],
             },
             {
+              title: "Desativacao de sabores",
+              href: "/admin/vendas/desativacao-sabores",
+              items: [],
+              disabled: false,
+              tags: ["sabores", "visibilidade", "whatsapp", "lote", "canais"],
+            },
+            {
               title: "Análise cardápio concorrência",
               href: "/admin/vendas/analise-cardapio-concorrencia/pesquisar/resultados",
               items: [],
@@ -363,6 +377,20 @@ const ADMIN_NAVIGATION_LINKS: WebsiteNavigationConfig = {
               items: [],
               disabled: false,
               tags: ["historico", "custo", "evolucao", "passado", "tendencia"],
+            },
+            {
+              title: "Mapa de negociação de insumos",
+              href: "/admin/supplier-negotiation-map",
+              items: [],
+              disabled: false,
+              tags: [
+                "negociacao",
+                "fornecedor",
+                "insumo",
+                "custo medio",
+                "ultimo custo",
+                "json",
+              ],
             },
           ],
           disabled: false,

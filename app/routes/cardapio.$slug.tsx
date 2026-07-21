@@ -35,6 +35,7 @@ function truncateText(value: string, maxLength: number) {
 
 function buildCardapioItemSeoDescription(item?: {
   name?: string | null;
+  baseIngredients?: string | null;
   ingredients?: string | null;
   longDescription?: string | null;
   notesPublic?: string | null;
@@ -45,6 +46,7 @@ function buildCardapioItemSeoDescription(item?: {
   }
 
   const parts = [
+    collapseWhitespace(item.baseIngredients),
     collapseWhitespace(item.ingredients),
     collapseWhitespace(item.longDescription),
     collapseWhitespace(item.notesPublic),
@@ -149,6 +151,7 @@ export default function SingleCardapioItem() {
       .map(([w, url]) => `${url} ${w}w`)
       .join(", ");
   })();
+  const baseIngredients = item.baseIngredients || "";
   const ingredients = item.ingredients || "";
 
   return (
@@ -222,9 +225,19 @@ export default function SingleCardapioItem() {
             <ItalyIngredientsStatement showText={false} />
           </div>
 
-          <p className="font-neue text-base leading-snug tracking-wide">
-            {ingredients}
-          </p>
+          <div className="space-y-2">
+            {baseIngredients ? (
+              <p className="font-neue text-sm leading-snug tracking-wide">
+                <span className="font-semibold">Base</span> · {baseIngredients}
+              </p>
+            ) : null}
+
+            {ingredients ? (
+              <p className="font-neue text-base leading-snug tracking-wide">
+                <span className="font-semibold">Recheio</span> · {ingredients}
+              </p>
+            ) : null}
+          </div>
 
           {galleryMedia.length > 0 && (
             <>

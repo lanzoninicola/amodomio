@@ -1,19 +1,21 @@
 import { Tag } from "@prisma/client";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
-import { Form, useActionData, useLoaderData } from "@remix-run/react";
-import { useState } from "react";
-import SubmitButton from "~/components/primitives/submit-button/submit-button";
+import { Form, Link, useActionData, useLoaderData } from "@remix-run/react";
+import { useEffect, useState } from "react";
 import { Input } from "~/components/ui/input";
 import { Separator } from "~/components/ui/separator";
 import { toast } from "~/components/ui/use-toast";
 import { buildAdminItemsMeta } from "~/domain/item/admin-items-meta";
-import { associateItemTag, listItemTags, removeItemTag } from "~/domain/item/item-tags.server";
+import {
+  associateItemTag,
+  listItemTags,
+  removeItemTag,
+} from "~/domain/item/item-tags.server";
 import BadgeTag from "~/domain/tags/components/badge-tag";
 import { tagPrismaEntity } from "~/domain/tags/tag.prisma.entity.server";
 import prismaClient from "~/lib/prisma/client.server";
 import { badRequest, ok, serverError } from "~/utils/http-response.server";
 import { jsonParse, jsonStringify } from "~/utils/json-helper";
-import tryit from "~/utils/try-it";
 
 export const meta = buildAdminItemsMeta("Tags de venda");
 
@@ -55,56 +57,15 @@ export async function action({ request, params }: ActionFunctionArgs) {
     const formData = await request.formData();
     const { _action, ...values } = Object.fromEntries(formData);
 
-    if (_action === "tag-create") {
-      const tagName = String(values?.tagName || "").trim();
-      if (!tagName) return badRequest("Nome da tag inválido");
-
-      const tagFound = await prismaClient.tag.findFirst({
-        where: { name: tagName },
-      });
-
-      if (tagFound) return ok({ message: "Tag já cadastrada", action: "tag-create" });
-
-      const [err] = await tryit(
-        tagPrismaEntity.create({
-          name: tagName,
-          public: false,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-          deletedAt: null,
-          colorHEX: "#FFFFFF",
-          featuredFilter: false,
-          sortOrderIndex: 0,
-        })
-      );
-
-      if (err) return badRequest(err);
-
-      return ok({ message: "Tag cadastrada", action: "tag-create" });
-    }
-
-    if (_action === "tag-remove") {
-      const tagId = String(values?.tagId || "").trim();
-      if (!tagId) return badRequest("Tag inválida");
-
-      const tagFound = await prismaClient.tag.findFirst({
-        where: { id: tagId },
-      });
-
-      if (!tagFound) return badRequest("Tag não encontrada");
-
-      const [err] = await tryit(tagPrismaEntity.delete(tagId));
-      if (err) return badRequest(err);
-
-      return ok(`Tag ${tagFound.name} removida`);
-    }
-
     if (_action === "item-tag-association") {
       const tagSelected = jsonParse(String(values?.tag || "")) as Tag | null;
       if (!tagSelected?.id) return badRequest("Tag não informada");
 
       await associateItemTag(itemId, tagSelected.id);
-      return ok({ message: "Tag associada ao item", action: "item-tag-association" });
+      return ok({
+        message: "Tag associada ao item",
+        action: "item-tag-association",
+      });
     }
 
     if (_action === "item-tag-dissociate") {
@@ -156,54 +117,71 @@ export default function AdminItemVendaTagsRoute() {
 
   const [currentTags, setCurrentTags] = useState(allTags);
 
+  useEffect(() => {
+    setCurrentTags(allTags);
+  }, [allTags]);
+
   if (!item) {
-    return <div className="text-sm text-muted-foreground">Item não encontrado.</div>;
+    return (
+      <div className="text-sm text-muted-foreground">Item não encontrado.</div>
+    );
   }
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="grid gap-8 md:grid-cols-8">
-        <Form method="post" className="md:col-span-3">
+      <div className="rounded-lg border p-4">
+        <div className="mb-6 grid gap-4 md:grid-cols-4">
+          <div className="flex flex-col gap-2 md:col-span-2">
+            <span className="text-xs font-semibold text-muted-foreground">
+              {`Tags disponíveis (${currentTags.length})`}
+            </span>
+            <span className="text-xs text-muted-foreground">
+              Clique na tag para associar ao item. A descrição pública,
+              visibilidade e comportamento clicável são configurados no
+              gerenciamento global de tags.
+            </span>
+          </div>
+
           <Input
             type="text"
-            name="tagName"
-            className="mb-2"
-            placeholder="Criar tag"
+            placeholder="Buscar tag"
+            className="md:col-span-2"
+            onChange={(e) => {
+              const value = e.target.value.toLowerCase();
+              setCurrentTags(
+                allTags.filter((tag) => tag.name.toLowerCase().includes(value))
+              );
+            }}
           />
-          <SubmitButton actionName="tag-create" labelClassName="text-xs" variant="outline" tabIndex={0} iconColor="black" />
-        </Form>
-
-        <div className="border rounded-lg p-4 flex flex-col md:col-span-5">
-          <div className="grid gap-4 mb-6 md:grid-cols-4">
-            <div className="flex flex-col gap-2 md:col-span-2">
-              <span className="text-xs font-semibold text-muted-foreground">
-                {`Tags disponíveis (${currentTags.length})`}
-              </span>
-              <span className="text-xs text-muted-foreground">Clique na tag para associar ao item.</span>
-            </div>
-
-            <Input
-              type="text"
-              placeholder="Buscar tag"
-              className="md:col-span-2"
-              onChange={(e) => {
-                const value = e.target.value.toLowerCase();
-                setCurrentTags(allTags.filter((tag) => tag.name.toLowerCase().includes(value)));
-              }}
-            />
-          </div>
-
-          <div className="flex gap-2 flex-wrap">
-            {currentTags.map((tag) => (
-              <Form method="post" key={tag.id}>
-                <input type="hidden" name="tag" value={jsonStringify(tag)} />
-                <button type="submit" name="_action" value="item-tag-association" className="hover:underline">
-                  <BadgeTag tag={tag} classNameLabel="text-sm" allowRemove={false} />
-                </button>
-              </Form>
-            ))}
-          </div>
         </div>
+
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+          {currentTags.map((tag) => (
+            <Form method="post" key={tag.id} className="min-w-0">
+              <input type="hidden" name="tag" value={jsonStringify(tag)} />
+              <button
+                type="submit"
+                name="_action"
+                value="item-tag-association"
+                className="flex w-full justify-start hover:underline"
+              >
+                <BadgeTag
+                  tag={tag}
+                  classNameContainer="max-w-full"
+                  classNameLabel="text-sm"
+                  allowRemove={false}
+                />
+              </button>
+            </Form>
+          ))}
+        </div>
+
+        <Link
+          to="/admin/gerenciamento/cardapio/tags"
+          className="mt-4 inline-flex text-xs font-semibold uppercase tracking-wide underline"
+        >
+          Gerenciar tags públicas
+        </Link>
       </div>
 
       <Separator className="my-4" />

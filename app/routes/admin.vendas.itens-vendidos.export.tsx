@@ -8,6 +8,7 @@ import prismaClient from "~/lib/prisma/client.server";
 
 const ITEM_STATUS_FILTERS = ["active", "inactive", "all"] as const;
 const EXPORT_VISIBILITY_FILTERS = ["all", "visible", "hidden"] as const;
+const EXPORT_FORMATS = ["all", "commercial"] as const;
 const LIST_SORT_OPTIONS = [
   "channelOrder",
   "cardapio",
@@ -20,6 +21,7 @@ export const meta: MetaFunction = () => [
 ];
 
 type ExportVisibilityFilter = (typeof EXPORT_VISIBILITY_FILTERS)[number];
+type ExportFormat = (typeof EXPORT_FORMATS)[number];
 type ListSortOption = (typeof LIST_SORT_OPTIONS)[number];
 
 function toSafeFilenameSegment(value: string | null | undefined) {
@@ -45,6 +47,15 @@ function parseExportVisibilityFilter(
     : "all";
 }
 
+function parseExportFormat(raw: string | null): ExportFormat {
+  const normalized = String(raw || "")
+    .trim()
+    .toLowerCase();
+  return EXPORT_FORMATS.includes(normalized as ExportFormat)
+    ? (normalized as ExportFormat)
+    : "all";
+}
+
 function parseListSort(raw: string | null): ListSortOption {
   const normalized = String(raw || "")
     .trim()
@@ -62,6 +73,15 @@ function formatExportVisibilityLabel(value: ExportVisibilityFilter) {
       return "somente ocultos";
     default:
       return "todos os sabores";
+  }
+}
+
+function formatExportFormatLabel(value: ExportFormat) {
+  switch (value) {
+    case "commercial":
+      return "somente informacoes comerciais";
+    default:
+      return "todas as informacoes";
   }
 }
 
@@ -225,7 +245,9 @@ function mapExportItem(
 ) {
   const row = mapSellingRow(item, selectedChannelId, cardapioChannelId);
   const publicIngredientsText = item.ItemSellingInfo?.ingredients || null;
+  const baseIngredientsText = item.ItemSellingInfo?.baseIngredients || null;
   const publicIngredients = splitIngredientText(publicIngredientsText);
+  const baseIngredients = splitIngredientText(baseIngredientsText);
   const priceEntries = (item.ItemSellingPriceVariation || []).map(
     (price: any) => ({
       id: String(price.id),
@@ -247,7 +269,21 @@ function mapExportItem(
         ),
         name: ingredient.IngredientItem?.name || "Ingrediente sem nome",
         classification: ingredient.IngredientItem?.classification || null,
+        defaultLossPct: Number(ingredient.defaultLossPct || 0),
+        sortOrderIndex: Number(ingredient.sortOrderIndex || 0),
         notes: ingredient.notes || null,
+        variationLines: (ingredient.RecipeVariationIngredient || [])
+          .filter(
+            (line: any) =>
+              String(line.itemVariationId || "") === String(variation.id)
+          )
+          .map((line: any) => ({
+            id: String(line.id),
+            itemVariationId: String(line.itemVariationId || ""),
+            unit: line.unit || null,
+            quantity: Number(line.quantity || 0),
+            lossPct: line.lossPct == null ? null : Number(line.lossPct),
+          })),
       })
     );
 
@@ -276,11 +312,74 @@ function mapExportItem(
 
   return {
     ...row,
+    description: item.description || null,
+    longDescription: item.ItemSellingInfo?.longDescription || null,
+    notesPublic: item.ItemSellingInfo?.notesPublic || null,
+    baseIngredientsText,
+    baseIngredients,
     publicIngredientsText,
     publicIngredients,
     recipeIngredients,
     variations,
     priceEntries,
+  };
+}
+
+function mapCommercialExportItem(
+  item: any,
+  selectedChannelId: string,
+  cardapioChannelId: string | null,
+  selectedChannelKey: string
+) {
+  const row = mapSellingRow(item, selectedChannelId, cardapioChannelId);
+  const sellingInfo = item.ItemSellingInfo || {};
+  const publicIngredientsText = sellingInfo.ingredients || null;
+  const baseIngredientsText = sellingInfo.baseIngredients || null;
+
+  return {
+    id: row.id,
+    name: row.name,
+    description: item.description || null,
+    longDescription: sellingInfo.longDescription || null,
+    commercialInfo: {
+      slug: row.slug,
+      categoryName: row.sellingCategoryName || row.categoryName,
+      groupName: row.groupName,
+      baseIngredientsText,
+      baseIngredients: splitIngredientText(baseIngredientsText),
+      publicIngredientsText,
+      publicIngredients: splitIngredientText(publicIngredientsText),
+      notesPublic: sellingInfo.notesPublic || null,
+      upcoming: row.upcoming,
+    },
+    status: {
+      active: row.active,
+      canSell: row.canSell,
+      commerciallyReady: row.commerciallyReady,
+      updatedAt: row.updatedAt,
+    },
+    channel: {
+      key: selectedChannelKey,
+      visible: row.channelVisible,
+      cardapioVisible: row.cardapioVisible,
+      sortOrderIndex: row.sortOrderIndex,
+    },
+    pricing: {
+      referenceVariationName: row.referenceVariationName,
+      referencePriceAmount: row.referencePriceAmount,
+      updatedBy: row.updatedBy,
+      entries: (item.ItemSellingPriceVariation || []).map((price: any) => ({
+        id: String(price.id),
+        priceAmount:
+          price.priceAmount == null ? null : Number(price.priceAmount),
+        updatedAt: price.updatedAt
+          ? new Date(price.updatedAt).toISOString()
+          : null,
+        updatedBy: price.updatedBy || null,
+        variationName: price.ItemVariation?.Variation?.name || null,
+        isReferenceVariation: Boolean(price.ItemVariation?.isReference),
+      })),
+    },
   };
 }
 
@@ -305,6 +404,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const exportVisibility = parseExportVisibilityFilter(
     url.searchParams.get("exportVisibility")
   );
+  const exportFormat = parseExportFormat(url.searchParams.get("exportFormat"));
   const sort = parseListSort(url.searchParams.get("sort"));
   const statusParam = String(url.searchParams.get("status") || "")
     .trim()
@@ -394,6 +494,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
       ItemSellingInfo: {
         select: {
           ingredients: true,
+          baseIngredients: true,
+          longDescription: true,
+          notesPublic: true,
           slug: true,
           upcoming: true,
           Category: {
@@ -423,6 +526,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
                 select: {
                   id: true,
                   ingredientItemId: true,
+                  defaultLossPct: true,
                   notes: true,
                   sortOrderIndex: true,
                   IngredientItem: {
@@ -431,6 +535,16 @@ export async function loader({ request }: LoaderFunctionArgs) {
                       name: true,
                       classification: true,
                     },
+                  },
+                  RecipeVariationIngredient: {
+                    select: {
+                      id: true,
+                      itemVariationId: true,
+                      unit: true,
+                      quantity: true,
+                      lossPct: true,
+                    },
+                    orderBy: [{ createdAt: "asc" }],
                   },
                 },
                 orderBy: [{ sortOrderIndex: "asc" }, { createdAt: "asc" }],
@@ -486,11 +600,18 @@ export async function loader({ request }: LoaderFunctionArgs) {
   });
   const sortedExportItems = (exportItems || [])
     .map((item: any) =>
-      mapExportItem(
-        item,
-        String(selectedChannel.id),
-        cardapioChannel?.id ? String(cardapioChannel.id) : null
-      )
+      exportFormat === "commercial"
+        ? mapCommercialExportItem(
+            item,
+            String(selectedChannel.id),
+            cardapioChannel?.id ? String(cardapioChannel.id) : null,
+            String(selectedChannel.key || "").toLowerCase()
+          )
+        : mapExportItem(
+            item,
+            String(selectedChannel.id),
+            cardapioChannel?.id ? String(cardapioChannel.id) : null
+          )
     )
     .sort((a: any, b: any) => {
       if (sort === "updatedAt") return 0;
@@ -501,7 +622,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const generatedAt = new Date().toISOString();
   const filename = `itens-vendidos-${toSafeFilenameSegment(
     selectedChannel.key || selectedChannel.name
-  )}-${exportVisibility}-${generatedAt.slice(0, 10)}.json`;
+  )}-${exportFormat}-${exportVisibility}-${generatedAt.slice(0, 10)}.json`;
 
   return buildExportResponse(filename, {
     meta: {
@@ -520,6 +641,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
         sort,
         visibility: exportVisibility,
         visibilityLabel: formatExportVisibilityLabel(exportVisibility),
+        format: exportFormat,
+        formatLabel: formatExportFormatLabel(exportFormat),
       },
       totals: {
         items: sortedExportItems.length,
@@ -531,10 +654,12 @@ export async function loader({ request }: LoaderFunctionArgs) {
           "preco da variacao marcada como referencia quando existir; fallback para o primeiro preco do canal",
         publicIngredientsText:
           "texto publico de ingredientes cadastrado na area comercial do item",
+        baseIngredientsText:
+          "texto comercial de ingredientes base cadastrado na area comercial do item",
         publicIngredients:
           "lista derivada do texto publico de ingredientes, separada por virgula, ponto e virgula ou quebra de linha",
         recipeIngredients:
-          "lista tecnica deduplicada de ingredientes vindos das receitas vinculadas as variacoes do item",
+          "lista tecnica deduplicada de ingredientes vindos das receitas vinculadas as variacoes do item; no formato completo, cada ingrediente tambem aparece dentro da receita da variacao com variationLines contendo unit, quantity e lossPct",
       },
     },
     aiContext: {
@@ -549,6 +674,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
       selectedScope: {
         channel:
           "Todos os itens exportados pertencem ao canal informado em meta.filters.channelKey/channelName.",
+        format:
+          "meta.filters.format controla se o arquivo inclui todas as informacoes ou somente informacoes comerciais.",
         visibility:
           "meta.filters.visibility controla se o arquivo inclui todos os sabores do canal, somente os visiveis ou somente os ocultos.",
         activeFilters:
@@ -569,6 +696,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
         "Use referencePriceAmount como preco principal quando quiser comparar preco por sabor.",
         "Use priceEntries para auditar todos os precos existentes no canal exportado.",
         "Use variations para entender quais variacoes existem e qual delas e a referencia.",
+        "No formato completo, use variations[].recipe.ingredients[].variationLines para analisar quantidade, unidade e perda por variacao.",
         "Use channelVisible e commerciallyReady para separar problema de visibilidade de problema de cadastro/preco.",
       ],
       importantFields: {
