@@ -1,7 +1,7 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
 import { json, redirect } from "@remix-run/node";
 import { Form, useActionData, useLoaderData, useNavigation, useOutletContext } from "@remix-run/react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { CardDescription, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -91,12 +91,12 @@ export default function AdminCrmCustomerTags() {
   const currentTagKeys = new Set(tags.map((tag) => tag.key));
 
   return (
-    <Card className="">
-      <CardHeader>
+    <section className="grid gap-6">
+      <header className="flex flex-col space-y-1.5">
         <CardTitle>Tags</CardTitle>
         <CardDescription>Classifique o cliente para segmentar campanhas.</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-3">
+      </header>
+      <div className="space-y-3">
         {actionData?.error && (
           <div className="rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive">
             {actionData.error}
@@ -218,7 +218,7 @@ export default function AdminCrmCustomerTags() {
             )}
           </div>
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </section>
   );
 }

@@ -567,6 +567,15 @@ async function listNativeCardapioItems(
               name: true,
               description: true,
               sortOrderIndex: true,
+              ProductLine: {
+                select: {
+                  id: true,
+                  key: true,
+                  name: true,
+                  description: true,
+                  sortOrderIndex: true,
+                },
+              },
             },
           },
         },
@@ -706,12 +715,20 @@ export async function findAllCardapioItemsGroupedByGroupLight(
     (acc, item) => {
       const group = item.MenuItemGroup;
       const key = group?.id || "__sem_grupo__";
+      const productLine = (group as any)?.ProductLine;
 
       if (!acc[key]) {
         acc[key] = {
           id: key,
           name: group?.name || "Sem grupo",
           description: group?.description || "",
+          productLineId: productLine?.id || "__sem_linha__",
+          productLine: productLine?.name || "Sem linha de produto",
+          productLineDescription: productLine?.description || "",
+          productLineSortOrderIndex:
+            typeof productLine?.sortOrderIndex === "number"
+              ? productLine.sortOrderIndex
+              : Number.MAX_SAFE_INTEGER,
           sortOrderIndex:
             typeof group?.sortOrderIndex === "number"
               ? group.sortOrderIndex
@@ -729,6 +746,10 @@ export async function findAllCardapioItemsGroupedByGroupLight(
         id: string;
         name: string;
         description: string;
+        productLineId: string;
+        productLine: string;
+        productLineDescription: string;
+        productLineSortOrderIndex: number;
         sortOrderIndex: number;
         items: CardapioCompatItem[];
       }
@@ -738,10 +759,16 @@ export async function findAllCardapioItemsGroupedByGroupLight(
   return Object.values(grouped)
     .sort(
       (a, b) =>
+        (a.productLineSortOrderIndex - b.productLineSortOrderIndex) *
+          direction ||
         (a.sortOrderIndex - b.sortOrderIndex) * direction ||
         a.name.localeCompare(b.name)
     )
     .map((group) => ({
+      productLineId: group.productLineId,
+      productLine: group.productLine,
+      productLineDescription: group.productLineDescription,
+      productLineSortOrderIndex: group.productLineSortOrderIndex,
       groupId: group.id,
       group: group.name,
       description: group.description,

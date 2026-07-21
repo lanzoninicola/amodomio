@@ -74,7 +74,7 @@ import prismaClient from "~/lib/prisma/client.server";
 import { badRequest, ok, serverError } from "~/utils/http-response.server";
 
 const PAGE_SIZE = 20;
-const ITEM_STATUS_FILTERS = ["active", "inactive", "all"] as const;
+const ITEM_VISIBILITY_FILTERS = ["visible", "hidden", "all"] as const;
 const EXPORT_VISIBILITY_FILTERS = ["all", "visible", "hidden"] as const;
 const EXPORT_FORMATS = ["all", "commercial"] as const;
 const LIST_SORT_OPTIONS = [
@@ -320,13 +320,10 @@ function getCostPercentageClass(value: number | null) {
 
 function buildBaseItemWhere(params: {
   q: string;
-  status: string;
   tagId: string;
+  menuEngineeringTag: string;
 }) {
   const where: any = { AND: [] as any[] };
-
-  if (params.status === "active") where.active = true;
-  if (params.status === "inactive") where.active = false;
 
   if (params.q) {
     where.AND.push({
@@ -383,6 +380,32 @@ function buildBaseItemWhere(params: {
     });
   }
 
+  if (params.menuEngineeringTag === "__none__") {
+    where.AND.push({
+      ItemTag: {
+        none: {
+          deletedAt: null,
+          Tag: {
+            name: { in: MENU_ENGINEERING_TAG_NAMES },
+            deletedAt: null,
+          },
+        },
+      },
+    });
+  } else if (MENU_ENGINEERING_TAG_NAMES.includes(params.menuEngineeringTag)) {
+    where.AND.push({
+      ItemTag: {
+        some: {
+          deletedAt: null,
+          Tag: {
+            name: params.menuEngineeringTag,
+            deletedAt: null,
+          },
+        },
+      },
+    });
+  }
+
   if (where.AND.length === 0) delete where.AND;
 
   return where;
@@ -393,6 +416,7 @@ function buildPageHref(params: {
   status: string;
   channel: string;
   tagId: string;
+  menuEngineeringTag?: string;
   sort: ListSortOption;
   page?: number;
 }) {
@@ -400,6 +424,8 @@ function buildPageHref(params: {
   if (params.q) searchParams.set("q", params.q);
   if (params.status) searchParams.set("status", params.status);
   if (params.tagId) searchParams.set("tagId", params.tagId);
+  if (params.menuEngineeringTag)
+    searchParams.set("menuEngineeringTag", params.menuEngineeringTag);
   if (params.sort && params.sort !== "channelOrder")
     searchParams.set("sort", params.sort);
   if (params.page && params.page > 1)
@@ -1017,6 +1043,14 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     const url = new URL(request.url);
     const q = String(url.searchParams.get("q") || "").trim();
     const tagId = String(url.searchParams.get("tagId") || "").trim();
+    const menuEngineeringTagParam = String(
+      url.searchParams.get("menuEngineeringTag") || ""
+    ).trim();
+    const menuEngineeringTag =
+      menuEngineeringTagParam === "__none__" ||
+      MENU_ENGINEERING_TAG_NAMES.includes(menuEngineeringTagParam)
+        ? menuEngineeringTagParam
+        : "";
     const exportFormat = String(url.searchParams.get("export") || "")
       .trim()
       .toLowerCase();
@@ -1026,11 +1060,11 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     const statusParam = String(url.searchParams.get("status") || "")
       .trim()
       .toLowerCase();
-    const status = ITEM_STATUS_FILTERS.includes(
-      statusParam as (typeof ITEM_STATUS_FILTERS)[number]
+    const status = ITEM_VISIBILITY_FILTERS.includes(
+      statusParam as (typeof ITEM_VISIBILITY_FILTERS)[number]
     )
       ? statusParam
-      : "active";
+      : "visible";
     const sort = parseListSort(url.searchParams.get("sort"));
     const requestedPage = parsePage(url.searchParams.get("page"));
 
@@ -1076,8 +1110,8 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
     const baseWhere = buildBaseItemWhere({
       q,
-      status,
       tagId: selectedTag ? String(selectedTag.id) : "",
+      menuEngineeringTag,
     });
 
     const channelTabs: SellingChannelTab[] = await Promise.all(
@@ -1092,6 +1126,8 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
             ItemSellingChannelItem: {
               some: {
                 itemSellingChannelId: channel.id,
+                ...(status === "visible" ? { visible: true } : {}),
+                ...(status === "hidden" ? { visible: false } : {}),
               },
             },
           },
@@ -1105,6 +1141,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           q,
           tagId: selectedTag ? String(selectedTag.id) : "",
           tagName: selectedTag?.name || null,
+          menuEngineeringTag,
           status,
           sort,
           channel: null,
@@ -1144,6 +1181,8 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       ItemSellingChannelItem: {
         some: {
           itemSellingChannelId: selectedChannel.id,
+          ...(status === "visible" ? { visible: true } : {}),
+          ...(status === "hidden" ? { visible: false } : {}),
         },
       },
     };
@@ -1152,7 +1191,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       return redirect(
         buildExportHref({
           q,
-          status,
+          status: "all",
           channel: String(selectedChannel.key || "").toLowerCase(),
           tagId: selectedTag ? String(selectedTag.id) : "",
           sort,
@@ -1169,7 +1208,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       upcomingItems,
     ] = await Promise.all([
       db.item.count({ where }),
-      db.item.count({ where }),
+      db.item.count({ where: { ...where, active: true } }),
       db.item.count({
         where: {
           ...where,
@@ -1347,6 +1386,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         q,
         tagId: selectedTag ? String(selectedTag.id) : "",
         tagName: selectedTag?.name || null,
+        menuEngineeringTag,
         status,
         sort,
         channel: String(selectedChannel.key || "").toLowerCase(),
@@ -1386,6 +1426,7 @@ export default function AdminVendasItensVendidosPage() {
       q: string;
       tagId: string;
       tagName?: string | null;
+      menuEngineeringTag: string;
       status: string;
       sort: ListSortOption;
       channel: string | null;
@@ -1410,7 +1451,8 @@ export default function AdminVendasItensVendidosPage() {
       q: "",
       tagId: "",
       tagName: null,
-      status: "active",
+      menuEngineeringTag: "",
+      status: "visible",
       sort: "channelOrder",
       channel: null,
       channelName: "",
@@ -1438,8 +1480,9 @@ export default function AdminVendasItensVendidosPage() {
   const [flavorLookupOpen, setFlavorLookupOpen] = useState(false);
 
   const currentChannel = filters.channel || "";
-  const currentStatus = filters.status || "active";
+  const currentStatus = filters.status || "visible";
   const currentTagId = filters.tagId || "";
+  const currentMenuEngineeringTag = filters.menuEngineeringTag || "";
   const currentSort = parseListSort(filters.sort || "channelOrder");
   const rows = payload.rows || [];
   const tabs = payload.tabs || [];
@@ -1448,6 +1491,7 @@ export default function AdminVendasItensVendidosPage() {
     sort?: ListSortOption;
     status?: string;
     tagId?: string;
+    menuEngineeringTag?: string;
   }) =>
     navigate(
       buildPageHref({
@@ -1455,6 +1499,8 @@ export default function AdminVendasItensVendidosPage() {
         status: next.status ?? currentStatus,
         channel: currentChannel,
         tagId: next.tagId ?? currentTagId,
+        menuEngineeringTag:
+          next.menuEngineeringTag ?? currentMenuEngineeringTag,
         sort: next.sort ?? currentSort,
         page: 1,
       })
@@ -1471,7 +1517,7 @@ export default function AdminVendasItensVendidosPage() {
   const exportHref = selectedExportTab
     ? buildExportHref({
         q: filters.q || "",
-        status: currentStatus,
+        status: "all",
         channel: selectedExportTab.key,
         tagId: currentTagId,
         sort: currentSort,
@@ -1813,17 +1859,45 @@ export default function AdminVendasItensVendidosPage() {
           >
             <SelectTrigger className="h-auto w-auto gap-1 border-0 p-0 text-sm font-medium text-blue-600 shadow-none focus:ring-0 [&>svg]:h-3 [&>svg]:w-3 [&>svg]:text-blue-400">
               <SelectValue>
-                {currentStatus === "active"
-                  ? "produtos ativos"
-                  : currentStatus === "inactive"
-                  ? "produtos inativos"
+                {currentStatus === "visible"
+                  ? "produtos visíveis"
+                  : currentStatus === "hidden"
+                  ? "produtos ocultos"
                   : "todos os produtos"}
               </SelectValue>
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="active">produtos ativos</SelectItem>
-              <SelectItem value="inactive">produtos inativos</SelectItem>
+              <SelectItem value="visible">produtos visíveis</SelectItem>
+              <SelectItem value="hidden">produtos ocultos</SelectItem>
               <SelectItem value="all">todos os produtos</SelectItem>
+            </SelectContent>
+          </Select>
+
+          <Select
+            name="menuEngineeringTag"
+            value={currentMenuEngineeringTag || "__all__"}
+            onValueChange={(value) =>
+              navigateWithFilters({
+                menuEngineeringTag: value === "__all__" ? "" : value,
+              })
+            }
+          >
+            <SelectTrigger className="h-auto w-auto gap-1 border-0 p-0 text-sm font-medium text-slate-600 shadow-none focus:ring-0 [&>svg]:h-3 [&>svg]:w-3 [&>svg]:text-slate-400">
+              <SelectValue>
+                {currentMenuEngineeringTag === "__none__"
+                  ? "sem Menu Engineering"
+                  : resolveMenuEngineeringTag(currentMenuEngineeringTag)
+                      ?.title || "Menu Engineering"}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__all__">Menu Engineering</SelectItem>
+              {MENU_ENGINEERING_TAG_NAMES.map((tagName) => (
+                <SelectItem key={tagName} value={tagName}>
+                  {resolveMenuEngineeringTag(tagName)?.title || tagName}
+                </SelectItem>
+              ))}
+              <SelectItem value="__none__">sem Menu Engineering</SelectItem>
             </SelectContent>
           </Select>
 
@@ -1877,6 +1951,7 @@ export default function AdminVendasItensVendidosPage() {
                     status: currentStatus,
                     channel: tab.key,
                     tagId: currentTagId,
+                    menuEngineeringTag: currentMenuEngineeringTag,
                     sort: currentSort,
                   })}
                   className={`relative flex flex-col items-start px-4 py-3 text-sm transition-colors ${
@@ -2166,6 +2241,7 @@ export default function AdminVendasItensVendidosPage() {
                       status: currentStatus,
                       channel: currentChannel,
                       tagId: currentTagId,
+                      menuEngineeringTag: currentMenuEngineeringTag,
                       sort: currentSort,
                       page: 1,
                     })}
@@ -2185,6 +2261,7 @@ export default function AdminVendasItensVendidosPage() {
                       status: currentStatus,
                       channel: currentChannel,
                       tagId: currentTagId,
+                      menuEngineeringTag: currentMenuEngineeringTag,
                       sort: currentSort,
                       page: Math.max(1, filters.page - 1),
                     })}
@@ -2210,6 +2287,7 @@ export default function AdminVendasItensVendidosPage() {
                           status: currentStatus,
                           channel: currentChannel,
                           tagId: currentTagId,
+                          menuEngineeringTag: currentMenuEngineeringTag,
                           sort: currentSort,
                           page,
                         })}
@@ -2228,6 +2306,7 @@ export default function AdminVendasItensVendidosPage() {
                       status: currentStatus,
                       channel: currentChannel,
                       tagId: currentTagId,
+                      menuEngineeringTag: currentMenuEngineeringTag,
                       sort: currentSort,
                       page: Math.min(filters.totalPages, filters.page + 1),
                     })}

@@ -68,7 +68,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
     const itemId = params.id;
     if (!itemId) return badRequest("Item inválido");
 
-    const [item, categories, groups] = await Promise.all([
+    const [item, productLines, groups, categories] = await Promise.all([
       (prismaClient as any).item.findUnique({
         where: { id: itemId },
         select: {
@@ -102,13 +102,9 @@ export async function loader({ params }: LoaderFunctionArgs) {
           },
         },
       }),
-      prismaClient.category.findMany({
-        where: { type: "menu" },
-        orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
-        select: {
-          id: true,
-          name: true,
-        },
+      prismaClient.productLine.findMany({
+        orderBy: [{ sortOrderIndex: "asc" }, { name: "asc" }],
+        select: { id: true, key: true, name: true, active: true },
       }),
       prismaClient.itemGroup.findMany({
         where: { deletedAt: null },
@@ -116,6 +112,15 @@ export async function loader({ params }: LoaderFunctionArgs) {
         select: {
           id: true,
           key: true,
+          name: true,
+          productLineId: true,
+        },
+      }),
+      prismaClient.category.findMany({
+        where: { type: "menu" },
+        orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+        select: {
+          id: true,
           name: true,
         },
       }),
@@ -125,6 +130,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
 
     return ok({
       item,
+      productLines,
       categories,
       groups,
     });
@@ -155,11 +161,16 @@ export async function action({ request, params }: ActionFunctionArgs) {
     const notesPublicRaw = String(formData.get("notesPublic") || "").trim();
     const slugRaw = String(formData.get("slug") || "").trim();
     const categoryId = String(formData.get("categoryId") || "").trim();
+    const productLineId = String(formData.get("productLineId") || "").trim();
     const itemGroupIdRaw = String(formData.get("itemGroupId") || "").trim();
     const requestedSlug = slugRaw ? slugifyString(slugRaw) : null;
 
     if (!categoryId) {
       return badRequest("Categoria inválida");
+    }
+
+    if (!productLineId) {
+      return badRequest("Linha de produto é obrigatória");
     }
 
     if (!itemGroupIdRaw) {
@@ -197,12 +208,16 @@ export async function action({ request, params }: ActionFunctionArgs) {
       }
     }
 
-    const [category, group] = await Promise.all([
+    const [category, productLine, group] = await Promise.all([
       prismaClient.category.findFirst({
         where: {
           id: categoryId,
           type: "menu",
         },
+        select: { id: true },
+      }),
+      prismaClient.productLine.findUnique({
+        where: { id: productLineId },
         select: { id: true },
       }),
       itemGroupIdRaw
@@ -211,7 +226,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
               id: itemGroupIdRaw,
               deletedAt: null,
             },
-            select: { id: true },
+            select: { id: true, productLineId: true },
           })
         : Promise.resolve(null),
     ]);
@@ -220,8 +235,16 @@ export async function action({ request, params }: ActionFunctionArgs) {
       return badRequest("Categoria de cardápio não encontrada");
     }
 
+    if (!productLine) {
+      return badRequest("Linha de produto não encontrada");
+    }
+
     if (itemGroupIdRaw && !group) {
       return badRequest("Grupo não encontrado");
+    }
+
+    if (group?.productLineId !== productLineId) {
+      return badRequest("O grupo selecionado não pertence à linha de produto");
     }
 
     await (prismaClient as any).itemSellingInfo.upsert({
@@ -285,10 +308,17 @@ export default function AdminItemVendaComercialRoute() {
       id: string;
       name: string;
     }>;
+    productLines?: Array<{
+      id: string;
+      key: string;
+      name: string;
+      active: boolean;
+    }>;
     groups?: Array<{
       id: string;
       key: string;
       name: string;
+      productLineId: string;
     }>;
   };
 
@@ -300,12 +330,17 @@ export default function AdminItemVendaComercialRoute() {
     (ri) => ri.IngredientItem.name
   );
   const categories = payload.categories || [];
+  const productLines = payload.productLines || [];
   const groups = payload.groups || [];
   const [categoryIdValue, setCategoryIdValue] = useState(
     sellingInfo?.categoryId || ""
   );
   const [groupIdValue, setGroupIdValue] = useState(
     sellingInfo?.itemGroupId || ""
+  );
+  const [productLineIdValue, setProductLineIdValue] = useState(
+    groups.find((group) => group.id === sellingInfo?.itemGroupId)
+      ?.productLineId || ""
   );
   const [baseIngredientsValue, setBaseIngredientsValue] = useState(
     sellingInfo?.baseIngredients || ""
@@ -332,6 +367,10 @@ export default function AdminItemVendaComercialRoute() {
   useEffect(() => {
     setCategoryIdValue(sellingInfo?.categoryId || "");
     setGroupIdValue(sellingInfo?.itemGroupId || "");
+    setProductLineIdValue(
+      groups.find((group) => group.id === sellingInfo?.itemGroupId)
+        ?.productLineId || ""
+    );
     setBaseIngredientsValue(sellingInfo?.baseIngredients || "");
     setIngredientsValue(sellingInfo?.ingredients || "");
   }, [
@@ -339,6 +378,7 @@ export default function AdminItemVendaComercialRoute() {
     sellingInfo?.categoryId,
     sellingInfo?.ingredients,
     sellingInfo?.itemGroupId,
+    groups,
   ]);
 
   if (!item) {
@@ -404,6 +444,9 @@ export default function AdminItemVendaComercialRoute() {
       (category) => category.id === categoryIdValue
     );
     const selectedGroup = groups.find((group) => group.id === groupIdValue);
+    const selectedProductLine = productLines.find(
+      (line) => line.id === productLineIdValue
+    );
     const commercialData = {
       item: {
         id: item.id,
@@ -414,6 +457,10 @@ export default function AdminItemVendaComercialRoute() {
       longDescription: String(formData.get("longDescription") || ""),
       notesPublic: String(formData.get("notesPublic") || ""),
       slug: String(formData.get("slug") || ""),
+      productLine: {
+        id: productLineIdValue || null,
+        name: selectedProductLine?.name || null,
+      },
       category: {
         id: categoryIdValue || null,
         name: selectedCategory?.name || null,
@@ -445,6 +492,7 @@ export default function AdminItemVendaComercialRoute() {
     <Form ref={formRef} method="post" className="space-y-6">
       <input type="hidden" name="_action" value="update-commercial-info" />
       <input type="hidden" name="categoryId" value={categoryIdValue} />
+      <input type="hidden" name="productLineId" value={productLineIdValue} />
       <input type="hidden" name="itemGroupId" value={groupIdValue} />
 
       <section className="flex flex-wrap items-center justify-end gap-3">
@@ -538,17 +586,34 @@ export default function AdminItemVendaComercialRoute() {
 
         <Separator />
 
-        <div className="grid gap-4 lg:grid-cols-2">
+        <div className="grid gap-4 lg:grid-cols-3">
           <div className="space-y-2">
-            <Label htmlFor="categoryIdSelect">Categoria</Label>
-            <Select value={categoryIdValue} onValueChange={setCategoryIdValue}>
-              <SelectTrigger id="categoryIdSelect">
-                <SelectValue placeholder="Selecionar..." />
+            <Label htmlFor="productLineIdSelect">
+              Linha de produto <span className="text-red-500">*</span>
+            </Label>
+            <Select
+              value={productLineIdValue}
+              onValueChange={(nextProductLineId) => {
+                setProductLineIdValue(nextProductLineId);
+                if (
+                  !groups.some(
+                    (group) =>
+                      group.id === groupIdValue &&
+                      group.productLineId === nextProductLineId
+                  )
+                ) {
+                  setGroupIdValue("");
+                }
+              }}
+            >
+              <SelectTrigger id="productLineIdSelect">
+                <SelectValue placeholder="Selecionar linha..." />
               </SelectTrigger>
               <SelectContent>
-                {categories.map((category) => (
-                  <SelectItem key={category.id} value={category.id}>
-                    {category.name}
+                {productLines.map((line) => (
+                  <SelectItem key={line.id} value={line.id}>
+                    {line.name}
+                    {!line.active ? " (inativa)" : ""}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -564,9 +629,27 @@ export default function AdminItemVendaComercialRoute() {
                 <SelectValue placeholder="Selecionar grupo..." />
               </SelectTrigger>
               <SelectContent>
-                {groups.map((group) => (
-                  <SelectItem key={group.id} value={group.id}>
-                    {group.name}
+                {groups
+                  .filter((group) => group.productLineId === productLineIdValue)
+                  .map((group) => (
+                    <SelectItem key={group.id} value={group.id}>
+                      {group.name}
+                    </SelectItem>
+                  ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="categoryIdSelect">Categoria</Label>
+            <Select value={categoryIdValue} onValueChange={setCategoryIdValue}>
+              <SelectTrigger id="categoryIdSelect">
+                <SelectValue placeholder="Selecionar..." />
+              </SelectTrigger>
+              <SelectContent>
+                {categories.map((category) => (
+                  <SelectItem key={category.id} value={category.id}>
+                    {category.name}
                   </SelectItem>
                 ))}
               </SelectContent>

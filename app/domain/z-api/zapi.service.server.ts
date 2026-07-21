@@ -12,6 +12,7 @@ import {
 } from "./zapi.types";
 import { ValidationError } from "./errors";
 import { normalizePhone } from "./zapi.service";
+import { logCrmWhatsappSentEventByPhone } from "~/domain/crm/crm-whatsapp-events.server";
 
 const DEFAULT_CONTACTS_PAGE = 1;
 const DEFAULT_CONTACTS_PAGE_SIZE = 20;
@@ -113,17 +114,38 @@ function parsePageNumber(value: unknown, fallback: number) {
 
 export async function sendTextMessage(
   payload: SendTextRequest,
-  options?: { timeoutMs?: number }
+  options?: { timeoutMs?: number; trackCrm?: boolean; crmSource?: string }
 ): Promise<SendMessageResponse> {
   const phone = assertPhone(payload?.phone);
   const message = assertMessage(payload?.message);
 
-  return zapiRequest<SendMessageResponse>(
+  const response = await zapiRequest<SendMessageResponse>(
     "POST",
     `${zapiInstancePath}/send-text`,
     { phone, message },
-    options
+    { timeoutMs: options?.timeoutMs }
   );
+
+  if (options?.trackCrm !== false) {
+    await logCrmWhatsappSentEventByPhone({
+      phone,
+      source: options?.crmSource || "zapi-send-text",
+      messageText: message,
+      externalId: response.messageId || response.id || null,
+      payload: {
+        channel: "zapi-send-text",
+        fromMe: true,
+        wppResponse: response,
+      },
+    }).catch((error) => {
+      console.warn("[z-api][send-text] CRM sent-message log failed", {
+        phone,
+        error: (error as Error)?.message,
+      });
+    });
+  }
+
+  return response;
 }
 
 export async function sendVideoMessage(

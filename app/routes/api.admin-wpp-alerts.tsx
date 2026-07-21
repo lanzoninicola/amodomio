@@ -65,7 +65,7 @@ export async function action({ request }: ActionFunctionArgs) {
     const message = await getWhatsappNoResponseQuickReplyMessage();
     const response = await sendTextMessage(
       { phone: normalizedPhone, message },
-      { timeoutMs: 10_000 }
+      { timeoutMs: 10_000, trackCrm: false }
     );
     await logCrmWhatsappSentEventByPhone({
       phone: normalizedPhone,

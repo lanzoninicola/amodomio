@@ -63,6 +63,10 @@ Campanhas de marketing. Cada `CrmCampaignSend` registra um envio para um cliente
 
 **`logCrmWhatsappSentEventByPhone(input)`** — registra um evento `WHATSAPP_SENT` no CRM a partir do número de telefone. Normaliza o telefone, busca o cliente, e cria o `CrmCustomerEvent`. Retorna `{ ok: false, reason }` se telefone inválido ou cliente não encontrado. Usado pelo sistema de envio de WhatsApp para rastrear mensagens enviadas.
 
+### `crm-conversation.ts`
+
+Converte eventos do CRM em mensagens de conversa e concentra a geração da transcrição e do prompt de análise, sem dependência da interface da rota.
+
 ---
 
 ## Rotas (`/admin/crm/...`)
@@ -94,6 +98,7 @@ Cabeçalho com nome, telefone e tags do cliente. Abas: **Dados | Conversa | Time
 
 - Filtra eventos `WHATSAPP_RECEIVED` / `WHATSAPP_SENT` por range de data. Sem filtro: últimas 60 mensagens. Com filtro: até 200 em ordem cronológica.
 - Gera automaticamente um **prompt para ChatGPT** com contexto do cliente + transcrição completa.
+- Organiza a interface nas abas **Conversa**, **Transcrição** e **Análise IA**.
 - UI visual estilo chat (bolhas verde = atendente, branco = cliente).
 
 ### Timeline — `admin.crm.$customerId.timeline.tsx`
@@ -133,7 +138,7 @@ Telefone (qualquer formato BR)
 
 ## Integração com WhatsApp
 
-Quando uma mensagem WhatsApp é enviada para um cliente, chama-se `logCrmWhatsappSentEventByPhone()` que:
+Toda mensagem de texto enviada por `sendTextMessage()` é registrada automaticamente no CRM. Fluxos que já mantêm um registro especializado podem usar `trackCrm: false` e chamar `logCrmWhatsappSentEventByPhone()` com seu próprio contexto. O registro:
 
 1. Normaliza o telefone
 2. Busca o `CrmCustomer` pelo `phone_e164`

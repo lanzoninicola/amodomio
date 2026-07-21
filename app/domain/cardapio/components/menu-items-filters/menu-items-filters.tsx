@@ -3,11 +3,10 @@ import { useEffect, useState } from "react";
 import { Input } from "~/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
 
-import { MenuItemWithCostVariations, MenuItemWithSellPriceVariations } from "~/domain/cardapio/menu-item.types";
+import { MenuItemVisibilityFilterOption, MenuItemWithCostVariations, MenuItemWithSellPriceVariations } from "~/domain/cardapio/menu-item.types";
 import { cn } from "~/lib/utils";
 import { Category } from "~/domain/category/category.model.server";
 import { jsonParse } from "~/utils/json-helper";
-import { MenuItemVisibilityFilterOption } from "~/routes/admin.gerenciamento.cardapio.main.list";
 
 
 interface MenuItemsFiltersProps {

@@ -67,7 +67,7 @@ function isPassFinishingTag(tag: CardapioPublicTag) {
 }
 
 function trackFilterClick(
-  control: "group" | "filter_toggle" | "tag",
+  control: "product_line" | "group" | "filter_toggle" | "tag",
   value: string,
   placement: "mobile_header" | "mobile_panel" | "desktop_nav" | "stories"
 ) {
@@ -101,6 +101,9 @@ export function CardapioCatalogSection({
 }) {
   const [currentItems, setCurrentItems] = useState(items);
   const [currentFilterTag, setCurrentFilterTag] = useState<Tag | null>(null);
+  const [currentProductLineId, setCurrentProductLineId] = useState<
+    string | null
+  >(() => (isGrouped(items) ? items[0]?.productLineId ?? null : null));
   const [showMobileTags, setShowMobileTags] = useState(false);
   const [activeItemId, setActiveItemId] = useState<string | null>(null);
   const catalogRef = useRef<HTMLDivElement | null>(null);
@@ -109,6 +112,33 @@ export function CardapioCatalogSection({
   useEffect(() => {
     setCurrentItems(items);
     setCurrentFilterTag(null);
+    setCurrentProductLineId(
+      isGrouped(items) ? items[0]?.productLineId ?? null : null
+    );
+  }, [items]);
+
+  const productLines = useMemo(() => {
+    if (!isGrouped(items)) return [];
+
+    const lines = new Map<
+      string,
+      { id: string; name: string; description: string; sortOrderIndex: number }
+    >();
+    items.forEach((group) => {
+      if (!lines.has(group.productLineId)) {
+        lines.set(group.productLineId, {
+          id: group.productLineId,
+          name: group.productLine,
+          description: group.productLineDescription || "",
+          sortOrderIndex: group.productLineSortOrderIndex ?? 0,
+        });
+      }
+    });
+
+    return [...lines.values()].sort(
+      (a, b) =>
+        a.sortOrderIndex - b.sortOrderIndex || a.name.localeCompare(b.name)
+    );
   }, [items]);
 
   const scrollToGroup = useCallback((groupId: string) => {
@@ -141,11 +171,15 @@ export function CardapioCatalogSection({
   const orderedGroups = useMemo(
     () =>
       groupedItems.length
-        ? [...groupedItems].sort(
-            (a, b) => (a.sortOrderIndex ?? 0) - (b.sortOrderIndex ?? 0)
-          )
+        ? groupedItems
+            .filter(
+              (group) =>
+                !currentProductLineId ||
+                group.productLineId === currentProductLineId
+            )
+            .sort((a, b) => (a.sortOrderIndex ?? 0) - (b.sortOrderIndex ?? 0))
         : [],
-    [groupedItems]
+    [currentProductLineId, groupedItems]
   );
   const visibleGroupChips = useMemo(
     () => orderedGroups.filter((g) => g.groupId !== "__sem_grupo__"),
@@ -325,6 +359,44 @@ export function CardapioCatalogSection({
           "md:mx-auto md:my-0 md:w-full md:max-w-[700px] md:px-6 md:py-6"
       )}
     >
+      {productLines.length > 1 ? (
+        <nav
+          aria-label="Linhas de produtos"
+          className="-mx-4 mb-4 overflow-x-auto px-4 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:mx-0 md:px-0"
+        >
+          <div className="flex w-max min-w-full gap-2">
+            {productLines.map((line) => {
+              const selected = line.id === currentProductLineId;
+              return (
+                <button
+                  key={line.id}
+                  type="button"
+                  aria-current={selected ? "page" : undefined}
+                  onClick={() => {
+                    setCurrentProductLineId(line.id);
+                    trackFilterClick(
+                      "product_line",
+                      line.name,
+                      window.matchMedia("(min-width: 768px)").matches
+                        ? "desktop_nav"
+                        : "mobile_header"
+                    );
+                  }}
+                  className={cn(
+                    "whitespace-nowrap rounded-full border px-4 py-2 font-neue text-sm font-bold transition-colors",
+                    selected
+                      ? "border-zinc-950 bg-zinc-950 text-white"
+                      : "border-black/10 bg-white text-zinc-600 hover:bg-zinc-100 hover:text-black"
+                  )}
+                >
+                  {line.name}
+                </button>
+              );
+            })}
+          </div>
+        </nav>
+      ) : null}
+
       {filterViewMode === "stories" ? (
         <div className="-mx-4 mb-2 overflow-x-auto px-4 pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:mx-0 md:px-0">
           <div className="flex w-max min-w-full gap-3">

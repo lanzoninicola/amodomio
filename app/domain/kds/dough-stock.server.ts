@@ -285,7 +285,7 @@ export async function notifyTodayDoughStockSavedByWhatsapp(input: {
       phones.map(async (phone) => {
         const response = await sendTextMessage(
           { phone, message },
-          { timeoutMs: 10_000 }
+          { timeoutMs: 10_000, trackCrm: false }
         );
         await logCrmWhatsappSentEventByPhone({
           phone,

@@ -224,6 +224,7 @@ function IngredientReadRow({
   const [recalculateOpen, setRecalculateOpen] = useState(false);
   const [availableQuantityInput, setAvailableQuantityInput] = useState("");
   const [availableUnit, setAvailableUnit] = useState(sourceUnit);
+  const [isAdded, setIsAdded] = useState(false);
   const selectedDisplayUnit = ingredient.displayUnits.find(
     (entry) => entry.unit === displayUnit
   ) ||
@@ -282,12 +283,24 @@ function IngredientReadRow({
   }
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4">
+    <div
+      className={`rounded-xl border border-slate-200 bg-white p-4 transition-opacity ${
+        isAdded ? "opacity-[0.45]" : "opacity-100"
+      }`}
+    >
       <div className="flex items-start justify-between gap-4">
         <div className="flex min-w-0 items-start gap-1">
-          <p className="min-w-0 font-semibold leading-snug text-slate-900">
+          <button
+            type="button"
+            onClick={() => setIsAdded((current) => !current)}
+            aria-pressed={isAdded}
+            aria-label={`${isAdded ? "Desmarcar" : "Marcar"} ${
+              ingredient.name
+            } como adicionado`}
+            className="min-h-10 min-w-0 py-0.5 text-left font-semibold leading-snug text-slate-900"
+          >
             {ingredient.name}
-          </p>
+          </button>
           {ingredient.notes ? (
             <button
               type="button"
@@ -372,7 +385,7 @@ function IngredientReadRow({
 
       {onScaleFromIngredient ? (
         <Dialog open={recalculateOpen} onOpenChange={setRecalculateOpen}>
-          <DialogContent className="w-[calc(100vw-2rem)] max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl sm:max-w-md">
+          <DialogContent className="!top-[max(env(safe-area-inset-top),1rem)] !translate-y-0 max-h-[calc(100dvh-2rem)] w-[calc(100vw-2rem)] max-w-[calc(100vw-2rem)] overflow-y-auto rounded-xl sm:max-w-md">
             <DialogHeader>
               <DialogTitle>Quantidade disponível</DialogTitle>
               <DialogDescription>
@@ -441,7 +454,7 @@ function IngredientReadRow({
               <button
                 type="button"
                 onClick={applyAvailableQuantity}
-                className="inline-flex min-h-11 w-full max-w-full items-center justify-center rounded-lg bg-violet-700 px-4 text-sm font-semibold text-white"
+                className="inline-flex min-h-14 w-full max-w-full items-center justify-center rounded-lg bg-violet-700 px-4 text-base font-semibold text-white"
               >
                 Recalcular receita
               </button>

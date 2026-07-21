@@ -454,7 +454,6 @@ function EditableTwoLevelRow({
     () => items.find((item: any) => item.id === line.mappedItemId) || null,
     [items, line.mappedItemId]
   );
-
   const availableMovementUnits = useMemo(() => {
     const merged = new Set<string>(ITEM_UNIT_OPTIONS);
     const linkedUnits = itemUnitOptionsByItemId[line.mappedItemId || ""] || [];
@@ -1156,6 +1155,14 @@ function LineCard({
   const rawLastEntryMovementUnit = normalizeUnit(
     lastEntryMovementUnitByItemId[line.mappedItemId || ""]
   );
+  const selectedItemUnitRows = useMemo(
+    () =>
+      resolveItemUnitRows(
+        selectedItem,
+        itemUnitOptionsByItemId[line.mappedItemId || ""] || []
+      ),
+    [itemUnitOptionsByItemId, line.mappedItemId, selectedItem]
+  );
   const lastEntryMovementUnit =
     rawLastEntryMovementUnit &&
     availableMovementUnits.includes(rawLastEntryMovementUnit)
@@ -1662,6 +1669,7 @@ function LineCard({
                     categories={categories}
                     costHint={hint}
                     showCostHint={false}
+                    showUnitShortcuts={false}
                     mobile={mobile}
                     onItemSelected={onStartEditing}
                   />
@@ -1704,7 +1712,10 @@ function LineCard({
                           ))}
                         </SelectContent>
                       </Select>
-                      {lastEntryMovementUnit ? (
+                      {lastEntryMovementUnit &&
+                      !selectedItemUnitRows.some(
+                        (row) => row.unit === lastEntryMovementUnit
+                      ) ? (
                         <button
                           type="button"
                           disabled={isSaving}
@@ -1712,12 +1723,14 @@ function LineCard({
                             handleUnitShortcut(lastEntryMovementUnit)
                           }
                           className={cn(
-                            "mt-1 text-left text-[11px] font-semibold text-slate-500 underline underline-offset-2 transition hover:text-slate-900",
+                            "mt-1 text-[11px] font-medium text-slate-600 underline underline-offset-2 transition hover:text-slate-900",
+                            mobile &&
+                              "inline-flex h-9 w-full items-center justify-center rounded-lg border border-slate-200 bg-white px-2 font-semibold no-underline shadow-sm hover:bg-slate-50",
                             isSaving && "cursor-wait opacity-60"
                           )}
-                          title={`Usar UM do ultimo movimento de entrada: ${lastEntryMovementUnit}`}
+                          title={`Usar a última UM de entrada: ${lastEntryMovementUnit}`}
                         >
-                          última entrada: {lastEntryMovementUnit}
+                          Última UM usada: {lastEntryMovementUnit}
                         </button>
                       ) : null}
                     </>
@@ -1732,6 +1745,25 @@ function LineCard({
                       {displayTargetUnit || line.movementUnit || "-"}
                     </div>
                   )}
+                  {selectedItemUnitRows.length > 0 ? (
+                    <div className="mt-1 flex flex-wrap gap-x-2 gap-y-1">
+                      {selectedItemUnitRows.map((row) => (
+                        <button
+                          key={row.unit}
+                          type="button"
+                          disabled={isSaving}
+                          onClick={() => handleUnitShortcut(row.unit)}
+                          className={cn(
+                            "text-[11px] font-medium text-slate-600 underline underline-offset-2 transition hover:text-slate-900",
+                            isSaving && "cursor-wait opacity-60"
+                          )}
+                          title={`Vincular UM ${row.unit} ao movimento`}
+                        >
+                          Último: {row.unit}
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
                 </div>
 
                 {/* Demanda */}
@@ -2111,7 +2143,7 @@ export function ImportStockLinesPanel({
     selectedBatch,
     unitOptions,
     itemUnitOptionsByItemId,
-    lastEntryMovementUnitByItemId,
+    lastEntryMovementUnitByItemId = {},
     measurementConversions,
     itemCostHints,
     summary,

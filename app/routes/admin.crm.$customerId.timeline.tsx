@@ -1,7 +1,7 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
 import { json, redirect } from "@remix-run/node";
 import { Form, useActionData, useLoaderData, useNavigation, useOutletContext } from "@remix-run/react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { CardDescription, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
@@ -75,12 +75,12 @@ export default function AdminCrmCustomerTimeline() {
   useOutletContext<Context>(); // ensure context exists
 
   return (
-    <Card className="">
-      <CardHeader>
+    <section className="grid gap-6">
+      <header className="flex flex-col space-y-1.5">
         <CardTitle>Timeline</CardTitle>
         <CardDescription>Últimos eventos (50 mais recentes).</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
+      </header>
+      <div className="space-y-4">
         {actionData?.error && (
           <div className="rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive">
             {actionData.error}
@@ -124,7 +124,7 @@ export default function AdminCrmCustomerTimeline() {
             <p className="text-sm text-muted-foreground">Nenhum evento ainda.</p>
           )}
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </section>
   );
 }

@@ -1,13 +1,18 @@
 import type { LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
 import { json } from "@remix-run/node";
-import { Form, Link, useLoaderData, useOutletContext } from "@remix-run/react";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Textarea } from "@/components/ui/textarea";
-import CopyButton from "~/components/primitives/copy-button/copy-button";
+import { useLoaderData, useOutletContext } from "@remix-run/react";
+import { CardDescription, CardTitle } from "@/components/ui/card";
+import {
+  CrmConversationFilters,
+  CrmConversationSummary,
+  CrmConversationWorkspace,
+} from "~/components/crm/crm-conversation-panels";
+import {
+  buildCrmConversationAnalysisPrompt,
+  buildCrmConversationTranscript,
+  toCrmConversationMessages,
+  type CrmConversationMessage,
+} from "~/domain/crm/crm-conversation";
 import prisma from "~/lib/prisma/client.server";
 
 type Context = {
@@ -19,17 +24,8 @@ type Context = {
   };
 };
 
-type MessageItem = {
-  id: string;
-  created_at: string;
-  direction: "inbound" | "outbound";
-  source: string | null;
-  event_type: string;
-  messageText: string;
-};
-
 type LoaderData = {
-  messages: MessageItem[];
+  messages: CrmConversationMessage[];
   transcript: string;
   chatGptPrompt: string;
   totalMessages: number;
@@ -38,41 +34,6 @@ type LoaderData = {
     to: string;
   };
 };
-
-function parsePayloadObject(value: unknown): Record<string, unknown> | null {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
-  return value as Record<string, unknown>;
-}
-
-function parsePayloadRaw(raw: string | null): Record<string, unknown> | null {
-  if (!raw) return null;
-  try {
-    const parsed = JSON.parse(raw);
-    return parsePayloadObject(parsed);
-  } catch {
-    return null;
-  }
-}
-
-function pickMessageText(payload: Record<string, unknown> | null, payloadRaw: string | null): string | null {
-  const text = typeof payload?.messageText === "string" ? payload.messageText.trim() : "";
-  if (text) return text;
-
-  const parsedRaw = parsePayloadRaw(payloadRaw);
-  const rawText = typeof parsedRaw?.messageText === "string" ? parsedRaw.messageText.trim() : "";
-  if (rawText) return rawText;
-
-  if (parsedRaw) return null;
-
-  const fallback = payloadRaw?.trim() || "";
-  return fallback || null;
-}
-
-function formatMessageLine(message: MessageItem): string {
-  const when = new Date(message.created_at).toLocaleString("pt-BR");
-  const author = message.direction === "outbound" ? "Atendente" : "Cliente";
-  return `[${when}] ${author}: ${message.messageText}`;
-}
 
 function parseDateTimeLocal(value: string | null) {
   if (!value) return null;
@@ -118,39 +79,9 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
   });
   const orderedEvents = hasExplicitRange ? events : [...events].reverse();
 
-  const messages: MessageItem[] = orderedEvents.flatMap((event) => {
-    const payload = parsePayloadObject(event.payload);
-    const messageText = pickMessageText(payload, event.payload_raw);
-    if (!messageText) return [];
-
-    return [{
-      id: event.id,
-      created_at: event.created_at.toISOString(),
-      direction: event.event_type === "WHATSAPP_SENT" ? "outbound" : "inbound",
-      source: event.source,
-      event_type: event.event_type,
-      messageText,
-    }];
-  });
-
-  const transcript = messages.length
-    ? messages.map(formatMessageLine).join("\n")
-    : "Nenhuma mensagem de WhatsApp registrada para este contato.";
-
-  const chatGptPrompt = [
-    "Analise a conversa abaixo e proponha a melhor proxima acao comercial/atendimento.",
-    "",
-    "Retorne:",
-    "1. Resumo objetivo da conversa.",
-    "2. Intencao principal do cliente.",
-    "3. Sentimento do cliente.",
-    "4. Pendencias e riscos.",
-    "5. Proxima resposta recomendada em portugues do Brasil.",
-    "6. Acoes operacionais sugeridas para o time.",
-    "",
-    "Conversa:",
-    transcript,
-  ].join("\n");
+  const messages = toCrmConversationMessages(orderedEvents);
+  const transcript = buildCrmConversationTranscript(messages);
+  const chatGptPrompt = buildCrmConversationAnalysisPrompt(transcript);
 
   return json<LoaderData>({
     messages,
@@ -167,10 +98,13 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
 export const meta: MetaFunction = () => [{ title: "CRM - Conversa" }];
 
 export default function AdminCrmCustomerConversation() {
-  const { messages, transcript, chatGptPrompt, totalMessages, filters } = useLoaderData<typeof loader>();
+  const { messages, transcript, chatGptPrompt, totalMessages, filters } =
+    useLoaderData<typeof loader>();
   const { customer } = useOutletContext<Context>();
-  const tagLabels = customer.tags?.map((item) => item.tag.label || item.tag.key) || [];
-  const isPartialLoad = !filters.from && !filters.to && totalMessages > messages.length;
+  const tagLabels =
+    customer.tags?.map((item) => item.tag.label || item.tag.key) || [];
+  const isPartialLoad =
+    !filters.from && !filters.to && totalMessages > messages.length;
   const promptWithContext = [
     `Contato: ${customer.name || "Sem nome"}`,
     `Telefone: ${customer.phone_e164}`,
@@ -180,147 +114,34 @@ export default function AdminCrmCustomerConversation() {
   ].join("\n");
 
   return (
-    <div className="grid min-w-0 gap-6">
-      <Card className="min-w-0 overflow-hidden">
-        <CardHeader className="gap-3 md:flex-row md:items-start md:justify-between">
-          <div className="space-y-1">
+    <div className="grid min-w-0 gap-4">
+      <section className="grid min-w-0 gap-3 overflow-hidden">
+        <header className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+          <div className="space-y-0.5">
             <CardTitle>Conversa WhatsApp</CardTitle>
             <CardDescription>
-              Histórico em ordem cronológica, preparado para copiar e colar no ChatGPT.
+              Histórico em ordem cronológica, preparado para copiar e colar no
+              ChatGPT.
             </CardDescription>
           </div>
-          <div className="flex flex-wrap gap-2">
-            <CopyButton
-              textToCopy={transcript}
-              label="Copiar conversa"
-              variant="outline"
-              classNameButton="px-3"
-              classNameIcon="text-current"
-              toastTitle="OK"
-              toastContent="Conversa copiada"
-            />
-            <CopyButton
-              textToCopy={promptWithContext}
-              label="Copiar prompt"
-              classNameButton="px-3"
-              classNameIcon="text-current"
-              toastTitle="OK"
-              toastContent="Prompt copiado"
-            />
-          </div>
-        </CardHeader>
-        <CardContent className="grid min-w-0 gap-4">
-          <div className="grid gap-2 rounded-lg border border-border bg-muted/20 p-4 text-sm">
-            <p><span className="font-medium">Contato:</span> {customer.name || "Sem nome"}</p>
-            <p><span className="font-medium">Telefone:</span> {customer.phone_e164}</p>
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="font-medium">Tags:</span>
-              {tagLabels.length ? (
-                tagLabels.map((tag) => (
-                  <Badge key={tag} variant="secondary">{tag}</Badge>
-                ))
-              ) : (
-                <span className="text-muted-foreground">Sem tags</span>
-              )}
-            </div>
-            <p>
-              <span className="font-medium">Mensagens:</span> {messages.length}
-              {isPartialLoad ? ` de ${totalMessages} mais recentes` : totalMessages !== messages.length ? ` de ${totalMessages}` : ""}
-            </p>
-          </div>
-
-          <Form method="get" className="grid gap-3 rounded-lg border border-border bg-background p-4 md:grid-cols-[1fr,1fr,auto,auto] md:items-end">
-            <div className="grid gap-1">
-              <label className="text-xs font-medium text-muted-foreground">De</label>
-              <Input type="datetime-local" name="from" defaultValue={filters.from} />
-            </div>
-            <div className="grid gap-1">
-              <label className="text-xs font-medium text-muted-foreground">Até</label>
-              <Input type="datetime-local" name="to" defaultValue={filters.to} />
-            </div>
-            <Button type="submit">Filtrar</Button>
-            <Button asChild variant="outline">
-              <Link to={`/admin/crm/${customer.id}/conversation`}>Limpar</Link>
-            </Button>
-          </Form>
-
-          <div className="grid min-w-0 gap-2">
-            <div className="flex items-center justify-between">
-              <p className="text-sm font-medium">Prompt pronto para ChatGPT</p>
-              <span className="text-xs text-muted-foreground">Inclui instrucoes + conversa</span>
-            </div>
-            <Textarea
-              value={promptWithContext}
-              readOnly
-              rows={12}
-              className="min-w-0 whitespace-pre-wrap break-words font-mono text-xs [overflow-wrap:anywhere]"
-            />
-          </div>
-
-          <div className="grid min-w-0 gap-2">
-            <div className="flex items-center justify-between">
-              <p className="text-sm font-medium">Transcricao</p>
-              <span className="text-xs text-muted-foreground">Somente a conversa</span>
-            </div>
-            <Textarea
-              value={transcript}
-              readOnly
-              rows={16}
-              className="min-w-0 whitespace-pre-wrap break-words font-mono text-xs [overflow-wrap:anywhere]"
-            />
-          </div>
-
-          <div className="grid min-w-0 gap-2">
-            <p className="text-sm font-medium">Visualizacao rapida</p>
-            {isPartialLoad ? (
-              <p className="text-xs text-muted-foreground">
-                Carregando por padrão só as 60 mensagens mais recentes. Use o filtro por data e horário para ampliar o período.
-              </p>
-            ) : null}
-            {messages.length ? (
-              <div className="min-w-0 overflow-hidden rounded-3xl border border-border bg-[linear-gradient(180deg,rgba(120,119,198,0.05),rgba(120,119,198,0)_22%),linear-gradient(135deg,rgba(34,197,94,0.08),rgba(255,255,255,0)_42%)]">
-                <ScrollArea className="h-[520px] w-full">
-                  <div className="grid min-w-0 gap-3 p-3 sm:p-4">
-                    {messages.map((message) => (
-                      <div
-                        key={message.id}
-                        className={`flex ${message.direction === "outbound" ? "justify-end" : "justify-start"}`}
-                      >
-                        <div className="min-w-0 max-w-[88%] sm:max-w-[75%]">
-                          <div
-                            className={`min-w-0 overflow-hidden rounded-3xl px-4 py-3 shadow-sm ${message.direction === "outbound"
-                                ? "rounded-br-md bg-emerald-500 text-emerald-50"
-                                : "rounded-bl-md border border-border bg-background text-foreground"
-                              }`}
-                          >
-                            <div
-                              className={`mb-2 flex flex-wrap items-center gap-2 text-[11px] ${message.direction === "outbound"
-                                  ? "text-emerald-100/90"
-                                  : "text-muted-foreground"
-                                }`}
-                            >
-                              <span className="font-medium">
-                                {message.direction === "outbound" ? "Atendente" : "Cliente"}
-                              </span>
-                              <span>{new Date(message.created_at).toLocaleString("pt-BR")}</span>
-                              {message.source ? <span>• {message.source}</span> : null}
-                            </div>
-                            <p className="whitespace-pre-wrap break-words text-sm leading-6 [overflow-wrap:anywhere]">
-                              {message.messageText}
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </ScrollArea>
-              </div>
-            ) : (
-              <p className="text-sm text-muted-foreground">Nenhuma conversa registrada ainda.</p>
-            )}
-          </div>
-        </CardContent>
-      </Card>
+        </header>
+        <div className="grid min-w-0 gap-3">
+          <CrmConversationSummary
+            customer={customer}
+            tagLabels={tagLabels}
+            visibleMessages={messages.length}
+            totalMessages={totalMessages}
+            isPartialLoad={isPartialLoad}
+          />
+          <CrmConversationFilters customerId={customer.id} filters={filters} />
+          <CrmConversationWorkspace
+            messages={messages}
+            transcript={transcript}
+            prompt={promptWithContext}
+            isPartialLoad={isPartialLoad}
+          />
+        </div>
+      </section>
     </div>
   );
 }
