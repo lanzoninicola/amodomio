@@ -1,5 +1,17 @@
 type ItemDeleteBlocker = {
   reason: string;
+  kind:
+    | "stock-movement"
+    | "recipe-usage"
+    | "recipe"
+    | "selling-channel"
+    | "item-cost-sheet"
+    | "purchase-conversion";
+};
+
+type ItemDeleteOptions = {
+  deleteLinkedRecipe?: boolean;
+  deleteLinkedCostSheets?: boolean;
 };
 
 function formatReasons(reasons: string[]) {
@@ -9,7 +21,11 @@ function formatReasons(reasons: string[]) {
   return `${reasons.slice(0, -1).join(", ")} e ${reasons[reasons.length - 1]}`;
 }
 
-export async function getItemDeleteBlockers(db: any, itemId: string) {
+export async function getItemDeleteBlockers(
+  db: any,
+  itemId: string,
+  options: ItemDeleteOptions = {}
+) {
   const stockMovementLookup =
     typeof db.stockMovement?.findFirst === "function"
       ? db.stockMovement.findFirst({
@@ -38,19 +54,26 @@ export async function getItemDeleteBlockers(db: any, itemId: string) {
           select: { id: true },
         })
       : Promise.resolve(null);
+  const sellingChannelLookup =
+    typeof db.itemSellingChannelItem?.findFirst === "function"
+      ? db.itemSellingChannelItem.findFirst({
+          where: { itemId },
+          select: { id: true },
+        })
+      : Promise.resolve(null);
 
   const [
     stockMovement,
     recipeLine,
     recipe,
-    menuItem,
+    sellingChannel,
     itemCostSheet,
     purchaseConversion,
   ] = await Promise.all([
     stockMovementLookup,
     recipeUsageLookup,
     db.recipe.findFirst({ where: { itemId }, select: { id: true } }),
-    db.menuItem.findFirst({ where: { itemId }, select: { id: true } }),
+    sellingChannelLookup,
     db.itemCostSheet.findFirst({ where: { itemId }, select: { id: true } }),
     db.itemPurchaseConversion.findFirst({
       where: { itemId },
@@ -60,16 +83,62 @@ export async function getItemDeleteBlockers(db: any, itemId: string) {
 
   const blockers: ItemDeleteBlocker[] = [];
   if (stockMovement)
-    blockers.push({ reason: "existem movimentações de estoque" });
+    blockers.push({
+      kind: "stock-movement",
+      reason: "existem movimentações de estoque",
+    });
   if (recipeLine)
-    blockers.push({ reason: "está sendo usado como ingrediente em receitas" });
-  if (recipe) blockers.push({ reason: "está vinculado a uma receita" });
-  if (menuItem) blockers.push({ reason: "está vinculado ao cardápio" });
-  if (itemCostSheet) blockers.push({ reason: "possui fichas de custo" });
+    blockers.push({
+      kind: "recipe-usage",
+      reason: "está sendo usado como ingrediente em receitas",
+    });
+  if (recipe && !options.deleteLinkedRecipe)
+    blockers.push({ kind: "recipe", reason: "está vinculado a uma receita" });
+  if (sellingChannel)
+    blockers.push({
+      kind: "selling-channel",
+      reason: "está vinculado a um canal de venda",
+    });
+  if (itemCostSheet && !options.deleteLinkedCostSheets)
+    blockers.push({
+      kind: "item-cost-sheet",
+      reason: "possui fichas de custo",
+    });
   if (purchaseConversion)
-    blockers.push({ reason: "possui UMs de compra vinculadas" });
+    blockers.push({
+      kind: "purchase-conversion",
+      reason: "possui UMs de compra vinculadas",
+    });
 
   return blockers;
+}
+
+export async function deleteItemWithLinkedRecords(
+  db: any,
+  itemId: string,
+  options: ItemDeleteOptions = {}
+) {
+  return db.$transaction(async (tx: any) => {
+    if (options.deleteLinkedCostSheets) {
+      await tx.itemCostSheet.deleteMany({
+        where: { itemId, baseItemCostSheetId: { not: null } },
+      });
+      await tx.itemCostSheet.deleteMany({ where: { itemId } });
+    }
+
+    if (options.deleteLinkedRecipe) {
+      await tx.recipe.deleteMany({ where: { itemId } });
+    }
+
+    // MenuItem pertence ao cardápio legado. Ele não representa um vínculo
+    // atual de canal e deve permanecer apenas sem a referência ao Item.
+    await tx.menuItem.updateMany({
+      where: { itemId },
+      data: { itemId: null },
+    });
+
+    return tx.item.delete({ where: { id: itemId } });
+  });
 }
 
 export function buildItemDeleteBlockedMessage(blockers: ItemDeleteBlocker[]) {

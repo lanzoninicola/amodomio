@@ -35,6 +35,7 @@ import { buildUniqueItemSellingSlug } from "~/domain/item/item-selling-slug.serv
 import { loadItemCostAuditForItem } from "~/domain/item/item-cost-audit.server";
 import { getAvailableItemUnits as getAvailableItemUnitsFromServer } from "~/domain/item/item-units.server";
 import {
+  deleteItemWithLinkedRecords,
   buildItemDeleteBlockedMessage,
   getItemDeleteBlockers,
 } from "~/domain/item/item-delete-guard.server";
@@ -663,13 +664,20 @@ export async function action({ request, params }: ActionFunctionArgs) {
     }
 
     if (_action === "item-delete") {
-      const blockers = await getItemDeleteBlockers(db, id);
+      const deleteLinkedRecipe = formData.get("deleteLinkedRecipe") === "on";
+      const deleteLinkedCostSheets =
+        formData.get("deleteLinkedCostSheets") === "on";
+      const deleteOptions = {
+        deleteLinkedRecipe,
+        deleteLinkedCostSheets,
+      };
+      const blockers = await getItemDeleteBlockers(db, id, deleteOptions);
 
       if (blockers.length > 0) {
         return badRequest(buildItemDeleteBlockedMessage(blockers));
       }
 
-      await db.item.delete({ where: { id } });
+      await deleteItemWithLinkedRecords(db, id, deleteOptions);
 
       return redirect("/admin/items");
     }

@@ -7,6 +7,7 @@ Este documento descreve a modelagem canônica do domínio `Item` e foi escrito p
 - `Item` é a entidade raiz do catálogo operacional.
 - O sistema não deve mais tratar `MenuItem` como fonte de verdade para produto vendável.
 - A disponibilidade pública no cardápio é derivada de flags e vínculos de venda; não existe mais `canBeInMenu`.
+- O catálogo comercial é organizado por `ProductLine -> ItemGroup -> ItemSellingInfo.Category`, com tags transversais no item.
 - Custos são controlados por `ItemVariation`, com separação entre:
   - estado atual: `ItemCostVariation`
   - histórico/auditoria operacional: `ItemCostVariationHistory`
@@ -26,6 +27,7 @@ Em outras palavras:
 - `Item` responde "o que é esse recurso no catálogo?"
 - `ItemVariation` responde "qual recorte vendável/técnico desse item?"
 - `ItemSellingInfo`, `ItemSellingChannelItem` e `ItemSellingPriceVariation` respondem "como esse item é publicado e precificado?"
+- `ProductLine`, `ItemGroup` e `ProductLineSellingChannel` respondem "a qual linha esse item pertence e em quais canais essa linha pode aparecer?"
 - `ItemCostVariation` e `ItemCostVariationHistory` respondem "qual é o custo atual e como ele evoluiu?"
 
 ## Entidades canônicas
@@ -82,6 +84,24 @@ Importante:
 - `ItemSellingInfo` não controla sozinha a exposição pública;
 - `upcoming = true` bloqueia a visibilidade pública do item no fluxo nativo.
 
+### `ProductLine` e `ItemGroup`
+
+O agrupamento comercial segue esta estrutura:
+
+```text
+ProductLine
+  -> ItemGroup
+       -> ItemSellingInfo.Category
+       -> ItemTag / Tag
+```
+
+- todo `ItemGroup` pertence obrigatoriamente a uma `ProductLine`;
+- categoria e tags continuam associadas ao item, pois podem variar entre os itens do mesmo grupo;
+- `ProductLineSellingChannel` controla se uma linha está liberada em cada canal;
+- a visibilidade final exige tanto a linha quanto o item visíveis no canal.
+
+As linhas iniciais são `pizza` e `massa-fresca`. A migração associa os grupos existentes a `pizza`, mantém Pizza visível nos canais já existentes e cria Massa fresca desabilitada. Portanto, `/cardapio` continua exibindo somente a linha Pizza até uma liberação explícita da nova linha para esse canal.
+
 ### `ItemSellingChannelItem`
 
 Representa o vínculo do item com um canal de venda.
@@ -96,6 +116,8 @@ Papel:
 
 - habilitar o item para um canal;
 - controlar a visibilidade pública por canal.
+
+Esse vínculo é o segundo nível da regra de exposição: ele só publica o item se a sua `ProductLine` também estiver visível no mesmo canal.
 
 Observação:
 

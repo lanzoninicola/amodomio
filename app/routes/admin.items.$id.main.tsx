@@ -12,10 +12,17 @@ import {
   AlertDialogTrigger,
 } from "~/components/ui/alert-dialog";
 import { Button } from "~/components/ui/button";
+import { Checkbox } from "~/components/ui/checkbox";
 import useSaveShortcut from "~/hooks/use-save-shortcut.hook";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "~/components/ui/select";
 import { Switch } from "~/components/ui/switch";
 import { buildAdminItemsMeta } from "~/domain/item/admin-items-meta";
 import type { AdminItemOutletContext } from "./admin.items.$id";
@@ -24,11 +31,20 @@ import { Separator } from "~/components/ui/separator";
 export const meta = buildAdminItemsMeta("Principal");
 
 export default function AdminItemMainTab() {
-  const { item, classifications, unitOptions, categories } = useOutletContext<AdminItemOutletContext>();
-  const [classificationValue, setClassificationValue] = useState(item.classification || classifications[0] || "");
-  const [categoryIdValue, setCategoryIdValue] = useState(item.categoryId || "__EMPTY__");
-  const [consumptionUmValue, setConsumptionUmValue] = useState(item.consumptionUm || "__EMPTY__");
-  const [recipeVariationPolicyValue, setRecipeVariationPolicyValue] = useState(item.recipeVariationPolicy || "auto");
+  const { item, classifications, unitOptions, categories } =
+    useOutletContext<AdminItemOutletContext>();
+  const [classificationValue, setClassificationValue] = useState(
+    item.classification || classifications[0] || ""
+  );
+  const [categoryIdValue, setCategoryIdValue] = useState(
+    item.categoryId || "__EMPTY__"
+  );
+  const [consumptionUmValue, setConsumptionUmValue] = useState(
+    item.consumptionUm || "__EMPTY__"
+  );
+  const [recipeVariationPolicyValue, setRecipeVariationPolicyValue] = useState(
+    item.recipeVariationPolicy || "auto"
+  );
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const formRef = useRef<HTMLFormElement | null>(null);
 
@@ -53,7 +69,10 @@ export default function AdminItemMainTab() {
                 Criar item
               </Link>
             </Button>
-            <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+            <AlertDialog
+              open={showDeleteDialog}
+              onOpenChange={setShowDeleteDialog}
+            >
               <AlertDialogTrigger asChild>
                 <Button type="button" variant="destructive">
                   Eliminar item
@@ -63,18 +82,59 @@ export default function AdminItemMainTab() {
                 <AlertDialogHeader>
                   <AlertDialogTitle>Eliminar item?</AlertDialogTitle>
                   <AlertDialogDescription>
-                    Esta ação remove <strong>{item.name}</strong>. Se a eliminação for permitida, você será redirecionado para a lista completa de itens.
+                    Esta ação remove <strong>{item.name}</strong>. Escolha
+                    abaixo se os registros vinculados também devem ser
+                    eliminados. Se a eliminação for permitida, você será
+                    redirecionado para a lista completa de itens.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                  <Form method="post" action="..">
-                    <input type="hidden" name="_action" value="item-delete" />
+                <Form method="post" action=".." className="space-y-4">
+                  <input type="hidden" name="_action" value="item-delete" />
+                  <div className="space-y-3 rounded-md border border-slate-200 p-4">
+                    <label className="flex items-start gap-3 text-sm">
+                      <Checkbox
+                        id="deleteLinkedRecipe"
+                        name="deleteLinkedRecipe"
+                        disabled={Number(item._linkedRecipeCount || 0) === 0}
+                      />
+                      <span>
+                        <span className="font-medium">
+                          Eliminar receita produzida por este item
+                        </span>
+                        <span className="block text-slate-500">
+                          {Number(item._linkedRecipeCount || 0)} receita(s)
+                          vinculada(s)
+                        </span>
+                      </span>
+                    </label>
+                    <label className="flex items-start gap-3 text-sm">
+                      <Checkbox
+                        id="deleteLinkedCostSheets"
+                        name="deleteLinkedCostSheets"
+                        disabled={Number(item._itemCostSheetCount || 0) === 0}
+                      />
+                      <span>
+                        <span className="font-medium">
+                          Eliminar fichas de custo vinculadas
+                        </span>
+                        <span className="block text-slate-500">
+                          {Number(item._itemCostSheetCount || 0)} ficha(s)
+                          vinculada(s)
+                        </span>
+                      </span>
+                    </label>
+                    <p className="text-xs text-slate-500">
+                      Se este item fizer parte da composição de outra receita, a
+                      eliminação será bloqueada mesmo com estas opções marcadas.
+                    </p>
+                  </div>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
                     <Button type="submit" variant="destructive">
                       Confirmar eliminação
                     </Button>
-                  </Form>
-                </AlertDialogFooter>
+                  </AlertDialogFooter>
+                </Form>
               </AlertDialogContent>
             </AlertDialog>
           </div>
@@ -87,12 +147,24 @@ export default function AdminItemMainTab() {
             <div className="grid gap-4 md:grid-cols-2">
               <div>
                 <Label htmlFor="name">Nome</Label>
-                <Input id="name" name="name" defaultValue={item.name} required />
+                <Input
+                  id="name"
+                  name="name"
+                  defaultValue={item.name}
+                  required
+                />
               </div>
               <div>
                 <Label htmlFor="classification">Classificação</Label>
-                <input type="hidden" name="classification" value={classificationValue} />
-                <Select value={classificationValue} onValueChange={setClassificationValue}>
+                <input
+                  type="hidden"
+                  name="classification"
+                  value={classificationValue}
+                />
+                <Select
+                  value={classificationValue}
+                  onValueChange={setClassificationValue}
+                >
                   <SelectTrigger id="classification" className="mt-1">
                     <SelectValue placeholder="Selecionar..." />
                   </SelectTrigger>
@@ -109,7 +181,11 @@ export default function AdminItemMainTab() {
 
             <div>
               <Label htmlFor="description">Descrição</Label>
-              <Input id="description" name="description" defaultValue={item.description || ""} />
+              <Input
+                id="description"
+                name="description"
+                defaultValue={item.description || ""}
+              />
             </div>
 
             <div className="grid gap-4 md:grid-cols-2">
@@ -118,9 +194,14 @@ export default function AdminItemMainTab() {
                 <input
                   type="hidden"
                   name="consumptionUm"
-                  value={consumptionUmValue === "__EMPTY__" ? "" : consumptionUmValue}
+                  value={
+                    consumptionUmValue === "__EMPTY__" ? "" : consumptionUmValue
+                  }
                 />
-                <Select value={consumptionUmValue} onValueChange={setConsumptionUmValue}>
+                <Select
+                  value={consumptionUmValue}
+                  onValueChange={setConsumptionUmValue}
+                >
                   <SelectTrigger id="consumptionUm" className="mt-1">
                     <SelectValue placeholder="Selecionar..." />
                   </SelectTrigger>
@@ -135,20 +216,32 @@ export default function AdminItemMainTab() {
                 </Select>
               </div>
               <div>
-                <Label htmlFor="recipeVariationPolicy">Variação na receita</Label>
-                <input type="hidden" name="recipeVariationPolicy" value={recipeVariationPolicyValue} />
-                <Select value={recipeVariationPolicyValue} onValueChange={setRecipeVariationPolicyValue}>
+                <Label htmlFor="recipeVariationPolicy">
+                  Variação na receita
+                </Label>
+                <input
+                  type="hidden"
+                  name="recipeVariationPolicy"
+                  value={recipeVariationPolicyValue}
+                />
+                <Select
+                  value={recipeVariationPolicyValue}
+                  onValueChange={setRecipeVariationPolicyValue}
+                >
                   <SelectTrigger id="recipeVariationPolicy" className="mt-1">
                     <SelectValue placeholder="Selecionar..." />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="auto">Automático (regra)</SelectItem>
                     <SelectItem value="hide">Ocultar variação</SelectItem>
-                    <SelectItem value="show">Sempre mostrar variação</SelectItem>
+                    <SelectItem value="show">
+                      Sempre mostrar variação
+                    </SelectItem>
                   </SelectContent>
                 </Select>
                 <p className="mt-1 text-xs text-slate-600">
-                  Auto mostra o campo só quando existir mais de uma variação com custo diferente.
+                  Auto mostra o campo só quando existir mais de uma variação com
+                  custo diferente.
                 </p>
               </div>
               <div>
@@ -158,7 +251,10 @@ export default function AdminItemMainTab() {
                   name="categoryId"
                   value={categoryIdValue === "__EMPTY__" ? "" : categoryIdValue}
                 />
-                <Select value={categoryIdValue} onValueChange={setCategoryIdValue}>
+                <Select
+                  value={categoryIdValue}
+                  onValueChange={setCategoryIdValue}
+                >
                   <SelectTrigger id="categoryId" className="mt-1">
                     <SelectValue placeholder="Selecionar..." />
                   </SelectTrigger>
@@ -177,8 +273,12 @@ export default function AdminItemMainTab() {
 
           <div className=" p-4">
             <div className="mb-3">
-              <h3 className="text-sm font-semibold text-slate-900">Configurações do item</h3>
-              <p className="text-xs text-slate-600">Ative somente os comportamentos que este item precisa.</p>
+              <h3 className="text-sm font-semibold text-slate-900">
+                Configurações do item
+              </h3>
+              <p className="text-xs text-slate-600">
+                Ative somente os comportamentos que este item precisa.
+              </p>
             </div>
 
             <div className="space-y-4">
@@ -228,10 +328,7 @@ export default function AdminItemMainTab() {
             </div>
           </div>
         </div>
-
-
       </Form>
-
     </div>
   );
 }
@@ -245,7 +342,9 @@ function FlagSection({
 }) {
   return (
     <section className="space-y-2">
-      <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500">{title}</h4>
+      <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+        {title}
+      </h4>
       <div className="grid gap-3 md:grid-cols-2">{children}</div>
     </section>
   );

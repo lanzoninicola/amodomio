@@ -17,7 +17,13 @@ export class RecipeEntity {
   }
 
   async findById(id: string) {
-    return await this.client.recipe.findUnique({ where: { id } });
+    return await this.client.recipe.findUnique({
+      where: { id },
+      include: {
+        RecipePreheating: true,
+        RecipeBaking: true,
+      },
+    });
   }
 
   async create(data: Prisma.RecipeCreateInput) {
@@ -34,6 +40,8 @@ export class RecipeEntity {
     const recipe = await client.recipe.findUnique({
       where: { id },
       include: {
+        RecipePreheating: true,
+        RecipeBaking: true,
         RecipeIngredient: {
           include: {
             RecipeVariationIngredient: {
@@ -94,6 +102,34 @@ export class RecipeEntity {
           isVegetarian: Boolean(recipe.isVegetarian),
         },
       });
+
+      if (recipe.RecipePreheating) {
+        await tx.recipePreheating.create({
+          data: {
+            recipeId: duplicatedRecipe.id,
+            upperTemperatureCelsius:
+              recipe.RecipePreheating.upperTemperatureCelsius,
+            lowerTemperatureCelsius:
+              recipe.RecipePreheating.lowerTemperatureCelsius,
+            durationMinutes: recipe.RecipePreheating.durationMinutes,
+            notes: recipe.RecipePreheating.notes,
+          },
+        });
+      }
+
+      if (recipe.RecipeBaking) {
+        await tx.recipeBaking.create({
+          data: {
+            recipeId: duplicatedRecipe.id,
+            upperTemperatureCelsius:
+              recipe.RecipeBaking.upperTemperatureCelsius,
+            lowerTemperatureCelsius:
+              recipe.RecipeBaking.lowerTemperatureCelsius,
+            durationMinutes: recipe.RecipeBaking.durationMinutes,
+            notes: recipe.RecipeBaking.notes,
+          },
+        });
+      }
 
       for (const ingredient of recipe.RecipeIngredient || []) {
         const duplicatedIngredient = await tx.recipeIngredient.create({

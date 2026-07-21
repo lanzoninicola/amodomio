@@ -43,10 +43,40 @@ model Recipe {
   Variation           Variation?         @relation(fields: [variationId], references: [id])
   ItemVariations      ItemVariation[]
   RecipeIngredient    RecipeIngredient[]
+  RecipePreheating    RecipePreheating?
+  RecipeBaking        RecipeBaking?
 
   @@index([itemId], map: "recipes_item_id_idx")
   @@index([variationId], map: "recipes_variation_id_idx")
   @@map("recipes")
+}
+
+model RecipePreheating {
+  id                      String   @id @default(uuid())
+  recipeId                String   @unique @map("recipe_id")
+  upperTemperatureCelsius Float?   @map("upper_temperature_celsius")
+  lowerTemperatureCelsius Float?   @map("lower_temperature_celsius")
+  durationMinutes         Int?     @map("duration_minutes")
+  notes                   String?  @db.Text
+  createdAt               DateTime @default(now()) @map("created_at")
+  updatedAt               DateTime @default(now()) @updatedAt @map("updated_at")
+  Recipe                  Recipe   @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+
+  @@map("recipe_preheating")
+}
+
+model RecipeBaking {
+  id                      String   @id @default(uuid())
+  recipeId                String   @unique @map("recipe_id")
+  upperTemperatureCelsius Float?   @map("upper_temperature_celsius")
+  lowerTemperatureCelsius Float?   @map("lower_temperature_celsius")
+  durationMinutes         Int?     @map("duration_minutes")
+  notes                   String?  @db.Text
+  createdAt               DateTime @default(now()) @map("created_at")
+  updatedAt               DateTime @default(now()) @updatedAt @map("updated_at")
+  Recipe                  Recipe   @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+
+  @@map("recipe_baking")
 }
 
 model Ingredient {
@@ -601,6 +631,7 @@ model MenuItemGroup {
 
 model ItemGroup {
   id             String    @id @default(uuid())
+  productLineId  String    @map("product_line_id")
   key            String
   name           String
   description    String
@@ -613,9 +644,27 @@ model ItemGroup {
   deletedBy      String?   @map("deleted_by")
   featured       Boolean   @default(false)
 
+  ProductLine     ProductLine       @relation(fields: [productLineId], references: [id], onDelete: Restrict)
   ItemSellingInfo ItemSellingInfo[]
 
+  @@index([productLineId], map: "item_groups_product_line_id_idx")
   @@map("item_groups")
+}
+
+model ProductLine {
+  id             String   @id @default(uuid())
+  key            String   @unique
+  name           String
+  description    String?
+  sortOrderIndex Int      @default(0) @map("sort_order_index")
+  active         Boolean  @default(true)
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at")
+
+  ItemGroup                 ItemGroup[]
+  ProductLineSellingChannel ProductLineSellingChannel[]
+
+  @@map("product_lines")
 }
 
 model MenuItem {
@@ -855,8 +904,25 @@ model ItemSellingChannel {
   sortOrderIndex            Int                         @default(0) @map("sort_order_index")
   ItemSellingChannelItem    ItemSellingChannelItem[]
   ItemSellingPriceVariation ItemSellingPriceVariation[]
+  ProductLineSellingChannel ProductLineSellingChannel[]
 
   @@map("item_selling_channels")
+}
+
+model ProductLineSellingChannel {
+  id                   String   @id @default(uuid())
+  productLineId        String   @map("product_line_id")
+  itemSellingChannelId String   @map("item_selling_channel_id")
+  visible              Boolean  @default(false)
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @default(now()) @updatedAt @map("updated_at")
+
+  ProductLine        ProductLine        @relation(fields: [productLineId], references: [id], onDelete: Cascade)
+  ItemSellingChannel ItemSellingChannel @relation(fields: [itemSellingChannelId], references: [id], onDelete: Cascade)
+
+  @@unique([productLineId, itemSellingChannelId], map: "product_line_selling_channels_line_channel_unique")
+  @@index([itemSellingChannelId, visible], map: "product_line_selling_channels_channel_visible_idx")
+  @@map("product_line_selling_channels")
 }
 
 model ItemSellingChannelItem {

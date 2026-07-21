@@ -65,6 +65,7 @@ import {
   listRecipeLinkedVariations,
   listRecipeCompositionLines,
   moveRecipeCompositionIngredient,
+  reorderRecipeCompositionIngredients,
   updateRecipeCompositionIngredientDefaultLoss,
   updateRecipeCompositionLine,
 } from "~/domain/recipe/recipe-composition.server";
@@ -1305,6 +1306,28 @@ export async function action({ request }: ActionFunctionArgs) {
       return badRequest(
         (error as Error)?.message ||
           "Erro ao reordenar ingrediente da composição"
+      );
+    }
+  }
+
+  if (_action === "recipe-ingredient-reorder") {
+    const recipeId = String(values.recipeId || "").trim();
+    if (!recipeId) return badRequest("Receita inválida");
+
+    try {
+      const orderedIds = JSON.parse(String(values.orderedIds || "[]"));
+      if (!Array.isArray(orderedIds)) return badRequest("Ordem inválida");
+
+      await reorderRecipeCompositionIngredients({
+        db: prismaClient as any,
+        recipeId,
+        orderedIds,
+      });
+      return ok({ reordered: true });
+    } catch (error) {
+      return badRequest(
+        (error as Error)?.message ||
+          "Erro ao reordenar ingredientes da composição"
       );
     }
   }

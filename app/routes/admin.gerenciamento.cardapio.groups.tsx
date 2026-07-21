@@ -41,6 +41,13 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   MoreHorizontal,
   Plus,
   Pencil,
@@ -61,10 +68,17 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const groups = await prismaClient.itemGroup.findMany({
     where: showDeleted ? {} : { deletedAt: null },
     orderBy: { sortOrderIndex: "asc" },
+    include: { ProductLine: true },
+  });
+
+  const productLines = await prismaClient.productLine.findMany({
+    where: { active: true },
+    orderBy: { sortOrderIndex: "asc" },
   });
 
   return json({
     groups,
+    productLines,
     showDeleted,
   });
 }
@@ -88,13 +102,17 @@ export async function action({ request }: ActionFunctionArgs) {
     const key = (formData.get("key") || "").toString().trim();
     const name = (formData.get("name") || "").toString().trim();
     const description = (formData.get("description") || "").toString();
-    const sortOrderIndexRaw = (formData.get("sortOrderIndex") || "1000").toString();
+    const sortOrderIndexRaw = (
+      formData.get("sortOrderIndex") || "1000"
+    ).toString();
     const visible = toBool(formData.get("visible"));
     const featured = toBool(formData.get("featured"));
+    const productLineId = (formData.get("productLineId") || "").toString();
 
     const errors: Record<string, string> = {};
     if (!key) errors.key = "Informe a chave";
     if (!name) errors.name = "Informe o nome";
+    if (!productLineId) errors.productLineId = "Selecione a linha de produto";
 
     const sortOrderIndex = Number.isNaN(Number(sortOrderIndexRaw))
       ? 1000
@@ -120,6 +138,7 @@ export async function action({ request }: ActionFunctionArgs) {
         sortOrderIndex,
         visible,
         featured,
+        productLineId,
         createdAt: new Date(),
       },
     });
@@ -133,14 +152,18 @@ export async function action({ request }: ActionFunctionArgs) {
     const key = (formData.get("key") || "").toString().trim();
     const name = (formData.get("name") || "").toString().trim();
     const description = (formData.get("description") || "").toString();
-    const sortOrderIndexRaw = (formData.get("sortOrderIndex") || "1000").toString();
+    const sortOrderIndexRaw = (
+      formData.get("sortOrderIndex") || "1000"
+    ).toString();
     const visible = toBool(formData.get("visible"));
     const featured = toBool(formData.get("featured"));
+    const productLineId = (formData.get("productLineId") || "").toString();
 
     const errors: Record<string, string> = {};
     if (!id) errors.id = "ID inválido";
     if (!key) errors.key = "Informe a chave";
     if (!name) errors.name = "Informe o nome";
+    if (!productLineId) errors.productLineId = "Selecione a linha de produto";
 
     const sortOrderIndex = Number.isNaN(Number(sortOrderIndexRaw))
       ? 1000
@@ -167,6 +190,7 @@ export async function action({ request }: ActionFunctionArgs) {
         sortOrderIndex,
         visible,
         featured,
+        productLineId,
       },
     });
 
@@ -221,6 +245,7 @@ type GroupFormDialogProps = {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   mode: "create" | "edit";
+  productLines: Array<{ id: string; name: string }>;
   defaultValues?: {
     id?: string;
     key?: string;
@@ -229,6 +254,7 @@ type GroupFormDialogProps = {
     sortOrderIndex?: number;
     visible?: boolean;
     featured?: boolean;
+    productLineId?: string;
   };
   actionErrors?: Record<string, string>;
 };
@@ -237,6 +263,7 @@ function GroupFormDialog({
   open,
   onOpenChange,
   mode,
+  productLines,
   defaultValues,
   actionErrors,
 }: GroupFormDialogProps) {
@@ -248,18 +275,49 @@ function GroupFormDialog({
       <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle>
-            {mode === "create" ? "Novo grupo de itens" : "Editar grupo de itens"}
+            {mode === "create"
+              ? "Novo grupo de itens"
+              : "Editar grupo de itens"}
           </DialogTitle>
           <DialogDescription>
-            Grupos controlam a ordem e a visibilidade das seções do cardápio (1000, 2000, 3000...).
+            Grupos controlam a ordem e a visibilidade das seções do cardápio
+            (1000, 2000, 3000...).
           </DialogDescription>
         </DialogHeader>
 
         <Form method="post" className="space-y-4">
-          <input type="hidden" name="_intent" value={mode === "create" ? "create" : "update"} />
+          <input
+            type="hidden"
+            name="_intent"
+            value={mode === "create" ? "create" : "update"}
+          />
           {mode === "edit" ? (
             <input type="hidden" name="id" defaultValue={defaultValues?.id} />
           ) : null}
+
+          <div className="space-y-1">
+            <label className="text-sm font-medium">Linha de produto</label>
+            <Select
+              name="productLineId"
+              defaultValue={defaultValues?.productLineId ?? productLines[0]?.id}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Selecione a linha" />
+              </SelectTrigger>
+              <SelectContent>
+                {productLines.map((line) => (
+                  <SelectItem key={line.id} value={line.id}>
+                    {line.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {actionErrors?.productLineId ? (
+              <p className="text-xs text-red-500">
+                {actionErrors.productLineId}
+              </p>
+            ) : null}
+          </div>
 
           <div className="space-y-1">
             <label className="text-sm font-medium">Key</label>
@@ -275,7 +333,11 @@ function GroupFormDialog({
 
           <div className="space-y-1">
             <label className="text-sm font-medium">Nome</label>
-            <Input name="name" defaultValue={defaultValues?.name ?? ""} placeholder="Pizzas" />
+            <Input
+              name="name"
+              defaultValue={defaultValues?.name ?? ""}
+              placeholder="Pizzas"
+            />
             {actionErrors?.name ? (
               <p className="text-xs text-red-500">{actionErrors.name}</p>
             ) : null}
@@ -292,7 +354,9 @@ function GroupFormDialog({
 
           <div className="flex gap-4 items-center">
             <div className="space-y-1">
-              <label className="text-sm font-medium">Ordem (sortOrderIndex)</label>
+              <label className="text-sm font-medium">
+                Ordem (sortOrderIndex)
+              </label>
               <Input
                 name="sortOrderIndex"
                 type="number"
@@ -342,7 +406,7 @@ function GroupFormDialog({
 // PAGE COMPONENT
 // ----------------------------------------------------
 export default function AdminGerenciamentoCardapioGroupsPage() {
-  const { groups, showDeleted } = useLoaderData<typeof loader>();
+  const { groups, productLines, showDeleted } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const [searchParams, setSearchParams] = useSearchParams();
   const [openDialog, setOpenDialog] = useState(false);
@@ -363,8 +427,13 @@ export default function AdminGerenciamentoCardapioGroupsPage() {
         name: actionData.form.name,
         description: actionData.form.description,
         sortOrderIndex: Number(actionData.form.sortOrderIndex ?? 1000),
-        visible: actionData.form.visible === "true" || actionData.form.visible === "on",
-        featured: actionData.form.featured === "true" || actionData.form.featured === "on",
+        visible:
+          actionData.form.visible === "true" ||
+          actionData.form.visible === "on",
+        featured:
+          actionData.form.featured === "true" ||
+          actionData.form.featured === "on",
+        productLineId: actionData.form.productLineId,
       });
     }
   }, [actionData]);
@@ -424,7 +493,11 @@ export default function AdminGerenciamentoCardapioGroupsPage() {
             onClick={toggleShowDeleted}
             className="gap-1"
           >
-            {showDeleted ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+            {showDeleted ? (
+              <Eye className="w-4 h-4" />
+            ) : (
+              <EyeOff className="w-4 h-4" />
+            )}
             {showDeleted ? "Ver ativos" : "Ver excluídos"}
           </Button>
           <Button onClick={handleNew} className="gap-2">
@@ -439,6 +512,7 @@ export default function AdminGerenciamentoCardapioGroupsPage() {
           <TableHeader>
             <TableRow>
               <TableHead className="w-[220px]">Nome</TableHead>
+              <TableHead>Linha de produto</TableHead>
               <TableHead>Key</TableHead>
               <TableHead>Descrição</TableHead>
               <TableHead className="w-[90px] text-right">Ordem</TableHead>
@@ -449,7 +523,10 @@ export default function AdminGerenciamentoCardapioGroupsPage() {
           <TableBody>
             {groups.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="text-center py-6 text-muted-foreground">
+                <TableCell
+                  colSpan={7}
+                  className="text-center py-6 text-muted-foreground"
+                >
                   Nenhum grupo encontrado
                 </TableCell>
               </TableRow>
@@ -460,21 +537,29 @@ export default function AdminGerenciamentoCardapioGroupsPage() {
                   className={cn(g.deletedAt ? "opacity-60 bg-muted/40" : "")}
                 >
                   <TableCell className="font-medium">{g.name}</TableCell>
+                  <TableCell>{g.ProductLine.name}</TableCell>
                   <TableCell className="text-xs font-mono">{g.key}</TableCell>
                   <TableCell className="max-w-[250px] truncate text-sm">
                     {g.description}
                   </TableCell>
-                  <TableCell className="text-right">{g.sortOrderIndex}</TableCell>
+                  <TableCell className="text-right">
+                    {g.sortOrderIndex}
+                  </TableCell>
                   <TableCell>
                     <div className="flex gap-1 items-center">
                       {g.visible ? (
                         <Badge variant="outline">Visível</Badge>
                       ) : (
-                        <Badge variant="destructive" className="bg-destructive/10 text-destructive border-destructive/50">
+                        <Badge
+                          variant="destructive"
+                          className="bg-destructive/10 text-destructive border-destructive/50"
+                        >
                           Oculto
                         </Badge>
                       )}
-                      {g.featured ? <Badge variant="secondary">Destaque</Badge> : null}
+                      {g.featured ? (
+                        <Badge variant="secondary">Destaque</Badge>
+                      ) : null}
                       {g.deletedAt ? (
                         <Badge variant="destructive">Excluído</Badge>
                       ) : null}
@@ -524,6 +609,7 @@ export default function AdminGerenciamentoCardapioGroupsPage() {
         open={openDialog}
         onOpenChange={setOpenDialog}
         mode={mode}
+        productLines={productLines}
         defaultValues={
           selected ?? {
             key: "",
@@ -532,6 +618,7 @@ export default function AdminGerenciamentoCardapioGroupsPage() {
             sortOrderIndex: 1000,
             visible: true,
             featured: false,
+            productLineId: productLines[0]?.id,
           }
         }
         actionErrors={actionData?.errors}

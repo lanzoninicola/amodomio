@@ -365,6 +365,42 @@ export async function moveRecipeCompositionIngredient(params: {
   ])
 }
 
+export async function reorderRecipeCompositionIngredients(params: {
+  db: any
+  recipeId: string
+  orderedIds: string[]
+}): Promise<void> {
+  const { db, recipeId, orderedIds } = params
+  const normalizedIds = orderedIds.map((id) => String(id).trim()).filter(Boolean)
+
+  if (normalizedIds.length === 0 || new Set(normalizedIds).size !== normalizedIds.length) {
+    throw new Error("Ordem de ingredientes inválida")
+  }
+
+  const model = isNewCompositionModelAvailable(db) ? db.recipeIngredient : db.recipeLine
+  const rows = await model.findMany({
+    where: { recipeId },
+    select: { id: true },
+  })
+  const persistedIds = rows.map((row: { id: string }) => String(row.id))
+
+  if (
+    persistedIds.length !== normalizedIds.length ||
+    persistedIds.some((id: string) => !normalizedIds.includes(id))
+  ) {
+    throw new Error("A composição mudou. Atualize a página e tente novamente")
+  }
+
+  await db.$transaction(
+    normalizedIds.map((id, index) =>
+      model.update({
+        where: { id },
+        data: { sortOrderIndex: index },
+      })
+    )
+  )
+}
+
 async function resolveTargetItemVariationIdsForRecipe(db: any, recipeId: string): Promise<string[]> {
   const linked = await db.itemVariation.findMany({
     where: { recipeId, deletedAt: null },

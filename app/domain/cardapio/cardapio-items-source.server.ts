@@ -486,13 +486,28 @@ function toCardapioIndexItem(item: CardapioCompatItem): CardapioIndexItem {
   };
 }
 
-function buildNativeCardapioItemWhere(
+export function buildNativeCardapioItemWhere(
   params: MenuItemEntityFindAllParams = {}
 ) {
   const legacyWhere = (params.where || {}) as Record<string, unknown>;
   const sellingChannelKey = params.sellingChannelKey || "cardapio";
   const where: Record<string, unknown> = {
     canSell: true,
+    ItemSellingInfo: {
+      ItemGroup: {
+        ProductLine: {
+          active: true,
+          ProductLineSellingChannel: {
+            some: {
+              visible: true,
+              ItemSellingChannel: {
+                key: sellingChannelKey,
+              },
+            },
+          },
+        },
+      },
+    },
     ItemSellingChannelItem: {
       some: {
         ItemSellingChannel: {

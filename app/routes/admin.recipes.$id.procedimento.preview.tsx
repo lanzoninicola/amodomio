@@ -12,10 +12,56 @@ function formatQuantity(value: unknown) {
   });
 }
 
+function ThermalPhasePreview({
+  title,
+  phase,
+}: {
+  title: string;
+  phase?: {
+    upperTemperatureCelsius?: number | null;
+    lowerTemperatureCelsius?: number | null;
+    durationMinutes?: number | null;
+    notes?: string | null;
+  } | null;
+}) {
+  if (!phase) return null;
+
+  return (
+    <section className="mt-6">
+      <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-700">
+        {title}
+      </h2>
+      <div className="mt-2 rounded-md border border-slate-200 p-4 text-sm text-slate-800 print:border-slate-300">
+        <div className="grid gap-2 sm:grid-cols-3">
+          <p>
+            Superior: {phase.upperTemperatureCelsius ?? "-"}
+            {phase.upperTemperatureCelsius == null ? "" : " °C"}
+          </p>
+          <p>
+            Inferior: {phase.lowerTemperatureCelsius ?? "-"}
+            {phase.lowerTemperatureCelsius == null ? "" : " °C"}
+          </p>
+          <p>
+            Tempo: {phase.durationMinutes ?? "-"}
+            {phase.durationMinutes == null ? "" : " min"}
+          </p>
+        </div>
+        {phase.notes ? (
+          <p className="mt-3 whitespace-pre-wrap border-t border-slate-100 pt-3 leading-7">
+            {phase.notes}
+          </p>
+        ) : null}
+      </div>
+    </section>
+  );
+}
+
 export default function AdminRecipeProcedimentoPreview() {
   const { recipe, recipeLines, linkedVariations } =
     useOutletContext<AdminRecipeOutletContext>();
   const procedure = String((recipe as any)?.productionProcedure || "").trim();
+  const preheating = (recipe as any)?.RecipePreheating || null;
+  const baking = (recipe as any)?.RecipeBaking || null;
   const productionNotes = String((recipe as any)?.productionNotes || "").trim();
   const referenceVariation =
     linkedVariations.find((variation) => variation.isReference)
@@ -148,6 +194,9 @@ export default function AdminRecipeProcedimentoPreview() {
               {procedure || "Procedimento ainda nao cadastrado."}
             </div>
           </section>
+
+          <ThermalPhasePreview title="Pré-aquecimento" phase={preheating} />
+          <ThermalPhasePreview title="Assamento" phase={baking} />
 
           {productionNotes ? (
             <section className="mt-6">

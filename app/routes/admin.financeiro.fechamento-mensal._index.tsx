@@ -21,12 +21,18 @@ import {
   Edit,
   ChevronDown,
   ExternalLink,
+  CalendarDays,
+  GripVertical,
+  Maximize2,
   Info,
+  RefreshCw,
+  Save,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import * as React from "react";
 
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -44,7 +50,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 import prismaClient from "~/lib/prisma/client.server";
 import { DecimalInput } from "~/components/inputs/inputs";
@@ -67,6 +78,11 @@ type ActionData = {
 
 type MonthlyCloseRecord = FinancialMonthlyClose & {
   accountantDreSheetUrl?: string | null;
+};
+
+type FloatingActionsPosition = {
+  x: number;
+  y: number;
 };
 
 export const meta: MetaFunction = () => [
@@ -98,7 +114,7 @@ const READONLY_INPUT_CLASS =
 const SECTION_SHELL_CLASS =
   "space-y-4 xl:col-span-4 rounded-2xl bg-slate-50/60 hover:bg-slate-50 hover:shadow-xl p-3";
 const STICKY_SECTION_HEADER_CLASS =
-  "sticky top-16 z-20 min-h-[200px] rounded-xl border border-slate-200 bg-white/95 px-4 py-4 shadow-none backdrop-blur-sm -mx-1";
+  "sticky z-20 min-h-[200px] rounded-xl border border-slate-200 bg-white/95 px-4 py-4 shadow-none backdrop-blur-sm -mx-1";
 const SUBSECTION_CLASS = "space-y-4 rounded-lg px-1 py-2";
 const SUBSECTION_HEADER_CLASS = "flex flex-col items-start gap-1";
 
@@ -672,11 +688,15 @@ function KPICard({
   }[tone];
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-none">
-      <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-slate-500">
+    <div className="flex min-h-10 items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-none">
+      <p className="min-w-0 truncate text-[10px] font-medium uppercase tracking-[0.08em] text-slate-500">
         {label}
       </p>
-      <p className={`font-mono text-xl font-semibold ${toneClass}`}>{value}</p>
+      <p
+        className={`shrink-0 font-mono text-sm font-semibold leading-tight ${toneClass}`}
+      >
+        {value}
+      </p>
     </div>
   );
 }
@@ -1059,7 +1079,16 @@ export default function AdminFinanceiroFechamentoMensal() {
   >("idle");
   const [isSwitchingPeriod, setIsSwitchingPeriod] = React.useState(false);
   const [isZenMode, setIsZenMode] = React.useState(false);
+  const [showKpis, setShowKpis] = React.useState(false);
+  const [floatingActionsPosition, setFloatingActionsPosition] =
+    React.useState<FloatingActionsPosition | null>(null);
   const loadFrameRef = React.useRef<number | null>(null);
+  const floatingActionsRef = React.useRef<HTMLDivElement | null>(null);
+  const floatingActionsDragRef = React.useRef<{
+    pointerId: number;
+    offsetX: number;
+    offsetY: number;
+  } | null>(null);
   const [currentBlocksOpen, setCurrentBlocksOpen] = React.useState({
     indicadores: true,
     receitas: true,
@@ -1521,21 +1550,6 @@ export default function AdminFinanceiroFechamentoMensal() {
   const hasPendingPeriodChange =
     selectedReferenceMonth !== referenceMonth ||
     selectedReferenceYear !== referenceYear;
-  const loadStatusMeta = {
-    idle: { label: "Selecione mês/ano e carregue", tone: "muted" as const },
-    loading: { label: "Carregando dados...", tone: "blue" as const },
-    ok: { label: "Valores carregados", tone: "green" as const },
-    notfound: {
-      label: "Nenhum fechamento para este período",
-      tone: "amber" as const,
-    },
-  };
-  const loadToneClass = {
-    muted: "border border-slate-200 bg-white text-slate-600",
-    blue: "border border-slate-200 bg-white text-slate-700",
-    green: "border border-emerald-200 bg-emerald-50 text-emerald-800",
-    amber: "border border-amber-200 bg-amber-50 text-amber-900",
-  }[loadStatusMeta[loadStatus].tone];
   const formatShortPeriodLabel = (month: number, year: number) => {
     const label =
       MONTH_OPTIONS.find((m) => m.value === month)?.label ?? String(month);
@@ -1607,6 +1621,69 @@ export default function AdminFinanceiroFechamentoMensal() {
     selectedReferenceYear,
   ]);
 
+  const handleFloatingActionsDragStart = React.useCallback(
+    (event: React.PointerEvent<HTMLButtonElement>) => {
+      const bar = floatingActionsRef.current;
+      if (!bar) return;
+      const rect = bar.getBoundingClientRect();
+
+      event.preventDefault();
+      event.currentTarget.setPointerCapture(event.pointerId);
+      floatingActionsDragRef.current = {
+        pointerId: event.pointerId,
+        offsetX: event.clientX - rect.left,
+        offsetY: event.clientY - rect.top,
+      };
+      setFloatingActionsPosition({ x: rect.left, y: rect.top });
+    },
+    []
+  );
+
+  const handleFloatingActionsDragMove = React.useCallback(
+    (event: React.PointerEvent<HTMLButtonElement>) => {
+      const drag = floatingActionsDragRef.current;
+      const bar = floatingActionsRef.current;
+      if (!drag || drag.pointerId !== event.pointerId || !bar) return;
+
+      const margin = 8;
+      const maxX = Math.max(
+        margin,
+        window.innerWidth - bar.offsetWidth - margin
+      );
+      const maxY = Math.max(
+        margin,
+        window.innerHeight - bar.offsetHeight - margin
+      );
+      const nextX = Math.min(
+        Math.max(event.clientX - drag.offsetX, margin),
+        maxX
+      );
+      const nextY = Math.min(
+        Math.max(event.clientY - drag.offsetY, margin),
+        maxY
+      );
+
+      setFloatingActionsPosition({ x: nextX, y: nextY });
+    },
+    []
+  );
+
+  const handleFloatingActionsDragEnd = React.useCallback(
+    (event: React.PointerEvent<HTMLButtonElement>) => {
+      const drag = floatingActionsDragRef.current;
+      if (drag?.pointerId === event.pointerId) {
+        floatingActionsDragRef.current = null;
+      }
+      if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+        event.currentTarget.releasePointerCapture(event.pointerId);
+      }
+    },
+    []
+  );
+  const stickySectionHeaderClass = `${STICKY_SECTION_HEADER_CLASS} ${
+    showKpis && !isZenMode ? "top-32" : "top-16"
+  }`;
+
   return (
     <div className="space-y-6 mb-12">
       <Form method="post" className="space-y-6" ref={formRef}>
@@ -1619,132 +1696,14 @@ export default function AdminFinanceiroFechamentoMensal() {
           </div>
         )}
 
-        <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50/60 p-4">
-          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-            <div className="space-y-1">
-              <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                FECHAMENTO MENSAL
-              </p>
-              <div className="flex flex-wrap items-baseline gap-2">
-                <span className="text-2xl font-semibold">
-                  {currentPeriodLabel}
-                </span>
-                <span className="rounded-full bg-background px-2 py-1 text-xs font-medium text-muted-foreground">
-                  Selecione mês/ano e clique em carregar dados
-                </span>
-              </div>
-            </div>
-            {currentDefaults && (
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
-                <div className="rounded-lg border bg-background/70 px-3 py-2">
-                  <p className="text-xs text-muted-foreground">
-                    Último fechamento
-                  </p>
-                  <p className="font-semibold">{lastClosingLabel}</p>
-                </div>
-                <div className="rounded-lg border bg-background/70 px-3 py-2">
-                  <p className="text-xs text-muted-foreground">
-                    Receita líquida
-                  </p>
-                  <p className="font-mono font-semibold">
-                    {formatMoneyString(receitaLiquidaPreview, 2)}
-                  </p>
-                </div>
-                <div className="rounded-lg border bg-background/70 px-3 py-2">
-                  <p className="text-xs text-muted-foreground">
-                    Ponto de equilíbrio
-                  </p>
-                  <p className="font-mono font-semibold">
-                    {formatMoneyString(
-                      currentDefaults.pontoEquilibrioAmount,
-                      2
-                    )}
-                  </p>
-                </div>
-              </div>
-            )}
-          </div>
-          <div className="flex flex-col gap-3">
-            <div className="grid grid-cols-1 md:grid-cols-8 gap-3 items-end">
-              <div className="flex flex-col gap-1 col-span-2">
-                <Label>Mês</Label>
-                <Select
-                  value={String(selectedReferenceMonth)}
-                  onValueChange={(value) =>
-                    setSelectedReferenceMonth(Number(value))
-                  }
-                >
-                  <SelectTrigger className="h-11 border-slate-200 bg-white px-3 text-sm shadow-none">
-                    <SelectValue placeholder="Selecione o mês" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {MONTH_OPTIONS.map((m) => (
-                      <SelectItem key={m.value} value={String(m.value)}>
-                        {m.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="flex flex-col gap-1 col-span-1">
-                <Label>Ano</Label>
-                <input
-                  type="number"
-                  className="h-11 rounded-md border border-slate-200 bg-white px-3 text-sm shadow-none transition focus-visible:border-slate-400 focus-visible:ring-2 focus-visible:ring-slate-200"
-                  value={selectedReferenceYear}
-                  onChange={(e) =>
-                    setSelectedReferenceYear(Number(e.target.value))
-                  }
-                  min={2020}
-                />
-              </div>
-              <div className="flex flex-col gap-1 col-span-2">
-                <div className="text-xs font-medium text-slate-600 opacity-0">
-                  Carregar
-                </div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={handleLoadPeriod}
-                  disabled={!hasPendingPeriodChange || isSwitchingPeriod}
-                  className="h-11 w-full gap-2 border-slate-200 bg-white text-slate-900 hover:bg-slate-100 disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500"
-                >
-                  {isSwitchingPeriod && (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  )}
-                  {isSwitchingPeriod ? "Carregando..." : "Carregar dados"}
-                </Button>
-              </div>
-            </div>
-            <Badge
-              variant="secondary"
-              className={`flex w-fit items-center justify-center gap-2 rounded-full px-3 py-2 text-xs font-medium md:justify-start ${loadToneClass}`}
-            >
-              {isLoadingData && <Loader2 className="h-4 w-4 animate-spin" />}
-              {loadStatusMeta[loadStatus].label}
-            </Badge>
-            <div className="flex flex-wrap items-center justify-end gap-3">
-              <label className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-xs font-medium uppercase tracking-wide text-slate-600">
-                <span>Modalidade Zen</span>
-                <Switch
-                  checked={isZenMode}
-                  onCheckedChange={setIsZenMode}
-                  aria-label="Alternar Modalidade Zen"
-                />
-              </label>
-              <Button asChild variant="outline" size="sm">
-                <Link to="/admin/financeiro/fechamento-mensal/visualizar">
-                  Ver visão anual de fechamentos
-                </Link>
-              </Button>
-            </div>
-          </div>
-        </div>
+        <h1 className="text-2xl font-semibold tracking-tight text-slate-950">
+          Fechamento mensal
+        </h1>
 
         {/* Top Summary Bar - KPIs Principais */}
-        {!isZenMode ? (
-          <div className="-mx-4 mb-6 border-b border-slate-200 bg-white px-4 py-4">
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
+        {showKpis && !isZenMode ? (
+          <div className="sticky top-16 z-30 -mx-4  bg-white/95 px-4 py-2 backdrop-blur">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-5">
               <KPICard
                 label="Receita Líquida"
                 value={formatMoneyString(receitaLiquidaPreview, 2)}
@@ -1787,7 +1746,7 @@ export default function AdminFinanceiroFechamentoMensal() {
           >
             {!isZenMode ? (
               <>
-                <div className={STICKY_SECTION_HEADER_CLASS}>
+                <div className={stickySectionHeaderClass}>
                   <p className="text-xs font-medium uppercase tracking-wide text-slate-600">
                     1. Mês anterior
                   </p>
@@ -2352,75 +2311,112 @@ export default function AdminFinanceiroFechamentoMensal() {
           </div>
 
           <div className={SECTION_SHELL_CLASS}>
-            <div className={STICKY_SECTION_HEADER_CLASS}>
+            <div className={stickySectionHeaderClass}>
               <div className="space-y-3">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex items-center gap-2">
-                    <Edit className="h-4 w-4 text-slate-500" />
-                    <div>
-                      <p className="text-xs font-medium uppercase tracking-wide text-slate-600">
-                        2. Mês corrente
-                      </p>
-                      <p className="text-sm font-semibold">
-                        {currentPeriodLabel}
-                      </p>
-                      <p className="text-xs text-slate-500">Área editável</p>
-                    </div>
-                  </div>
-                  <div className="min-w-[210px] space-y-2 text-right">
-                    <div>
-                      <p className="text-xs font-medium uppercase tracking-wide text-slate-600">
-                        Resultado de caixa global
-                      </p>
-                      <p
-                        className={`font-mono text-lg font-semibold ${
-                          resultadoCaixaGlobalPreview >= 0
-                            ? "text-emerald-700"
-                            : "text-red-700"
-                        }`}
-                      >
-                        {formatMoneyString(resultadoCaixaGlobalPreview, 2)}
-                      </p>
-                      <p className="text-[11px] font-medium text-slate-500">
-                        Líquido + investimento + não operacional
-                      </p>
-                    </div>
-                    <div className="border-t border-slate-200 pt-2">
-                      <p className="text-[11px] font-medium uppercase tracking-wide text-slate-500">
-                        Resultado líquido atual
-                      </p>
-                      <p
-                        className={`font-mono text-sm font-semibold ${
-                          resultadoLiquidoPreview >= 0
-                            ? "text-emerald-700"
-                            : "text-red-700"
-                        }`}
-                      >
-                        {formatMoneyString(resultadoLiquidoPreview, 2)}{" "}
-                        <span className="font-medium text-slate-500">
-                          ({resultadoLiquidoPercPreview.toFixed(2)}%)
-                        </span>
-                      </p>
-                      <p
-                        className={`text-xs font-medium ${
-                          resultadoLiquidoSemDinheiroPreview >= 0
-                            ? "text-emerald-700"
-                            : "text-red-700"
-                        }`}
-                      >
-                        Sem receita em dinheiro:{" "}
-                        {formatMoneyString(
-                          resultadoLiquidoSemDinheiroPreview,
-                          2
-                        )}
-                      </p>
-                    </div>
+                <div className="flex items-center gap-2">
+                  <Edit className="h-4 w-4 text-slate-500" />
+                  <div>
+                    <p className="text-xs font-medium uppercase tracking-wide text-slate-600">
+                      2. Mês corrente
+                    </p>
+                    <p className="text-xs text-slate-500">Área editável</p>
                   </div>
                 </div>
-                <div className="pt-3">
-                  <Button type="submit" disabled={saving} className="w-full">
-                    {saving ? "Salvando…" : "Salvar fechamento"}
-                  </Button>
+                <div className="space-y-2">
+                  <div className="grid grid-cols-[minmax(0,1fr)_6.25rem_auto] items-end gap-2">
+                    <div className="flex flex-col gap-1">
+                      <Label>Mês</Label>
+                      <Select
+                        value={String(selectedReferenceMonth)}
+                        onValueChange={(value) =>
+                          setSelectedReferenceMonth(Number(value))
+                        }
+                      >
+                        <SelectTrigger className="h-10 border-slate-200 bg-white px-3 text-sm shadow-none">
+                          <SelectValue placeholder="Selecione o mês" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {MONTH_OPTIONS.map((m) => (
+                            <SelectItem key={m.value} value={String(m.value)}>
+                              {m.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <Label>Ano</Label>
+                      <input
+                        type="number"
+                        className="h-10 rounded-md border border-slate-200 bg-white px-3 text-sm shadow-none transition focus-visible:border-slate-400 focus-visible:ring-2 focus-visible:ring-slate-200"
+                        value={selectedReferenceYear}
+                        onChange={(e) =>
+                          setSelectedReferenceYear(Number(e.target.value))
+                        }
+                        min={2020}
+                      />
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={handleLoadPeriod}
+                      disabled={!hasPendingPeriodChange || isSwitchingPeriod}
+                      className="h-10 gap-2 border-slate-200 bg-white px-3 text-slate-900 hover:bg-slate-100 disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500"
+                    >
+                      {isSwitchingPeriod ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <RefreshCw className="h-4 w-4" />
+                      )}
+                      <span>Carregar</span>
+                    </Button>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3 border-t border-slate-200 pt-3">
+                  <div className="min-w-0">
+                    <p className="text-[11px] font-medium uppercase tracking-wide text-slate-500">
+                      Resultado líquido atual
+                    </p>
+                    <p
+                      className={`font-mono text-sm font-semibold ${
+                        resultadoLiquidoPreview >= 0
+                          ? "text-emerald-700"
+                          : "text-red-700"
+                      }`}
+                    >
+                      {formatMoneyString(resultadoLiquidoPreview, 2)}{" "}
+                      <span className="font-medium text-slate-500">
+                        ({resultadoLiquidoPercPreview.toFixed(2)}%)
+                      </span>
+                    </p>
+                    <p
+                      className={`text-xs font-medium ${
+                        resultadoLiquidoSemDinheiroPreview >= 0
+                          ? "text-emerald-700"
+                          : "text-red-700"
+                      }`}
+                    >
+                      Sem receita em dinheiro:{" "}
+                      {formatMoneyString(resultadoLiquidoSemDinheiroPreview, 2)}
+                    </p>
+                  </div>
+                  <div className="min-w-0 text-right">
+                    <p className="text-xs font-medium uppercase tracking-wide text-slate-600">
+                      Resultado de caixa global
+                    </p>
+                    <p
+                      className={`font-mono text-lg font-semibold ${
+                        resultadoCaixaGlobalPreview >= 0
+                          ? "text-emerald-700"
+                          : "text-red-700"
+                      }`}
+                    >
+                      {formatMoneyString(resultadoCaixaGlobalPreview, 2)}
+                    </p>
+                    <p className="text-[11px] font-medium text-slate-500">
+                      Líquido + investimento + não operacional
+                    </p>
+                  </div>
                 </div>
               </div>
             </div>
@@ -3363,7 +3359,7 @@ export default function AdminFinanceiroFechamentoMensal() {
           >
             {!isZenMode ? (
               <>
-                <div className={STICKY_SECTION_HEADER_CLASS}>
+                <div className={stickySectionHeaderClass}>
                   <p className="text-xs font-medium uppercase tracking-wide text-slate-600">
                     3. Diferença
                   </p>
@@ -4416,6 +4412,107 @@ export default function AdminFinanceiroFechamentoMensal() {
             ) : null}
           </div>
         </div>
+        <TooltipProvider delayDuration={120}>
+          <div
+            ref={floatingActionsRef}
+            className={`fixed z-50 flex items-center gap-2 rounded-full border border-slate-200 bg-white/95 p-2 shadow-lg backdrop-blur ${
+              floatingActionsPosition ? "" : "bottom-5 right-5"
+            }`}
+            style={
+              floatingActionsPosition
+                ? {
+                    left: `${floatingActionsPosition.x}px`,
+                    top: `${floatingActionsPosition.y}px`,
+                  }
+                : undefined
+            }
+          >
+            <button
+              type="button"
+              className="flex h-10 w-6 touch-none cursor-grab items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 active:cursor-grabbing"
+              aria-label="Arrastar barra de ações"
+              onPointerDown={handleFloatingActionsDragStart}
+              onPointerMove={handleFloatingActionsDragMove}
+              onPointerUp={handleFloatingActionsDragEnd}
+              onPointerCancel={handleFloatingActionsDragEnd}
+            >
+              <GripVertical className="h-4 w-4" />
+            </button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  size="icon"
+                  variant={showKpis ? "default" : "outline"}
+                  className="h-10 w-10 rounded-full"
+                  aria-label={showKpis ? "Ocultar KPIs" : "Mostrar KPIs"}
+                  onClick={() => setShowKpis((current) => !current)}
+                >
+                  {showKpis ? (
+                    <EyeOff className="h-4 w-4" />
+                  ) : (
+                    <Eye className="h-4 w-4" />
+                  )}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top">
+                {showKpis ? "Ocultar KPIs" : "Mostrar KPIs"}
+              </TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  size="icon"
+                  variant={isZenMode ? "default" : "outline"}
+                  className="h-10 w-10 rounded-full"
+                  aria-label="Alternar Modalidade Zen"
+                  onClick={() => setIsZenMode((current) => !current)}
+                >
+                  <Maximize2 className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top">Modalidade Zen</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="submit"
+                  size="icon"
+                  className="h-10 w-10 rounded-full"
+                  aria-label="Salvar fechamento"
+                  disabled={saving}
+                >
+                  {saving ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Save className="h-4 w-4" />
+                  )}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top">Salvar fechamento</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  asChild
+                  type="button"
+                  size="icon"
+                  variant="outline"
+                  className="h-10 w-10 rounded-full"
+                >
+                  <Link
+                    to="/admin/financeiro/fechamento-mensal/visualizar"
+                    aria-label="Ver visão anual"
+                  >
+                    <CalendarDays className="h-4 w-4" />
+                  </Link>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top">Ver visão anual</TooltipContent>
+            </Tooltip>
+          </div>
+        </TooltipProvider>
       </Form>
 
       <FloatingViewportNotice visible={isFaturamentoToastVisible}>

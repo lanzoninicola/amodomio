@@ -1,12 +1,50 @@
-import { Form, Link, useOutletContext } from "@remix-run/react";
-import { ArrowDown, ArrowUp, Plus, Sparkles, Trash2 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { Form, Link, useFetcher, useOutletContext } from "@remix-run/react";
+import { closestCenter, DndContext, type DragEndEvent } from "@dnd-kit/core";
+import { arrayMove, SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import { ArrowDown, ArrowUp, GripVertical, Plus, Sparkles, Trash2 } from "lucide-react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Button } from "~/components/ui/button";
 import { Badge } from "~/components/ui/badge";
 import { cn } from "~/lib/utils";
 import type { ItemClassification } from "~/domain/item/item.prisma.entity.server";
 import type { AdminRecipeOutletContext } from "./admin.recipes.$id";
 import { ALPHABET_FILTERS, normalizeInitialLetter } from "./admin.recipes.$id";
+
+function SortableCompositionRow({ id, displayOrder, disabled, children }: {
+    id: string
+    displayOrder: number
+    disabled: boolean
+    children: ReactNode
+}) {
+    const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id, disabled })
+
+    return (
+        <tr
+            ref={setNodeRef}
+            style={{ transform: CSS.Transform.toString(transform), transition }}
+            className={cn("border-t border-slate-100 bg-white", isDragging && "relative z-10 shadow-lg")}
+        >
+            <td className="px-4 py-3 text-slate-500">
+                <div className="flex items-center gap-2">
+                    <button
+                        type="button"
+                        className="inline-flex h-8 w-8 touch-none cursor-grab items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-700 active:cursor-grabbing disabled:cursor-wait disabled:opacity-40"
+                        disabled={disabled}
+                        aria-label={`Arrastar ingrediente da posição ${displayOrder}`}
+                        title="Arraste para reordenar"
+                        {...attributes}
+                        {...listeners}
+                    >
+                        <GripVertical size={16} />
+                    </button>
+                    <span>{displayOrder}</span>
+                </div>
+            </td>
+            {children}
+        </tr>
+    )
+}
 
 const ITEM_CLASSIFICATION_ORDER: ItemClassification[] = [
     "insumo",
@@ -41,6 +79,7 @@ function getClassificationBadgeClass(value?: string | null) {
 
 export default function AdminRecipeComposicaoTab() {
     const { recipe, items, recipeLines } = useOutletContext<AdminRecipeOutletContext>()
+    const reorderFetcher = useFetcher()
     const [builderSearch, setBuilderSearch] = useState("")
     const [builderLetter, setBuilderLetter] = useState<string>("")
     const [builderSelectedItemIds, setBuilderSelectedItemIds] = useState<string[]>([])
@@ -83,6 +122,49 @@ export default function AdminRecipeComposicaoTab() {
         itemName: row.itemName,
         recipeLineId: row.recipeLineId,
     }))
+
+    const baseIngredientOrderKey = baseIngredients
+        .map((ingredient) => ingredient.recipeIngredientId || ingredient.recipeLineId)
+        .join("|")
+    const [orderedIngredientIds, setOrderedIngredientIds] = useState<string[]>(() =>
+        baseIngredients.map((ingredient) => ingredient.recipeIngredientId || ingredient.recipeLineId)
+    )
+
+    useEffect(() => {
+        setOrderedIngredientIds(baseIngredients.map((ingredient) => ingredient.recipeIngredientId || ingredient.recipeLineId))
+    }, [baseIngredientOrderKey])
+
+    useEffect(() => {
+        if (Number((reorderFetcher.data as { status?: number } | undefined)?.status || 0) >= 400) {
+            setOrderedIngredientIds(baseIngredients.map((ingredient) => ingredient.recipeIngredientId || ingredient.recipeLineId))
+        }
+    }, [reorderFetcher.data])
+
+    const orderedBaseIngredients = orderedIngredientIds
+        .map((id) => baseIngredients.find((ingredient) => (ingredient.recipeIngredientId || ingredient.recipeLineId) === id))
+        .filter((ingredient): ingredient is (typeof baseIngredients)[number] => Boolean(ingredient))
+
+    const handleIngredientDragEnd = (event: DragEndEvent) => {
+        if (reorderFetcher.state !== "idle") return
+        const { active, over } = event
+        if (!over || active.id === over.id) return
+
+        const oldIndex = orderedIngredientIds.indexOf(String(active.id))
+        const newIndex = orderedIngredientIds.indexOf(String(over.id))
+        if (oldIndex < 0 || newIndex < 0) return
+
+        const nextOrder = arrayMove(orderedIngredientIds, oldIndex, newIndex)
+        setOrderedIngredientIds(nextOrder)
+        reorderFetcher.submit(
+            {
+                _action: "recipe-ingredient-reorder",
+                recipeId: recipe.id,
+                tab: "composicao",
+                orderedIds: JSON.stringify(nextOrder),
+            },
+            { method: "post", action: "..", preventScrollReset: true }
+        )
+    }
 
     const selectedBaseIngredientIds = new Set(baseIngredients.map((ingredient) => ingredient.itemId))
     const selectedBaseIngredientKey = baseIngredients.map((ingredient) => ingredient.itemId).join("|")
@@ -295,6 +377,13 @@ export default function AdminRecipeComposicaoTab() {
                 <div className="pb-4">
                     <h2 className="text-base font-semibold text-slate-900">Composição base</h2>
                     <p className="mt-0.5 text-sm text-slate-500">Organize os ingredientes principais da receita antes de detalhar as variações.</p>
+                    {reorderFetcher.state !== "idle" ? (
+                        <p className="mt-1 text-xs text-slate-400">Salvando nova ordem...</p>
+                    ) : Number((reorderFetcher.data as { status?: number } | undefined)?.status || 0) >= 400 ? (
+                        <p className="mt-1 text-xs text-red-600">
+                            {(reorderFetcher.data as { message?: string })?.message || "Não foi possível salvar a nova ordem."}
+                        </p>
+                    ) : null}
                 </div>
                 <div className="overflow-x-auto border-t border-slate-200">
                     <table className="min-w-full text-sm">
@@ -306,6 +395,8 @@ export default function AdminRecipeComposicaoTab() {
                                 <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">Ação</th>
                             </tr>
                         </thead>
+                        <DndContext collisionDetection={closestCenter} onDragEnd={handleIngredientDragEnd}>
+                        <SortableContext items={orderedIngredientIds} strategy={verticalListSortingStrategy}>
                         <tbody>
                             {baseIngredients.length === 0 ? (
                                 <tr>
@@ -314,9 +405,13 @@ export default function AdminRecipeComposicaoTab() {
                                     </td>
                                 </tr>
                             ) : (
-                                baseIngredients.map((ingredient, index) => (
-                                    <tr key={ingredient.recipeIngredientId || ingredient.itemId} className="border-t border-slate-100">
-                                        <td className="px-4 py-3 text-slate-500">{ingredient.displayOrder}</td>
+                                orderedBaseIngredients.map((ingredient, index) => (
+                                    <SortableCompositionRow
+                                        key={ingredient.recipeIngredientId || ingredient.recipeLineId}
+                                        id={ingredient.recipeIngredientId || ingredient.recipeLineId}
+                                        displayOrder={index + 1}
+                                        disabled={reorderFetcher.state !== "idle"}
+                                    >
                                         <td className="px-4 py-3 font-medium text-slate-900">
                                             <Link
                                                 to={`/admin/items/${ingredient.itemId}/main`}
@@ -362,7 +457,7 @@ export default function AdminRecipeComposicaoTab() {
                                                         className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 text-slate-600 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
                                                         title="Mover para baixo"
                                                         aria-label="Mover para baixo"
-                                                        disabled={index === baseIngredients.length - 1}
+                                                        disabled={index === orderedBaseIngredients.length - 1}
                                                     >
                                                         <ArrowDown size={13} />
                                                     </button>
@@ -384,10 +479,12 @@ export default function AdminRecipeComposicaoTab() {
                                                 </Form>
                                             </div>
                                         </td>
-                                    </tr>
+                                    </SortableCompositionRow>
                                 ))
                             )}
                         </tbody>
+                        </SortableContext>
+                        </DndContext>
                     </table>
                 </div>
             </div>

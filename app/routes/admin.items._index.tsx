@@ -43,6 +43,7 @@ import {
 import { buildAdminItemsMeta } from "~/domain/item/admin-items-meta";
 import {
   buildItemDeleteBlockedMessage,
+  deleteItemWithLinkedRecords,
   getItemDeleteBlockers,
 } from "~/domain/item/item-delete-guard.server";
 import {
@@ -507,7 +508,7 @@ export async function action({ request }: ActionFunctionArgs) {
           return badRequest(buildItemDeleteBlockedMessage(blockers));
         }
 
-        await db.item.delete({ where: { id: itemId } });
+        await deleteItemWithLinkedRecords(db, itemId);
 
         return ok({ message: "Item eliminado com sucesso" });
       }
