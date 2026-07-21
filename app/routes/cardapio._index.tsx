@@ -30,6 +30,7 @@ import CardapioOrderCtaButton from "~/domain/cardapio/components/cardapio-order-
 import CardapioDesktopSidebarHeader from "~/domain/cardapio/components/cardapio-desktop-sidebar-header";
 import { trackCardapioFacebookPixelTrigger } from "~/domain/cardapio/facebook-pixel.client";
 import { trackCardapioFeatured } from "~/domain/cardapio/tracking/cardapio-tracking.client";
+import { cn } from "~/lib/utils";
 import {
   Carousel,
   CarouselContent,
@@ -144,7 +145,9 @@ export default function CardapioWebIndex() {
     menuItemInterestEnabled,
     likesEnabled,
     filterViewMode,
-    worldCupBannerEnabled,
+    bannerEnabled = true,
+    bannerText = "Confira nossas novidades",
+    bannerUrl = "https://www.amodomio.com.br",
     featuredSections = [],
   } = useLoaderData<typeof loader>();
   const [showLikeCelebration, setShowLikeCelebration] = useState(false);
@@ -182,7 +185,12 @@ export default function CardapioWebIndex() {
 
   return (
     <section
-      className="mb-20 flex flex-col pt-[calc(7rem+env(safe-area-inset-top))] md:fixed md:inset-0 md:z-20 md:mb-0 md:block md:overflow-y-auto md:bg-white md:pt-0"
+      className={cn(
+        "mb-20 flex flex-col md:fixed md:inset-0 md:z-20 md:mb-0 md:block md:overflow-y-auto md:bg-white md:pt-0",
+        bannerEnabled
+          ? "pt-[calc(7rem+env(safe-area-inset-top))]"
+          : "pt-[calc(4.5rem+env(safe-area-inset-top))]"
+      )}
       data-element="cardapio-index"
     >
       <LikeCelebrationOverlay
@@ -236,7 +244,9 @@ export default function CardapioWebIndex() {
                     likesEnabled={likesEnabled}
                     desktopFeedLayout
                     filterViewMode={filterViewMode}
-                    worldCupBannerEnabled={worldCupBannerEnabled}
+                    bannerEnabled={bannerEnabled}
+                    bannerText={bannerText}
+                    bannerUrl={bannerUrl}
                   />
                 </main>
 

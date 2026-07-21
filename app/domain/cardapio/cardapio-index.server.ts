@@ -18,8 +18,12 @@ const REELS_ENABLED_SETTING_NAME = "reels.enabled";
 const REELS_SETTING_CONTEXT = "cardapio";
 export const CARDAPIO_FILTER_VIEW_SETTING_NAME = "filter.view-mode";
 export const DEFAULT_CARDAPIO_FILTER_VIEW_MODE = "chip";
-export const WORLD_CUP_BANNER_SETTING_NAME = "world-cup-banner.enabled";
-export const DEFAULT_WORLD_CUP_BANNER_ENABLED = true;
+export const CARDAPIO_BANNER_ENABLED_SETTING_NAME = "banner.enabled";
+export const DEFAULT_CARDAPIO_BANNER_ENABLED = true;
+export const CARDAPIO_BANNER_TEXT_SETTING_NAME = "banner.text";
+export const DEFAULT_CARDAPIO_BANNER_TEXT = "Confira nossas novidades";
+export const CARDAPIO_BANNER_URL_SETTING_NAME = "banner.url";
+export const DEFAULT_CARDAPIO_BANNER_URL = "https://www.amodomio.com.br";
 const MENU_ITEM_INTEREST_SETTING_CONTEXT = "cardapio";
 const MENU_ITEM_INTEREST_SETTING_NAME = "menu-item-interest-enabled";
 const SIMULATE_ERROR_SETTING_CONTEXT = "cardapio";
@@ -37,7 +41,9 @@ export type CardapioIndexLoaderData = {
   likesEnabled: boolean;
   sharesEnabled: boolean;
   filterViewMode: "chip" | "stories";
-  worldCupBannerEnabled: boolean;
+  bannerEnabled: boolean;
+  bannerText: string;
+  bannerUrl: string;
   featuredSections: CardapioFeatured[];
 };
 
@@ -145,7 +151,13 @@ export async function loadCardapioIndexData(
       reelUrls = await loadReelUrls(request);
     }
 
-    const [menuItemInterestSetting, filterViewSetting, worldCupBannerSetting] = await Promise.all([
+    const [
+      menuItemInterestSetting,
+      filterViewSetting,
+      bannerEnabledSetting,
+      bannerTextSetting,
+      bannerUrlSetting,
+    ] = await Promise.all([
       prismaClient.setting.findFirst({
         where: {
           context: MENU_ITEM_INTEREST_SETTING_CONTEXT,
@@ -163,7 +175,21 @@ export async function loadCardapioIndexData(
       prismaClient.setting.findFirst({
         where: {
           context: REELS_SETTING_CONTEXT,
-          name: WORLD_CUP_BANNER_SETTING_NAME,
+          name: CARDAPIO_BANNER_ENABLED_SETTING_NAME,
+        },
+        orderBy: [{ createdAt: "desc" }],
+      }),
+      prismaClient.setting.findFirst({
+        where: {
+          context: REELS_SETTING_CONTEXT,
+          name: CARDAPIO_BANNER_TEXT_SETTING_NAME,
+        },
+        orderBy: [{ createdAt: "desc" }],
+      }),
+      prismaClient.setting.findFirst({
+        where: {
+          context: REELS_SETTING_CONTEXT,
+          name: CARDAPIO_BANNER_URL_SETTING_NAME,
         },
         orderBy: [{ createdAt: "desc" }],
       }),
@@ -176,10 +202,13 @@ export async function loadCardapioIndexData(
       filterViewSetting?.value === "stories"
         ? "stories"
         : DEFAULT_CARDAPIO_FILTER_VIEW_MODE;
-    const worldCupBannerEnabled = parseBooleanSetting(
-      worldCupBannerSetting?.value,
-      DEFAULT_WORLD_CUP_BANNER_ENABLED
+    const bannerEnabled = parseBooleanSetting(
+      bannerEnabledSetting?.value,
+      DEFAULT_CARDAPIO_BANNER_ENABLED
     );
+    const bannerText =
+      bannerTextSetting?.value?.trim() || DEFAULT_CARDAPIO_BANNER_TEXT;
+    const bannerUrl = getBannerUrl(bannerUrlSetting?.value);
     const { likesEnabled, sharesEnabled } = await getEngagementSettings();
     const [items, tags] = await Promise.all([itemsPromise, tagsPromise]);
 
@@ -192,7 +221,9 @@ export async function loadCardapioIndexData(
       likesEnabled,
       sharesEnabled,
       filterViewMode,
-      worldCupBannerEnabled,
+      bannerEnabled,
+      bannerText,
+      bannerUrl,
       featuredSections,
     };
 
@@ -219,6 +250,20 @@ export async function loadCardapioIndexData(
       error,
     });
     throw error;
+  }
+}
+
+function getBannerUrl(rawValue?: string | null) {
+  const value = rawValue?.trim();
+  if (!value) return DEFAULT_CARDAPIO_BANNER_URL;
+
+  try {
+    const url = new URL(value);
+    return url.protocol === "http:" || url.protocol === "https:"
+      ? url.toString()
+      : DEFAULT_CARDAPIO_BANNER_URL;
+  } catch {
+    return DEFAULT_CARDAPIO_BANNER_URL;
   }
 }
 

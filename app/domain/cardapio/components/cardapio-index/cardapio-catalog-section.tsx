@@ -7,7 +7,7 @@ import React, {
   useRef,
   useState,
 } from "react";
-import { ArrowRight, ListFilter, X } from "lucide-react";
+import { ArrowRight, ListFilter, Megaphone, X } from "lucide-react";
 import { LikeIt } from "~/domain/cardapio/components/cardapio-item-action-bar/cardapio-item-action-bar";
 import CardapioItemImageSingle from "~/domain/cardapio/components/cardapio-item-image-single/cardapio-item-image-single";
 import type { ThreadSectionProfile } from "~/domain/cardapio/components/section-thread-header/section-thread-header";
@@ -85,7 +85,9 @@ export function CardapioCatalogSection({
   likesEnabled,
   desktopFeedLayout = false,
   filterViewMode = "chip",
-  worldCupBannerEnabled = true,
+  bannerEnabled = true,
+  bannerText,
+  bannerUrl,
 }: {
   items: CardapioIndexItem[] | GroupedItems[];
   tags: Tag[];
@@ -93,7 +95,9 @@ export function CardapioCatalogSection({
   likesEnabled: boolean;
   desktopFeedLayout?: boolean;
   filterViewMode?: "chip" | "stories";
-  worldCupBannerEnabled?: boolean;
+  bannerEnabled?: boolean;
+  bannerText: string;
+  bannerUrl: string;
 }) {
   const [currentItems, setCurrentItems] = useState(items);
   const [currentFilterTag, setCurrentFilterTag] = useState<Tag | null>(null);
@@ -351,7 +355,10 @@ export function CardapioCatalogSection({
         <div
           id="cardapio-tag-filters"
           className={cn(
-            "fixed left-4 right-4 top-[calc(7.25rem+env(safe-area-inset-top))] z-40 mb-2 max-h-[46vh] overflow-y-auto rounded-2xl border border-black/10 bg-white/95 p-3 shadow-[0_10px_35px_rgba(0,0,0,0.2)] backdrop-blur-xl md:static md:mx-0 md:mb-4 md:block md:max-h-none md:overflow-visible md:rounded-none md:border-0 md:bg-transparent md:p-0 md:shadow-none md:backdrop-blur-none",
+            "fixed left-4 right-4 z-40 mb-2 max-h-[46vh] overflow-y-auto rounded-2xl border border-black/10 bg-white/95 p-3 shadow-[0_10px_35px_rgba(0,0,0,0.2)] backdrop-blur-xl md:static md:mx-0 md:mb-4 md:block md:max-h-none md:overflow-visible md:rounded-none md:border-0 md:bg-transparent md:p-0 md:shadow-none md:backdrop-blur-none",
+            bannerEnabled
+              ? "top-[calc(7.25rem+env(safe-area-inset-top))]"
+              : "top-[calc(4.5rem+env(safe-area-inset-top))]",
             showMobileTags ? "block" : "hidden"
           )}
         >
@@ -455,30 +462,22 @@ export function CardapioCatalogSection({
               </button>
             ) : null}
           </div>
-          {worldCupBannerEnabled && (
+          {bannerEnabled ? (
             <a
-              href="https://www.fifa.com/pt/tournaments/mens/worldcup/canadamexicousa2026/teams/brazil/fixtures"
+              href={bannerUrl}
               target="_blank"
               rel="noopener noreferrer"
               className="mx-4 rounded-lg bg-[linear-gradient(90deg,#e1251b,#0072ce,#16a34a)] p-[1.5px] shadow-md"
             >
-              <div className="flex items-center justify-between rounded-[7px] bg-white px-3 py-1.5 text-zinc-950">
-                <span className="flex items-center gap-2 font-neue text-[11px] font-semibold uppercase tracking-tight leading-none">
-                  <img
-                    src="/images/world-cup-26/world-cup-ball.webp"
-                    alt=""
-                    aria-hidden="true"
-                    className="h-5 w-5 rounded-full object-cover"
-                    loading="lazy"
-                  />
-                  Acompanha o Mundial de 2026
-                </span>
-                <div className="flex items-center gap-x-2 zinc-950 uppercase">
-                  <ArrowRight size={16} />
-                </div>
+              <div className="grid grid-cols-[20px_minmax(0,1fr)_16px] items-center gap-2 rounded-[7px] bg-white px-3 py-1.5 text-zinc-950">
+                <Megaphone className="h-5 w-5" aria-hidden="true" />
+                <p className="truncate font-neue text-[11px] font-semibold uppercase leading-5 tracking-tight">
+                  {bannerText}
+                </p>
+                <ArrowRight size={16} />
               </div>
             </a>
-          )}
+          ) : null}
         </div>
       ) : null}
 
@@ -518,7 +517,10 @@ export function CardapioCatalogSection({
               groupRefs.current[group.groupId] = element;
             }}
             data-group-id={group.groupId}
-            className="mb-6 scroll-mt-28"
+            className={cn(
+              "mb-6",
+              bannerEnabled ? "scroll-mt-28" : "scroll-mt-20"
+            )}
           >
             <CardapioGroupHeader
               title={group.group}

@@ -77,17 +77,6 @@ export function FiltersTags({
                     </ul>
                 </div>
 
-                <a
-                    href="https://www.fifa.com/pt/tournaments/mens/worldcup/canadamexicousa2026/teams/brazil/fixtures"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center justify-between px-3 py-1.5 mx-2 mb-1.5 rounded-lg bg-green-600 text-white text-[11px] font-semibold hover:bg-green-700 transition-colors"
-                >
-                    <span className="flex items-center gap-1.5">
-                        🇧🇷 <span>Acompanha o Mundial de 2026</span>
-                    </span>
-                    <span className="opacity-80 text-[10px]">Ver jogos →</span>
-                </a>
             </div>
 
             {showBanner && currentTag && (
