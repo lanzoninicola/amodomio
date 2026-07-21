@@ -46,6 +46,9 @@ export default function AdminMobileLayout() {
     "/admin/mobile/pedido-compra/por-produtos"
   );
   const isRecipes = pathname.startsWith("/admin/mobile/receitas");
+  const isNewPizzaFlavor = pathname.startsWith(
+    "/admin/mobile/novo-sabor-pizza"
+  );
   const pageTitle = isEstoque
     ? "Estoque de massa"
     : isProgramacao
@@ -70,6 +73,8 @@ export default function AdminMobileLayout() {
     ? "Lista de compras"
     : isPurchaseOrder
     ? "Pedido de compra"
+    : isNewPizzaFlavor
+    ? "Novo sabor de pizza"
     : isRecipes
     ? "Receitas"
     : "Atalhos";
@@ -116,6 +121,23 @@ export default function AdminMobileLayout() {
 
         {isHome ? (
           <main className="grid grid-cols-2 gap-3">
+            <Link
+              to="/admin/mobile/novo-sabor-pizza"
+              className="grid grid-cols-[auto_1fr] items-center gap-x-2 gap-y-1.5 rounded-xl border border-amber-200 bg-amber-50 p-3 shadow-sm"
+            >
+              <span className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-amber-200 text-amber-900">
+                <Pizza className="h-5 w-5" />
+              </span>
+              <span className="contents">
+                <span className="text-xs font-semibold leading-tight text-slate-900">
+                  Novo sabor de pizza
+                </span>
+                <span className="col-span-2 text-[11px] leading-snug text-slate-600">
+                  Criar item, receita e ficha rapidamente
+                </span>
+              </span>
+            </Link>
+
             <Link
               to="/admin/mobile/receitas"
               className="grid grid-cols-[auto_1fr] items-center gap-x-2 gap-y-1.5 rounded-xl border border-slate-200 bg-white p-3 shadow-sm"

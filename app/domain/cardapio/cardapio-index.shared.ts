@@ -61,6 +61,10 @@ export type CardapioIndexItem = {
 };
 
 export type GroupedItems = {
+  productLineId: string;
+  productLine: string;
+  productLineDescription?: string | null;
+  productLineSortOrderIndex?: number | null;
   groupId: string;
   group: string;
   description?: string | null;

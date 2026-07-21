@@ -8,6 +8,7 @@ export const CARDAPIO_FEATURED_SLIDE_EVENT = "cardapio_highlight_slide_view";
 export const CARDAPIO_FEATURED_CTA_EVENT = "cardapio_highlight_cta_click";
 
 export const CARDAPIO_NAVIGATION_CONTROLS = [
+  "product_line",
   "group",
   "filter_toggle",
   "tag",

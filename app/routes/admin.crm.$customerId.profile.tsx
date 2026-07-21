@@ -1,6 +1,6 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
 import { json, redirect } from "@remix-run/node";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { CardDescription, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -15,6 +15,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { ImageOff, Trash2 } from "lucide-react";
 import prisma from "~/lib/prisma/client.server";
 import { Form, useLoaderData, useNavigation, useActionData } from "@remix-run/react";
+import { useEffect, useState } from "react";
 
 type LoaderData = {
   customer: {
@@ -159,6 +160,53 @@ export async function action({ request, params }: ActionFunctionArgs) {
     return redirect(`/admin/crm/${customerId}/profile`);
   }
 
+  if (intent === "delete_images") {
+    const imageIds = Array.from(
+      new Set(
+        form
+          .getAll("image_ids")
+          .map((value) => String(value).trim())
+          .filter(Boolean),
+      ),
+    );
+    if (imageIds.length === 0) {
+      return json<ActionData>({ error: "Selecione pelo menos uma imagem" }, { status: 400 });
+    }
+
+    const deleted = await prisma.crmCustomerImage.deleteMany({
+      where: {
+        id: { in: imageIds },
+        customer_id: customerId,
+      },
+    });
+
+    if (deleted.count === 0) {
+      return json<ActionData>({ error: "Imagens não encontradas" }, { status: 404 });
+    }
+
+    await prisma.crmCustomerEvent.create({
+      data: {
+        customer_id: customerId,
+        event_type: "PROFILE_UPDATE",
+        source: "admin-ui",
+        payload: {
+          action: "customer_images_delete",
+          image_ids: imageIds,
+          deleted_count: deleted.count,
+          source: "admin-ui",
+        },
+        payload_raw: JSON.stringify({
+          action: "customer_images_delete",
+          image_ids: imageIds,
+          deleted_count: deleted.count,
+          source: "admin-ui",
+        }),
+      },
+    });
+
+    return redirect(`/admin/crm/${customerId}/profile`);
+  }
+
   const name = String(form.get("name") || "").trim();
 
   const email = String(form.get("email") || "").trim() || null;
@@ -235,6 +283,7 @@ export default function AdminCrmCustomerProfile() {
   const { customer } = useLoaderData<typeof loader>();
   const actionData = useActionData<ActionData>();
   const navigation = useNavigation();
+  const [selectedImageIds, setSelectedImageIds] = useState<string[]>([]);
   const isSavingProfile =
     navigation.state === "submitting" &&
     String(navigation.formData?.get("intent") || "update_profile") === "update_profile";
@@ -243,6 +292,9 @@ export default function AdminCrmCustomerProfile() {
     String(navigation.formData?.get("intent") || "") === "delete_image"
       ? String(navigation.formData?.get("image_id") || "")
       : null;
+  const isDeletingImages =
+    navigation.state === "submitting" &&
+    String(navigation.formData?.get("intent") || "") === "delete_images";
   const images = customer.images || [];
   const primaryImage = images[0];
   const galleryImages = primaryImage ? images.slice(1) : images;
@@ -259,13 +311,27 @@ export default function AdminCrmCustomerProfile() {
     })()
     : "";
 
+  useEffect(() => {
+    const availableImageIds = new Set(images.map((image) => image.id));
+    setSelectedImageIds((current) => current.filter((imageId) => availableImageIds.has(imageId)));
+  }, [images]);
+
+  const allImagesSelected = images.length > 0 && selectedImageIds.length === images.length;
+  const toggleImageSelection = (imageId: string) => {
+    setSelectedImageIds((current) =>
+      current.includes(imageId)
+        ? current.filter((selectedId) => selectedId !== imageId)
+        : [...current, imageId],
+    );
+  };
+
   return (
-    <Card className="font-neue">
-      <CardHeader>
+    <section className="grid gap-6 font-neue">
+      <header className="flex flex-col space-y-1.5">
         <CardTitle>Dados do cliente</CardTitle>
         <CardDescription>Informações completas do cadastro.</CardDescription>
-      </CardHeader>
-      <CardContent className="grid gap-6 text-sm">
+      </header>
+      <div className="grid gap-6 text-sm">
         {actionData?.error && (
           <div className="rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive">
             {actionData.error}
@@ -279,9 +345,54 @@ export default function AdminCrmCustomerProfile() {
               Últimas fotos recebidas do WhatsApp.
             </p>
           </div>
+          {images.length > 0 && (
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border bg-muted/30 px-3 py-2">
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="select-all-images"
+                  checked={allImagesSelected}
+                  onCheckedChange={(checked) =>
+                    setSelectedImageIds(checked === true ? images.map((image) => image.id) : [])
+                  }
+                />
+                <label htmlFor="select-all-images" className="cursor-pointer text-sm font-medium">
+                  Selecionar todas ({images.length})
+                </label>
+              </div>
+              <Form
+                method="post"
+                onSubmit={(event) => {
+                  if (!window.confirm(`Eliminar ${selectedImageIds.length} foto(s) selecionada(s)?`)) {
+                    event.preventDefault();
+                  }
+                }}
+              >
+                <input type="hidden" name="intent" value="delete_images" />
+                {selectedImageIds.map((imageId) => (
+                  <input key={imageId} type="hidden" name="image_ids" value={imageId} />
+                ))}
+                <Button
+                  type="submit"
+                  variant="destructive"
+                  size="sm"
+                  disabled={selectedImageIds.length === 0 || isDeletingImages}
+                >
+                  <Trash2 className="mr-2 h-4 w-4" aria-hidden="true" />
+                  {isDeletingImages
+                    ? "Eliminando..."
+                    : `Eliminar selecionadas (${selectedImageIds.length})`}
+                </Button>
+              </Form>
+            </div>
+          )}
           {primaryImage ? (
             <div className="grid gap-4 md:grid-cols-[200px,1fr]">
               <div className="relative">
+                <ImageSelectionCheckbox
+                  imageId={primaryImage.id}
+                  checked={selectedImageIds.includes(primaryImage.id)}
+                  onCheckedChange={() => toggleImageSelection(primaryImage.id)}
+                />
                 {hasValidImageUrl(primaryImage.url) ? (
                   <a
                     href={primaryImage.url}
@@ -310,6 +421,11 @@ export default function AdminCrmCustomerProfile() {
               <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-4">
                 {galleryImages.map((image) => (
                   <div key={image.id} className="relative">
+                    <ImageSelectionCheckbox
+                      imageId={image.id}
+                      checked={selectedImageIds.includes(image.id)}
+                      onCheckedChange={() => toggleImageSelection(image.id)}
+                    />
                     {hasValidImageUrl(image.url) ? (
                       <a
                         href={image.url}
@@ -503,8 +619,29 @@ export default function AdminCrmCustomerProfile() {
           <div>Criação: {new Date(customer.created_at).toLocaleString()}</div>
           <div>Atualizado: {new Date(customer.updated_at).toLocaleString()}</div>
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </section>
+  );
+}
+
+function ImageSelectionCheckbox({
+  imageId,
+  checked,
+  onCheckedChange,
+}: {
+  imageId: string;
+  checked: boolean;
+  onCheckedChange: () => void;
+}) {
+  return (
+    <div className="absolute left-2 top-2 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-background/90 shadow-sm">
+      <Checkbox
+        id={`select-image-${imageId}`}
+        checked={checked}
+        onCheckedChange={onCheckedChange}
+        aria-label={checked ? "Desmarcar imagem" : "Selecionar imagem"}
+      />
+    </div>
   );
 }
 

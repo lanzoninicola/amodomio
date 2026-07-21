@@ -19,7 +19,7 @@ export async function action({ request }: ActionFunctionArgs) {
 
   try {
     const body = await readJsonBody(request);
-    const result = await sendTextMessage(body);
+    const result = await sendTextMessage(body, { trackCrm: false });
     await logCrmWhatsappSentEventByPhone({
       phone: String(body?.phone || ""),
       source: "api.messages.text",

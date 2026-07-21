@@ -1,5 +1,5 @@
 import { MenuItemTag } from "@prisma/client";
-import { Link, Outlet, MetaFunction, useLocation } from "@remix-run/react";
+import { Outlet, MetaFunction, useLocation } from "@remix-run/react";
 import { ChevronRight, CircleArrowOutUpRight, Printer, SquarePlus } from "lucide-react";
 import Container from "~/components/layout/container/container";
 import { Separator } from "~/components/ui/separator";
@@ -105,9 +105,6 @@ export default function AdminCardapioOutlet() {
                         <h1 className="font-semibold text-sm text-muted-foreground">Gerenciamento Cardápio</h1>
                     </div>
 
-                    <Link to="/admin/gerenciamento/cardapio/main/list" >
-                        <span className="text-[12px] underline uppercase tracking-wider">Voltar para a lista</span>
-                    </Link>
                 </div>
 
             </div>

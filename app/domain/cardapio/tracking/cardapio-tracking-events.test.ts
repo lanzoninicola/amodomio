@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+
 import {
   CARDAPIO_FEATURED_CTA_EVENT,
   CARDAPIO_NAVIGATION_EVENT,
@@ -19,6 +20,20 @@ describe("parseCardapioTrackingRecord", () => {
       control: "tag",
       value: "vegetariana",
       placement: "mobile_panel",
+    });
+  });
+
+  it("aceita a seleção de linha de produto", () => {
+    expect(
+      parseCardapioTrackingRecord({
+        eventName: CARDAPIO_NAVIGATION_EVENT,
+        control: "product_line",
+        value: "Massa fresca",
+        placement: "mobile_header",
+      })
+    ).toMatchObject({
+      control: "product_line",
+      value: "Massa fresca",
     });
   });
 

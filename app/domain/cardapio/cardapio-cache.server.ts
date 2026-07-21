@@ -4,7 +4,7 @@ import {
   redisSetString,
 } from "~/lib/cache/redis.server";
 
-export const CARDAPIO_INDEX_CACHE_KEY = "cardapio:index:v4";
+export const CARDAPIO_INDEX_CACHE_KEY = "cardapio:index:v5";
 const SELLING_PRICE_HANDLER_CACHE_VERSION_KEY =
   "cardapio:selling-price-handler:version";
 

@@ -391,7 +391,7 @@ async function sendOffHoursAutoReply(
       phone: normalized.phone,
       message,
     },
-    { timeoutMs: 10_000 }
+    { timeoutMs: 10_000, trackCrm: false }
   ).catch((error) => {
     console.warn("[z-api][off-hours] send text failed", {
       correlationId,

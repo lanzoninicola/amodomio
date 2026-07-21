@@ -23,26 +23,27 @@ enum FacebookPixelIntegrationMode {
 }
 
 model Recipe {
-  id                  String             @id @default(uuid())
+  id                  String                    @id @default(uuid())
   name                String
-  itemId              String?            @map("item_id")
-  variationId         String?            @map("variation_id")
-  type                RecipeType         @default(semiFinished)
-  costingMode         String             @default("per_variation") @map("costing_mode")
-  yieldQuantity       Float?             @map("yield_quantity")
-  yieldUnit           String?            @map("yield_unit") @db.VarChar
+  itemId              String?                   @map("item_id")
+  variationId         String?                   @map("variation_id")
+  type                RecipeType                @default(semiFinished)
+  costingMode         String                    @default("per_variation") @map("costing_mode")
+  yieldQuantity       Float?                    @map("yield_quantity")
+  yieldUnit           String?                   @map("yield_unit") @db.VarChar
   description         String?
-  productionProcedure String?            @map("production_procedure") @db.Text
-  productionNotes     String?            @map("production_notes") @db.Text
-  hasVariations       Boolean            @default(false) @map("has_variations")
-  isVegetarian        Boolean            @default(false) @map("is_vegetarian")
-  isGlutenFree        Boolean            @default(false) @map("is_gluten_free")
-  createdAt           DateTime           @default(now()) @map("created_at")
-  updatedAt           DateTime           @default(now()) @updatedAt @map("updated_at")
-  Item                Item?              @relation(fields: [itemId], references: [id])
-  Variation           Variation?         @relation(fields: [variationId], references: [id])
+  productionProcedure String?                   @map("production_procedure") @db.Text
+  productionNotes     String?                   @map("production_notes") @db.Text
+  hasVariations       Boolean                   @default(false) @map("has_variations")
+  isVegetarian        Boolean                   @default(false) @map("is_vegetarian")
+  isGlutenFree        Boolean                   @default(false) @map("is_gluten_free")
+  createdAt           DateTime                  @default(now()) @map("created_at")
+  updatedAt           DateTime                  @default(now()) @updatedAt @map("updated_at")
+  Item                Item?                     @relation(fields: [itemId], references: [id])
+  Variation           Variation?                @relation(fields: [variationId], references: [id])
   ItemVariations      ItemVariation[]
   RecipeIngredient    RecipeIngredient[]
+  PendingIngredient   RecipePendingIngredient[]
   RecipePreheating    RecipePreheating?
   RecipeBaking        RecipeBaking?
 
@@ -444,6 +445,23 @@ model RecipeIngredient {
   @@index([recipeId], map: "recipe_ingredients_recipe_id_idx")
   @@index([ingredientItemId], map: "recipe_ingredients_ingredient_item_id_idx")
   @@map("recipe_ingredients")
+}
+
+model RecipePendingIngredient {
+  id             String   @id @default(uuid())
+  recipeId       String   @map("recipe_id")
+  name           String
+  normalizedName String   @map("normalized_name")
+  section        String
+  status         String   @default("pending")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at")
+
+  Recipe Recipe @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+
+  @@unique([recipeId, section, normalizedName], map: "recipe_pending_ingredients_recipe_section_name_unique")
+  @@index([recipeId, status], map: "recipe_pending_ingredients_recipe_status_idx")
+  @@map("recipe_pending_ingredients")
 }
 
 model RecipeVariationIngredient {

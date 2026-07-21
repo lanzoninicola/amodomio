@@ -475,7 +475,7 @@ export async function sendKdsDailyReportWhatsapp(dateInt: number, dateStr: strin
     payload.phones.map(async (phone) => {
       const response = await sendTextMessage(
         { phone, message: payload.message },
-        { timeoutMs: 10_000 }
+        { timeoutMs: 10_000, trackCrm: false }
       );
       await logCrmWhatsappSentEventByPhone({
         phone,

@@ -6,6 +6,13 @@ import { ComputedSellingPriceBreakdown } from "./menu-item-selling-price-utility
 import { PizzaSizeKey } from "./menu-item-size.entity.server";
 import { Category } from "../category/category.model.server";
 
+export type MenuItemVisibilityFilterOption =
+  | "all"
+  | "active"
+  | "lancamento-futuro"
+  | "venda-pausada"
+  | "inactive";
+
 // para custos
 export interface MenuItemWithCostVariations {
   menuItemId: string;

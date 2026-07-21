@@ -144,25 +144,24 @@ const ADMIN_NAVIGATION_LINKS: WebsiteNavigationConfig = {
           href: "",
           items: [
             {
-              title: "Cardápio Delivery",
-              href: "/admin/gerenciamento/cardapio/main/list",
-              items: [],
-              disabled: false,
-              tags: [
-                "menu",
-                "delivery",
-                "items",
-                "precos",
-                "cardapio",
-                "lista",
-              ],
-            },
-            {
               title: "Cardápio Pizza Al Taglio",
               href: "/admin/gerenciamento/cardapio-pizza-al-taglio",
               items: [],
               disabled: false,
               tags: ["taglio", "pizza", "fatia", "balcao", "cardapio"],
+            },
+            {
+              title: "Linhas de produtos",
+              href: "/admin/gerenciamento/cardapio/product-lines",
+              items: [],
+              disabled: false,
+              tags: [
+                "linha de produto",
+                "linha",
+                "pizza",
+                "massa fresca",
+                "canal",
+              ],
             },
             {
               title: "Grupos",
@@ -553,6 +552,13 @@ const ADMIN_NAVIGATION_LINKS: WebsiteNavigationConfig = {
           items: [],
           disabled: false,
           tags: ["producao", "diario", "agenda", "planejamento", "programacao"],
+        },
+        {
+          title: "Novo sabor de pizza",
+          href: "/admin/novo-sabor-pizza",
+          items: [],
+          disabled: false,
+          tags: ["pizza", "sabor", "receita", "ficha", "lancamento"],
         },
         {
           title: "Receitas",

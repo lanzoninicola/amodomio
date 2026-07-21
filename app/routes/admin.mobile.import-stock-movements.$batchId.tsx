@@ -40,6 +40,11 @@ export default function AdminMobileImportStockMovementsBatchRoute() {
   const unitOptions = (payload.unitOptions || []) as string[];
   const itemUnitOptionsByItemId = (payload.itemUnitOptionsByItemId ||
     {}) as Record<string, string[]>;
+  const lastEntryMovementUnitByItemId =
+    (payload.lastEntryMovementUnitByItemId || {}) as Record<
+      string,
+      string | null
+    >;
   const measurementConversions = (payload.measurementConversions ||
     []) as Array<{
     fromUnit: string;
@@ -74,6 +79,7 @@ export default function AdminMobileImportStockMovementsBatchRoute() {
     appliedChanges,
     unitOptions,
     itemUnitOptionsByItemId,
+    lastEntryMovementUnitByItemId,
     measurementConversions,
     suppliers,
     categories,

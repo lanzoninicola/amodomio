@@ -13,7 +13,7 @@ import { prismaIt } from "~/lib/prisma/prisma-it.server";
 import { badRequest, ok } from "~/utils/http-response.server";
 import { jsonParse } from "~/utils/json-helper";
 import tryit from "~/utils/try-it";
-import { MenuItemVisibilityFilterOption } from "./admin.gerenciamento.cardapio.main.list";
+import { MenuItemVisibilityFilterOption } from "~/domain/cardapio/menu-item.types";
 import { Separator } from "~/components/ui/separator";
 import ExportCsvButton from "~/domain/export-csv/components/export-csv-button/export-csv-button";
 import { ArrowDownToLine } from "lucide-react";

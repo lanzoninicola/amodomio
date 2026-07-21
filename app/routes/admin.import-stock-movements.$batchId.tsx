@@ -729,6 +729,7 @@ export function ItemSystemMapperCell({
   categories = [],
   costHint,
   compact = false,
+  showUnitShortcuts = true,
   showCostHint = true,
   mobile = false,
   onItemSelected,
@@ -744,6 +745,7 @@ export function ItemSystemMapperCell({
     avgCostPerUnit: number | null;
   } | null;
   compact?: boolean;
+  showUnitShortcuts?: boolean;
   showCostHint?: boolean;
   mobile?: boolean;
   onItemSelected?: () => void;
@@ -1703,35 +1705,38 @@ export function ItemSystemMapperCell({
             )}
           </div>
         )}
-        {!compact && selectedItem && selectedItemUnitRows.length > 0 && (
-          <div className="flex flex-wrap gap-1.5 pt-1">
-            {selectedItemUnitRows.map((row) => {
-              const isSelected =
-                normalizeItemUnit(line.movementUnit || line.unitEntry) ===
-                row.unit;
-              const isSelectable = selectableUnitCodes.has(row.unit);
-              return (
-                <button
-                  key={row.unit}
-                  type="button"
-                  disabled={isEditingLineUnit || !isSelectable}
-                  onClick={() => submitMovementUnit(row.unit)}
-                  className={cn(
-                    "rounded border px-2 py-1 text-[11px] font-semibold transition",
-                    isSelected
-                      ? "border-slate-300 bg-slate-100 text-slate-900"
-                      : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-slate-900",
-                    (isEditingLineUnit || !isSelectable) &&
-                      "cursor-not-allowed opacity-50"
-                  )}
-                  title={`Vincular UM ${row.unit} ao movimento`}
-                >
-                  {row.unit}
-                </button>
-              );
-            })}
-          </div>
-        )}
+        {!compact &&
+          showUnitShortcuts &&
+          selectedItem &&
+          selectedItemUnitRows.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 pt-1">
+              {selectedItemUnitRows.map((row) => {
+                const isSelected =
+                  normalizeItemUnit(line.movementUnit || line.unitEntry) ===
+                  row.unit;
+                const isSelectable = selectableUnitCodes.has(row.unit);
+                return (
+                  <button
+                    key={row.unit}
+                    type="button"
+                    disabled={isEditingLineUnit || !isSelectable}
+                    onClick={() => submitMovementUnit(row.unit)}
+                    className={cn(
+                      "rounded border px-2 py-1 text-[11px] font-semibold transition",
+                      isSelected
+                        ? "border-slate-300 bg-slate-100 text-slate-900"
+                        : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-slate-900",
+                      (isEditingLineUnit || !isSelectable) &&
+                        "cursor-not-allowed opacity-50"
+                    )}
+                    title={`Vincular UM ${row.unit} ao movimento`}
+                  >
+                    {row.unit}
+                  </button>
+                );
+              })}
+            </div>
+          )}
         {!compact &&
           showCostHint &&
           (costHint &&

@@ -769,10 +769,13 @@ export async function action({ request }: ActionFunctionArgs) {
         return badRequest("Informe um telefone valido para WhatsApp.");
       }
 
-      const zapiResponse = await sendTextMessage({
-        phone: recipientPhone,
-        message: messageText,
-      });
+      const zapiResponse = await sendTextMessage(
+        {
+          phone: recipientPhone,
+          message: messageText,
+        },
+        { trackCrm: false }
+      );
 
       await prismaClient.itemSellingVisibilityDisableBatch.update({
         where: { id: batch.id },

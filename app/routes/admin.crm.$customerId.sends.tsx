@@ -1,6 +1,6 @@
 import type { LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
 import { json } from "@remix-run/node";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { CardDescription, CardTitle } from "@/components/ui/card";
 import prisma from "~/lib/prisma/client.server";
 import { useLoaderData } from "@remix-run/react";
 
@@ -38,12 +38,12 @@ export default function AdminCrmCustomerSends() {
   const { sends } = useLoaderData<typeof loader>();
 
   return (
-    <Card className="">
-      <CardHeader>
+    <section className="grid gap-6">
+      <header className="flex flex-col space-y-1.5">
         <CardTitle>Envios de campanha</CardTitle>
         <CardDescription>Últimos 20 envios para este cliente.</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-2">
+      </header>
+      <div className="space-y-2">
         {sends.length ? (
           sends.map((s) => (
             <div key={s.id} className="rounded border border-border px-3 py-2">
@@ -56,8 +56,8 @@ export default function AdminCrmCustomerSends() {
         ) : (
           <p className="text-sm text-muted-foreground">Nenhum envio registrado.</p>
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </section>
   );
 }
 
