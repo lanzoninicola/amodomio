@@ -32,6 +32,12 @@ type CatalogItem = {
 };
 
 type IngredientSection = "base" | "filling";
+const PIZZA_SIZE_OPTIONS = [
+  { code: "pizza-individual", label: "Ind.", fullLabel: "Individual" },
+  { code: "pizza-small", label: "Peq.", fullLabel: "Pequena" },
+  { code: "pizza-medium", label: "Méd.", fullLabel: "Média" },
+  { code: "pizza-bigger", label: "Fam.", fullLabel: "Família" },
+] as const;
 type ConfirmedIngredient = {
   key: string;
   itemId: string | null;
@@ -186,6 +192,9 @@ export default function PizzaFlavorWizardRoute({
   const catalog = (loaderData?.payload?.ingredients || []) as CatalogItem[];
   const [name, setName] = useState("");
   const [confirmed, setConfirmed] = useState<ConfirmedIngredient[]>([]);
+  const [variationCodes, setVariationCodes] = useState<string[]>(
+    PIZZA_SIZE_OPTIONS.map((option) => option.code)
+  );
   const created = actionData?.payload?.created;
   const error = actionData?.status >= 400 ? actionData?.message : null;
   const baseIngredients = confirmed.filter((item) => item.section === "base");
@@ -304,7 +313,8 @@ export default function PizzaFlavorWizardRoute({
               <ul className="space-y-2 text-sm text-slate-700">
                 <li>• Categoria técnica: Sabor Pizza</li>
                 <li>• Grupo comercial padrão: Pizzas Salgadas</li>
-                <li>• Receita criada para todos os tamanhos</li>
+                <li>• Receita criada para os tamanhos selecionados</li>
+                <li>• Quantidades iniciadas pela média dos sabores visíveis</li>
                 <li>• Ficha técnica criada como rascunho</li>
                 <li>• Lançamento futuro ativado</li>
               </ul>
@@ -323,6 +333,11 @@ export default function PizzaFlavorWizardRoute({
                 section: row.section,
               }))
             )}
+          />
+          <input
+            type="hidden"
+            name="variationCodes"
+            value={JSON.stringify(variationCodes)}
           />
           <div
             className={
@@ -408,6 +423,42 @@ export default function PizzaFlavorWizardRoute({
             </div>
           ) : null}
 
+          <fieldset>
+            <legend className="text-sm font-semibold text-slate-900">
+              Tamanhos
+            </legend>
+            <div className="mt-2 grid grid-cols-4 gap-1.5">
+              {PIZZA_SIZE_OPTIONS.map((option) => {
+                const checked = variationCodes.includes(option.code);
+                return (
+                  <label
+                    key={option.code}
+                    title={option.fullLabel}
+                    className={`flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2.5 text-sm font-semibold ${
+                      checked
+                        ? "border-violet-300 bg-violet-50 text-violet-950"
+                        : "border-slate-200 bg-white text-slate-500"
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={(event) =>
+                        setVariationCodes((current) =>
+                          event.target.checked
+                            ? [...current, option.code]
+                            : current.filter((code) => code !== option.code)
+                        )
+                      }
+                      className="h-4 w-4 accent-violet-700"
+                    />
+                    {option.label}
+                  </label>
+                );
+              })}
+            </div>
+          </fieldset>
+
           <div>
             <div className="flex flex-wrap items-center justify-between gap-2">
               <label
@@ -456,8 +507,9 @@ export default function PizzaFlavorWizardRoute({
           </div>
 
           <p className="text-[11px] text-slate-500">
-            As quantidades serão preenchidas depois, durante a revisão da
-            receita.
+            Cada ingrediente recebe, por tamanho, a média usada nos sabores
+            visíveis do canal cardápio. Sem histórico compatível, começa em zero
+            para revisão.
           </p>
           {error ? (
             <p className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
@@ -475,6 +527,7 @@ export default function PizzaFlavorWizardRoute({
             disabled={
               !baseIngredients.length ||
               !fillingIngredients.length ||
+              !variationCodes.length ||
               !loaderData?.payload?.ready ||
               navigation.state !== "idle"
             }

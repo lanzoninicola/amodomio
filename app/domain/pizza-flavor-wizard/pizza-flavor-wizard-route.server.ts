@@ -19,6 +19,9 @@ export async function action({ request }: ActionFunctionArgs) {
     const formData = await request.formData();
     const name = String(formData.get("name") || "").trim();
     const raw = JSON.parse(String(formData.get("ingredients") || "[]"));
+    const variationCodesRaw = JSON.parse(
+      String(formData.get("variationCodes") || "[]")
+    );
     const ingredients: PizzaFlavorIngredientInput[] = Array.isArray(raw)
       ? raw
           .map((row) => ({
@@ -28,7 +31,12 @@ export async function action({ request }: ActionFunctionArgs) {
           }))
           .filter((row) => row.itemId || row.name)
       : [];
-    return ok({ created: await createPizzaFlavor({ name, ingredients }) });
+    const variationCodes = Array.isArray(variationCodesRaw)
+      ? variationCodesRaw.map(String)
+      : [];
+    return ok({
+      created: await createPizzaFlavor({ name, ingredients, variationCodes }),
+    });
   } catch (error) {
     const message =
       (error as Error)?.message || "Não foi possível criar o sabor";
