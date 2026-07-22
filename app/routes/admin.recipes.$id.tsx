@@ -15,6 +15,7 @@ import {
   useSearchParams,
 } from "@remix-run/react";
 import {
+  AlertTriangle,
   Check,
   ChevronLeft,
   Copy,
@@ -22,6 +23,7 @@ import {
   FileSpreadsheet,
   RefreshCw,
   Trash2,
+  X,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import {
@@ -610,6 +612,17 @@ function buildRecipeSectionRedirect(recipeId: string, sectionRaw: unknown) {
   );
 }
 
+function buildRecipeCostSheetRecalculationRedirect(
+  recipeId: string,
+  sectionRaw: unknown
+) {
+  const href = buildRecipeSectionHref(
+    recipeId,
+    resolveRecipeSection(sectionRaw)
+  );
+  return redirect(`${href}?recalculateCostSheet=yes`);
+}
+
 function buildRecipeCostSheetCreatedHref(
   recipeId: string,
   sectionRaw: unknown,
@@ -888,7 +901,10 @@ export async function action({ request }: ActionFunctionArgs) {
         defaultUnit,
       });
 
-      return buildRecipeSectionRedirect(recipeId, currentSection);
+      return buildRecipeCostSheetRecalculationRedirect(
+        recipeId,
+        currentSection
+      );
     } catch (error) {
       return badRequest(
         (error as Error)?.message || "Erro ao adicionar ingrediente"
@@ -925,7 +941,10 @@ export async function action({ request }: ActionFunctionArgs) {
           defaultUnit,
         });
       }
-      return buildRecipeSectionRedirect(recipeId, currentSection);
+      return buildRecipeCostSheetRecalculationRedirect(
+        recipeId,
+        currentSection
+      );
     } catch (error) {
       return badRequest(
         (error as Error)?.message || "Erro ao adicionar ingredientes"
@@ -1094,7 +1113,7 @@ export async function action({ request }: ActionFunctionArgs) {
         }
       }
 
-      return buildRecipeSectionRedirect(recipeId, "variacoes");
+      return buildRecipeCostSheetRecalculationRedirect(recipeId, "variacoes");
     } catch (error) {
       return badRequest(
         (error as Error)?.message || "Erro ao importar composição do ChatGPT"
@@ -1223,7 +1242,7 @@ export async function action({ request }: ActionFunctionArgs) {
         importMode,
       });
 
-      return buildRecipeSectionRedirect(recipeId, "variacoes");
+      return buildRecipeCostSheetRecalculationRedirect(recipeId, "variacoes");
     } catch (error) {
       return badRequest(
         (error as Error)?.message || "Erro ao importar receita externa"
@@ -1239,7 +1258,7 @@ export async function action({ request }: ActionFunctionArgs) {
     try {
       const db = prismaClient as any;
       await deleteRecipeCompositionLine(db, recipeLineId);
-      return buildRecipeSectionRedirect(recipeId, currentSection);
+      return buildRecipeCostSheetRecalculationRedirect(recipeId, currentSection);
     } catch (error) {
       return badRequest(
         (error as Error)?.message || "Erro ao remover item da composição"
@@ -1266,11 +1285,17 @@ export async function action({ request }: ActionFunctionArgs) {
         for (const line of lines) {
           await deleteRecipeCompositionLine(db, String(line.id));
         }
-        return buildRecipeSectionRedirect(recipeId, currentSection);
+        return buildRecipeCostSheetRecalculationRedirect(
+          recipeId,
+          currentSection
+        );
       }
       if (recipeLineId) {
         await deleteRecipeCompositionLine(db, recipeLineId);
-        return buildRecipeSectionRedirect(recipeId, currentSection);
+        return buildRecipeCostSheetRecalculationRedirect(
+          recipeId,
+          currentSection
+        );
       }
       return badRequest("Linha inválida");
     } catch (error) {
@@ -1364,7 +1389,7 @@ export async function action({ request }: ActionFunctionArgs) {
         lossPct: null,
       });
 
-      return buildRecipeSectionRedirect(recipeId, currentSection);
+      return buildRecipeCostSheetRecalculationRedirect(recipeId, currentSection);
     } catch (error) {
       return badRequest(
         (error as Error)?.message || "Erro ao atualizar item da composição"
@@ -1401,7 +1426,7 @@ export async function action({ request }: ActionFunctionArgs) {
         variationIds,
       });
 
-      return buildRecipeSectionRedirect(recipeId, currentSection);
+      return buildRecipeCostSheetRecalculationRedirect(recipeId, currentSection);
     } catch (error) {
       return badRequest(
         (error as Error)?.message ||
@@ -1436,7 +1461,7 @@ export async function action({ request }: ActionFunctionArgs) {
           lossPct: null,
         });
       }
-      return buildRecipeSectionRedirect(recipeId, currentSection);
+      return buildRecipeCostSheetRecalculationRedirect(recipeId, currentSection);
     } catch (error) {
       return badRequest(
         (error as Error)?.message || "Erro ao atualizar UM do ingrediente"
@@ -1487,7 +1512,7 @@ export async function action({ request }: ActionFunctionArgs) {
         });
       }
 
-      return buildRecipeSectionRedirect(recipeId, currentSection);
+      return buildRecipeCostSheetRecalculationRedirect(recipeId, currentSection);
     } catch (error) {
       return badRequest(
         (error as Error)?.message || "Erro ao atualizar perda padrão"
@@ -1517,6 +1542,15 @@ export async function action({ request }: ActionFunctionArgs) {
     } catch (error) {
       return badRequest((error as Error)?.message || "Rendimento inválido");
     }
+    const costingChanged =
+      String((recipe as any)?.costingMode || "") !==
+        String(costingInput.costingMode || "") ||
+      Number((recipe as any)?.yieldQuantity || 0) !==
+        Number(costingInput.yieldQuantity || 0) ||
+      String((recipe as any)?.yieldUnit || "")
+        .trim()
+        .toUpperCase() !==
+        String(costingInput.yieldUnit || "").trim().toUpperCase();
 
     const nextRecipe = {
       ...recipe,
@@ -1759,10 +1793,10 @@ export async function action({ request }: ActionFunctionArgs) {
       // best effort: preserve legacy behavior when migrations are pending
     }
 
-    return buildRecipeSectionRedirect(
-      String(values.recipeId || "").trim(),
-      currentSection
-    );
+    const recipeId = String(values.recipeId || "").trim();
+    return costingChanged || isItemChangeRequested
+      ? buildRecipeCostSheetRecalculationRedirect(recipeId, currentSection)
+      : buildRecipeSectionRedirect(recipeId, currentSection);
   }
 
   if (_action === "recipe-procedure-update") {
@@ -1831,7 +1865,7 @@ export async function action({ request }: ActionFunctionArgs) {
       return badRequest(err);
     }
 
-    return redirect(`/admin/recipes/${recipeId}/procedimento/editar`);
+    return buildRecipeCostSheetRecalculationRedirect(recipeId, "procedimento");
   }
 
   return null;
@@ -2294,6 +2328,9 @@ export default function AdminRecipeDetailLayout() {
   const linkedItemCreatedHref = linkedItemCreatedId
     ? `/admin/items/${linkedItemCreatedId}/main`
     : "";
+  const showCostSheetRecalculationNotice =
+    searchParams.get("recalculateCostSheet") === "yes" &&
+    recipeCostSheetCount > 0;
   const handleCreatedCostSheetDialogOpenChange = (open: boolean) => {
     if (open) return;
     const nextParams = new URLSearchParams(searchParams);
@@ -2308,6 +2345,14 @@ export default function AdminRecipeDetailLayout() {
     const nextParams = new URLSearchParams(searchParams);
     nextParams.delete("linkedItemCreatedId");
     nextParams.delete("linkedItemUnit");
+    setSearchParams(nextParams, {
+      preventScrollReset: true,
+      replace: true,
+    });
+  };
+  const dismissCostSheetRecalculationNotice = () => {
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.delete("recalculateCostSheet");
     setSearchParams(nextParams, {
       preventScrollReset: true,
       replace: true,
@@ -2419,6 +2464,42 @@ export default function AdminRecipeDetailLayout() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {showCostSheetRecalculationNotice ? (
+        <div
+          role="alert"
+          className="flex flex-col gap-3 border border-amber-200 bg-amber-50 px-4 py-3 text-amber-950 sm:flex-row sm:items-center"
+        >
+          <AlertTriangle className="h-5 w-5 shrink-0 text-amber-600" />
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold">
+              É necessário recalcular a ficha técnica
+            </p>
+            <p className="text-xs text-amber-800">
+              A composição ou o rendimento da receita mudou. Recalcule as
+              fichas vinculadas para atualizar os custos.
+            </p>
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            <Button asChild size="sm" variant="outline">
+              <Link to={buildRecipeSectionHref(recipe.id, "fichas")}>
+                Ver fichas técnicas
+              </Link>
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 text-amber-800"
+              onClick={dismissCostSheetRecalculationNotice}
+              aria-label="Fechar aviso de recálculo"
+              title="Fechar aviso"
+            >
+              <X size={16} />
+            </Button>
+          </div>
+        </div>
+      ) : null}
 
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0 space-y-2">
