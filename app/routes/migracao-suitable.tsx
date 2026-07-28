@@ -60,7 +60,7 @@ export default function MigracaoSuitablePage() {
 
   return (
     <main className="min-h-screen bg-white px-4 py-6 font-neue text-zinc-950 sm:px-6 lg:px-8">
-      <div className="mx-auto max-w-[1600px]">
+      <div className="w-full">
         <header className="mb-6">
           <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
             Sabores de pizza
