@@ -44,6 +44,7 @@ import {
 } from "~/components/ui/dialog";
 import { toast } from "~/components/ui/use-toast";
 import { DecimalInput } from "~/components/inputs/inputs";
+import { notifyRecipeCostSheetRecalculationRequired } from "~/domain/recipe/recipe-cost-sheet-recalculation-notification.server";
 import { getAvailableItemUnits } from "~/domain/item/item-units.server";
 import { recipeEntity } from "~/domain/recipe/recipe.entity.server";
 import { ensureItemCostSheetForRecipe } from "~/domain/recipe/recipe-item-cost-sheet.server";
@@ -612,10 +613,14 @@ function buildRecipeSectionRedirect(recipeId: string, sectionRaw: unknown) {
   );
 }
 
-function buildRecipeCostSheetRecalculationRedirect(
+async function buildRecipeCostSheetRecalculationRedirect(
   recipeId: string,
   sectionRaw: unknown
 ) {
+  await notifyRecipeCostSheetRecalculationRequired(
+    prismaClient as any,
+    recipeId
+  );
   const href = buildRecipeSectionHref(
     recipeId,
     resolveRecipeSection(sectionRaw)

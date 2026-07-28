@@ -40,6 +40,7 @@ export function buildImageSrcSet(
 export type CardapioIndexItem = {
   id: string;
   slug?: string | null;
+  publishedAt?: string | Date | null;
   name: string;
   description?: string | null;
   longDescription?: string | null;
@@ -136,14 +137,24 @@ export function getNoveltyItems(input: CardapioIndexItem[] | GroupedItems[]) {
   const flatItems = isGrouped(input)
     ? input.flatMap((group) => group.items)
     : input;
+  const noveltyCutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
+  const getPublishedTime = (item: CardapioIndexItem) => {
+    const publishedTime = new Date(item.publishedAt || 0).getTime();
+    return Number.isFinite(publishedTime) ? publishedTime : 0;
+  };
 
   return [...flatItems]
-    .filter((item) => itemHasPublicTag(item, "novidade"))
+    .filter(
+      (item) =>
+        itemHasPublicTag(item, "novidade") ||
+        getPublishedTime(item) >= noveltyCutoff
+    )
     .sort((a, b) => {
+      const publishedDiff = getPublishedTime(b) - getPublishedTime(a);
       const aHasImage = getPrimaryCardapioMedia(a)?.secureUrl ? 1 : 0;
       const bHasImage = getPrimaryCardapioMedia(b)?.secureUrl ? 1 : 0;
       const likesDiff = (b.likes?.amount || 0) - (a.likes?.amount || 0);
-      return bHasImage - aHasImage || likesDiff;
+      return publishedDiff || bHasImage - aHasImage || likesDiff;
     });
 }
 

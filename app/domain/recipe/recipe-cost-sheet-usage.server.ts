@@ -79,6 +79,14 @@ export async function countRecipeCostSheetUsage(db: any, recipeId: string) {
   return sourceLabelsByRootId.size;
 }
 
+export async function listRecipeCostSheetRootIds(db: any, recipeId: string) {
+  const sourceLabelsByRootId = await getRecipeCostSheetRootSources(
+    db,
+    recipeId
+  );
+  return Array.from(sourceLabelsByRootId.keys());
+}
+
 export async function listRecipeCostSheetUsage(
   db: any,
   recipeId: string

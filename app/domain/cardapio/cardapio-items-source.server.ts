@@ -9,6 +9,7 @@ import {
 type CardapioCompatItem = MenuItemWithAssociations & {
   sourceType?: "native";
   sourceItemId?: string;
+  cardapioPublishedAt?: Date | null;
   baseIngredients?: string | null;
   publicPriceVariations?: PublicCardapioVariation[];
 };
@@ -461,6 +462,7 @@ function toCompatCardapioItem(item: NativeCardapioRow): CardapioCompatItem {
     meta: buildMetaFromTags(allTags),
     sourceType: "native",
     sourceItemId: item.id,
+    cardapioPublishedAt: channelLink?.createdAt || null,
   } as CardapioCompatItem;
 }
 
@@ -468,6 +470,7 @@ function toCardapioIndexItem(item: CardapioCompatItem): CardapioIndexItem {
   return {
     id: item.id,
     slug: item.slug || null,
+    publishedAt: item.cardapioPublishedAt || null,
     name: item.name,
     description: item.description || null,
     longDescription: item.longDescription || null,
@@ -589,6 +592,7 @@ async function listNativeCardapioItems(
           visible: true,
           itemSellingChannelId: true,
           sortOrderIndex: true,
+          createdAt: true,
         },
       },
       ItemGalleryImage: {

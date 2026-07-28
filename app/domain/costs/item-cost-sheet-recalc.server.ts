@@ -1,6 +1,7 @@
 import { resolveItemCostSnapshot } from "~/domain/costs/item-cost-snapshot.server";
 import { registerItemCostEvent } from "~/domain/costs/item-cost-event.server";
 import { listRecipeCompositionLines } from "~/domain/recipe/recipe-composition.server";
+import { resolveNotificationsForRecalculatedCostSheet } from "~/domain/recipe/recipe-cost-sheet-recalculation-notification.server";
 
 export function roundItemCostSheetMoney(value: number) {
   return Number(Number(value || 0).toFixed(6));
@@ -471,6 +472,7 @@ export async function recalcItemCostSheetTotals(
     db,
     rootSheetId
   );
+  await resolveNotificationsForRecalculatedCostSheet(db, rootSheetId);
 
   return { rootSheetId, updatedSheets: groupSheets.length, publishedSnapshots };
 }

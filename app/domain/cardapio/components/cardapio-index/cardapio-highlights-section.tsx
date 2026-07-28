@@ -33,6 +33,8 @@ export function CardapioHighlightsSection({
     includeNovelties = true,
     showMobileHiddenContent = false,
     desktopColumnLayout = false,
+    stickyHighlights = false,
+    bannerEnabled = true,
 }: {
     items: CardapioIndexItem[] | GroupedItems[];
     likesEnabled: boolean;
@@ -41,9 +43,25 @@ export function CardapioHighlightsSection({
     includeNovelties?: boolean;
     showMobileHiddenContent?: boolean;
     desktopColumnLayout?: boolean;
+    stickyHighlights?: boolean;
+    bannerEnabled?: boolean;
 }) {
-    const noveltyItems = getNoveltyItems(items);
     const flatItems = isGrouped(items) ? items.flatMap((group) => getGroupedItemsList(group)) : items;
+    const pizzaItems = isGrouped(items)
+        ? items
+            .filter((group) => group.productLine.toLocaleLowerCase("pt-BR").includes("pizza"))
+            .flatMap((group) => getGroupedItemsList(group))
+        : items;
+    const highlightLimit = 10;
+    const noveltyItems = getNoveltyItems(pizzaItems).slice(0, highlightLimit);
+    const noveltyItemIds = new Set(noveltyItems.map((item) => item.id));
+    const highlightItems = [
+        ...noveltyItems,
+        ...[...pizzaItems]
+            .filter((item) => !noveltyItemIds.has(item.id))
+            .sort((a, b) => getItemMarginPerc(b) - getItemMarginPerc(a))
+            .slice(0, Math.max(0, highlightLimit - noveltyItems.length)),
+    ];
     const topMarginItems = [...flatItems]
         .sort((a, b) => getItemMarginPerc(b) - getItemMarginPerc(a))
         .slice(0, 12);
@@ -85,7 +103,13 @@ export function CardapioHighlightsSection({
 
     return (
         <>
-            {includeNovelties && noveltyItems.length > 0 ? <NoveltiesHeroSection items={noveltyItems} /> : null}
+            {includeNovelties && highlightItems.length > 0 ? (
+                <HighlightsBarSection
+                    items={highlightItems}
+                    sticky={stickyHighlights}
+                    bannerEnabled={bannerEnabled}
+                />
+            ) : null}
 
             <div
                 className={cn(
@@ -200,153 +224,127 @@ function SidebarAccordionSection({
     );
 }
 
-function NoveltiesHeroSection({ items }: { items: CardapioIndexItem[] }) {
-    const allItems = items.slice(0, 6);
-    const [current, setCurrent] = useState(0);
-    const [paused, setPaused] = useState(false);
-    const containerRef = useRef<HTMLDivElement>(null);
-    const pauseTimerRef = useRef<ReturnType<typeof setTimeout>>();
-    const itemWidth = 220;
-    const itemGap = 20;
-    const step = itemWidth + itemGap;
-
-    const scrollToIndex = useCallback((index: number, instant = false) => {
-        containerRef.current?.scrollTo({
-            left: index * step,
-            behavior: instant ? "auto" : "smooth",
-        });
-    }, [step]);
-
-    const handleScroll = useCallback(() => {
-        if (!containerRef.current) return;
-        const index = Math.round(containerRef.current.scrollLeft / step);
-        setCurrent(Math.max(0, Math.min(index, allItems.length - 1)));
-    }, [allItems.length, step]);
+function HighlightsBarSection({
+    items,
+    sticky,
+    bannerEnabled,
+}: {
+    items: CardapioIndexItem[];
+    sticky: boolean;
+    bannerEnabled: boolean;
+}) {
+    const [isCompact, setIsCompact] = useState(false);
 
     useEffect(() => {
-        if (paused || allItems.length <= 1) return;
-        const timer = window.setInterval(() => {
-            setCurrent((previous) => {
-                const next = (previous + 1) % allItems.length;
-                scrollToIndex(next, next === 0);
-                return next;
-            });
-        }, 4000);
-        return () => window.clearInterval(timer);
-    }, [allItems.length, paused, scrollToIndex]);
+        if (!sticky) return;
 
-    const handleInteraction = useCallback(() => {
-        setPaused(true);
-        if (pauseTimerRef.current) clearTimeout(pauseTimerRef.current);
-        pauseTimerRef.current = window.setTimeout(() => setPaused(false), 6000);
-    }, []);
+        const update = () => setIsCompact(window.scrollY > 24);
+        update();
+        window.addEventListener("scroll", update, { passive: true });
+        return () => window.removeEventListener("scroll", update);
+    }, [sticky]);
 
-    const activeItem = allItems[current] ?? allItems[0];
-    const activePrice = activeItem ? getVisiblePublicPriceVariations(activeItem)[0] : null;
-
-    if (!activeItem) return null;
+    if (!items.length) return null;
 
     return (
-        <section id="novo-lancamento">
-            <div className="mb-6 px-4 flex flex-col items-center">
-                <h2 className="font-neue text-md font-semibold tracking-tight uppercase text-zinc-950">
-                    Novos Lançamentos
-                </h2>
-                <div className="mt-1 flex items-center gap-2">
-                    <span className="font-neue text-[10px] uppercase tracking-[0.36em] text-zinc-500">
-                        {items.length} novos sabores
-                    </span>
-                </div>
-            </div>
-
-            <div className="overflow-hidden">
-                <div
-                    ref={containerRef}
-                    className="flex snap-x snap-mandatory overflow-x-scroll [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-                    onScroll={handleScroll}
-                    onTouchStart={handleInteraction}
-                    onMouseDown={handleInteraction}
-                >
-                    <div style={{ flexShrink: 0, width: `calc(50vw - ${itemWidth / 2}px)` }} />
-
-                    {allItems.map((item, index) => {
-                        const media = getPrimaryCardapioMedia(item);
-                        const isActive = index === current;
-                        return (
-                            <div
-                                key={item.id}
-                                className="snap-center flex-shrink-0"
-                                style={{
-                                    width: itemWidth,
-                                    marginRight: index < allItems.length - 1 ? itemGap : 0,
-                                }}
-                            >
-                                <div
-                                    className="aspect-square w-full overflow-hidden rounded-full bg-zinc-100 transition-all duration-500"
-                                    style={{
-                                        transform: isActive ? "scale(1)" : "scale(0.78)",
-                                        opacity: isActive ? 1 : 0.38,
-                                    }}
-                                >
-                                    <CardapioItemImageSingle
-                                        src={media?.secureUrl || ""}
-                                        srcSet={buildImageSrcSet(media?.variants)}
-                                        sizes="160px"
-                                        placeholder={item.imagePlaceholderURL || ""}
-                                        placeholderIcon={false}
-                                        placeholderText={item.name}
-                                        cnPlaceholderContainer="from-zinc-200 via-zinc-100 to-zinc-50"
-                                        cnPlaceholderText="font-lora text-sm text-zinc-500"
-                                        cnContainer="h-full w-full"
-                                        enableOverlay={false}
-                                    />
-                                </div>
-                            </div>
-                        );
-                    })}
-
-                    <div style={{ flexShrink: 0, width: `calc(50vw - ${itemWidth / 2}px)` }} />
-                </div>
-            </div>
-
-            <Link to={getCardapioItemHref(activeItem)} className="group mt-6 block px-6 text-center">
-                <h3 className="font-lora text-2xl font-bold text-zinc-950 transition-opacity group-hover:opacity-60">
-                    {activeItem.name}
-                </h3>
-                {activeItem.baseIngredients ? (
-                    <p className="mt-1 font-neue text-xs text-zinc-500">
-                        <span className="font-semibold">Base</span> · {activeItem.baseIngredients}
-                    </p>
-                ) : null}
-                <p className="mt-1 font-neue text-sm text-zinc-500">
-                    {activeItem.ingredients ? (
-                        <>
-                            <span className="font-semibold">Recheio</span> · {capitalize(activeItem.ingredients)}
-                        </>
-                    ) : (
-                        "Novo sabor no cardápio."
+        <section
+            id="cardapio-destaques"
+            aria-label="Pizzas em destaque"
+            className={cn(
+                "border-b border-zinc-200 bg-white transition-[padding,box-shadow] duration-300",
+                isCompact ? "py-1.5 shadow-md" : "py-3",
+                sticky && isCompact && "fixed left-0 right-0 z-30",
+                sticky &&
+                    (bannerEnabled
+                        ? "top-[calc(7.25rem+env(safe-area-inset-top))]"
+                        : "top-[calc(4.5rem+env(safe-area-inset-top))]")
+            )}
+        >
+            <div
+                className={cn(
+                    "flex items-center gap-2 px-4 transition-[margin] duration-300",
+                    isCompact ? "mb-1" : "mb-2"
+                )}
+            >
+                <h2
+                    className={cn(
+                        "shrink-0 font-neue font-bold uppercase text-zinc-500 transition-[font-size,letter-spacing] duration-300",
+                        isCompact
+                            ? "text-[8px] tracking-[0.16em]"
+                            : "text-[10px] tracking-[0.2em]"
                     )}
-                </p>
-                {activePrice ? (
-                    <p className="mt-2 font-neue text-sm text-zinc-400">
-                        {formatMoneyString(activePrice.priceAmount)}
-                    </p>
-                ) : null}
-            </Link>
-
-            <div className="mt-5 flex items-center justify-center gap-1.5">
-                {allItems.map((_, index) => (
-                    <div
-                        key={index}
-                        className={cn(
-                            "h-[3px] rounded-full transition-all duration-300",
-                            index === current ? "w-6 bg-zinc-950" : "w-[6px] bg-zinc-300"
-                        )}
-                    />
-                ))}
+                >
+                    Destaques
+                </h2>
+                <div className="h-px flex-1 bg-zinc-200" aria-hidden="true" />
             </div>
+            <div
+                className={cn(
+                    "flex snap-x snap-proximity overflow-x-auto px-4 transition-[gap] duration-300 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
+                    isCompact ? "gap-2" : "gap-3"
+                )}
+            >
+                {items.map((item) => {
+                    const media = getPrimaryCardapioMedia(item);
+                    const initial =
+                        item.name.trim().charAt(0).toLocaleUpperCase("pt-BR") ||
+                        "?";
 
-            <div className="mx-4 my-4 h-[2px] bg-zinc-900" />
+                    return (
+                        <Link
+                            key={item.id}
+                            to={getCardapioItemHref(item)}
+                            prefetch="intent"
+                            className={cn(
+                                "flex shrink-0 snap-start touch-manipulation flex-col items-center rounded-xl transition-[width,gap] duration-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-950",
+                                isCompact
+                                    ? "w-[54px] gap-1"
+                                    : "w-[76px] gap-1.5"
+                            )}
+                            aria-label={`Abrir detalhes de ${item.name}`}
+                        >
+                            <div
+                                className={cn(
+                                    "overflow-hidden rounded-full bg-zinc-200 transition-[width,height] duration-300",
+                                    isCompact
+                                        ? "h-[46px] w-[46px]"
+                                        : "h-[72px] w-[72px]"
+                                )}
+                            >
+                                <CardapioItemImageSingle
+                                    src={media?.secureUrl || ""}
+                                    srcSet={buildImageSrcSet(media?.variants)}
+                                    sizes={isCompact ? "46px" : "72px"}
+                                    placeholder={
+                                        media?.thumbnailUrl ||
+                                        item.imagePlaceholderURL ||
+                                        ""
+                                    }
+                                    placeholderIcon={false}
+                                    placeholderText={initial}
+                                    cnPlaceholderContainer="!bg-none !bg-zinc-200"
+                                    cnPlaceholderText={cn(
+                                        "!mb-0 font-neue font-bold leading-none text-zinc-500 opacity-100",
+                                        isCompact ? "text-2xl" : "text-4xl"
+                                    )}
+                                    cnContainer="h-full w-full"
+                                    enableOverlay={false}
+                                />
+                            </div>
+                            <span
+                                className={cn(
+                                    "w-full text-center font-neue font-semibold leading-tight text-zinc-950 transition-[font-size] duration-300",
+                                    isCompact
+                                        ? "line-clamp-1 text-[9px]"
+                                        : "line-clamp-2 text-[11px]"
+                                )}
+                            >
+                                {item.name}
+                            </span>
+                        </Link>
+                    );
+                })}
+            </div>
         </section>
     );
 }

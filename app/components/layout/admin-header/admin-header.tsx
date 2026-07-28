@@ -1,6 +1,6 @@
 
 import { Link, NavLink, useFetcher, useLocation, useNavigate, useRevalidator } from "@remix-run/react";
-import { Globe, House, Loader2, Menu, Pin, PinOff, Search, Settings, Smartphone, X, Zap } from "lucide-react";
+import { Bell, Globe, House, Loader2, Menu, Pin, PinOff, Search, Settings, Smartphone, X, Zap } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { cn } from "~/lib/utils";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "~/components/ui/dropdown-menu";
@@ -31,7 +31,16 @@ interface AdminHeaderProps {
     urlSegment?: string
     slug?: string
     topNavItems?: TopNavItem[]
+    actionNotifications?: AdminActionNotificationItem[]
 }
+
+export type AdminActionNotificationItem = {
+    id: string;
+    title: string;
+    description: string | null;
+    href: string | null;
+    pendingTargetCount: number;
+};
 
 type StoreOpeningStatusResponse = {
     isOpen: boolean
@@ -86,7 +95,73 @@ function flattenSearchItems(
 const normalizeStr = (s: string) =>
     s.toLowerCase().normalize("NFD").replace(/\p{M}/gu, "");
 
-export function AdminHeader({ urlSegment, slug, topNavItems = [] }: AdminHeaderProps) {
+function AdminActionNotificationsMenu({
+    notifications,
+}: {
+    notifications: AdminActionNotificationItem[];
+}) {
+    return (
+        <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+                <button
+                    type="button"
+                    className="relative flex flex-col items-center gap-0.5 rounded-md p-2 hover:bg-slate-50"
+                    aria-label={`Ações pendentes: ${notifications.length}`}
+                >
+                    <Bell size={18} />
+                    {notifications.length > 0 ? (
+                        <span className="absolute right-0 top-0 inline-flex min-w-4 items-center justify-center rounded-full bg-amber-500 px-1 text-[10px] font-bold leading-4 text-white">
+                            {notifications.length > 99 ? "99+" : notifications.length}
+                        </span>
+                    ) : null}
+                    <span className="text-[10px] text-foreground/60 lg:text-xs">
+                        Pendências
+                    </span>
+                </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-[min(24rem,calc(100vw-1rem))]">
+                <DropdownMenuLabel>Ações para finalizar</DropdownMenuLabel>
+                <div className="px-2 pb-2 text-xs text-muted-foreground">
+                    {notifications.length > 0
+                        ? `${notifications.length} pendência(s) em aberto`
+                        : "Nenhuma pendência em aberto"}
+                </div>
+                {notifications.length > 0 ? (
+                    <>
+                        <DropdownMenuSeparator />
+                        {notifications.map((notification) => (
+                            <DropdownMenuItem key={notification.id} asChild>
+                                <Link
+                                    to={notification.href || "/admin"}
+                                    className="flex cursor-pointer flex-col items-start gap-1 py-2"
+                                >
+                                    <span className="font-semibold text-slate-900">
+                                        {notification.title}
+                                    </span>
+                                    {notification.description ? (
+                                        <span className="whitespace-normal text-xs text-slate-500">
+                                            {notification.description}
+                                        </span>
+                                    ) : null}
+                                    <span className="text-[11px] font-medium text-amber-700">
+                                        {notification.pendingTargetCount} etapa(s) pendente(s)
+                                    </span>
+                                </Link>
+                            </DropdownMenuItem>
+                        ))}
+                    </>
+                ) : null}
+            </DropdownMenuContent>
+        </DropdownMenu>
+    );
+}
+
+export function AdminHeader({
+    urlSegment,
+    slug,
+    topNavItems = [],
+    actionNotifications = [],
+}: AdminHeaderProps) {
     const [openingStatus, setOpeningStatus] = useState<StoreOpeningStatusResponse | null>(null)
     const [isLoading, setIsLoading] = useState(false)
     const [openSearch, setOpenSearch] = useState(false)
@@ -275,6 +350,7 @@ export function AdminHeader({ urlSegment, slug, topNavItems = [] }: AdminHeaderP
                                     </DropdownMenuContent>
                                 </DropdownMenu>
                             </div>
+                            <AdminActionNotificationsMenu notifications={actionNotifications} />
                             <Link to={"/admin"}>
                                 <div className="flex flex-col items-center gap-0.5 hover:bg-slate-50 rounded-md p-2">
                                     <House size={18} />
