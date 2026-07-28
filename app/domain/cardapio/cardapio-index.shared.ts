@@ -46,6 +46,7 @@ export type CardapioIndexItem = {
   longDescription?: string | null;
   baseIngredients?: string | null;
   ingredients?: string | null;
+  commercialCategory?: string | null;
   imagePlaceholderURL?: string | null;
   mediaAssets?: CardapioMedia[] | null;
   publicPriceVariations?: CardapioPriceVariation[] | null;

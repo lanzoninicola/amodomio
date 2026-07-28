@@ -1,6 +1,6 @@
 import type { HeadersFunction, MetaFunction } from "@remix-run/node";
 import { Await, defer, useLoaderData } from "@remix-run/react";
-import { Check, Copy, Download } from "lucide-react";
+import { Check, Copy, Download, FileSpreadsheet } from "lucide-react";
 import { Suspense, useMemo, useState } from "react";
 
 import Loading from "~/components/loading/loading";
@@ -12,6 +12,8 @@ import type {
 } from "~/domain/cardapio/cardapio-index.shared";
 import { getVisiblePublicPriceVariations } from "~/domain/cardapio/cardapio-index.shared";
 import { findAllCardapioItemsGroupedByGroupLight } from "~/domain/cardapio/cardapio-items-source.server";
+
+type CatalogItem = CardapioIndexItem & { groupName: string };
 
 export const meta: MetaFunction = () => [
   { title: "Migração Suitable | A Modo Mio" },
@@ -84,11 +86,18 @@ function FlavorCatalog({ groups }: { groups: GroupedItems[] }) {
   const items = useMemo(
     () =>
       groups
-        .flatMap((group) => group.items)
+        .flatMap((group) =>
+          group.items.map((item) => ({
+            ...item,
+            groupName: group.group,
+          }))
+        )
         .filter((item) =>
           normalizedQuery
             ? [
                 item.name,
+                item.groupName,
+                item.commercialCategory,
                 item.description,
                 item.longDescription,
                 item.baseIngredients,
@@ -137,7 +146,7 @@ function FlavorCatalog({ groups }: { groups: GroupedItems[] }) {
   return (
     <>
       <div className="sticky top-0 z-20 -mx-4 mb-5 border-y border-zinc-200 bg-white/95 px-4 py-3 backdrop-blur sm:mx-0 sm:border-x-0 sm:border-t-0 sm:px-0">
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <input
             type="search"
             value={query}
@@ -148,15 +157,25 @@ function FlavorCatalog({ groups }: { groups: GroupedItems[] }) {
           <p className="shrink-0 text-sm text-zinc-500">
             {items.length} {items.length === 1 ? "item" : "itens"}
           </p>
+          <Button asChild className="ml-auto gap-2">
+            <a href="/migracao-suitable/excel">
+              <FileSpreadsheet className="h-4 w-4" />
+              Exportar Excel
+            </a>
+          </Button>
         </div>
       </div>
 
       {items.length ? (
-        <div className="overflow-x-auto border-y border-zinc-200 sm:rounded-lg sm:border">
-          <table className="w-full min-w-[1400px] border-collapse text-left text-sm">
-            <thead className="bg-zinc-50 text-xs uppercase tracking-wide text-zinc-500">
+        <div className="max-h-[calc(100vh-13rem)] touch-pan-x overflow-auto overscroll-x-contain border-y border-zinc-200 sm:rounded-lg sm:border">
+          <table className="w-full min-w-[1760px] border-collapse text-left text-sm">
+            <thead className="sticky top-0 z-10 bg-zinc-50 text-xs uppercase tracking-wide text-zinc-500 shadow-[0_1px_0_0_rgb(228_228_231)]">
               <tr>
                 <th className="min-w-[170px] px-4 py-3 font-semibold">Sabor</th>
+                <th className="min-w-[170px] px-4 py-3 font-semibold">Grupo</th>
+                <th className="min-w-[190px] px-4 py-3 font-semibold">
+                  Categoria comercial
+                </th>
                 <th className="min-w-[290px] px-4 py-3 font-semibold">
                   Ingredientes
                 </th>
@@ -198,7 +217,7 @@ function FlavorRow({
   item,
   sizeColumns,
 }: {
-  item: CardapioIndexItem;
+  item: CatalogItem;
   sizeColumns: Array<{ key: string; label: string }>;
 }) {
   const media = (item.mediaAssets || []).filter((asset) =>
@@ -220,6 +239,25 @@ function FlavorRow({
       <td className="px-4 py-4">
         <p className="font-semibold text-zinc-950">{item.name}</p>
         <CopyTextButton text={item.name} label="Copiar nome" />
+      </td>
+      <td className="px-4 py-4">
+        <p className="text-zinc-700">{item.groupName}</p>
+        <CopyTextButton text={item.groupName} label="Copiar grupo" />
+      </td>
+      <td className="px-4 py-4">
+        <p
+          className={
+            item.commercialCategory ? "text-zinc-700" : "text-zinc-400"
+          }
+        >
+          {item.commercialCategory || "Não disponível"}
+        </p>
+        {item.commercialCategory ? (
+          <CopyTextButton
+            text={item.commercialCategory}
+            label="Copiar categoria"
+          />
+        ) : null}
       </td>
       <td className="px-4 py-4">
         <p className={ingredients ? "text-zinc-700" : "text-zinc-400"}>
