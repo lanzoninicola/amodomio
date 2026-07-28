@@ -476,6 +476,7 @@ function toCardapioIndexItem(item: CardapioCompatItem): CardapioIndexItem {
     longDescription: item.longDescription || null,
     baseIngredients: item.baseIngredients || null,
     ingredients: item.ingredients || null,
+    commercialCategory: item.Category?.name || null,
     imagePlaceholderURL: item.imagePlaceholderURL || null,
     mediaAssets: (item.MenuItemGalleryImage || []) as any,
     publicPriceVariations: item.publicPriceVariations || [],
