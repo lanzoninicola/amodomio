@@ -209,6 +209,8 @@ export default function CardapioWebIndex() {
                   likesEnabled={likesEnabled}
                   reelUrls={reelUrls}
                   reelsEnabled={reelsEnabled}
+                  stickyHighlights
+                  bannerEnabled={bannerEnabled}
                 />
               </div>
             );

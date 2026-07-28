@@ -18,6 +18,7 @@ import { useCallback, useEffect, useRef, useState, type MouseEvent as ReactMouse
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { toast } from "~/components/ui/use-toast";
 import { getErrorMessage, isDatabaseConnectivityError } from "~/lib/errors/connectivity";
+import { listOpenAdminActionNotifications } from "~/domain/admin-notifications/admin-action-notification.server";
 
 
 export interface AdminOutletContext {
@@ -91,8 +92,8 @@ export const loader: LoaderFunction = async ({ request }: LoaderFunctionArgs) =>
     const slug = lastUrlSegment(request.url)
     const whatsappNoResponseEnabled = isMobileRoute ? false : await isWhatsappNoResponseEnabled();
 
-    const [pinnedNav, pendingReplyAlerts, topNavItems, adminNavigationMenuLayout] = isMobileRoute
-        ? [[], [], [], "sidebar" as const]
+    const [pinnedNav, pendingReplyAlerts, topNavItems, adminNavigationMenuLayout, actionNotifications] = isMobileRoute
+        ? [[], [], [], "sidebar" as const, []]
         : await Promise.all([
             prismaClient.adminNavigationClick.findMany({
                 where: { pinned: true },
@@ -141,6 +142,7 @@ export const loader: LoaderFunction = async ({ request }: LoaderFunctionArgs) =>
                 return [];
             }),
             getAdminNavigationMenuLayout(),
+            listOpenAdminActionNotifications(prismaClient as any),
         ]);
 
     return ok({
@@ -168,6 +170,7 @@ export const loader: LoaderFunction = async ({ request }: LoaderFunctionArgs) =>
             secondsWaiting: Number(row.seconds_waiting ?? 0),
             messagePreview: row.message_preview,
         })),
+        actionNotifications,
     })
 }
 
@@ -190,6 +193,7 @@ export default function AdminOutlet() {
     const adminNavigationMenuLayout = loaderData?.payload?.adminNavigationMenuLayout ?? "sidebar";
     const whatsappNoResponseEnabled = loaderData?.payload?.whatsappNoResponseEnabled ?? true;
     const pendingReplyAlerts = (loaderData?.payload?.pendingReplyAlerts ?? []) as PendingReplyAlert[];
+    const actionNotifications = loaderData?.payload?.actionNotifications ?? [];
     const [isAlertsPanelOpen, setIsAlertsPanelOpen] = useState(false);
     const [panelPosition, setPanelPosition] = useState<{ x: number; y: number } | null>(null);
     const [isDraggingPanel, setIsDraggingPanel] = useState(false);
@@ -561,7 +565,12 @@ export default function AdminOutlet() {
                         <div className="h-6 md:h-7" aria-hidden />
                     </>
                 ) : null}
-                <AdminHeader slug={slug} urlSegment={urlSegment} topNavItems={topNavItems} />
+                <AdminHeader
+                    slug={slug}
+                    urlSegment={urlSegment}
+                    topNavItems={topNavItems}
+                    actionNotifications={actionNotifications}
+                />
                 {/* {env === "development" && <EnvironmentAlert />} */}
                 <div className="mt-6 mx-4 md:mr-12 pb-16" data-element="outer-div-admin-outlet">
                     <Outlet context={{

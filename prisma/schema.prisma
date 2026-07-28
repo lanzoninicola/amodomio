@@ -1558,6 +1558,42 @@ model AdminNavigationClick {
   @@map("admin_navigation_clicks")
 }
 
+model AdminActionNotification {
+  id          String    @id @default(uuid())
+  key         String    @unique
+  type        String
+  entityId    String?   @map("entity_id")
+  title       String
+  description String?   @db.Text
+  href        String?
+  status      String    @default("open")
+  resolvedAt  DateTime? @map("resolved_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @default(now()) @updatedAt @map("updated_at")
+
+  targets AdminActionNotificationTarget[]
+
+  @@index([status, updatedAt], map: "admin_action_notifications_status_updated_idx")
+  @@index([type, entityId], map: "admin_action_notifications_type_entity_idx")
+  @@map("admin_action_notifications")
+}
+
+model AdminActionNotificationTarget {
+  id             String    @id @default(uuid())
+  notificationId String    @map("notification_id")
+  targetType     String    @map("target_type")
+  targetId       String    @map("target_id")
+  resolvedAt     DateTime? @map("resolved_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @default(now()) @updatedAt @map("updated_at")
+
+  notification AdminActionNotification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+
+  @@unique([notificationId, targetType, targetId], map: "admin_action_notification_targets_unique")
+  @@index([targetType, targetId, resolvedAt], map: "admin_action_notification_targets_lookup_idx")
+  @@map("admin_action_notification_targets")
+}
+
 model Tag {
   id             String        @id @default(uuid())
   name           String
