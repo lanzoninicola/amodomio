@@ -20,12 +20,14 @@ export type CardapioFeaturedConfig = {
   displayStyle: "polaroid" | "default";
   showTitle: boolean;
   showPromotionHint: boolean;
+  promotionHintText: string | null;
 };
 
 export const DEFAULT_CARDAPIO_FEATURED_CONFIG: CardapioFeaturedConfig = {
   displayStyle: "polaroid",
   showTitle: true,
   showPromotionHint: true,
+  promotionHintText: null,
 };
 
 export function parseCardapioFeaturedConfig(
@@ -40,6 +42,10 @@ export function parseCardapioFeaturedConfig(
     displayStyle: source.displayStyle === "default" ? "default" : "polaroid",
     showTitle: source.showTitle !== false,
     showPromotionHint: source.showPromotionHint !== false,
+    promotionHintText:
+      typeof source.promotionHintText === "string"
+        ? source.promotionHintText.trim() || null
+        : null,
   };
 }
 

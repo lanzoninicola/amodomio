@@ -63,6 +63,31 @@ function buildCardapioWhatsappMessage(params: {
   ].join("\n");
 }
 
+function buildLongDescriptionChatGptPrompt(params: {
+  itemName: string;
+  baseIngredients: string;
+  ingredients: string;
+  currentDescription: string;
+}) {
+  const currentDescription = params.currentDescription.trim();
+  const task = currentDescription
+    ? "Revise e melhore a descricao extensa atual"
+    : "Crie uma descricao extensa";
+
+  return [
+    `${task} para este sabor do cardapio da pizzaria Amodomio.`,
+    "",
+    `Nome do sabor: ${params.itemName}`,
+    `Base da pizza: ${params.baseIngredients.trim() || "nao informada"}`,
+    `Ingredientes do sabor: ${params.ingredients.trim() || "nao informados"}`,
+    ...(currentDescription ? ["", "Descricao atual:", currentDescription] : []),
+    "",
+    "Escreva em portugues do Brasil, com tom comercial, apetitoso e natural.",
+    "Destaque a experiencia do sabor e os ingredientes informados, sem inventar ingredientes, caracteristicas ou promessas.",
+    "Entregue um unico paragrafo, sem titulo, lista, aspas, emojis ou explicacoes adicionais, pronto para colar no campo de descricao extensa.",
+  ].join("\n");
+}
+
 export async function loader({ params }: LoaderFunctionArgs) {
   try {
     const itemId = params.id;
@@ -348,6 +373,9 @@ export default function AdminItemVendaComercialRoute() {
   const [ingredientsValue, setIngredientsValue] = useState(
     sellingInfo?.ingredients || ""
   );
+  const [longDescriptionValue, setLongDescriptionValue] = useState(
+    sellingInfo?.longDescription || ""
+  );
   const [whatsappMessage, setWhatsappMessage] = useState("");
 
   useEffect(() => {
@@ -373,11 +401,13 @@ export default function AdminItemVendaComercialRoute() {
     );
     setBaseIngredientsValue(sellingInfo?.baseIngredients || "");
     setIngredientsValue(sellingInfo?.ingredients || "");
+    setLongDescriptionValue(sellingInfo?.longDescription || "");
   }, [
     sellingInfo?.baseIngredients,
     sellingInfo?.categoryId,
     sellingInfo?.ingredients,
     sellingInfo?.itemGroupId,
+    sellingInfo?.longDescription,
     groups,
   ]);
 
@@ -488,6 +518,42 @@ export default function AdminItemVendaComercialRoute() {
       });
   }
 
+  function copyLongDescriptionChatGptPrompt() {
+    if (!navigator?.clipboard) {
+      toast({
+        title: "Erro",
+        description: "Não foi possível copiar o prompt.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const prompt = buildLongDescriptionChatGptPrompt({
+      itemName: item.name,
+      baseIngredients: baseIngredientsValue,
+      ingredients: ingredientsValue,
+      currentDescription: longDescriptionValue,
+    });
+
+    void navigator.clipboard
+      .writeText(prompt)
+      .then(() => {
+        toast({
+          title: "Prompt copiado",
+          description: longDescriptionValue.trim()
+            ? "Cole no ChatGPT para revisar a descrição atual."
+            : "Cole no ChatGPT para criar a descrição extensa.",
+        });
+      })
+      .catch(() => {
+        toast({
+          title: "Erro",
+          description: "Não foi possível copiar o prompt.",
+          variant: "destructive",
+        });
+      });
+  }
+
   return (
     <Form ref={formRef} method="post" className="space-y-6">
       <input type="hidden" name="_action" value="update-commercial-info" />
@@ -567,11 +633,26 @@ export default function AdminItemVendaComercialRoute() {
 
         <div className="grid gap-4 lg:grid-cols-2">
           <div className="space-y-2">
-            <Label htmlFor="longDescription">Descrição extensa</Label>
+            <div className="flex items-center justify-between">
+              <Label htmlFor="longDescription">Descrição extensa</Label>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-7 gap-1.5 px-2 text-xs text-slate-500 hover:text-slate-900"
+                onClick={copyLongDescriptionChatGptPrompt}
+              >
+                <Wand2 size={13} />
+                {longDescriptionValue.trim()
+                  ? "Revisar com ChatGPT"
+                  : "Criar com ChatGPT"}
+              </Button>
+            </div>
             <Textarea
               id="longDescription"
               name="longDescription"
-              defaultValue={sellingInfo?.longDescription || ""}
+              value={longDescriptionValue}
+              onChange={(event) => setLongDescriptionValue(event.target.value)}
               placeholder="Texto comercial mais completo para o canal."
               className="min-h-32"
             />
