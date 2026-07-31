@@ -268,6 +268,7 @@ export async function createPizzaFlavor(params: {
         name,
         classification: "produto_final",
         categoryId: category.id,
+        consumptionUm: "UN",
         active: true,
         canPurchase: false,
         canTransform: true,
@@ -283,22 +284,12 @@ export async function createPizzaFlavor(params: {
         itemGroupId: savoryPizzaGroup.id,
         baseIngredients: params.ingredients
           .filter((row) => row.section === "base")
-          .map((row) =>
-            row.itemId
-              ? ingredientItems.find((item: any) => item.id === row.itemId)
-                  ?.name
-              : row.name
-          )
+          .map((row) => row.name)
           .filter(Boolean)
           .join(", "),
         ingredients: params.ingredients
           .filter((row) => row.section === "filling")
-          .map((row) =>
-            row.itemId
-              ? ingredientItems.find((item: any) => item.id === row.itemId)
-                  ?.name
-              : row.name
-          )
+          .map((row) => row.name)
           .filter(Boolean)
           .join(", "),
       },

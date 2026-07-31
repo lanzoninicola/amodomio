@@ -493,10 +493,16 @@ function CardapioFeaturedPromotionCarousel({
         <div className="pt-3 text-center md:py-1.5">
           {!isExpanded && section.showPromotionHint ? (
             <p className="mb-2 font-neue text-[11px] font-bold uppercase tracking-wide text-zinc-500">
-              <span className="md:hidden">Toque para ver a promoção</span>
-              <span className="hidden md:inline">
-                Clique para ver a promoção
-              </span>
+              {section.promotionHintText ? (
+                section.promotionHintText
+              ) : (
+                <>
+                  <span className="md:hidden">Toque para ver a promoção</span>
+                  <span className="hidden md:inline">
+                    Clique para ver a promoção
+                  </span>
+                </>
+              )}
             </p>
           ) : null}
 
@@ -684,6 +690,7 @@ function PromotionLinkSticker({
   imageIndex: number;
   placement: "card" | "mobile_modal" | "desktop_modal";
 }) {
+  if (image.chipAction === "none") return null;
   if (!image.linkText) return null;
 
   const isBottom = image.linkPosition === "bottom";

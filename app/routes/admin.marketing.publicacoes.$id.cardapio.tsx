@@ -7,6 +7,8 @@ import {
   useNavigation,
 } from "@remix-run/react";
 import { Send, Undo2 } from "lucide-react";
+import type { ReactNode } from "react";
+import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
@@ -71,6 +73,8 @@ export async function action({ request, params }: ActionFunctionArgs) {
       displayStyle: displayStyle === "default" ? "default" : "polaroid",
       showTitle: form.get("showTitle") === "on",
       showPromotionHint: form.get("showPromotionHint") === "on",
+      promotionHintText:
+        String(form.get("promotionHintText") || "").trim() || null,
     },
   });
 
@@ -104,19 +108,24 @@ function ConfigSwitch({
   title,
   description,
   defaultChecked,
+  children,
 }: {
   name: string;
   title: string;
   description: string;
   defaultChecked: boolean;
+  children?: ReactNode;
 }) {
   return (
-    <div className="flex min-h-16 items-center justify-between gap-4 rounded-lg border p-4">
-      <div>
-        <Label htmlFor={name}>{title}</Label>
-        <p className="text-xs text-slate-500">{description}</p>
+    <div className="grid min-h-16 gap-4 rounded-lg border p-4">
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <Label htmlFor={name}>{title}</Label>
+          <p className="text-xs text-slate-500">{description}</p>
+        </div>
+        <Switch id={name} name={name} defaultChecked={defaultChecked} />
       </div>
-      <Switch id={name} name={name} defaultChecked={defaultChecked} />
+      {children}
     </div>
   );
 }
@@ -127,13 +136,27 @@ export default function ContentPostCardapioPage() {
   const navigation = useNavigation();
   const config = parseCardapioFeaturedConfig(target.config);
   const submitting = navigation.state === "submitting";
-  const canUnpublish = target.status === "active" && Boolean(target.lastPublishedAt);
+  const isPublished =
+    target.status === "active" && Boolean(target.lastPublishedAt);
+  const canUnpublish = isPublished;
 
   return (
     <Form method="post" className="grid max-w-2xl gap-6">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h2 className="text-lg font-semibold">Cardápio</h2>
+          <div className="flex items-center gap-2">
+            <h2 className="text-lg font-semibold">Cardápio</h2>
+            <Badge
+              variant="outline"
+              className={
+                isPublished
+                  ? "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-50"
+                  : "border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-50"
+              }
+            >
+              {isPublished ? "Publicado" : "Não publicado"}
+            </Badge>
+          </div>
           <p className="text-sm text-slate-500">
             Ajuste como esta publicação aparece no destaque do cardápio.
           </p>
@@ -226,9 +249,25 @@ export default function ContentPostCardapioPage() {
         <ConfigSwitch
           name="showPromotionHint"
           title="Mostrar chamada promocional"
-          description="Exibe “Toque para ver a promoção”."
+          description="Exibe uma chamada abaixo da mídia promocional."
           defaultChecked={config.showPromotionHint}
-        />
+        >
+          <div className="grid gap-2 border-t pt-4">
+            <Label htmlFor="promotionHintText">
+              Texto da chamada promocional
+            </Label>
+            <Input
+              id="promotionHintText"
+              name="promotionHintText"
+              defaultValue={config.promotionHintText || ""}
+              placeholder="Toque para ver a promoção"
+            />
+            <p className="text-xs text-slate-500">
+              Se ficar vazio, o cardápio usa a chamada padrão para cada
+              dispositivo.
+            </p>
+          </div>
+        </ConfigSwitch>
       </div>
     </Form>
   );

@@ -92,8 +92,12 @@ function MediaLinkFields({
   };
   itemOptions: SearchableSelectOption[];
 }) {
-  const [mode, setMode] = useState<"external" | "internal" | "item" | "modal">(
-    media.chipAction === "modal"
+  const [mode, setMode] = useState<
+    "none" | "external" | "internal" | "item" | "modal"
+  >(
+    media.chipAction === "none"
+      ? "none"
+      : media.chipAction === "modal"
       ? "modal"
       : media.linkMenuItemId
       ? "item"
@@ -113,7 +117,12 @@ function MediaLinkFields({
           name={`linkMode_${index}`}
           value={mode}
           onValueChange={(value) => {
-            if (value === "item" || value === "internal" || value === "modal") {
+            if (
+              value === "none" ||
+              value === "item" ||
+              value === "internal" ||
+              value === "modal"
+            ) {
               setMode(value);
               return;
             }
@@ -124,6 +133,7 @@ function MediaLinkFields({
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
+            <SelectItem value="none">Não exibir chip</SelectItem>
             <SelectItem value="item">Item do cardápio</SelectItem>
             <SelectItem value="internal">Link interno</SelectItem>
             <SelectItem value="external">Link externo</SelectItem>
@@ -132,7 +142,7 @@ function MediaLinkFields({
         </Select>
       </div>
 
-      {isItemLink ? (
+      {mode === "none" ? null : isItemLink ? (
         <div className="grid gap-2">
           <Label>Item do cardápio</Label>
           <input
@@ -199,15 +209,17 @@ function MediaLinkFields({
         </div>
       )}
 
-      <div className="grid gap-2">
-        <Label htmlFor={`linkText_${index}`}>Texto do link</Label>
-        <Input
-          id={`linkText_${index}`}
-          name={`linkText_${index}`}
-          value={linkText}
-          onChange={(event) => setLinkText(event.target.value)}
-        />
-      </div>
+      {mode !== "none" ? (
+        <div className="grid gap-2">
+          <Label htmlFor={`linkText_${index}`}>Texto do link</Label>
+          <Input
+            id={`linkText_${index}`}
+            name={`linkText_${index}`}
+            value={linkText}
+            onChange={(event) => setLinkText(event.target.value)}
+          />
+        </div>
+      ) : null}
     </>
   );
 }

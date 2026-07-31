@@ -30,6 +30,7 @@ export type CardapioFeatured = {
   displayStyle: "polaroid" | "default";
   showTitle: boolean;
   showPromotionHint: boolean;
+  promotionHintText?: string | null;
   images: CardapioFeaturedMedia[];
 };
 

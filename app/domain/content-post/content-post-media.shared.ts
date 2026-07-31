@@ -41,12 +41,17 @@ export function parseContentPostMediaForm(
   return mediaUrls.map((mediaUrl, index) => {
     const rawLinkMode = String(form.get(`linkMode_${index}`) || "external");
     const linkMode =
-      rawLinkMode === "item" || rawLinkMode === "modal" ? rawLinkMode : "free";
+      rawLinkMode === "none" ||
+      rawLinkMode === "item" ||
+      rawLinkMode === "modal"
+        ? rawLinkMode
+        : "free";
     const linkMenuItemId =
       linkMode === "item"
         ? String(form.get(`linkMenuItemId_${index}`) || "").trim() || null
         : null;
-    const chipAction = linkMode === "modal" ? "modal" : "link";
+    const chipAction =
+      linkMode === "none" ? "none" : linkMode === "modal" ? "modal" : "link";
 
     return {
       key: String(index),
@@ -60,7 +65,10 @@ export function parseContentPostMediaForm(
         : chipAction === "modal"
         ? null
         : String(form.get(`linkUrl_${index}`) || "").trim() || null,
-      linkText: String(form.get(`linkText_${index}`) || "").trim() || null,
+      linkText:
+        chipAction === "none"
+          ? null
+          : String(form.get(`linkText_${index}`) || "").trim() || null,
       linkMenuItemId,
       linkBackgroundColor: normalizeHexColor(
         String(form.get(`linkBackgroundColor_${index}`) || ""),

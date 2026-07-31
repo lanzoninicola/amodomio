@@ -90,7 +90,7 @@ function CampaignForm({
         </div>
       ) : null}
 
-      <div className="grid gap-5 rounded-xl border border-slate-200 bg-white p-5">
+      <div className="grid gap-5 rounded-xl bg-white">
         <div className="grid gap-2">
           <Label htmlFor="name">Nome</Label>
           <Input id="name" name="name" required />
