@@ -133,7 +133,7 @@ cardapio_navigation_click
 
 Propriedades:
 
-- `control`: `group`, `filter_toggle` ou `tag`;
+- `control`: `product_line`, `category`, `group`, `filter_toggle` ou `tag`;
 - `value`: grupo, ação ou nome da tag;
 - `placement`: `mobile_header`, `mobile_panel`, `desktop_nav` ou `stories`;
 - `clientId`: o mesmo identificador anônimo usado no interesse por item;
@@ -168,6 +168,10 @@ Indicadores:
   cardápio;
 - interações médias por usuário;
 - comparação entre mês atual e mês anterior.
+
+Os cartões de categoria comercial emitem `control=category`. O relatório separa
+essas interações em um ranking próprio, com total de cliques, participação de
+cada categoria e comparação com o período anterior.
 
 ## Cardapio featured
 

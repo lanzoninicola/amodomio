@@ -144,6 +144,7 @@ export async function loadCardapioIndexData(
 
     const tagsPromise = tagPrismaEntity.findAll({
       public: true,
+      deletedAt: null,
     });
 
     let reelUrls: string[] = [];

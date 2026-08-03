@@ -342,12 +342,39 @@ function CardapioHeader() {
   return (
     <header
       className={cn(
-        "fixed right-4 top-[calc(1rem+env(safe-area-inset-top))] z-30 md:left-1/2 md:right-auto md:top-0 md:w-full md:max-w-6xl md:-translate-x-1/2 md:bg-white",
+        "fixed inset-x-0 top-[env(safe-area-inset-top)] z-50 border-b border-black/10 bg-white/95 px-4 shadow-sm backdrop-blur-xl md:left-1/2 md:right-auto md:top-0 md:w-full md:max-w-6xl md:-translate-x-1/2 md:border-b-0 md:bg-white md:px-0 md:shadow-none",
         usesDesktopSidebar && "md:hidden"
       )}
     >
-      <div className="flex h-[50px] flex-col md:h-[70px] md:border-b-0 md:bg-white md:px-1 md:pb-3 md:pt-2">
-        <div className="grid grid-cols-3 items-center w-full">
+      <div className="flex h-[52px] flex-col justify-center md:h-[70px] md:border-b-0 md:bg-white md:px-1 md:pb-3 md:pt-2">
+        <div className="flex w-full items-center justify-between gap-4 md:hidden">
+          <Link
+            to={WEBSITE_LINKS.cardapioPublic.href}
+            className="flex min-w-0 touch-manipulation rounded-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black"
+            aria-label="Ir para o início do cardápio A Modo Mio"
+          >
+            <Logo color="black" onlyText className="w-24 p-1" tagline={false} />
+          </Link>
+
+          <Suspense fallback={<div className="h-8 w-[110px]" />}>
+            <Await resolve={fazerPedidoPublicURL}>
+              {(url) => (
+                <div className="w-[110px] shrink-0">
+                  <CardapioOrderCtaButton
+                    compact
+                    headerCompact
+                    externalLinkURL={url}
+                    onClick={() =>
+                      trackCardapioFacebookPixelTrigger("fazer_pedido_click")
+                    }
+                  />
+                </div>
+              )}
+            </Await>
+          </Suspense>
+        </div>
+
+        <div className="hidden w-full grid-cols-3 items-center md:grid">
           {/* <div className="flex gap-1 items-center" onClick={() => setShowSearch(!showSearch)}>
                         <HamburgerMenuIcon className="w-6 h-6" />
                         <span className="font-neue text-[10px] font-semibold  uppercase">Menu</span>

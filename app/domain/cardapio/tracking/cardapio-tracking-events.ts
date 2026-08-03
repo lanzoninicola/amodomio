@@ -9,6 +9,7 @@ export const CARDAPIO_FEATURED_CTA_EVENT = "cardapio_highlight_cta_click";
 
 export const CARDAPIO_NAVIGATION_CONTROLS = [
   "product_line",
+  "category",
   "group",
   "filter_toggle",
   "tag",

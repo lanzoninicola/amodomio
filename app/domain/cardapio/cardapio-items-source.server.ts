@@ -358,6 +358,7 @@ function toCompatCardapioItem(item: NativeCardapioRow): CardapioCompatItem {
     id: "",
     name: "Sem categoria",
     type: "menu",
+    sortOrder: Number.MAX_SAFE_INTEGER,
   };
   const group = sellingInfo?.ItemGroup || {
     id: "__sem_grupo__",
@@ -477,6 +478,10 @@ function toCardapioIndexItem(item: CardapioCompatItem): CardapioIndexItem {
     baseIngredients: item.baseIngredients || null,
     ingredients: item.ingredients || null,
     commercialCategory: item.Category?.name || null,
+    commercialCategorySortOrder:
+      typeof item.Category?.sortOrder === "number"
+        ? item.Category.sortOrder
+        : Number.MAX_SAFE_INTEGER,
     imagePlaceholderURL: item.imagePlaceholderURL || null,
     mediaAssets: (item.MenuItemGalleryImage || []) as any,
     publicPriceVariations: item.publicPriceVariations || [],
@@ -562,7 +567,7 @@ async function listNativeCardapioItems(
           categoryId: true,
           itemGroupId: true,
           Category: {
-            select: { id: true, name: true, type: true },
+            select: { id: true, name: true, type: true, sortOrder: true },
           },
           ItemGroup: {
             select: {

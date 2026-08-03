@@ -185,12 +185,7 @@ export default function CardapioWebIndex() {
 
   return (
     <section
-      className={cn(
-        "mb-20 flex flex-col md:fixed md:inset-0 md:z-20 md:mb-0 md:block md:overflow-y-auto md:bg-white md:pt-0",
-        bannerEnabled
-          ? "pt-[calc(7rem+env(safe-area-inset-top))]"
-          : "pt-[calc(4.5rem+env(safe-area-inset-top))]"
-      )}
+      className="mb-20 flex flex-col pt-[calc(3.25rem+env(safe-area-inset-top))] md:fixed md:inset-0 md:z-20 md:mb-0 md:block md:overflow-y-auto md:bg-white md:pt-0"
       data-element="cardapio-index"
     >
       <LikeCelebrationOverlay
@@ -198,25 +193,6 @@ export default function CardapioWebIndex() {
         seed={likeCelebrationSeed}
         onClose={() => setShowLikeCelebration(false)}
       />
-
-      <Suspense fallback={null}>
-        <Await resolve={items}>
-          {(items) => {
-            return (
-              <div className="md:hidden">
-                <CardapioHighlightsSection
-                  items={items}
-                  likesEnabled={likesEnabled}
-                  reelUrls={reelUrls}
-                  reelsEnabled={reelsEnabled}
-                  stickyHighlights
-                  bannerEnabled={bannerEnabled}
-                />
-              </div>
-            );
-          }}
-        </Await>
-      </Suspense>
 
       <Suspense fallback={<Loading />}>
         <Await resolve={Promise.all([tags, items])}>
@@ -232,12 +208,6 @@ export default function CardapioWebIndex() {
                   />
                 </aside>
 
-                {featuredSections[0] ? (
-                  <CardapioFeaturedPromotionCarousel
-                    section={featuredSections[0]}
-                  />
-                ) : null}
-
                 <main className="min-h-full md:ml-[300px] md:mr-[252px] lg:ml-[340px] lg:mr-[304px] 2xl:mx-auto 2xl:max-w-[780px]">
                   <CardapioCatalogSection
                     items={loadedItems}
@@ -249,6 +219,13 @@ export default function CardapioWebIndex() {
                     bannerEnabled={bannerEnabled}
                     bannerText={bannerText}
                     bannerUrl={bannerUrl}
+                    publication={
+                      featuredSections[0] ? (
+                        <CardapioFeaturedPromotionCarousel
+                          section={featuredSections[0]}
+                        />
+                      ) : null
+                    }
                   />
                 </main>
 
@@ -362,26 +339,13 @@ function CardapioFeaturedPromotionCarousel({
 
   return (
     <>
-      {section.showTitle ? (
-        <div className="mt-8 text-center md:hidden">
-          <h2 className="font-lora text-2xl font-bold tracking-tight">
-            {section.title}
-          </h2>
-          {section.subtitle ? (
-            <p className="mt-1 font-neue text-sm font-semibold uppercase text-zinc-500">
-              {section.subtitle}
-            </p>
-          ) : null}
-        </div>
-      ) : null}
-
       <div
         ref={promotionRef}
         className={[
           "relative transition-[width] duration-300 ease-out md:fixed md:right-6 md:top-6 md:z-30 md:m-0 md:max-w-none md:rounded-2xl md:bg-white md:p-1.5 md:shadow-lg lg:right-8",
           isExpanded ? "md:z-[60] md:w-[440px]" : "md:w-[220px] lg:w-[260px]",
           section.displayStyle === "polaroid"
-            ? "mx-auto mb-6 mt-4 w-[70vw] max-w-[260px] -rotate-1 border border-black/10 bg-[#fffdf8] p-2 pb-5 shadow-[0_12px_24px_rgba(0,0,0,0.18)]"
+            ? "mx-auto mb-6 mt-1 w-[calc(100%-2rem)] max-w-[440px] border border-black/10 bg-[#fffdf8] p-2 pb-5 shadow-[0_12px_24px_rgba(0,0,0,0.18)] md:-rotate-1"
             : "mb-6 mt-4 w-full overflow-hidden px-4 md:px-0",
         ].join(" ")}
       >
@@ -401,7 +365,7 @@ function CardapioFeaturedPromotionCarousel({
                 `${section.title}, imagem ${index + 1} de ${images.length}`;
               return (
                 <CarouselItem key={`${src}-${index}`} className="pl-0">
-                  <div className="relative -rotate-1 transform-gpu overflow-hidden rounded-[0.5rem]">
+                  <div className="relative transform-gpu overflow-hidden rounded-[0.5rem] md:-rotate-1">
                     {isVideo ? (
                       <video
                         className={

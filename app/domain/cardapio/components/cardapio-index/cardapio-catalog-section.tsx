@@ -7,7 +7,7 @@ import React, {
   useRef,
   useState,
 } from "react";
-import { ArrowRight, ListFilter, Megaphone, X } from "lucide-react";
+import { ArrowRight, Megaphone, Sparkles, Star, X } from "lucide-react";
 import { LikeIt } from "~/domain/cardapio/components/cardapio-item-action-bar/cardapio-item-action-bar";
 import CardapioItemImageSingle from "~/domain/cardapio/components/cardapio-item-image-single/cardapio-item-image-single";
 import type { ThreadSectionProfile } from "~/domain/cardapio/components/section-thread-header/section-thread-header";
@@ -33,6 +33,8 @@ import {
   getCardapioTagName,
   getGroupedItemsDescription,
   getGroupedItemsList,
+  getItemMarginPerc,
+  getNoveltyItems,
   getPrimaryCardapioMedia,
   getVisiblePublicPriceVariations,
   itemHasPublicTag,
@@ -52,6 +54,38 @@ const MOBILE_CARD_IMAGE_HEIGHTS = [
   "h-[154px]",
 ];
 const MOBILE_OPEN_DETAIL_MIN_VIEW_MS = 900;
+type CatalogCollection = "highlights" | "novelties" | string;
+const CATEGORY_CARD_COLOR_CLASSES = [
+  "bg-[#d8a1ff]",
+  "bg-[#ffe64d]",
+  "bg-[#8de1d1]",
+  "bg-[#ff9f8f]",
+  "bg-[#a9c8ff]",
+];
+const CATEGORY_CARD_RING_CLASSES = [
+  "ring-[#d8a1ff]",
+  "ring-[#ffe64d]",
+  "ring-[#8de1d1]",
+  "ring-[#ff9f8f]",
+  "ring-[#a9c8ff]",
+];
+
+function getCategoryCardColorIndex(label: string) {
+  return (
+    [...label].reduce(
+      (total, character) => total + character.charCodeAt(0),
+      0
+    ) % CATEGORY_CARD_COLOR_CLASSES.length
+  );
+}
+
+function isDarkCategoryColor(hex: string) {
+  const value = hex.slice(1);
+  const red = Number.parseInt(value.slice(0, 2), 16);
+  const green = Number.parseInt(value.slice(2, 4), 16);
+  const blue = Number.parseInt(value.slice(4, 6), 16);
+  return red * 0.299 + green * 0.587 + blue * 0.114 < 128;
+}
 
 function normalizeTagLabel(value: string) {
   return value
@@ -67,7 +101,7 @@ function isPassFinishingTag(tag: CardapioPublicTag) {
 }
 
 function trackFilterClick(
-  control: "product_line" | "group" | "filter_toggle" | "tag",
+  control: "product_line" | "category" | "group" | "filter_toggle" | "tag",
   value: string,
   placement: "mobile_header" | "mobile_panel" | "desktop_nav" | "stories"
 ) {
@@ -88,6 +122,7 @@ export function CardapioCatalogSection({
   bannerEnabled = true,
   bannerText,
   bannerUrl,
+  publication,
 }: {
   items: CardapioIndexItem[] | GroupedItems[];
   tags: Tag[];
@@ -98,22 +133,25 @@ export function CardapioCatalogSection({
   bannerEnabled?: boolean;
   bannerText: string;
   bannerUrl: string;
+  publication?: React.ReactNode;
 }) {
-  const [currentItems, setCurrentItems] = useState(items);
   const [currentFilterTag, setCurrentFilterTag] = useState<Tag | null>(null);
-  const [currentProductLineId, setCurrentProductLineId] = useState<
-    string | null
-  >(() => (isGrouped(items) ? items[0]?.productLineId ?? null : null));
-  const [showMobileTags, setShowMobileTags] = useState(false);
+  const [currentCollection, setCurrentCollection] = useState<CatalogCollection>(
+    () =>
+      isGrouped(items) ? items[0]?.productLineId ?? "highlights" : "highlights"
+  );
   const [activeItemId, setActiveItemId] = useState<string | null>(null);
   const catalogRef = useRef<HTMLDivElement | null>(null);
   const groupRefs = useRef<Record<string, HTMLElement | null>>({});
 
   useEffect(() => {
-    setCurrentItems(items);
     setCurrentFilterTag(null);
-    setCurrentProductLineId(
-      isGrouped(items) ? items[0]?.productLineId ?? null : null
+    setCurrentCollection(
+      window.matchMedia("(max-width: 767px)").matches
+        ? "highlights"
+        : isGrouped(items)
+          ? items[0]?.productLineId ?? "highlights"
+          : "highlights"
     );
   }, [items]);
 
@@ -140,6 +178,130 @@ export function CardapioCatalogSection({
         a.sortOrderIndex - b.sortOrderIndex || a.name.localeCompare(b.name)
     );
   }, [items]);
+
+  const pizzaItems = useMemo(
+    () =>
+      isGrouped(items)
+        ? items
+          .filter((group) =>
+            group.productLine.toLocaleLowerCase("pt-BR").includes("pizza")
+          )
+          .flatMap((group) => getGroupedItemsList(group))
+        : items,
+    [items]
+  );
+  const pizzaProductLineId = useMemo(
+    () =>
+      isGrouped(items)
+        ? items.find((group) =>
+          group.productLine.toLocaleLowerCase("pt-BR").includes("pizza")
+        )?.productLineId ?? null
+        : null,
+    [items]
+  );
+  const pizzaCommercialCategories = useMemo(() => {
+    const categories = new Map<
+      string,
+      { items: CardapioIndexItem[]; sortOrder: number }
+    >();
+    pizzaItems.forEach((item) => {
+      const category = item.commercialCategory?.trim();
+      if (!category) return;
+      const current = categories.get(category);
+      categories.set(category, {
+        items: [...(current?.items ?? []), item],
+        sortOrder: Math.min(
+          current?.sortOrder ?? Number.MAX_SAFE_INTEGER,
+          item.commercialCategorySortOrder ?? Number.MAX_SAFE_INTEGER
+        ),
+      });
+    });
+    return [...categories.entries()]
+      .map(([name, category]) => ({ name, ...category }))
+      .sort(
+        (a, b) =>
+          a.sortOrder - b.sortOrder || a.name.localeCompare(b.name, "pt-BR")
+      );
+  }, [pizzaItems]);
+  const featuredTagCategories = useMemo(
+    () =>
+      tags
+        .filter((tag) => tag.featuredFilter)
+        .sort(
+          (a, b) =>
+            a.sortOrderIndex - b.sortOrderIndex ||
+            a.name.localeCompare(b.name, "pt-BR")
+        )
+        .map((tag) => ({
+          tag,
+          items: pizzaItems.filter((item) => itemHasPublicTag(item, tag.name)),
+        }))
+        .filter(({ items: tagItems }) => tagItems.length > 0),
+    [pizzaItems, tags]
+  );
+  const noveltyItems = useMemo(() => getNoveltyItems(pizzaItems), [pizzaItems]);
+  const highlightItems = useMemo(() => {
+    const selectedNovelties = noveltyItems.slice(0, 10);
+    const selectedIds = new Set(selectedNovelties.map((item) => item.id));
+    return [
+      ...selectedNovelties,
+      ...[...pizzaItems]
+        .filter((item) => !selectedIds.has(item.id))
+        .sort((a, b) => getItemMarginPerc(b) - getItemMarginPerc(a))
+        .slice(0, Math.max(0, 10 - selectedNovelties.length)),
+    ];
+  }, [noveltyItems, pizzaItems]);
+
+  const currentItems = useMemo(() => {
+    const selectedGroupId = currentCollection.startsWith("group:")
+      ? currentCollection.slice("group:".length)
+      : null;
+    const selectedCommercialCategory = currentCollection.startsWith("category:")
+      ? currentCollection.slice("category:".length)
+      : null;
+    const collectionIds =
+      currentCollection === "highlights"
+        ? new Set(highlightItems.map((item) => item.id))
+        : currentCollection === "novelties"
+          ? new Set(noveltyItems.map((item) => item.id))
+          : null;
+    const matches = (item: CardapioIndexItem) => {
+      if (collectionIds && !collectionIds.has(item.id)) return false;
+      if (
+        selectedCommercialCategory &&
+        item.commercialCategory?.trim() !== selectedCommercialCategory
+      ) {
+        return false;
+      }
+      if (currentFilterTag && !itemHasPublicTag(item, currentFilterTag.name)) {
+        return false;
+      }
+      return true;
+    };
+
+    if (!isGrouped(items)) return items.filter(matches);
+
+    return items
+      .filter(
+        (group) =>
+          currentCollection === "highlights" ||
+          currentCollection === "novelties" ||
+          selectedCommercialCategory ||
+          (selectedGroupId && group.groupId === selectedGroupId) ||
+          group.productLineId === currentCollection
+      )
+      .map((group) => ({
+        ...group,
+        items: group.items.filter(matches),
+      }))
+      .filter((group) => group.items.length > 0);
+  }, [
+    currentCollection,
+    currentFilterTag,
+    highlightItems,
+    items,
+    noveltyItems,
+  ]);
 
   const scrollToGroup = useCallback((groupId: string) => {
     const element = groupRefs.current[groupId];
@@ -168,19 +330,27 @@ export function CardapioCatalogSection({
     () => (isGrouped(currentItems) ? currentItems : []),
     [currentItems]
   );
-  const orderedGroups = useMemo(
-    () =>
-      groupedItems.length
-        ? groupedItems
-            .filter(
-              (group) =>
-                !currentProductLineId ||
-                group.productLineId === currentProductLineId
-            )
-            .sort((a, b) => (a.sortOrderIndex ?? 0) - (b.sortOrderIndex ?? 0))
-        : [],
-    [currentProductLineId, groupedItems]
-  );
+  const orderedGroups = useMemo(() => {
+    const selectedGroupId = currentCollection.startsWith("group:")
+      ? currentCollection.slice("group:".length)
+      : null;
+    const selectedCommercialCategory = currentCollection.startsWith("category:")
+      ? currentCollection.slice("category:".length)
+      : null;
+
+    return groupedItems.length
+      ? groupedItems
+        .filter(
+          (group) =>
+            currentCollection === "highlights" ||
+            currentCollection === "novelties" ||
+            selectedCommercialCategory ||
+            (selectedGroupId && group.groupId === selectedGroupId) ||
+            group.productLineId === currentCollection
+        )
+        .sort((a, b) => (a.sortOrderIndex ?? 0) - (b.sortOrderIndex ?? 0))
+      : [];
+  }, [currentCollection, groupedItems]);
   const visibleGroupChips = useMemo(
     () => orderedGroups.filter((g) => g.groupId !== "__sem_grupo__"),
     [orderedGroups]
@@ -190,8 +360,8 @@ export function CardapioCatalogSection({
       orderedGroups.length
         ? orderedGroups.flatMap((group) => getGroupedItemsList(group))
         : isGrouped(currentItems)
-        ? []
-        : (currentItems as CardapioIndexItem[]),
+          ? []
+          : (currentItems as CardapioIndexItem[]),
     [currentItems, orderedGroups]
   );
   const visibleActiveItemId =
@@ -321,59 +491,62 @@ export function CardapioCatalogSection({
     window.scrollTo({ top, behavior: "smooth" });
   }, []);
 
-  const onCurrentTagSelected = useCallback(
-    (tag: Tag | null) => {
-      setCurrentFilterTag(tag);
+  const onCurrentTagSelected = useCallback((tag: Tag | null) => {
+    setCurrentFilterTag(tag);
+  }, []);
 
-      if (!tag || tag.id === "all") {
-        setCurrentItems(items);
-        return;
-      }
+  const activeCollectionLabel = currentCollection.startsWith("category:")
+    ? currentCollection.slice("category:".length)
+    : currentCollection === "highlights"
+      ? "Destaques"
+      : currentCollection === "novelties"
+        ? "Novidades"
+        : null;
+  const hasActiveMobileFilter =
+    Boolean(activeCollectionLabel) || Boolean(currentFilterTag);
 
-      const hasTag = (item: CardapioIndexItem) =>
-        itemHasPublicTag(item, tag.name);
+  const clearMobileFilters = useCallback(() => {
+    setCurrentCollection(pizzaProductLineId ?? "highlights");
+    setCurrentFilterTag(null);
+    trackFilterClick("filter_toggle", "limpar", "mobile_header");
+  }, [pizzaProductLineId]);
 
-      if (isGrouped(items)) {
-        const filteredGroups = items
-          .map((group) => ({
-            ...group,
-            items: group.items.filter(hasTag),
-          }))
-          .filter((group) => group.items.length > 0);
-
-        setCurrentItems(filteredGroups);
-        return;
-      }
-
-      setCurrentItems(items.filter(hasTag));
-    },
-    [items]
-  );
+  const showAllPizzas = useCallback(() => {
+    clearMobileFilters();
+    window.requestAnimationFrame(() => {
+      catalogRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    });
+  }, [clearMobileFilters]);
 
   return (
     <div
       ref={catalogRef}
       className={cn(
-        "flex flex-col m-4",
+        "mx-4 mb-4 mt-1 flex flex-col",
         desktopFeedLayout &&
-          "md:mx-auto md:my-0 md:w-full md:max-w-[700px] md:px-6 md:py-6"
+        "md:mx-auto md:my-0 md:w-full md:max-w-[700px] md:px-6 md:py-6"
       )}
     >
+      {publication ? <div className="-mx-4 md:mx-0">{publication}</div> : null}
+
       {productLines.length > 1 ? (
         <nav
           aria-label="Linhas de produtos"
-          className="-mx-4 mb-4 overflow-x-auto px-4 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:mx-0 md:px-0"
+          className="mb-4 hidden overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:block"
         >
           <div className="flex w-max min-w-full gap-2">
             {productLines.map((line) => {
-              const selected = line.id === currentProductLineId;
+              const selected = line.id === currentCollection;
               return (
                 <button
                   key={line.id}
                   type="button"
                   aria-current={selected ? "page" : undefined}
                   onClick={() => {
-                    setCurrentProductLineId(line.id);
+                    setCurrentCollection(line.id);
                     trackFilterClick(
                       "product_line",
                       line.name,
@@ -398,7 +571,7 @@ export function CardapioCatalogSection({
       ) : null}
 
       {filterViewMode === "stories" ? (
-        <div className="-mx-4 mb-2 overflow-x-auto px-4 pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:mx-0 md:px-0">
+        <div className="mb-2 hidden overflow-x-auto pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:block">
           <div className="flex w-max min-w-full gap-3">
             <StoryFilter
               label="Todos"
@@ -424,16 +597,7 @@ export function CardapioCatalogSection({
           </div>
         </div>
       ) : (
-        <div
-          id="cardapio-tag-filters"
-          className={cn(
-            "fixed left-4 right-4 z-40 mb-2 max-h-[46vh] overflow-y-auto rounded-2xl border border-black/10 bg-white/95 p-3 shadow-[0_10px_35px_rgba(0,0,0,0.2)] backdrop-blur-xl md:static md:mx-0 md:mb-4 md:block md:max-h-none md:overflow-visible md:rounded-none md:border-0 md:bg-transparent md:p-0 md:shadow-none md:backdrop-blur-none",
-            bannerEnabled
-              ? "top-[calc(7.25rem+env(safe-area-inset-top))]"
-              : "top-[calc(4.5rem+env(safe-area-inset-top))]",
-            showMobileTags ? "block" : "hidden"
-          )}
-        >
+        <div id="cardapio-tag-filters" className="mb-4 hidden md:block">
           <h2 className="hidden font-lora text-2xl font-bold tracking-tight leading-tight mb-3 md:block">
             Sabores da casa
           </h2>
@@ -441,11 +605,7 @@ export function CardapioCatalogSection({
             <button
               type="button"
               onClick={() => {
-                trackFilterClick(
-                  "tag",
-                  "todos",
-                  showMobileTags ? "mobile_panel" : "desktop_nav"
-                );
+                trackFilterClick("tag", "todos", "desktop_nav");
                 onCurrentTagSelected(null);
               }}
               className={cn(
@@ -462,11 +622,7 @@ export function CardapioCatalogSection({
                 key={tag.id}
                 type="button"
                 onClick={() => {
-                  trackFilterClick(
-                    "tag",
-                    tag.name,
-                    showMobileTags ? "mobile_panel" : "desktop_nav"
-                  );
+                  trackFilterClick("tag", tag.name, "desktop_nav");
                   onCurrentTagSelected(tag);
                 }}
                 className={cn(
@@ -480,66 +636,106 @@ export function CardapioCatalogSection({
               </button>
             ))}
           </div>
-          <div className="sticky bottom-0 -mb-1 mt-3 flex justify-end bg-gradient-to-t from-white/95 via-white/95 to-transparent pt-3 md:hidden">
-            <button
-              type="button"
-              onClick={() => {
-                trackFilterClick("filter_toggle", "fechar", "mobile_panel");
-                setShowMobileTags(false);
-              }}
-              className="inline-flex items-center gap-1.5 rounded-full bg-slate-50  px-3 py-2 font-neue text-[12px] font-bold uppercase leading-none tracking-wide text-zinc-950 shadow-sm transition active:bg-zinc-100"
-            >
-              <X className="h-4 w-4" />
-              Fechar
-            </button>
-          </div>
         </div>
       )}
 
-      {visibleGroupChips.length > 0 ? (
-        <div className="fixed left-0 right-0 top-[calc(1rem+env(safe-area-inset-top))] z-40 flex flex-col md:hidden">
-          <div className="flex h-[50px] w-full items-center gap-2 px-4">
-            {visibleGroupChips.map((group) => (
-              <button
-                key={group.groupId}
-                type="button"
+      <div className="mb-4 bg-white pb-3 md:hidden">
+        <nav
+          aria-label="Categorias do cardápio"
+          className="flex snap-x snap-proximity gap-3 overflow-x-auto pb-2 pt-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        >
+          <CategoryFilterCard
+            label="Destaques"
+            items={pizzaItems}
+            selected={currentCollection === "highlights"}
+            icon={<Star className="h-3.5 w-3.5" fill="currentColor" />}
+            onClick={() => {
+              setCurrentFilterTag(null);
+              setCurrentCollection("highlights");
+              trackFilterClick("product_line", "Destaques", "mobile_header");
+            }}
+          />
+          <CategoryFilterCard
+            label="Novidades"
+            items={pizzaItems}
+            selected={currentCollection === "novelties"}
+            disabled={!noveltyItems.length}
+            icon={<Sparkles className="h-3.5 w-3.5" />}
+            onClick={() => {
+              setCurrentFilterTag(null);
+              setCurrentCollection("novelties");
+              trackFilterClick("product_line", "Novidades", "mobile_header");
+            }}
+          />
+          {featuredTagCategories.map(({ tag, items: tagItems }) => (
+            <CategoryFilterCard
+              key={`tag:${tag.id}`}
+              label={tag.name}
+              items={tagItems}
+              color={tag.colorHEX}
+              selected={currentFilterTag?.id === tag.id}
+              onClick={() => {
+                onCurrentTagSelected(tag);
+                trackFilterClick("tag", tag.name, "mobile_header");
+              }}
+            />
+          ))}
+          {pizzaCommercialCategories.map((category) => (
+            <CategoryFilterCard
+              key={category.name}
+              label={category.name}
+              items={category.items}
+              selected={currentCollection === `category:${category.name}`}
+              onClick={() => {
+                setCurrentCollection(`category:${category.name}`);
+                trackFilterClick("category", category.name, "mobile_header");
+              }}
+            />
+          ))}
+        </nav>
+
+        <div className="relative mt-1">
+          <div
+            className="flex gap-2 overflow-x-auto pr-14 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+            aria-label="Filtrar por tags"
+          >
+            <TagFilterChip
+              label="Todos"
+              selected={!currentFilterTag}
+              onClick={() => {
+                trackFilterClick("tag", "todos", "mobile_header");
+                onCurrentTagSelected(null);
+              }}
+            />
+            {tags.map((tag) => (
+              <TagFilterChip
+                key={tag.id}
+                label={tag.name}
+                selected={currentFilterTag?.id === tag.id}
                 onClick={() => {
-                  trackFilterClick("group", group.group, "mobile_header");
-                  scrollToGroup(group.groupId);
+                  trackFilterClick("tag", tag.name, "mobile_header");
+                  onCurrentTagSelected(tag);
                 }}
-                className="min-w-0 flex-1 whitespace-nowrap rounded-full border border-black/10 bg-white px-2.5 py-1.5 font-neue text-[13px] font-bold capitalize tracking-wide text-black shadow-[0_6px_20px_rgba(0,0,0,0.18)] transition active:bg-zinc-100"
-              >
-                {group.group}
-              </button>
+              />
             ))}
-            {filterViewMode === "chip" ? (
-              <button
-                type="button"
-                onClick={() => {
-                  trackFilterClick(
-                    "filter_toggle",
-                    showMobileTags ? "fechar" : "abrir",
-                    "mobile_header"
-                  );
-                  setShowMobileTags((current) => !current);
-                }}
-                className={cn(
-                  "inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border border-black/10 bg-zinc-950 px-3 py-1.5 font-neue text-[13px] font-bold capitalize tracking-wide text-white shadow-[0_6px_20px_rgba(0,0,0,0.18)] transition active:bg-zinc-800"
-                )}
-                aria-expanded={showMobileTags}
-                aria-controls="cardapio-tag-filters"
-              >
-                <ListFilter className="h-4 w-4" />
-                Filtrar
-              </button>
-            ) : null}
           </div>
-          {bannerEnabled ? (
+          {tags.length > 2 ? (
+            <div
+              className="pointer-events-none absolute inset-y-0 right-0 flex w-14 items-center justify-end bg-gradient-to-l from-white via-white/95 to-transparent pr-3"
+              aria-hidden="true"
+            >
+              <ArrowRight className="h-4 w-4 animate-pulse text-zinc-700" />
+            </div>
+          ) : null}
+        </div>
+
+        {bannerEnabled ? (
+          <div className="mt-3">
             <a
               href={bannerUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="mx-4 rounded-lg bg-[linear-gradient(90deg,#e1251b,#0072ce,#16a34a)] p-[1.5px] shadow-md"
+              className="block rounded-lg bg-[linear-gradient(90deg,#e1251b,#0072ce,#16a34a)] p-[1.5px] shadow-sm"
             >
               <div className="grid grid-cols-[20px_minmax(0,1fr)_16px] items-center gap-2 rounded-[7px] bg-white px-3 py-1.5 text-zinc-950">
                 <Megaphone className="h-5 w-5" aria-hidden="true" />
@@ -549,7 +745,40 @@ export function CardapioCatalogSection({
                 <ArrowRight size={16} />
               </div>
             </a>
-          ) : null}
+          </div>
+        ) : null}
+      </div>
+
+      {hasActiveMobileFilter ? (
+        <div className="sticky top-[calc(3.25rem+env(safe-area-inset-top))] z-40 -mx-4 mb-3 flex min-h-12 items-center justify-between gap-3 border-y border-zinc-200 bg-white/95 px-4 py-2 shadow-sm backdrop-blur-md md:hidden">
+          <p className="flex min-w-0 items-center gap-1.5 truncate font-neue text-[11px] text-zinc-500">
+            <span className="shrink-0">Exibindo:</span>
+            {activeCollectionLabel ? (
+              <strong
+                className={cn(
+                  "truncate rounded-md px-2 py-1 font-bold leading-none text-zinc-950 ring-1 ring-black/5",
+                  CATEGORY_CARD_COLOR_CLASSES[
+                  getCategoryCardColorIndex(activeCollectionLabel)
+                  ]
+                )}
+              >
+                {activeCollectionLabel}
+              </strong>
+            ) : null}
+            {currentFilterTag ? (
+              <span className="truncate rounded-full bg-zinc-100 px-2 py-1 font-bold leading-none text-zinc-700">
+                {currentFilterTag.name}
+              </span>
+            ) : null}
+          </p>
+          <button
+            type="button"
+            onClick={clearMobileFilters}
+            className="inline-flex min-h-8 shrink-0 items-center gap-1.5 rounded-full bg-transparent px-3 py-2 font-neue text-xs font-bold text-zinc-950 transition active:scale-[0.97]"
+          >
+            <X className="h-3.5 w-3.5" />
+            Limpar filtros
+          </button>
         </div>
       ) : null}
 
@@ -578,8 +807,6 @@ export function CardapioCatalogSection({
           onSelect={scrollToCatalogItem}
         />
       ) : null}
-
-      <Separator className="my-4" />
 
       {orderedGroups.length > 0 ? (
         orderedGroups.map((group) => (
@@ -616,7 +843,151 @@ export function CardapioCatalogSection({
           desktopFeedLayout={desktopFeedLayout}
         />
       )}
+
+      {hasActiveMobileFilter ? (
+        <aside className="mb-[calc(7rem+env(safe-area-inset-bottom))] mt-8 md:hidden">
+          <button
+            type="button"
+            onClick={showAllPizzas}
+            className="group flex min-h-[76px] w-full items-center gap-3 rounded-2xl bg-gradient-to-br from-[#d8a1ff] via-[#ead0ff] to-[#ffe64d] p-3 text-left text-zinc-950 shadow-[0_10px_28px_rgba(0,0,0,0.14)] ring-1 ring-black/5 transition active:scale-[0.98]"
+          >
+            <span className="min-w-0 flex-1 font-neue text-[18px] font-bold leading-tight">
+              Visualizar todos os sabores
+            </span>
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-zinc-950 text-white shadow-sm transition-transform group-active:translate-x-0.5">
+              <ArrowRight className="h-5 w-5" aria-hidden="true" />
+            </span>
+          </button>
+        </aside>
+      ) : null}
     </div>
+  );
+}
+
+function CategoryFilterCard({
+  label,
+  items,
+  selected,
+  disabled = false,
+  icon,
+  color,
+  onClick,
+}: {
+  label: string;
+  items: CardapioIndexItem[];
+  selected: boolean;
+  disabled?: boolean;
+  icon?: React.ReactNode;
+  color?: string | null;
+  onClick: () => void;
+}) {
+  const mainPreviewItem = items[0];
+  const bubbleItems = [
+    items[1] ?? mainPreviewItem,
+    mainPreviewItem,
+    items[2] ?? mainPreviewItem,
+  ];
+  const bubbleClasses = [
+    "left-[3px] top-[27px] h-[34px] w-[34px]",
+    "left-1/2 top-[12px] z-10 h-[54px] w-[54px] -translate-x-1/2",
+    "right-[3px] top-[27px] h-[34px] w-[34px]",
+  ];
+  const colorIndex = getCategoryCardColorIndex(label);
+  const categoryColor = color && /^#[0-9a-fA-F]{6}$/.test(color) ? color : null;
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      aria-pressed={selected}
+      style={categoryColor ? { backgroundColor: categoryColor } : undefined}
+      className={cn(
+        "group relative h-[104px] w-[104px] shrink-0 snap-start overflow-hidden rounded-xl text-left text-zinc-950 shadow-sm transition duration-200 active:scale-[0.97] disabled:cursor-default disabled:opacity-60",
+        !categoryColor && CATEGORY_CARD_COLOR_CLASSES[colorIndex],
+        categoryColor && isDarkCategoryColor(categoryColor) && "text-white",
+        selected && "ring-2 ring-inset ring-zinc-950"
+      )}
+    >
+      {bubbleItems.map((item, index) => {
+        const media = item ? getPrimaryCardapioMedia(item) : null;
+        const initial =
+          item?.name.trim().charAt(0).toLocaleUpperCase("pt-BR") || "?";
+        return (
+          <span
+            key={`${item?.id ?? "placeholder"}-${index}`}
+            style={
+              categoryColor
+                ? ({ "--tw-ring-color": categoryColor } as React.CSSProperties)
+                : undefined
+            }
+            className={cn(
+              "absolute overflow-hidden rounded-full bg-black/10 shadow-[0_4px_10px_rgba(0,0,0,0.2)] ring-2",
+              !categoryColor && CATEGORY_CARD_RING_CLASSES[colorIndex],
+              bubbleClasses[index]
+            )}
+          >
+            {media ? (
+              <CardapioItemImageSingle
+                src={media.secureUrl || ""}
+                srcSet={buildImageSrcSet(media.variants)}
+                sizes={index === 1 ? "54px" : "34px"}
+                placeholder={
+                  media.thumbnailUrl || item?.imagePlaceholderURL || ""
+                }
+                alt=""
+                cnContainer="h-full w-full"
+                enableOverlay={false}
+              />
+            ) : (
+              <span
+                className={cn(
+                  "flex h-full w-full items-center justify-center bg-zinc-900 font-lora font-bold text-white",
+                  index === 1 ? "text-2xl" : "text-base"
+                )}
+                aria-hidden="true"
+              >
+                {initial}
+              </span>
+            )}
+          </span>
+        );
+      })}
+      {icon ? (
+        <span className="absolute right-1 top-1 rounded-full bg-white/75 p-0.5 text-zinc-950 shadow-sm backdrop-blur-sm">
+          {icon}
+        </span>
+      ) : null}
+      <span className="absolute inset-x-2 bottom-1.5 line-clamp-2 font-neue text-[13px] font-bold leading-[1.05]">
+        {label}
+      </span>
+    </button>
+  );
+}
+
+function TagFilterChip({
+  label,
+  selected,
+  onClick,
+}: {
+  label: string;
+  selected: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={selected}
+      className={cn(
+        "shrink-0 whitespace-nowrap rounded-full border px-3 py-1.5 font-neue text-[12px] font-bold leading-none transition-colors",
+        selected
+          ? "border-zinc-950 bg-zinc-950 text-white"
+          : "border-black/10 bg-zinc-100 text-zinc-700 active:bg-zinc-200"
+      )}
+    >
+      {label}
+    </button>
   );
 }
 
@@ -642,12 +1013,12 @@ function StoryFilter({
   const symbol = /veg|salad|verde/.test(normalizedLabel)
     ? "leaf"
     : /doce|sobremesa|chocolate/.test(normalizedLabel)
-    ? "sparkle"
-    : /picante|apiment/.test(normalizedLabel)
-    ? "flame"
-    : /nov|destaque|promo/.test(normalizedLabel)
-    ? "star"
-    : "slice";
+      ? "sparkle"
+      : /picante|apiment/.test(normalizedLabel)
+        ? "flame"
+        : /nov|destaque|promo/.test(normalizedLabel)
+          ? "star"
+          : "slice";
 
   return (
     <button
@@ -778,8 +1149,8 @@ function CardapioItemPositionRail({
                       ? "h-[3px] w-12 bg-black"
                       : "h-[2px] w-6 bg-zinc-300 group-hover:w-10 group-hover:bg-zinc-600"
                     : isActive
-                    ? "h-2.5 w-2.5 bg-black"
-                    : "h-1.5 w-1.5 bg-zinc-300/80 group-hover:h-2 group-hover:w-2 group-hover:bg-zinc-500"
+                      ? "h-2.5 w-2.5 bg-black"
+                      : "h-1.5 w-1.5 bg-zinc-300/80 group-hover:h-2 group-hover:w-2 group-hover:bg-zinc-500"
                 )}
               />
             </button>
@@ -919,7 +1290,7 @@ export function CardapioItemsGrid({
       : null;
   const initialExpandedId = initialHash
     ? items.find((item) => item.slug === initialHash || item.id === initialHash)
-        ?.id ?? null
+      ?.id ?? null
     : null;
 
   const [expandedItemId, setExpandedItemId] = useState<string | null>(
@@ -1087,7 +1458,7 @@ export function CardapioItemsGrid({
       className={cn(
         "mt-4 columns-2 gap-4 md:grid md:grid-cols-3 md:columns-auto md:gap-3 lg:grid-cols-4 xl:grid-cols-4",
         desktopFeedLayout &&
-          "md:grid-cols-2 md:gap-5 lg:grid-cols-2 xl:grid-cols-2"
+        "md:grid-cols-2 md:gap-5 lg:grid-cols-2 xl:grid-cols-2"
       )}
     >
       {items.map((item, index) => (
@@ -1144,7 +1515,7 @@ function CardapioGridItem({
     featuredImage?.thumbnailUrl || item.imagePlaceholderURL || "";
   const featuredMediaKind =
     featuredImage?.kind === "video" ||
-    /\.(mp4|mov|webm|m4v|ogg|ogv)(\?|$)/i.test(featuredMediaUrl)
+      /\.(mp4|mov|webm|m4v|ogg|ogv)(\?|$)/i.test(featuredMediaUrl)
       ? "video"
       : "image";
   const featuredMediaSrcSet = buildImageSrcSet(featuredImage?.variants);
@@ -1244,8 +1615,8 @@ function CardapioGridItem({
         isMobileExpanded
           ? "fixed left-0 right-0 top-0 z-[90] mb-0 h-[88dvh] max-h-[88dvh] translate-y-0 rounded-b-[24px] rounded-t-none shadow-[0_20px_55px_rgba(15,23,42,0.34)]"
           : isExpanded
-          ? "max-h-none shadow-[0_14px_34px_rgba(15,23,42,0.22)]"
-          : "max-h-[460px] md:max-h-none",
+            ? "max-h-none shadow-[0_14px_34px_rgba(15,23,42,0.22)]"
+            : "max-h-[460px] md:max-h-none",
         isExpanded ? "md:col-span-2 lg:col-span-1" : "md:col-span-1"
       )}
     >
@@ -1255,8 +1626,8 @@ function CardapioGridItem({
           isMobileExpanded
             ? "order-1 mx-0 mb-3 mt-0 h-[32dvh] shrink-0 rounded-none"
             : isExpanded
-            ? "order-1 mb-3 mt-4 h-[min(24dvh,210px)] shrink-0 md:h-[220px]"
-            : `order-2 mb-5 ${mobileImageHeight} md:h-[160px]`,
+              ? "order-1 mb-3 mt-4 h-[min(24dvh,210px)] shrink-0 md:h-[220px]"
+              : `order-2 mb-5 ${mobileImageHeight} md:h-[160px]`,
           desktopFeedLayout && !isMobileExpanded && "md:h-[260px]"
         )}
       >
@@ -1315,8 +1686,8 @@ function CardapioGridItem({
           isMobileExpanded
             ? "order-2 min-h-0 overflow-y-auto pb-9 pt-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
             : isExpanded
-            ? "order-2 min-h-0 overflow-y-auto pt-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-            : "order-1"
+              ? "order-2 min-h-0 overflow-y-auto pt-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+              : "order-1"
         )}
         onClick={isDesktop ? undefined : onClick}
         role={isDesktop ? undefined : "button"}
@@ -1373,7 +1744,7 @@ function CardapioGridItem({
         ) : null}
 
         {clickablePublicTags.length > 0 &&
-        !showExpandedPublicTagDescriptions ? (
+          !showExpandedPublicTagDescriptions ? (
           <div className="mb-3 flex flex-wrap gap-1.5">
             {clickablePublicTags.map((tag) => {
               const passFinishingTag = isPassFinishingTag(tag);
@@ -1429,8 +1800,8 @@ function CardapioGridItem({
               {priceRange.minimum === priceRange.maximum
                 ? formatMoneyString(priceRange.minimum)
                 : `De ${formatMoneyString(
-                    priceRange.minimum
-                  )} a ${formatMoneyString(priceRange.maximum)}`}
+                  priceRange.minimum
+                )} a ${formatMoneyString(priceRange.maximum)}`}
             </span>
 
             {isDesktop ? (
