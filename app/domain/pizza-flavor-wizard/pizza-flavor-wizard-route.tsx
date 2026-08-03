@@ -47,6 +47,12 @@ type ConfirmedIngredient = {
   pending: boolean;
 };
 
+type CommercialToken = {
+  key: string;
+  name: string;
+  section: IngredientSection;
+};
+
 function normalize(value: string) {
   return value
     .normalize("NFD")
@@ -70,36 +76,68 @@ function buildNameSuggestions(ingredients: ConfirmedIngredient[]) {
   );
 }
 
-function IngredientPicker({
+function parseCommercialTokens(
+  value: string,
+  section: IngredientSection
+): CommercialToken[] {
+  const seen = new Set<string>();
+  return value
+    .split(/[,;\n]+/)
+    .map((name) => name.trim())
+    .filter(Boolean)
+    .flatMap((name) => {
+      const normalizedName = normalize(name);
+      if (!normalizedName || seen.has(normalizedName)) return [];
+      seen.add(normalizedName);
+      return [{ key: `${section}:${normalizedName}`, name, section }];
+    });
+}
+
+function CommercialIngredientEditor({
   section,
   label,
   placeholder,
   catalog,
-  confirmed,
-  onConfirm,
-  onPending,
+  value,
+  onChange,
+  links,
+  ignoredKeys,
+  onResolve,
+  onToggleIgnored,
   mobile,
 }: {
   section: IngredientSection;
   label: string;
   placeholder: string;
   catalog: CatalogItem[];
-  confirmed: ConfirmedIngredient[];
-  onConfirm: (
-    item: CatalogItem,
-    section: IngredientSection,
-    commercialName: string
-  ) => void;
-  onPending: (name: string, section: IngredientSection) => void;
+  value: string;
+  onChange: (value: string) => void;
+  links: Record<string, string>;
+  ignoredKeys: string[];
+  onResolve: (tokenKey: string, itemId: string) => void;
+  onToggleIgnored: (tokenKey: string) => void;
   mobile: boolean;
 }) {
-  const [text, setText] = useState("");
-  const pendingTerm = text.trim();
+  const [activeKey, setActiveKey] = useState<string | null>(null);
+  const tokens = useMemo(
+    () => parseCommercialTokens(value, section),
+    [section, value]
+  );
+  const activeToken =
+    tokens.find((token) => token.key === activeKey) ||
+    [...tokens].reverse().find((token) => {
+      const exactItem = catalog.find(
+        (item) => normalize(item.name) === normalize(token.name)
+      );
+      return (
+        !ignoredKeys.includes(token.key) && !links[token.key] && !exactItem
+      );
+    });
+  const activeQuery = activeToken?.name || "";
   const matches = useMemo(() => {
-    const query = normalize(pendingTerm);
+    const query = normalize(activeQuery);
     if (query.length < 2) return [];
     return catalog
-      .filter((item) => !confirmed.some((row) => row.itemId === item.id))
       .filter((item) => normalize(item.name).includes(query))
       .sort(
         (a, b) =>
@@ -107,39 +145,94 @@ function IngredientPicker({
           Number(normalize(a.name).startsWith(query))
       )
       .slice(0, 6);
-  }, [catalog, confirmed, pendingTerm]);
+  }, [activeQuery, catalog]);
 
-  const confirm = (item: CatalogItem) => {
-    onConfirm(item, section, pendingTerm);
-    setText("");
+  const removeToken = (tokenKey: string) => {
+    onChange(
+      tokens
+        .filter((token) => token.key !== tokenKey)
+        .map((token) => token.name)
+        .join(", ")
+    );
+    if (activeKey === tokenKey) setActiveKey(null);
   };
-  const normalizedPendingTerm = normalize(pendingTerm);
-  const canAddPending =
-    normalizedPendingTerm.length >= 2 &&
-    !catalog.some((item) => normalize(item.name) === normalizedPendingTerm) &&
-    !confirmed.some((item) => normalize(item.name) === normalizedPendingTerm);
 
   return (
     <div className="relative">
       <label
-        className="text-sm font-semibold text-slate-900"
+        className={`${
+          mobile ? "text-sm" : "text-base"
+        } font-semibold text-slate-900`}
         htmlFor={`pizza-flavor-${section}`}
       >
         {label}
       </label>
       <div className="relative mt-1.5">
-        <input
-          type="text"
+        <textarea
           id={`pizza-flavor-${section}`}
-          value={text}
-          onChange={(event) => setText(event.target.value)}
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
           placeholder={placeholder}
-          autoComplete="off"
-          className="w-full rounded-lg border border-slate-300 px-3 py-3 pr-10 text-base outline-none focus:border-slate-900"
+          rows={3}
+          className="w-full resize-y rounded-lg border border-slate-300 px-3 py-3 pr-10 text-base outline-none focus:border-slate-900"
         />
         <Search className="absolute right-3 top-3 h-5 w-5 text-slate-400" />
       </div>
-      {pendingTerm.length >= 2 ? (
+      {tokens.length ? (
+        <div className="mt-2 flex flex-wrap gap-2">
+          {tokens.map((token) => {
+            const exactItem = catalog.find(
+              (item) => normalize(item.name) === normalize(token.name)
+            );
+            const itemId = links[token.key] || exactItem?.id;
+            const ignored = ignoredKeys.includes(token.key);
+            return (
+              <span
+                key={token.key}
+                className={`inline-flex max-w-full items-center rounded-full border py-1 pl-3 text-sm font-semibold ${
+                  ignored
+                    ? "border-slate-300 bg-slate-100 text-slate-500"
+                    : itemId
+                    ? "border-emerald-200 bg-emerald-50 text-slate-900"
+                    : "border-amber-300 bg-amber-50 text-amber-950"
+                }`}
+              >
+                <button
+                  type="button"
+                  onClick={() => setActiveKey(token.key)}
+                  className="max-w-[14rem] truncate"
+                  title={
+                    ignored
+                      ? "Ignorado na receita"
+                      : itemId
+                      ? "Ingrediente técnico vinculado"
+                      : "Clique para vincular o ingrediente técnico"
+                  }
+                >
+                  {token.name}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onToggleIgnored(token.key)}
+                  className="ml-1 rounded-full px-1.5 py-0.5 text-[10px] font-bold uppercase hover:bg-black/5"
+                  title={ignored ? "Incluir na receita" : "Ignorar na receita"}
+                >
+                  {ignored ? "Incluir" : itemId ? "OK" : "Pendente"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => removeToken(token.key)}
+                  aria-label={`Remover ${token.name}`}
+                  className="mx-1 inline-flex h-6 w-6 items-center justify-center rounded-full text-slate-500 hover:bg-black/5"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </span>
+            );
+          })}
+        </div>
+      ) : null}
+      {activeToken && !ignoredKeys.includes(activeToken.key) ? (
         <div
           className={
             mobile
@@ -151,7 +244,10 @@ function IngredientPicker({
             ? matches.map((item) => (
                 <button
                   type="button"
-                  onClick={() => confirm(item)}
+                  onClick={() => {
+                    onResolve(activeToken.key, item.id);
+                    setActiveKey(null);
+                  }}
                   key={item.id}
                   className="flex w-full items-center justify-between gap-3 border-b border-slate-100 px-3 py-3 text-left last:border-0 hover:bg-slate-50"
                 >
@@ -172,21 +268,9 @@ function IngredientPicker({
             : null}
           {!matches.length ? (
             <p className="p-3 text-sm text-amber-800">
-              Nenhum insumo ou semiacabado encontrado para “{pendingTerm}”.
+              Nenhum insumo ou semiacabado encontrado para “{activeQuery}”. O
+              termo ficará pendente para cadastro.
             </p>
-          ) : null}
-          {canAddPending ? (
-            <button
-              type="button"
-              onClick={() => {
-                onPending(pendingTerm, section);
-                setText("");
-              }}
-              className="flex w-full items-center gap-2 border-t border-amber-200 bg-amber-50 px-3 py-3 text-left text-sm font-semibold text-amber-900 hover:bg-amber-100"
-            >
-              <Plus className="h-4 w-4" />
-              Adicionar “{pendingTerm}” como ingrediente pendente
-            </button>
           ) : null}
         </div>
       ) : null}
@@ -214,8 +298,8 @@ function WizardHelpButton({ dark = false }: { dark?: boolean }) {
         <DialogHeader>
           <DialogTitle>Como funciona o cadastro rápido</DialogTitle>
           <DialogDescription>
-            Você confirma os ingredientes da base e do recheio. O sistema reúne
-            os dois na receita completa.
+            Digite ou cole a lista comercial da base e do recheio. Cada termo
+            pode ser vinculado ao item técnico sem alterar o texto informado.
           </DialogDescription>
         </DialogHeader>
         <ul className="space-y-2 text-sm text-slate-700">
@@ -224,6 +308,7 @@ function WizardHelpButton({ dark = false }: { dark?: boolean }) {
           <li>• Unidade de consumo do sabor: UN</li>
           <li>• Receita criada para os tamanhos selecionados</li>
           <li>• Quantidades iniciadas pela média dos sabores visíveis</li>
+          <li>• Termos sem cadastro ficam pendentes para revisão</li>
           <li>• Ficha técnica criada como rascunho</li>
           <li>• Lançamento futuro ativado</li>
         </ul>
@@ -242,12 +327,37 @@ export default function PizzaFlavorWizardRoute({
   const navigation = useNavigation();
   const catalog = (loaderData?.payload?.ingredients || []) as CatalogItem[];
   const [name, setName] = useState("");
-  const [confirmed, setConfirmed] = useState<ConfirmedIngredient[]>([]);
+  const [baseCommercialText, setBaseCommercialText] = useState("");
+  const [fillingCommercialText, setFillingCommercialText] = useState("");
+  const [ingredientLinks, setIngredientLinks] = useState<
+    Record<string, string>
+  >({});
+  const [ignoredTokenKeys, setIgnoredTokenKeys] = useState<string[]>([]);
   const [variationCodes, setVariationCodes] = useState<string[]>(
     PIZZA_SIZE_OPTIONS.map((option) => option.code)
   );
   const created = actionData?.payload?.created;
   const error = actionData?.status >= 400 ? actionData?.message : null;
+  const commercialTokens = [
+    ...parseCommercialTokens(baseCommercialText, "base"),
+    ...parseCommercialTokens(fillingCommercialText, "filling"),
+  ];
+  const confirmed = commercialTokens.flatMap((token) => {
+    if (ignoredTokenKeys.includes(token.key)) return [];
+    const exactItem = catalog.find(
+      (item) => normalize(item.name) === normalize(token.name)
+    );
+    const itemId = ingredientLinks[token.key] || exactItem?.id || null;
+    return [
+      {
+        key: token.key,
+        itemId,
+        name: token.name,
+        section: token.section,
+        pending: !itemId,
+      } satisfies ConfirmedIngredient,
+    ];
+  });
   const baseIngredients = confirmed.filter((item) => item.section === "base");
   const fillingIngredients = confirmed.filter(
     (item) => item.section === "filling"
@@ -301,38 +411,14 @@ export default function PizzaFlavorWizardRoute({
     );
   }
 
-  const addIngredient = (
-    item: CatalogItem,
-    section: IngredientSection,
-    commercialName: string
-  ) => {
-    setConfirmed((rows) => [
-      ...rows,
-      {
-        key: item.id,
-        itemId: item.id,
-        name: commercialName.trim() || item.name,
-        section,
-        pending: false,
-      },
-    ]);
-  };
-  const addPendingIngredient = (
-    ingredientName: string,
-    section: IngredientSection
-  ) => {
-    const trimmedName = ingredientName.trim();
-    setConfirmed((rows) => [
-      ...rows,
-      {
-        key: `pending:${section}:${normalize(trimmedName)}`,
-        itemId: null,
-        name: trimmedName,
-        section,
-        pending: true,
-      },
-    ]);
-  };
+  const resolveIngredient = (tokenKey: string, itemId: string) =>
+    setIngredientLinks((current) => ({ ...current, [tokenKey]: itemId }));
+  const toggleIgnored = (tokenKey: string) =>
+    setIgnoredTokenKeys((current) =>
+      current.includes(tokenKey)
+        ? current.filter((key) => key !== tokenKey)
+        : [...current, tokenKey]
+    );
 
   return (
     <section className={`mx-auto ${mobile ? "max-w-md" : "w-full"}`}>
@@ -357,7 +443,7 @@ export default function PizzaFlavorWizardRoute({
             <WizardHelpButton dark />
           </header>
         ) : (
-          <header className="space-y-5">
+          <header className="space-y-6">
             <div className="flex flex-wrap items-center gap-2 text-sm">
               <Link
                 to="/admin/items"
@@ -378,7 +464,7 @@ export default function PizzaFlavorWizardRoute({
                 <p className="text-xs font-semibold uppercase tracking-widest text-slate-500">
                   Cadastro rápido
                 </p>
-                <h2 className="mt-1 text-2xl font-semibold tracking-tight text-slate-950">
+                <h2 className="mt-1 text-3xl font-semibold tracking-tight text-slate-950">
                   Novo sabor de pizza
                 </h2>
               </div>
@@ -389,11 +475,7 @@ export default function PizzaFlavorWizardRoute({
 
         <Form
           method="post"
-          className={`space-y-6 ${
-            mobile
-              ? "p-5"
-              : "relative rounded-2xl border border-slate-200 bg-white p-6 lg:pr-[25rem]"
-          }`}
+          className={`space-y-6 ${mobile ? "p-5" : "relative lg:pr-[25rem]"}`}
         >
           <input
             type="hidden"
@@ -408,93 +490,60 @@ export default function PizzaFlavorWizardRoute({
           />
           <input
             type="hidden"
+            name="baseCommercialText"
+            value={baseCommercialText}
+          />
+          <input
+            type="hidden"
+            name="fillingCommercialText"
+            value={fillingCommercialText}
+          />
+          <input
+            type="hidden"
             name="variationCodes"
             value={JSON.stringify(variationCodes)}
           />
-          <div className="space-y-5">
-            <IngredientPicker
+          <div
+            className={
+              mobile ? "space-y-5" : "space-y-7 border-b border-slate-200 pb-8"
+            }
+          >
+            <CommercialIngredientEditor
               section="base"
               label="Base da pizza"
               placeholder="Molho de tomate, muçarela..."
               catalog={catalog}
-              confirmed={confirmed}
-              onConfirm={addIngredient}
-              onPending={addPendingIngredient}
+              value={baseCommercialText}
+              onChange={setBaseCommercialText}
+              links={ingredientLinks}
+              ignoredKeys={ignoredTokenKeys}
+              onResolve={resolveIngredient}
+              onToggleIgnored={toggleIgnored}
               mobile={mobile}
             />
-            <IngredientPicker
+            <CommercialIngredientEditor
               section="filling"
               label="Recheio"
               placeholder="Bacon, provolone, cebola..."
               catalog={catalog}
-              confirmed={confirmed}
-              onConfirm={addIngredient}
-              onPending={addPendingIngredient}
+              value={fillingCommercialText}
+              onChange={setFillingCommercialText}
+              links={ingredientLinks}
+              ignoredKeys={ignoredTokenKeys}
+              onResolve={resolveIngredient}
+              onToggleIgnored={toggleIgnored}
               mobile={mobile}
             />
           </div>
 
-          {confirmed.length ? (
-            <div
-              className={
-                mobile ? "space-y-4" : "grid grid-cols-2 items-start gap-5"
-              }
+          <fieldset
+            className={mobile ? undefined : "border-b border-slate-200 py-8"}
+          >
+            <legend
+              className={`${
+                mobile ? "text-sm" : "text-base"
+              } font-semibold text-slate-900`}
             >
-              {(
-                [
-                  { title: "Base confirmada", items: baseIngredients },
-                  { title: "Recheio confirmado", items: fillingIngredients },
-                ] as const
-              ).map((group) => (
-                <div className="space-y-2" key={group.title}>
-                  <p className="text-sm font-semibold text-slate-900">
-                    {group.title}
-                  </p>
-                  {group.items.length ? (
-                    <div className="flex flex-wrap gap-2">
-                      {group.items.map((item) => (
-                        <span
-                          key={item.key}
-                          className={`inline-flex max-w-full items-center gap-1.5 rounded-full border py-1.5 pl-3 pr-1.5 text-sm font-semibold text-slate-900 ${
-                            item.pending
-                              ? "border-amber-300 bg-amber-50"
-                              : "border-emerald-200 bg-emerald-50"
-                          }`}
-                        >
-                          <span className="truncate">{item.name}</span>
-                          {item.pending ? (
-                            <span className="text-[10px] font-bold uppercase text-amber-700">
-                              Pendente
-                            </span>
-                          ) : null}
-                          <button
-                            type="button"
-                            aria-label={`Remover ${item.name}`}
-                            title={`Remover ${item.name}`}
-                            onClick={() =>
-                              setConfirmed((rows) =>
-                                rows.filter((row) => row.key !== item.key)
-                              )
-                            }
-                            className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-slate-500 hover:bg-black/5 hover:text-slate-900"
-                          >
-                            <X className="h-3.5 w-3.5" />
-                          </button>
-                        </span>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="rounded-lg border border-dashed border-slate-300 p-3 text-xs text-slate-500">
-                      Nenhum ingrediente confirmado.
-                    </p>
-                  )}
-                </div>
-              ))}
-            </div>
-          ) : null}
-
-          <fieldset>
-            <legend className="text-sm font-semibold text-slate-900">
               Tamanhos
             </legend>
             <div className="mt-2 grid grid-cols-4 gap-1.5">
@@ -504,7 +553,9 @@ export default function PizzaFlavorWizardRoute({
                   <label
                     key={option.code}
                     title={option.fullLabel}
-                    className={`flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2.5 text-sm font-semibold ${
+                    className={`flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2.5 ${
+                      mobile ? "text-sm" : "text-base"
+                    } font-semibold ${
                       checked
                         ? "border-violet-300 bg-violet-50 text-violet-950"
                         : "border-slate-200 bg-white text-slate-500"
@@ -529,10 +580,12 @@ export default function PizzaFlavorWizardRoute({
             </div>
           </fieldset>
 
-          <div>
+          <div className={mobile ? undefined : "py-8"}>
             <div className="flex flex-wrap items-center justify-between gap-2">
               <label
-                className="text-sm font-semibold text-slate-900"
+                className={`${
+                  mobile ? "text-sm" : "text-base"
+                } font-semibold text-slate-900`}
                 htmlFor="pizza-flavor-name"
               >
                 Nome do sabor{" "}
@@ -541,7 +594,9 @@ export default function PizzaFlavorWizardRoute({
                 </span>
               </label>
               {nameSuggestions.length ? (
-                <span className="text-xs text-slate-500">
+                <span
+                  className={`${mobile ? "text-xs" : "text-sm"} text-slate-500`}
+                >
                   Sugestões baseadas no recheio
                 </span>
               ) : null}
@@ -561,7 +616,9 @@ export default function PizzaFlavorWizardRoute({
                     key={suggestion}
                     type="button"
                     onClick={() => setName(suggestion)}
-                    className="inline-flex items-center gap-1.5 rounded-full border border-violet-200 bg-violet-50 px-3 py-1.5 text-xs font-semibold text-violet-900 hover:bg-violet-100"
+                    className={`inline-flex items-center gap-1.5 rounded-full border border-violet-200 bg-violet-50 px-3 py-1.5 ${
+                      mobile ? "text-xs" : "text-sm"
+                    } font-semibold text-violet-900 hover:bg-violet-100`}
                   >
                     <Sparkles className="h-3.5 w-3.5" />
                     {suggestion}
@@ -570,13 +627,23 @@ export default function PizzaFlavorWizardRoute({
               </div>
             ) : null}
             {!name.trim() ? (
-              <p className="mt-2 text-xs text-slate-500">
+              <p
+                className={`mt-2 ${
+                  mobile ? "text-xs" : "text-sm"
+                } text-slate-500`}
+              >
                 Será salvo com um nome interno de rascunho.
               </p>
             ) : null}
           </div>
 
-          <p className="text-[11px] text-slate-500">
+          <p
+            className={`${
+              mobile
+                ? "text-[11px]"
+                : "border-t border-slate-200 pt-6 text-sm leading-relaxed"
+            } text-slate-500`}
+          >
             Cada ingrediente recebe, por tamanho, a média usada nos sabores
             visíveis do canal cardápio. Sem histórico compatível, começa em zero
             para revisão.

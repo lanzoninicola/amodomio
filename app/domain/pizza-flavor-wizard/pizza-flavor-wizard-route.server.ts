@@ -18,6 +18,10 @@ export async function action({ request }: ActionFunctionArgs) {
   try {
     const formData = await request.formData();
     const name = String(formData.get("name") || "").trim();
+    const baseCommercialText = String(formData.get("baseCommercialText") || "");
+    const fillingCommercialText = String(
+      formData.get("fillingCommercialText") || ""
+    );
     const raw = JSON.parse(String(formData.get("ingredients") || "[]"));
     const variationCodesRaw = JSON.parse(
       String(formData.get("variationCodes") || "[]")
@@ -35,7 +39,13 @@ export async function action({ request }: ActionFunctionArgs) {
       ? variationCodesRaw.map(String)
       : [];
     return ok({
-      created: await createPizzaFlavor({ name, ingredients, variationCodes }),
+      created: await createPizzaFlavor({
+        name,
+        ingredients,
+        variationCodes,
+        baseCommercialText,
+        fillingCommercialText,
+      }),
     });
   } catch (error) {
     const message =
