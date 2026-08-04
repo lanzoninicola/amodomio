@@ -345,7 +345,7 @@ function CardapioFeaturedPromotionCarousel({
           "relative transition-[width] duration-300 ease-out md:fixed md:right-6 md:top-6 md:z-30 md:m-0 md:max-w-none md:rounded-2xl md:bg-white md:p-1.5 md:shadow-lg lg:right-8",
           isExpanded ? "md:z-[60] md:w-[440px]" : "md:w-[220px] lg:w-[260px]",
           section.displayStyle === "polaroid"
-            ? "mx-auto mb-6 mt-1 w-[calc(100%-2rem)] max-w-[440px] border border-black/10 bg-[#fffdf8] p-2 pb-5 shadow-[0_12px_24px_rgba(0,0,0,0.18)] md:-rotate-1"
+            ? "mx-auto mb-6 mt-1 w-[calc(100%-1rem)] max-w-[460px] border border-amber-950/10 bg-[#fffdf8] p-2 pb-4 shadow-[0_12px_28px_rgba(74,52,34,0.16)] md:-rotate-1"
             : "mb-6 mt-4 w-full overflow-hidden px-4 md:px-0",
         ].join(" ")}
       >
@@ -362,7 +362,9 @@ function CardapioFeaturedPromotionCarousel({
                 : image.imageUrl;
               const altText =
                 image.alt ||
-                `${section.title}, imagem ${index + 1} de ${images.length}`;
+                `${section.title}, ${isVideo ? "vídeo" : "imagem"} ${
+                  index + 1
+                } de ${images.length}`;
               return (
                 <CarouselItem key={`${src}-${index}`} className="pl-0">
                   <div className="relative transform-gpu overflow-hidden rounded-[0.5rem] md:-rotate-1">
@@ -371,7 +373,7 @@ function CardapioFeaturedPromotionCarousel({
                         className={
                           isExpanded
                             ? "hidden h-[calc(100dvh-5rem)] w-full rounded-[0.5rem] object-contain [clip-path:inset(0_round_0.5rem)] md:block"
-                            : "mx-auto block max-h-[42vh] max-w-full rounded-[0.5rem] object-contain [clip-path:inset(0_round_0.5rem)] md:max-h-[38vh]"
+                            : "block aspect-[4/5] w-full rounded-[0.5rem] object-cover [clip-path:inset(0_round_0.5rem)] md:max-h-[38vh]"
                         }
                         src={src}
                         autoPlay
@@ -394,9 +396,15 @@ function CardapioFeaturedPromotionCarousel({
                       />
                     )}
 
+                    {hasMultipleImages ? (
+                      <span className="pointer-events-none absolute left-2 top-2 z-10 rounded-full bg-black/65 px-2.5 py-1 font-neue text-[11px] font-semibold tabular-nums text-white shadow-sm backdrop-blur-sm">
+                        {index + 1} / {images.length}
+                      </span>
+                    ) : null}
+
                     <button
                       type="button"
-                      className="absolute inset-0 flex cursor-zoom-in items-start justify-end bg-transparent p-2 md:hidden"
+                      className="absolute inset-0 z-10 flex cursor-zoom-in items-start justify-end bg-transparent p-2 md:hidden"
                       onClick={() => {
                         trackCardapioFeatured({
                           action: "expand",
@@ -406,9 +414,9 @@ function CardapioFeaturedPromotionCarousel({
                         });
                         setIsMobileExpanded(true);
                       }}
-                      aria-label="Ampliar promoção"
+                      aria-label={`Ampliar ${isVideo ? "vídeo" : "imagem"}`}
                     >
-                      <span className="rounded-full bg-black/65 p-2 text-white backdrop-blur-sm">
+                      <span className="rounded-full bg-black/70 p-2.5 text-white shadow-md backdrop-blur-sm">
                         <Maximize2 className="h-4 w-4" />
                       </span>
                     </button>
@@ -416,7 +424,7 @@ function CardapioFeaturedPromotionCarousel({
                     {!isExpanded ? (
                       <button
                         type="button"
-                        className="absolute inset-0 hidden cursor-zoom-in items-start justify-end bg-transparent p-2 md:flex"
+                        className="absolute inset-0 z-10 hidden cursor-zoom-in items-start justify-end bg-transparent p-2 md:flex"
                         onClick={() => {
                           trackCardapioFeatured({
                             action: "expand",
@@ -426,9 +434,9 @@ function CardapioFeaturedPromotionCarousel({
                           });
                           setIsExpanded(true);
                         }}
-                        aria-label="Ampliar promoção"
+                        aria-label={`Ampliar ${isVideo ? "vídeo" : "imagem"}`}
                       >
-                        <span className="rounded-full bg-black/65 p-2 text-white backdrop-blur-sm">
+                        <span className="rounded-full bg-black/70 p-2.5 text-white shadow-md backdrop-blur-sm">
                           <Maximize2 className="h-4 w-4" />
                         </span>
                       </button>
@@ -454,20 +462,52 @@ function CardapioFeaturedPromotionCarousel({
           ) : null}
         </Carousel>
 
-        <div className="pt-3 text-center md:py-1.5">
+        {!isExpanded && section.showTitle ? (
+          <header className="px-1 pt-3 text-left md:px-2 md:pt-2.5">
+            <h2 className="font-lora text-lg font-bold leading-tight text-zinc-950 md:text-base">
+              {section.title}
+            </h2>
+            {section.subtitle ? (
+              <p className="mt-1 font-neue text-sm leading-snug text-zinc-600 md:text-xs">
+                {section.subtitle}
+              </p>
+            ) : null}
+          </header>
+        ) : null}
+
+        <div className="pt-3 text-center md:px-1 md:py-2">
           {!isExpanded && section.showPromotionHint ? (
-            <p className="mb-2 font-neue text-[11px] font-bold uppercase tracking-wide text-zinc-500">
-              {section.promotionHintText ? (
-                section.promotionHintText
-              ) : (
-                <>
-                  <span className="md:hidden">Toque para ver a promoção</span>
-                  <span className="hidden md:inline">
-                    Clique para ver a promoção
-                  </span>
-                </>
-              )}
-            </p>
+            <button
+              type="button"
+              className="mb-2 inline-flex max-w-full items-center justify-center gap-2 rounded-full bg-zinc-900 px-4 py-2 font-neue text-[13px] font-semibold leading-snug text-white shadow-sm transition hover:bg-zinc-800 focus:outline-none focus:ring-2 focus:ring-zinc-400 focus:ring-offset-2 md:px-3 md:py-1.5 md:text-xs"
+              onClick={() => {
+                trackCardapioFeatured({
+                  action: "expand",
+                  sectionKey: section.key,
+                  imageIndex: currentSlide,
+                  placement: getCardapioFeaturedCardPlacement(),
+                });
+                if (window.matchMedia("(min-width: 768px)").matches) {
+                  setIsExpanded(true);
+                } else {
+                  setIsMobileExpanded(true);
+                }
+              }}
+            >
+              <Maximize2 className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+              <span className="truncate">
+                {section.promotionHintText ? (
+                  section.promotionHintText
+                ) : (
+                  <>
+                    <span className="md:hidden">Toque para ampliar</span>
+                    <span className="hidden md:inline">
+                      Clique para ampliar
+                    </span>
+                  </>
+                )}
+              </span>
+            </button>
           ) : null}
 
           {hasMultipleImages ? (
@@ -535,7 +575,9 @@ function CardapioFeaturedPromotionCarousel({
                   const src = image.fullscreenImageUrl || image.imageUrl;
                   const altText =
                     image.alt ||
-                    `${section.title}, imagem ${index + 1} de ${images.length}`;
+                    `${section.title}, ${isVideo ? "vídeo" : "imagem"} ${
+                      index + 1
+                    } de ${images.length}`;
                   return (
                     <CarouselItem key={`${src}-${index}`} className="pl-0">
                       <div className="relative">
