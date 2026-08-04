@@ -286,6 +286,7 @@ function LeftColumn({
 }) {
   const [showAiPrompt, setShowAiPrompt] = useState(false);
   const [revenueMonths, setRevenueMonths] = useState<RevenueMonthOption>(3);
+  const [averageRevenueMonths, setAverageRevenueMonths] = useState<RevenueMonthOption>(3);
 
   const currentMonth = monthlyRevenue.find(m => m.isCurrent);
   const currentRevenue = currentMonth?.total ?? 0;
@@ -294,6 +295,10 @@ function LeftColumn({
     : null;
 
   const visibleMonthlyRevenue = monthlyRevenue.slice(-revenueMonths);
+  const averageRevenuePeriod = monthlyRevenue.slice(-averageRevenueMonths);
+  const averageRevenue = averageRevenuePeriod.length > 0
+    ? averageRevenuePeriod.reduce((sum, month) => sum + month.total, 0) / averageRevenuePeriod.length
+    : 0;
   const visiblePreviousYearMonthlyRevenue = previousYearMonthlyRevenue?.slice(-revenueMonths) ?? null;
   const revenuePeriodLabel = `Últimos ${revenueMonths} meses`;
   const chartSeries = [
@@ -370,8 +375,8 @@ Seja direto e objetivo. Prefiro sugestões específicas ao meu contexto a consel
         />
       )}
 
-      {/* ── Current Revenue + Estimated Profit ── */}
-      <div className="grid grid-cols-2 gap-4">
+      {/* ── Revenue summary ── */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card className="p-4">
           <CardContent className="p-0">
             <p className="text-[10px] uppercase tracking-wide text-slate-400">Faturamento corrente</p>
@@ -390,6 +395,34 @@ Seja direto e objetivo. Prefiro sugestões específicas ao meu contexto a consel
             </CardContent>
           </Card>
         )}
+        <Card className="p-4">
+          <CardContent className="p-0">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-[10px] uppercase tracking-wide text-slate-400">Faturamento médio</p>
+                <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-slate-500 mb-1">
+                  Últimos {averageRevenueMonths} meses
+                </p>
+                <p className="text-2xl font-bold text-slate-900">{fmtBRL(averageRevenue)}</p>
+              </div>
+              <Select
+                value={String(averageRevenueMonths)}
+                onValueChange={(value) => setAverageRevenueMonths(Number(value) as RevenueMonthOption)}
+              >
+                <SelectTrigger className="h-8 w-[118px] text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {REVENUE_MONTH_OPTIONS.map(months => (
+                    <SelectItem key={months} value={String(months)}>
+                      {months} meses
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       <Card className="p-4">
