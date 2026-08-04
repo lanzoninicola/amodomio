@@ -177,7 +177,7 @@ export default function AdminItemVendaTagsRoute() {
         </div>
 
         <Link
-          to="/admin/gerenciamento/cardapio/tags"
+          to="/admin/vendas/cardapio/tags"
           className="mt-4 inline-flex text-xs font-semibold uppercase tracking-wide underline"
         >
           Gerenciar tags públicas

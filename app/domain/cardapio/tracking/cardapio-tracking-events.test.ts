@@ -37,6 +37,20 @@ describe("parseCardapioTrackingRecord", () => {
     });
   });
 
+  it("aceita o clique em uma categoria comercial", () => {
+    expect(
+      parseCardapioTrackingRecord({
+        eventName: CARDAPIO_NAVIGATION_EVENT,
+        control: "category",
+        value: "Especiais da Casa",
+        placement: "mobile_header",
+      })
+    ).toMatchObject({
+      control: "category",
+      value: "Especiais da Casa",
+    });
+  });
+
   it("accepts a featured record with featured dimensions", () => {
     expect(
       parseCardapioTrackingRecord({

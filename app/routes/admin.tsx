@@ -572,7 +572,7 @@ export default function AdminOutlet() {
                     actionNotifications={actionNotifications}
                 />
                 {/* {env === "development" && <EnvironmentAlert />} */}
-                <div className="mt-6 mx-4 md:mr-12 pb-16" data-element="outer-div-admin-outlet">
+                <div className="mx-3 mt-4 pb-16 sm:mx-4 md:mt-6 md:mr-12" data-element="outer-div-admin-outlet">
                     <Outlet context={{
                         loggedUser,
                     }} />

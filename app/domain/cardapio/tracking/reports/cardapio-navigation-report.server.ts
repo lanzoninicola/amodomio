@@ -59,6 +59,39 @@ export async function readCardapioNavigationReport({
     (total, row) => total + count(row),
     0
   );
+  const categoryRows = currentRows.filter((row) => row.control === "category");
+  const categoryClicksCurrent = categoryRows.reduce(
+    (total, row) => total + count(row),
+    0
+  );
+  const categoryClicksPrevious = previousRows
+    .filter((row) => row.control === "category")
+    .reduce((total, row) => total + count(row), 0);
+  const categoryPreviousMap = new Map<string, number>();
+  previousRows
+    .filter((row) => row.control === "category")
+    .forEach((row) =>
+      categoryPreviousMap.set(
+        row.value,
+        (categoryPreviousMap.get(row.value) ?? 0) + count(row)
+      )
+    );
+  const categoryCurrentMap = new Map<string, number>();
+  categoryRows.forEach((row) =>
+    categoryCurrentMap.set(
+      row.value,
+      (categoryCurrentMap.get(row.value) ?? 0) + count(row)
+    )
+  );
+  const categories = [...categoryCurrentMap.entries()]
+    .map(([name, current]) => ({
+      key: `category:${name}`,
+      name,
+      current,
+      previous: categoryPreviousMap.get(name) ?? 0,
+      share: categoryClicksCurrent > 0 ? current / categoryClicksCurrent : 0,
+    }))
+    .sort((a, b) => b.current - a.current);
 
   return {
     summary: {
@@ -76,7 +109,11 @@ export async function readCardapioNavigationReport({
         previousVisitors.length > 0
           ? previousUsers.length / previousVisitors.length
           : 0,
+      categoryClicksCurrent,
+      categoryClicksPrevious,
+      topCategory: categories[0]?.name ?? null,
     },
+    categories,
     ranking: currentRows
       .map((row) => ({
         key: keyOf(row),

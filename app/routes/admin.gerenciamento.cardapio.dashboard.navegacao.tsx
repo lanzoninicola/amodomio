@@ -218,7 +218,7 @@ function NavigationReportContent({
     previous?: number
   ) => { text: string; cls: string };
 }) {
-  const { summary, ranking } = report;
+  const { summary, categories, ranking } = report;
 
   return (
     <>
@@ -250,6 +250,101 @@ function NavigationReportContent({
           }
           helper="Frequência média de uso"
         />
+      </div>
+
+      <div className="rounded-lg border border-muted bg-white p-4 shadow-sm">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h3 className="text-sm font-semibold text-slate-900">
+              Categorias mais clicadas
+            </h3>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Preferência dos visitantes nos atalhos de categoria do cardápio.
+            </p>
+          </div>
+          <div className="text-right">
+            <div className="flex items-baseline justify-end gap-2">
+              <strong className="text-2xl font-semibold text-slate-900">
+                {summary.categoryClicksCurrent}
+              </strong>
+              <span
+                className={`text-xs font-semibold ${
+                  pctDiff(
+                    summary.categoryClicksCurrent,
+                    summary.categoryClicksPrevious
+                  ).cls
+                }`}
+              >
+                {
+                  pctDiff(
+                    summary.categoryClicksCurrent,
+                    summary.categoryClicksPrevious
+                  ).text
+                }
+              </span>
+            </div>
+            <span className="text-xs text-muted-foreground">
+              {summary.topCategory
+                ? `mais clicada: ${summary.topCategory}`
+                : "cliques em categorias"}
+            </span>
+          </div>
+        </div>
+
+        {categories.length === 0 ? (
+          <div className="mt-4 rounded-md border border-dashed border-muted px-4 py-6 text-sm text-muted-foreground">
+            Ainda não há cliques em categorias no período selecionado. A coleta
+            começa a partir da publicação desta versão do cardápio.
+          </div>
+        ) : (
+          <div className="mt-4 overflow-x-auto rounded-md border border-muted">
+            <table className="w-full min-w-[680px] text-sm">
+              <thead className="bg-slate-50 text-xs uppercase tracking-wide text-muted-foreground">
+                <tr>
+                  <th className="px-3 py-2 text-left font-medium">Posição</th>
+                  <th className="px-3 py-2 text-left font-medium">Categoria</th>
+                  <th className="px-3 py-2 text-right font-medium">Cliques</th>
+                  <th className="px-3 py-2 text-right font-medium">
+                    Participação
+                  </th>
+                  <th className="px-3 py-2 text-right font-medium">
+                    Período anterior
+                  </th>
+                  <th className="px-3 py-2 text-right font-medium">Δ</th>
+                </tr>
+              </thead>
+              <tbody>
+                {categories.map((category, index) => {
+                  const diff = pctDiff(category.current, category.previous);
+                  return (
+                    <tr key={category.key} className="border-t">
+                      <td className="px-3 py-2 font-mono text-slate-500">
+                        {index + 1}º
+                      </td>
+                      <td className="px-3 py-2 font-medium text-slate-900">
+                        {category.name}
+                      </td>
+                      <td className="px-3 py-2 text-right font-mono">
+                        {category.current}
+                      </td>
+                      <td className="px-3 py-2 text-right font-mono">
+                        {(category.share * 100).toFixed(1)}%
+                      </td>
+                      <td className="px-3 py-2 text-right font-mono text-slate-500">
+                        {category.previous}
+                      </td>
+                      <td
+                        className={`px-3 py-2 text-right font-mono text-xs font-semibold ${diff.cls}`}
+                      >
+                        {diff.text}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       <div className="rounded-lg border border-muted bg-white p-4 shadow-sm">
@@ -347,6 +442,7 @@ function Metric({
 }
 
 function formatControl(control: string) {
+  if (control === "category") return "Categoria comercial";
   if (control === "group") return "Atalho de categoria";
   if (control === "filter_toggle") return "Painel de filtros";
   if (control === "tag") return "Filtro por tag";

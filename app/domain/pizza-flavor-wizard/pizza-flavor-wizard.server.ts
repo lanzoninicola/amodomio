@@ -193,6 +193,8 @@ export async function createPizzaFlavor(params: {
   name: string;
   ingredients: PizzaFlavorIngredientInput[];
   variationCodes: string[];
+  baseCommercialText: string;
+  fillingCommercialText: string;
 }) {
   const db = prismaClient as any;
   const requestedName = params.name.trim();
@@ -210,8 +212,24 @@ export async function createPizzaFlavor(params: {
     throw new Error("Selecione pelo menos um tamanho");
 
   const result = await db.$transaction(async (tx: any) => {
-    const resolvedInputs = params.ingredients.filter((row) => row.itemId);
-    const pendingInputs = params.ingredients.filter((row) => !row.itemId);
+    const resolvedInputs = params.ingredients
+      .filter((row) => row.itemId)
+      .filter(
+        (row, index, rows) =>
+          rows.findIndex((candidate) => candidate.itemId === row.itemId) ===
+          index
+      );
+    const pendingInputs = params.ingredients
+      .filter((row) => !row.itemId)
+      .filter(
+        (row, index, rows) =>
+          rows.findIndex(
+            (candidate) =>
+              candidate.section === row.section &&
+              normalizeIngredientName(candidate.name) ===
+                normalizeIngredientName(row.name)
+          ) === index
+      );
     const existing = await tx.item.findFirst({
       where: { name: { equals: name, mode: "insensitive" } },
       select: { id: true },
@@ -282,16 +300,8 @@ export async function createPizzaFlavor(params: {
         itemId: item.id,
         upcoming: true,
         itemGroupId: savoryPizzaGroup.id,
-        baseIngredients: params.ingredients
-          .filter((row) => row.section === "base")
-          .map((row) => row.name)
-          .filter(Boolean)
-          .join(", "),
-        ingredients: params.ingredients
-          .filter((row) => row.section === "filling")
-          .map((row) => row.name)
-          .filter(Boolean)
-          .join(", "),
+        baseIngredients: params.baseCommercialText,
+        ingredients: params.fillingCommercialText,
       },
     });
 

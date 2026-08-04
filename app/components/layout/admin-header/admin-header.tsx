@@ -300,14 +300,14 @@ export function AdminHeader({
 
                 )
             }>
-                <div className="container flex h-14 max-w-screen-2xl items-center">
-                    <div className="flex flex-1 items-center justify-between space-x-2 md:justify-end">
-                        <div className="w-full flex-1 md:w-auto md:flex-none">
+                <div className="flex h-14 w-full max-w-screen-2xl items-center px-1.5 md:container md:px-4">
+                    <div className="flex min-w-0 flex-1 items-center md:justify-end md:space-x-2">
+                        <div className="hidden md:block md:w-auto md:flex-none">
                         </div>
-                        <nav className="flex items-center justify-center gap-3 lg:gap-4">
+                        <nav className="grid w-full grid-cols-5 items-center md:flex md:w-auto md:justify-center md:gap-3 lg:gap-4">
                             <button
                                 type="button"
-                                className="md:hidden flex flex-col items-center gap-0.5 hover:bg-slate-50 rounded-md p-2"
+                                className="flex min-w-0 flex-col items-center gap-0.5 rounded-md px-1 py-2 hover:bg-slate-50 md:hidden"
                                 onClick={() => setIsMobileMenuOpen(true)}
                                 aria-label="Abrir menu"
                             >
@@ -357,7 +357,7 @@ export function AdminHeader({
                                     <span className="text-[10px] lg:text-xs text-foreground/60 transition-colors hover:text-foreground/80">Início</span>
                                 </div>
                             </Link>
-                            <Link to={"/admin/administracao/settings"}>
+                            <Link to={"/admin/administracao/settings"} className="hidden md:block">
                                 <div className="flex flex-col items-center gap-0.5 hover:bg-slate-50 rounded-md p-2">
                                     <Settings size={18} />
                                     <span className="text-[10px] lg:text-xs text-foreground/60 transition-colors hover:text-foreground/80">Config</span>
@@ -370,7 +370,9 @@ export function AdminHeader({
                                 </div>
                             </Link>
 
-                            <FastLinks topNavItems={topNavItems} />
+                            <div className="hidden md:block">
+                                <FastLinks topNavItems={topNavItems} />
+                            </div>
 
                             <Link to={"/admin/mobile"} prefetch="none">
                                 <div className="flex flex-col items-center gap-0.5 hover:bg-slate-50 rounded-md p-2">
