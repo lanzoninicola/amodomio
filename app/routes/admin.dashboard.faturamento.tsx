@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 import { loadRevenueGroupData } from "~/domain/dashboard/kpi-loader.server";
-import type { StockVsRevenueMonth, WeekdayChart } from "~/domain/dashboard/kpi-loader.server";
+import type { MonthlyCostProgress, StockVsRevenueMonth, WeekdayChart } from "~/domain/dashboard/kpi-loader.server";
 import {
   fmtBRL,
   MultiLineChart,
@@ -265,6 +265,100 @@ function StockVsRevenueCard({
   );
 }
 
+function MonthlyCostProgressGrid({
+  rows,
+  months,
+  onMonthsChange,
+}: {
+  rows: MonthlyCostProgress[];
+  months: RevenueMonthOption;
+  onMonthsChange: (months: RevenueMonthOption) => void;
+}) {
+  const fmtPct = (value: number | null) => value == null
+    ? "—"
+    : value.toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+
+  return (
+    <Card className="p-4">
+      <CardContent className="p-0">
+        <div className="flex items-start justify-between gap-3">
+          <ChartHeader
+            title="Andamento dos custos"
+            subtitle="Percentual sobre a receita bruta do fechamento mensal"
+          />
+          <Select
+            value={String(months)}
+            onValueChange={(value) => onMonthsChange(Number(value) as RevenueMonthOption)}
+          >
+            <SelectTrigger className="h-8 w-[118px] flex-shrink-0 text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {REVENUE_MONTH_OPTIONS.map(option => (
+                <SelectItem key={option} value={String(option)}>
+                  {option} meses
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="mt-4 overflow-x-auto">
+          <Table
+            className="table-fixed"
+            style={{ minWidth: `${76 + rows.length * 58}px` }}
+          >
+            <TableHeader>
+              <TableRow className="hover:bg-transparent">
+                <TableHead className="sticky left-0 z-10 w-[76px] bg-white px-1 text-[10px] uppercase tracking-wide text-slate-400">
+                  Custos
+                </TableHead>
+                {rows.map(row => (
+                  <TableHead key={row.monthKey} className="px-1 text-center text-[10px] font-semibold uppercase text-slate-500">
+                    {row.label}
+                  </TableHead>
+                ))}
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {[
+                { label: "Fixos", value: (row: MonthlyCostProgress) => row.fixedCostPerc },
+                { label: "Variáveis", value: (row: MonthlyCostProgress) => row.variableCostPerc },
+                { label: "Andamento", value: (row: MonthlyCostProgress) => row.totalCostPerc },
+              ].map(metric => (
+                <TableRow key={metric.label} className="hover:bg-slate-50">
+                  <TableCell className="sticky left-0 z-10 bg-white px-1 py-2 text-xs font-medium text-slate-500">
+                    {metric.label}
+                  </TableCell>
+                  {rows.map(row => {
+                    const value = metric.value(row);
+                    const isTotal = metric.label === "Andamento";
+                    return (
+                      <TableCell
+                        key={row.monthKey}
+                        className={`px-1 py-2 text-center text-sm font-bold ${
+                          isTotal && value != null
+                            ? value > 100
+                              ? "text-red-600"
+                              : value > 80
+                                ? "text-amber-600"
+                                : "text-emerald-600"
+                            : "text-slate-900"
+                        }`}
+                      >
+                        {fmtPct(value)}
+                      </TableCell>
+                    );
+                  })}
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 // ─── LeftColumn ───────────────────────────────────────────────────────────────
 
 function LeftColumn({
@@ -272,6 +366,7 @@ function LeftColumn({
   previousYearMonthlyRevenue,
   avgProfitMarginPerc,
   stockVsRevenue,
+  monthlyCostProgress,
   weekdayCharts,
   onExpandMonthly,
   onExpandWeekday,
@@ -280,13 +375,14 @@ function LeftColumn({
   previousYearMonthlyRevenue: Array<{ monthKey: string; label: string; total: number }> | null;
   avgProfitMarginPerc: number | null;
   stockVsRevenue: StockVsRevenueMonth[];
+  monthlyCostProgress: MonthlyCostProgress[];
   weekdayCharts: WeekdayChart[];
   onExpandMonthly: (modal: MonthlyChartModal) => void;
   onExpandWeekday: (chart: WeekdayChart) => void;
 }) {
   const [showAiPrompt, setShowAiPrompt] = useState(false);
-  const [revenueMonths, setRevenueMonths] = useState<RevenueMonthOption>(3);
-  const [averageRevenueMonths, setAverageRevenueMonths] = useState<RevenueMonthOption>(3);
+  const [revenueMonths, setRevenueMonths] = useState<RevenueMonthOption>(6);
+  const [averageRevenueMonths, setAverageRevenueMonths] = useState<RevenueMonthOption>(6);
 
   const currentMonth = monthlyRevenue.find(m => m.isCurrent);
   const currentRevenue = currentMonth?.total ?? 0;
@@ -309,6 +405,7 @@ function LeftColumn({
   ];
   const chartLabels = visibleMonthlyRevenue.map(m => m.label);
   const visibleStockVsRevenue = stockVsRevenue.slice(-revenueMonths);
+  const visibleMonthlyCostProgress = monthlyCostProgress.slice(-revenueMonths);
 
   function buildRevenuePrompt() {
     const fmtN = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 0 });
@@ -376,40 +473,33 @@ Seja direto e objetivo. Prefiro sugestões específicas ao meu contexto a consel
       )}
 
       {/* ── Revenue summary ── */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card className="p-4">
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
+        <Card className="order-1 p-4">
           <CardContent className="p-0">
-            <p className="text-[10px] uppercase tracking-wide text-slate-400">Faturamento corrente</p>
-            <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-slate-500 mb-1">{currentMonth?.label ?? "Mês corrente"}</p>
+            <div className="h-[46px]">
+              <p className="text-[10px] uppercase tracking-wide text-slate-400">Faturamento corrente</p>
+              <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-slate-500">{currentMonth?.label ?? "Mês corrente"}</p>
+            </div>
             <p className="text-2xl font-bold text-slate-900">{fmtBRL(currentRevenue)}</p>
           </CardContent>
         </Card>
-        {estimatedProfit != null && (
-          <Card className="p-4">
-            <CardContent className="p-0">
-              <p className="text-[10px] uppercase tracking-wide text-slate-400">Lucro presumido</p>
-              <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-slate-500 mb-1">
-                {avgProfitMarginPerc!.toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}% médio
-              </p>
-              <p className="text-2xl font-bold text-emerald-600">{fmtBRL(estimatedProfit)}</p>
-            </CardContent>
-          </Card>
-        )}
-        <Card className="p-4">
+        <Card className="order-2 p-4 md:order-3">
           <CardContent className="p-0">
-            <div className="flex items-start justify-between gap-3">
+            <div className="flex flex-col items-start gap-2">
               <div>
-                <p className="text-[10px] uppercase tracking-wide text-slate-400">Faturamento médio</p>
-                <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-slate-500 mb-1">
-                  Últimos {averageRevenueMonths} meses
-                </p>
+                <div className="h-[46px]">
+                  <p className="text-[10px] uppercase tracking-wide text-slate-400">Faturamento médio</p>
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-slate-500">
+                    Últimos {averageRevenueMonths} meses
+                  </p>
+                </div>
                 <p className="text-2xl font-bold text-slate-900">{fmtBRL(averageRevenue)}</p>
               </div>
               <Select
                 value={String(averageRevenueMonths)}
                 onValueChange={(value) => setAverageRevenueMonths(Number(value) as RevenueMonthOption)}
               >
-                <SelectTrigger className="h-8 w-[118px] text-xs">
+                <SelectTrigger className="h-8 w-full text-xs sm:w-[118px]">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -423,7 +513,24 @@ Seja direto e objetivo. Prefiro sugestões específicas ao meu contexto a consel
             </div>
           </CardContent>
         </Card>
+        {estimatedProfit != null && (
+          <Card className="order-3 col-span-2 p-4 md:order-2 md:col-span-1">
+            <CardContent className="p-0">
+              <p className="text-[10px] uppercase tracking-wide text-slate-400">Lucro presumido</p>
+              <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-slate-500 mb-1">
+                {avgProfitMarginPerc!.toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}% médio
+              </p>
+              <p className="text-2xl font-bold text-emerald-600">{fmtBRL(estimatedProfit)}</p>
+            </CardContent>
+          </Card>
+        )}
       </div>
+
+      <MonthlyCostProgressGrid
+        rows={visibleMonthlyCostProgress}
+        months={revenueMonths}
+        onMonthsChange={setRevenueMonths}
+      />
 
       <Card className="p-4">
         <CardContent className="p-0">
@@ -524,6 +631,7 @@ export default function DashboardFaturamento() {
               previousYearMonthlyRevenue={data.previousYearMonthlyRevenue}
               avgProfitMarginPerc={data.avgProfitMarginPerc}
               stockVsRevenue={data.stockVsRevenue}
+              monthlyCostProgress={data.monthlyCostProgress}
               weekdayCharts={data.weekdayCharts}
               onExpandMonthly={setChartModal}
               onExpandWeekday={(chart) => setChartModal({ type: "weekday", chart })}

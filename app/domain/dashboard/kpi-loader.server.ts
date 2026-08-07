@@ -1,4 +1,5 @@
 import prismaClient from "~/lib/prisma/client.server";
+import { calcMonthlyCloseTotals } from "~/domain/finance/calc-monthly-close-totals";
 import {
   calculateItemCostMetrics,
   getItemAverageCostWindowDays,
@@ -204,6 +205,14 @@ export type StockVsRevenueMonth = {
   stockToRevenuePct: number | null;
   movementCount: number;
   isCurrent: boolean;
+};
+
+export type MonthlyCostProgress = {
+  monthKey: string;
+  label: string;
+  fixedCostPerc: number | null;
+  variableCostPerc: number | null;
+  totalCostPerc: number | null;
 };
 
 // ─── weekday series builder ───────────────────────────────────────────────────
@@ -810,6 +819,57 @@ async function getStockInputTotalsByMonth(
   return totals;
 }
 
+async function loadMonthlyCostProgress(
+  entries: Array<{ year: number; month: number }>,
+): Promise<MonthlyCostProgress[]> {
+  const rows = await prismaClient.financialMonthlyClose.findMany({
+    where: {
+      OR: entries.map(({ year, month }) => ({
+        referenceYear: year,
+        referenceMonth: month,
+      })),
+    },
+  });
+  const rowsByMonth = new Map<string, (typeof rows)[number]>(
+    rows.map(row => [
+      `${row.referenceYear}-${String(row.referenceMonth).padStart(2, "0")}`,
+      row,
+    ]),
+  );
+
+  return entries.map(({ year, month }) => {
+    const monthKey = `${year}-${String(month).padStart(2, "0")}`;
+    const close = rowsByMonth.get(monthKey);
+    if (!close) {
+      return {
+        monthKey,
+        label: monthLabel(year, month),
+        fixedCostPerc: null,
+        variableCostPerc: null,
+        totalCostPerc: null,
+      };
+    }
+
+    const totals = calcMonthlyCloseTotals(close);
+    const fixedCostPerc = totals.receitaBruta > 0
+      ? (totals.custoFixoTotal / totals.receitaBruta) * 100
+      : null;
+    const variableCostPerc = totals.receitaBruta > 0
+      ? (totals.custoVariavelTotal / totals.receitaBruta) * 100
+      : null;
+
+    return {
+      monthKey,
+      label: monthLabel(year, month),
+      fixedCostPerc,
+      variableCostPerc,
+      totalCostPerc: fixedCostPerc != null && variableCostPerc != null
+        ? fixedCostPerc + variableCostPerc
+        : null,
+    };
+  });
+}
+
 /** Group 1 — KDS revenue charts (monthly + weekday comparison) */
 export async function loadRevenueGroupData() {
   const { m0, m1, mly, r0, r1, rly } = computeDateContext();
@@ -843,11 +903,12 @@ export async function loadRevenueGroupData() {
   const overallMinLy = Math.min(...previousYearMonthEntries.map(({ range }) => range.start));
   const overallMaxLy = Math.max(...previousYearMonthEntries.map(({ range }) => range.end));
 
-  const [revenueCurrentPeriod, revenueLastYear, avgProfitMarginPerc, stockInputByMonth] = await Promise.all([
+  const [revenueCurrentPeriod, revenueLastYear, avgProfitMarginPerc, stockInputByMonth, monthlyCostProgress] = await Promise.all([
     getRevenueByDate(overallMin, overallMax),
     getRevenueByDate(overallMinLy, overallMaxLy),
     loadAvgProfitMargin(),
     getStockInputTotalsByMonth(currentMonthEntries),
+    loadMonthlyCostProgress(currentMonthEntries),
   ]);
 
   const monthlyRevenue = currentMonthEntries.map(({ year, month, range, isCurrent }) => ({
@@ -900,7 +961,7 @@ export async function loadRevenueGroupData() {
     };
   });
 
-  return { monthlyRevenue, previousYearMonthlyRevenue, weekdayCharts, avgProfitMarginPerc, stockVsRevenue };
+  return { monthlyRevenue, previousYearMonthlyRevenue, weekdayCharts, avgProfitMarginPerc, stockVsRevenue, monthlyCostProgress };
 }
 
 /** Group 2 — Item cost tables (top expensive + top impactful) */

@@ -973,6 +973,13 @@ const ADMIN_NAVIGATION_LINKS: WebsiteNavigationConfig = {
           ],
         },
         {
+          title: "Gerador de QR Code",
+          href: "/admin/marketing/qr-code",
+          items: [],
+          disabled: false,
+          tags: ["qr", "qrcode", "link", "cardapio", "impressao", "marketing"],
+        },
+        {
           title: "Notificações (Push)",
           href: "/admin/push-notifications",
           items: [],
