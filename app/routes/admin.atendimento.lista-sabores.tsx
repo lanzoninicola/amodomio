@@ -76,6 +76,15 @@ function formatFlavorIngredients(item: CardapioFlavorItem) {
     .join(", ");
 }
 
+function formatFlavorTag(tag: unknown) {
+  if (typeof tag === "string") return tag;
+  if (tag && typeof tag === "object" && "name" in tag) {
+    return String(tag.name || "");
+  }
+
+  return "";
+}
+
 async function enrichCardapioItemsWithQuickPriceCosts(
   itemsPromise: Promise<MenuItemWithAssociations[]>
 ): Promise<QuickSellPriceItem[]> {
@@ -1305,11 +1314,12 @@ function CardapioItemSearch({
     shouldIncludeHidden: boolean,
     shouldIncludeUpcoming: boolean,
   ) => {
+    const normalizedSearch = value.trim().toLocaleLowerCase()
     const baseItems = items
       .filter((item) => item.active === true)
       .filter((item) => (shouldIncludeUpcoming ? true : item.upcoming !== true))
 
-    if (!value) {
+    if (!normalizedSearch) {
       setIsSearching(false)
       return setFilteredItems(
         baseItems.filter((item) => (shouldIncludeHidden ? true : item.visible === true))
@@ -1324,10 +1334,10 @@ function CardapioItemSearch({
         const tags = item?.tags?.public || []
 
         return (
-          item.name?.toLowerCase().includes(value.toLowerCase()) ||
-          formatFlavorIngredients(item).toLowerCase().includes(value.toLowerCase()) ||
-          item.description?.toLowerCase().includes(value.toLowerCase()) ||
-          tags.some(t => t?.toLowerCase().includes(value.toLowerCase()))
+          item.name?.toLocaleLowerCase().includes(normalizedSearch) ||
+          formatFlavorIngredients(item).toLocaleLowerCase().includes(normalizedSearch) ||
+          item.description?.toLocaleLowerCase().includes(normalizedSearch) ||
+          tags.some((tag) => formatFlavorTag(tag).toLocaleLowerCase().includes(normalizedSearch))
         )
       })
 
