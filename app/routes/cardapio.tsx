@@ -353,7 +353,7 @@ function CardapioHeader() {
             className="flex min-w-0 touch-manipulation rounded-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black"
             aria-label="Ir para o início do cardápio A Modo Mio"
           >
-            <Logo color="black" onlyText className="w-24 p-1" tagline={false} />
+            <Logo color="black" onlyText className="w-36 p-1" tagline={false} />
           </Link>
 
           <Suspense fallback={<div className="h-8 w-[110px]" />}>

@@ -1,4 +1,6 @@
 import {
+  BIO_LINK_CLICK_EVENT,
+  BIO_PAGE_VIEW_EVENT,
   CARDAPIO_FEATURED_CTA_EVENT,
   CARDAPIO_FEATURED_EXPAND_EVENT,
   CARDAPIO_FEATURED_IMPRESSION_EVENT,
@@ -54,6 +56,24 @@ export function trackCardapioNavigation({
     control,
     value,
     placement,
+  });
+}
+
+export function trackBioPageView() {
+  collectCardapioTrackingRecord({
+    eventName: BIO_PAGE_VIEW_EVENT,
+    control: "page",
+    value: "bio",
+    placement: "bio_page",
+  });
+}
+
+export function trackBioLinkClick(destination: string) {
+  collectCardapioTrackingRecord({
+    eventName: BIO_LINK_CLICK_EVENT,
+    control: "link",
+    value: destination,
+    placement: "bio_page",
   });
 }
 

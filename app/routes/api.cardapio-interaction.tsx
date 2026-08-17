@@ -1,5 +1,8 @@
 import { json, type ActionFunctionArgs } from "@remix-run/node";
-import { parseCardapioTrackingRecord } from "~/domain/cardapio/tracking/cardapio-tracking-events";
+import {
+  BIO_EVENTS,
+  parseCardapioTrackingRecord,
+} from "~/domain/cardapio/tracking/cardapio-tracking-events";
 import { saveCardapioTrackingRecord } from "~/domain/cardapio/tracking/cardapio-tracking-records.server";
 import { isAllowedRequestOrigin } from "~/domain/security/origin.server";
 
@@ -26,7 +29,15 @@ export async function action({ request }: ActionFunctionArgs) {
   const clientId = normalizeString(payload.clientId, 120) || null;
   const path = normalizeString(payload.path, 255);
 
-  if (!record || !path.startsWith("/cardapio")) {
+  const isBioPath = path === "/bio" || path.startsWith("/bio?");
+  const isCardapioPath = path.startsWith("/cardapio");
+  const isBioEvent = record
+    ? BIO_EVENTS.some((eventName) => eventName === record.eventName)
+    : false;
+  const hasMatchingEventPath =
+    (isBioPath && isBioEvent) || (isCardapioPath && !isBioEvent);
+
+  if (!record || !hasMatchingEventPath) {
     return json({ error: "invalid_payload" }, { status: 400 });
   }
 

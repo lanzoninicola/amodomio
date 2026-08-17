@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  BIO_LINK_CLICK_EVENT,
+  BIO_PAGE_VIEW_EVENT,
   CARDAPIO_FEATURED_CTA_EVENT,
   CARDAPIO_NAVIGATION_EVENT,
   parseCardapioTrackingRecord,
@@ -74,6 +76,40 @@ describe("parseCardapioTrackingRecord", () => {
         control: "image_4",
         value: "promocao-junina",
         placement: "desktop_modal",
+      })
+    ).toBeNull();
+  });
+
+  it("accepts bio page views and link clicks", () => {
+    expect(
+      parseCardapioTrackingRecord({
+        eventName: BIO_PAGE_VIEW_EVENT,
+        control: "page",
+        value: "bio",
+        placement: "bio_page",
+      })
+    ).toMatchObject({ eventName: BIO_PAGE_VIEW_EVENT, control: "page" });
+
+    expect(
+      parseCardapioTrackingRecord({
+        eventName: BIO_LINK_CLICK_EVENT,
+        control: "link",
+        value: "instagram",
+        placement: "bio_page",
+      })
+    ).toMatchObject({
+      eventName: BIO_LINK_CLICK_EVENT,
+      value: "instagram",
+    });
+  });
+
+  it("rejects mixed bio dimensions", () => {
+    expect(
+      parseCardapioTrackingRecord({
+        eventName: BIO_LINK_CLICK_EVENT,
+        control: "tag",
+        value: "instagram",
+        placement: "mobile_panel",
       })
     ).toBeNull();
   });

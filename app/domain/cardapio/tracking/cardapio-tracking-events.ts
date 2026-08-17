@@ -1,6 +1,8 @@
 export const CARDAPIO_TRACKING_ENDPOINT = "/api/cardapio-interaction";
 
 export const CARDAPIO_NAVIGATION_EVENT = "cardapio_navigation_click";
+export const BIO_PAGE_VIEW_EVENT = "bio_page_view";
+export const BIO_LINK_CLICK_EVENT = "bio_link_click";
 export const CARDAPIO_FEATURED_IMPRESSION_EVENT =
   "cardapio_highlight_impression";
 export const CARDAPIO_FEATURED_EXPAND_EVENT = "cardapio_highlight_expand";
@@ -50,6 +52,10 @@ export const CARDAPIO_FEATURED_EVENTS = [
   CARDAPIO_FEATURED_CTA_EVENT,
 ] as const;
 
+export const BIO_EVENTS = [BIO_PAGE_VIEW_EVENT, BIO_LINK_CLICK_EVENT] as const;
+export const BIO_CONTROLS = ["page", "link"] as const;
+export const BIO_PLACEMENTS = ["bio_page"] as const;
+
 export type CardapioNavigationControl =
   (typeof CARDAPIO_NAVIGATION_CONTROLS)[number];
 export type CardapioNavigationPlacement =
@@ -60,6 +66,9 @@ export type CardapioFeaturedPlacement =
   (typeof CARDAPIO_FEATURED_PLACEMENTS)[number];
 export type CardapioFeaturedEventName =
   (typeof CARDAPIO_FEATURED_EVENTS)[number];
+export type BioEventName = (typeof BIO_EVENTS)[number];
+export type BioControl = (typeof BIO_CONTROLS)[number];
+export type BioPlacement = (typeof BIO_PLACEMENTS)[number];
 
 export type CardapioNavigationTrackingRecord = {
   eventName: typeof CARDAPIO_NAVIGATION_EVENT;
@@ -75,15 +84,26 @@ export type CardapioFeaturedTrackingRecord = {
   placement: CardapioFeaturedPlacement;
 };
 
+export type BioTrackingRecord = {
+  eventName: BioEventName;
+  control: BioControl;
+  value: string;
+  placement: BioPlacement;
+};
+
 export type CardapioTrackingRecord =
   | CardapioNavigationTrackingRecord
-  | CardapioFeaturedTrackingRecord;
+  | CardapioFeaturedTrackingRecord
+  | BioTrackingRecord;
 
 const navigationControls = new Set<string>(CARDAPIO_NAVIGATION_CONTROLS);
 const navigationPlacements = new Set<string>(CARDAPIO_NAVIGATION_PLACEMENTS);
 const featuredEvents = new Set<string>(CARDAPIO_FEATURED_EVENTS);
 const featuredControls = new Set<string>(CARDAPIO_FEATURED_CONTROLS);
 const featuredPlacements = new Set<string>(CARDAPIO_FEATURED_PLACEMENTS);
+const bioEvents = new Set<string>(BIO_EVENTS);
+const bioControls = new Set<string>(BIO_CONTROLS);
+const bioPlacements = new Set<string>(BIO_PLACEMENTS);
 
 const normalizeString = (value: unknown, maxLength: number) =>
   typeof value === "string" ? value.trim().slice(0, maxLength) : "";
@@ -124,6 +144,19 @@ export function parseCardapioTrackingRecord(
       control: control as CardapioFeaturedControl,
       value,
       placement: placement as CardapioFeaturedPlacement,
+    };
+  }
+
+  if (
+    bioEvents.has(eventName) &&
+    bioControls.has(control) &&
+    bioPlacements.has(placement)
+  ) {
+    return {
+      eventName: eventName as BioEventName,
+      control: control as BioControl,
+      value,
+      placement: placement as BioPlacement,
     };
   }
 

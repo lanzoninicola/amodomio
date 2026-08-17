@@ -2569,17 +2569,6 @@ export default function AdminFinanceiroFechamentoMensal() {
                           {formatMoneyString(resultadoLiquidoPreview, 2)}
                         </p>
                       </div>
-                      <div className="w-full">
-                        <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                          Fora do líquido
-                        </p>
-                        <p className="font-mono text-lg font-bold text-slate-900">
-                          {formatMoneyString(
-                            saldoMovimentosNaoOperacionaisPreview,
-                            2
-                          )}
-                        </p>
-                      </div>
                     </>
                   }
                   description="Margem de contribuição menos custos fixos. Lucro/prejuízo do mês."
@@ -2616,40 +2605,45 @@ export default function AdminFinanceiroFechamentoMensal() {
                           {formatMoneyString(resultadoCaixaGlobalPreview, 2)}
                         </p>
                       </div>
-                      <div className="w-full">
-                        <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                          Saldo investimento
-                        </p>
-                        <p
-                          className={`font-mono text-lg font-bold ${
-                            saldoInvestimentoPreview >= 0
-                              ? "text-emerald-700"
-                              : "text-red-700"
-                          }`}
-                        >
+                    </>
+                  }
+                  description={
+                    <div>
+                      <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-4 gap-y-1 rounded-md bg-slate-50 px-3 py-2 text-sm font-normal text-slate-800">
+                        <span>Resultado líquido</span>
+                        <span className="text-right font-mono">
+                          {formatMoneyString(resultadoLiquidoPreview, 2)}
+                        </span>
+                        <span>+ Saldo do investimento</span>
+                        <span className="text-right font-mono">
+                          {saldoInvestimentoPreview < 0 ? "(" : ""}
                           {formatMoneyString(saldoInvestimentoPreview, 2)}
-                        </p>
-                      </div>
-                      <div className="w-full">
-                        <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                          Saldo não operacional
-                        </p>
-                        <p
-                          className={`font-mono text-lg font-bold ${
-                            saldoMovimentosNaoOperacionaisPreview >= 0
-                              ? "text-emerald-700"
-                              : "text-red-700"
-                          }`}
-                        >
+                          {saldoInvestimentoPreview < 0 ? ")" : ""}
+                        </span>
+                        <span>+ Saldo não operacional</span>
+                        <span className="text-right font-mono">
+                          {saldoMovimentosNaoOperacionaisPreview < 0 ? "(" : ""}
                           {formatMoneyString(
                             saldoMovimentosNaoOperacionaisPreview,
                             2
                           )}
-                        </p>
+                          {saldoMovimentosNaoOperacionaisPreview < 0 ? ")" : ""}
+                        </span>
+                        <span className="border-t border-slate-300 pt-1">
+                          = Resultado global
+                        </span>
+                        <span
+                          className={`border-t border-slate-300 pt-1 text-right font-mono ${
+                            resultadoCaixaGlobalPreview >= 0
+                              ? "text-emerald-700"
+                              : "text-red-700"
+                          }`}
+                        >
+                          {formatMoneyString(resultadoCaixaGlobalPreview, 2)}
+                        </span>
                       </div>
-                    </>
+                    </div>
                   }
-                  description="Resultado líquido + saldo do investimento + saldo dos movimentos não operacionais."
                 />
                 <Separator />
                 <MetricRow

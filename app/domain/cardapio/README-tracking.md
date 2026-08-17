@@ -18,6 +18,12 @@ Essa infraestrutura deve ser reutilizada como base para métricas de filtros,
 mas os eventos de interface não devem ser gravados nas tabelas de interesse por
 item.
 
+A rota pública `/bio` também reutiliza essa infraestrutura. Ela registra
+`bio_page_view` uma vez por carregamento e `bio_link_click` com o destino
+estável (`cardapio`, `fazer_pedido`, `instagram` ou `maps`). O campo `path`
+preserva a query string para permitir análise de UTMs sem aceitar propriedades
+arbitrárias no payload.
+
 ## Organização do domínio
 
 O tracking possui duas responsabilidades explícitas:
