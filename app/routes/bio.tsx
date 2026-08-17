@@ -9,8 +9,15 @@ import {
   MessageCircle,
   Pizza,
 } from "lucide-react";
+import { useEffect, useRef } from "react";
 
 import Logo from "~/components/primitives/logo/logo";
+import CardapioFacebookPixel from "~/domain/cardapio/components/cardapio-facebook-pixel";
+import { trackCardapioFacebookPixelTrigger } from "~/domain/cardapio/facebook-pixel.client";
+import {
+  trackBioLinkClick,
+  trackBioPageView,
+} from "~/domain/cardapio/tracking/cardapio-tracking.client";
 import WEBSITE_LINKS from "~/domain/website-navigation/links/website-links";
 import prismaClient from "~/lib/prisma/client.server";
 import { cn } from "~/lib/utils";
@@ -38,8 +45,6 @@ export const meta: MetaFunction = () => [
 ];
 
 export async function loader({ request }: LoaderFunctionArgs) {
-  void request;
-
   let orderUrl = WEBSITE_LINKS.cardapioFallbackURL.href;
 
   try {
@@ -57,7 +62,14 @@ export async function loader({ request }: LoaderFunctionArgs) {
     console.error("[bio] order URL load failed, using fallback", error);
   }
 
-  return defer({ orderUrl });
+  const { getFacebookPixelRuntimeConfigForPath } = await import(
+    "~/domain/cardapio/facebook-pixel.server"
+  );
+  const facebookPixel = await getFacebookPixelRuntimeConfigForPath(
+    new URL(request.url).pathname
+  );
+
+  return defer({ orderUrl, facebookPixel });
 }
 
 type BioLinkProps = {
@@ -67,6 +79,8 @@ type BioLinkProps = {
   icon: typeof Pizza;
   accent: string;
   external?: boolean;
+  trackingDestination: string;
+  onTrack?: () => void;
 };
 
 function BioLink({
@@ -76,7 +90,13 @@ function BioLink({
   icon: Icon,
   accent,
   external = false,
+  trackingDestination,
+  onTrack,
 }: BioLinkProps) {
+  const trackClick = () => {
+    trackBioLinkClick(trackingDestination);
+    onTrack?.();
+  };
   const content = (
     <>
       <span
@@ -108,24 +128,38 @@ function BioLink({
 
   if (external) {
     return (
-      <a className={className} href={href} rel="noreferrer" target="_blank">
+      <a
+        className={className}
+        href={href}
+        rel="noreferrer"
+        target="_blank"
+        onClick={trackClick}
+      >
         {content}
       </a>
     );
   }
 
   return (
-    <Link className={className} to={href}>
+    <Link className={className} to={href} onClick={trackClick}>
       {content}
     </Link>
   );
 }
 
 export default function BioPage() {
-  const { orderUrl } = useLoaderData<typeof loader>();
+  const { orderUrl, facebookPixel } = useLoaderData<typeof loader>();
+  const pageViewTracked = useRef(false);
+
+  useEffect(() => {
+    if (pageViewTracked.current) return;
+    pageViewTracked.current = true;
+    trackBioPageView();
+  }, []);
 
   return (
     <main className="relative min-h-screen overflow-hidden bg-[#faf9f6] px-4 pb-[calc(2rem+env(safe-area-inset-bottom))] pt-[calc(2rem+env(safe-area-inset-top))] text-zinc-950">
+      {facebookPixel ? <CardapioFacebookPixel config={facebookPixel} /> : null}
       <div
         aria-hidden="true"
         className="absolute -left-24 -top-28 h-72 w-72 rounded-full bg-[#d8a1ff]/55 blur-3xl"
@@ -172,6 +206,7 @@ export default function BioPage() {
             href={WEBSITE_LINKS.cardapioPublic.href}
             icon={Pizza}
             accent="bg-[#ffe64d]"
+            trackingDestination="cardapio"
           />
           <BioLink
             title="Fazer pedido"
@@ -180,6 +215,12 @@ export default function BioPage() {
             icon={MessageCircle}
             accent="bg-[#8de1d1]"
             external
+            trackingDestination="fazer_pedido"
+            onTrack={() =>
+              trackCardapioFacebookPixelTrigger("fazer_pedido_click", {
+                source: "bio",
+              })
+            }
           />
           <BioLink
             title="Instagram"
@@ -188,6 +229,7 @@ export default function BioPage() {
             icon={Instagram}
             accent="bg-[#d8a1ff]"
             external
+            trackingDestination="instagram"
           />
           <BioLink
             title="Como chegar"
@@ -196,6 +238,7 @@ export default function BioPage() {
             icon={MapPin}
             accent="bg-[#ff9f8f]"
             external
+            trackingDestination="maps"
           />
         </nav>
 
