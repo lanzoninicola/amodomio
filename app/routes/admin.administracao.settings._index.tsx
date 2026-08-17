@@ -75,6 +75,7 @@ import {
   DEFAULT_COST_REVIEW_WHATSAPP_PHONE,
 } from "~/domain/stock-movement/cost-review-notification-settings";
 import { ensureAdminNavigationMenuLayoutSetting } from "~/domain/website-navigation/admin-navigation-settings.server";
+import { ensureBioSettings } from "~/domain/bio/bio-settings.server";
 import {
   CARDAPIO_FILTER_VIEW_SETTING_NAME,
   DEFAULT_CARDAPIO_FILTER_VIEW_MODE,
@@ -447,6 +448,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   }
 
   await ensureAdminNavigationMenuLayoutSetting();
+  await ensureBioSettings();
 
   const settings = await prismaClient.setting.findMany({
     where,

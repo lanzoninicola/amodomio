@@ -144,6 +144,7 @@ export async function readCardapioFeaturedReport({
     "mobile_modal",
     "desktop_card",
     "desktop_modal",
+    "bio_card",
   ]
     .map((placement) => ({
       placement,

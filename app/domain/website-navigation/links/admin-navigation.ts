@@ -987,6 +987,13 @@ const ADMIN_NAVIGATION_LINKS: WebsiteNavigationConfig = {
           ],
         },
         {
+          title: "Bio",
+          href: "/admin/marketing/bio",
+          items: [],
+          disabled: false,
+          tags: ["bio", "link", "links", "texto", "marketing"],
+        },
+        {
           title: "Gerador de QR Code",
           href: "/admin/marketing/qr-code",
           items: [],
