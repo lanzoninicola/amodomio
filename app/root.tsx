@@ -3,6 +3,7 @@ import type {
   LoaderFunctionArgs,
   MetaFunction,
 } from "@remix-run/node";
+import { redirect } from "@remix-run/node";
 import {
   Link,
   Links,
@@ -122,6 +123,12 @@ export interface EnvironmentVariables {
 }
 
 export async function loader({ request }: LoaderFunctionArgs) {
+  const url = new URL(request.url);
+
+  if (url.hostname === "bio.amodomio.com.br") {
+    return redirect("https://www.amodomio.com.br/bio", 308);
+  }
+
   const env = import.meta.env;
   const ENV: EnvironmentVariables = {
     MODE: env.VITE_MODE ?? "development",
