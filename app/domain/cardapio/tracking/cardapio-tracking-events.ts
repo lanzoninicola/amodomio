@@ -43,6 +43,7 @@ export const CARDAPIO_FEATURED_PLACEMENTS = [
   "mobile_modal",
   "desktop_card",
   "desktop_modal",
+  "bio_card",
 ] as const;
 
 export const CARDAPIO_FEATURED_EVENTS = [

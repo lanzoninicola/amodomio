@@ -135,6 +135,7 @@ const placementLabels: Record<string, string> = {
   mobile_modal: "Ampliado mobile",
   desktop_card: "Card desktop",
   desktop_modal: "Ampliado desktop",
+  bio_card: "Card na Bio",
 };
 
 export default function AdminMarketingCardapioFeaturedReport() {
