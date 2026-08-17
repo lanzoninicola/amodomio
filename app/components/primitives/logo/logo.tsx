@@ -165,6 +165,18 @@ const LogoSvg = ({ color = "white", className }: LogoProps) => {
 
 const LogoOnlyText = ({ color = "black", className }: LogoProps) => {
 
+    if (color === "black" || color === "white") {
+        return (
+            <img
+                src={`/images/logos/logo-reto-${color}.svg`}
+                alt="Logo A Modo Mio"
+                width="1030"
+                height="133"
+                className={cn(className)}
+            />
+        )
+    }
+
     return (
         <svg width="1030" height="133" viewBox="0 0 1030 133" fill="none" xmlns="http://www.w3.org/2000/svg" className={
             cn(
@@ -176,4 +188,3 @@ const LogoOnlyText = ({ color = "black", className }: LogoProps) => {
     )
 
 }
-

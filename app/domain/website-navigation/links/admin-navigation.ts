@@ -931,6 +931,20 @@ const ADMIN_NAVIGATION_LINKS: WebsiteNavigationConfig = {
           tags: ["cliente", "cadastro", "comprador", "historico", "contato"],
         },
         {
+          title: "Relatórios",
+          href: "/admin/crm/relatorios",
+          items: [],
+          disabled: false,
+          tags: [
+            "relatorio",
+            "crm",
+            "clientes",
+            "segmentacao",
+            "conversas",
+            "reativacao",
+          ],
+        },
+        {
           title: "Relatório de inserções",
           href: "/admin/crm/jornada-de-inserimento",
           items: [],
