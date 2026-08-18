@@ -46,6 +46,7 @@ export default function AdminItemMainTab() {
     item.recipeVariationPolicy || "auto"
   );
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [showDuplicateDialog, setShowDuplicateDialog] = useState(false);
   const formRef = useRef<HTMLFormElement | null>(null);
 
   useSaveShortcut({
@@ -69,6 +70,74 @@ export default function AdminItemMainTab() {
                 Criar item
               </Link>
             </Button>
+            <AlertDialog
+              open={showDuplicateDialog}
+              onOpenChange={setShowDuplicateDialog}
+            >
+              <AlertDialogTrigger asChild>
+                <Button type="button" variant="outline">
+                  Duplicar item
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Duplicar item</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Crie um novo item a partir de <strong>{item.name}</strong>.
+                    O nome precisa ser diferente do original.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <Form method="post" action=".." className="space-y-4">
+                  <input type="hidden" name="_action" value="item-duplicate" />
+                  <div className="space-y-2">
+                    <Label htmlFor="duplicateName">Nome do novo item</Label>
+                    <Input
+                      id="duplicateName"
+                      name="duplicateName"
+                      defaultValue={`${item.name} (cópia)`}
+                      required
+                    />
+                  </div>
+                  {Number(item._linkedRecipeCount || 0) > 0 ||
+                  Number(item._itemCostSheetCount || 0) > 0 ? (
+                    <div className="space-y-3 rounded-md border border-slate-200 p-4">
+                      {Number(item._linkedRecipeCount || 0) > 0 ? (
+                        <label className="flex items-start gap-3 text-sm">
+                          <Checkbox name="duplicateRecipe" />
+                          <span>
+                            <span className="font-medium">
+                              Duplicar receita
+                            </span>
+                            <span className="block text-slate-500">
+                              Copia e vincula {Number(item._linkedRecipeCount)}{" "}
+                              receita(s) ao novo item.
+                            </span>
+                          </span>
+                        </label>
+                      ) : null}
+                      {Number(item._itemCostSheetCount || 0) > 0 ? (
+                        <label className="flex items-start gap-3 text-sm">
+                          <Checkbox name="duplicateCostSheet" />
+                          <span>
+                            <span className="font-medium">
+                              Duplicar ficha de custo
+                            </span>
+                            <span className="block text-slate-500">
+                              Copia a ficha mais recente, vincula às novas
+                              variações e deixa ativa.
+                            </span>
+                          </span>
+                        </label>
+                      ) : null}
+                    </div>
+                  ) : null}
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                    <Button type="submit">Duplicar item</Button>
+                  </AlertDialogFooter>
+                </Form>
+              </AlertDialogContent>
+            </AlertDialog>
             <AlertDialog
               open={showDeleteDialog}
               onOpenChange={setShowDeleteDialog}

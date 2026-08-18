@@ -61,6 +61,7 @@ import prismaClient from "~/lib/prisma/client.server";
 import { badRequest, ok, serverError } from "~/utils/http-response.server";
 import { lastUrlSegment } from "~/utils/url";
 import { buildAdminItemsMeta } from "~/domain/item/admin-items-meta";
+import { duplicateItemWithLinkedRecords } from "~/domain/item/item-duplicate.server";
 
 export const meta = buildAdminItemsMeta("Detalhes");
 
@@ -680,6 +681,22 @@ export async function action({ request, params }: ActionFunctionArgs) {
       await deleteItemWithLinkedRecords(db, id, deleteOptions);
 
       return redirect("/admin/items");
+    }
+
+    if (_action === "item-duplicate") {
+      try {
+        const duplicatedItem = await duplicateItemWithLinkedRecords(db, id, {
+          name: String(formData.get("duplicateName") || "").trim(),
+          duplicateRecipe: toBool(formData.get("duplicateRecipe")),
+          duplicateCostSheet: toBool(formData.get("duplicateCostSheet")),
+        });
+
+        return redirect(`/admin/items/${duplicatedItem.id}/main`);
+      } catch (error) {
+        return badRequest(
+          (error as Error)?.message || "Não foi possível duplicar o item"
+        );
+      }
     }
 
     if (_action === "item-recipe-chatgpt-preview") {

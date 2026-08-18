@@ -1,11 +1,24 @@
-import { useOutletContext } from "@remix-run/react";
+import { useActionData, useOutletContext } from "@remix-run/react";
+import { useEffect } from "react";
+import { toast } from "~/components/ui/use-toast";
 import RecipeForm from "~/domain/recipe/components/recipe-form/recipe-form";
 import type { AdminRecipeOutletContext } from "./admin.recipes.$id";
 export { action } from "./admin.recipes.$id";
 
 export default function AdminRecipeCadastroTab() {
+  const actionData = useActionData<{ status?: number; message?: string }>();
   const { recipe, items, unitOptions } =
     useOutletContext<AdminRecipeOutletContext>();
+
+  useEffect(() => {
+    if (actionData?.status && actionData.status >= 400) {
+      toast({
+        title: "Erro",
+        description: actionData.message,
+        variant: "destructive",
+      });
+    }
+  }, [actionData]);
 
   return (
     <div>

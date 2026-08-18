@@ -11,6 +11,7 @@ import {
   defer,
   useLoaderData,
   useLocation,
+  useMatches,
   useRouteError,
   useRouteLoaderData,
 } from "@remix-run/react";
@@ -332,17 +333,56 @@ function BannerFechado() {
 function CardapioHeader() {
   const currentPage = useCurrentPage();
   const location = useLocation();
+  const matches = useMatches();
   const [showSearch, setShowSearch] = useState(false);
+  const [isCinematicHeaderScrolled, setIsCinematicHeaderScrolled] =
+    useState(false);
   const { fazerPedidoPublicURL, notificationsEnabled, vapidPublicKey } =
     useLoaderData<typeof loader>();
   const usesDesktopSidebar =
     location.pathname === WEBSITE_LINKS.cardapioPublic.href ||
     currentPage === "single";
+  const hasMobileCinematicPublication =
+    location.pathname === WEBSITE_LINKS.cardapioPublic.href &&
+    matches.some((match) => match.id === "routes/cardapio._index");
+  const isCinematicHeaderTransparent =
+    hasMobileCinematicPublication && !isCinematicHeaderScrolled;
+
+  useEffect(() => {
+    if (!hasMobileCinematicPublication) {
+      setIsCinematicHeaderScrolled(false);
+      return;
+    }
+
+    const updateHeaderAppearance = () => {
+      const catalogContent = document.querySelector(
+        "[data-cardapio-catalog-content]"
+      );
+      if (!(catalogContent instanceof HTMLElement)) return;
+      setIsCinematicHeaderScrolled(
+        catalogContent.getBoundingClientRect().top <= 52
+      );
+    };
+
+    updateHeaderAppearance();
+    window.addEventListener("scroll", updateHeaderAppearance, {
+      passive: true,
+    });
+    window.addEventListener("resize", updateHeaderAppearance);
+
+    return () => {
+      window.removeEventListener("scroll", updateHeaderAppearance);
+      window.removeEventListener("resize", updateHeaderAppearance);
+    };
+  }, [hasMobileCinematicPublication]);
 
   return (
     <header
       className={cn(
-        "fixed inset-x-0 top-[env(safe-area-inset-top)] z-50 border-b border-black/10 bg-white/95 px-4 shadow-sm backdrop-blur-xl md:left-1/2 md:right-auto md:top-0 md:w-full md:max-w-6xl md:-translate-x-1/2 md:border-b-0 md:bg-white md:px-0 md:shadow-none",
+        "fixed inset-x-0 top-[env(safe-area-inset-top)] z-50 px-4 transition-[background-color,border-color,box-shadow] duration-300 md:left-1/2 md:right-auto md:top-0 md:w-full md:max-w-6xl md:-translate-x-1/2 md:border-b-0 md:bg-white md:px-0 md:shadow-none",
+        isCinematicHeaderTransparent
+          ? "border-b border-transparent bg-transparent text-white shadow-none"
+          : "border-b border-black/10 bg-white/95 text-black shadow-sm backdrop-blur-xl",
         usesDesktopSidebar && "md:hidden"
       )}
     >
@@ -353,7 +393,12 @@ function CardapioHeader() {
             className="flex min-w-0 touch-manipulation rounded-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black"
             aria-label="Ir para o início do cardápio A Modo Mio"
           >
-            <Logo color="black" onlyText className="w-36 p-1" tagline={false} />
+            <Logo
+              color={isCinematicHeaderTransparent ? "white" : "black"}
+              onlyText
+              className="w-36 p-1"
+              tagline={false}
+            />
           </Link>
 
           <Suspense fallback={<div className="h-8 w-[110px]" />}>

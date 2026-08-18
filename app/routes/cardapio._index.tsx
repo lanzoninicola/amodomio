@@ -153,6 +153,9 @@ export default function CardapioWebIndex() {
   const [showLikeCelebration, setShowLikeCelebration] = useState(false);
   const [likeCelebrationSeed, setLikeCelebrationSeed] = useState(1);
   const forceLikeOverlay = false;
+  const hasMobileCinematicPublication =
+    Boolean(featuredSections[0]) &&
+    featuredSections[0]?.displayStyle !== "polaroid";
 
   useEffect(() => {
     const handler = () => {
@@ -185,7 +188,12 @@ export default function CardapioWebIndex() {
 
   return (
     <section
-      className="mb-20 flex flex-col pt-[calc(3.25rem+env(safe-area-inset-top))] md:fixed md:inset-0 md:z-20 md:mb-0 md:block md:overflow-y-auto md:bg-white md:pt-0"
+      className={cn(
+        "mb-20 flex flex-col md:fixed md:inset-0 md:z-20 md:mb-0 md:block md:overflow-y-auto md:bg-white md:pt-0",
+        hasMobileCinematicPublication
+          ? "pt-0"
+          : "pt-[calc(3.25rem+env(safe-area-inset-top))]"
+      )}
       data-element="cardapio-index"
     >
       <LikeCelebrationOverlay
@@ -219,6 +227,7 @@ export default function CardapioWebIndex() {
                     bannerEnabled={bannerEnabled}
                     bannerText={bannerText}
                     bannerUrl={bannerUrl}
+                    cinematicPublication={hasMobileCinematicPublication}
                     publication={
                       featuredSections[0] ? (
                         <CardapioFeaturedPromotionCarousel
@@ -346,15 +355,23 @@ function CardapioFeaturedPromotionCarousel({
           isExpanded ? "md:z-[60] md:w-[440px]" : "md:w-[220px] lg:w-[260px]",
           section.displayStyle === "polaroid"
             ? "mx-auto mb-6 mt-1 w-[calc(100%-1rem)] max-w-[460px] border border-amber-950/10 bg-[#fffdf8] p-2 pb-4 shadow-[0_12px_28px_rgba(74,52,34,0.16)] md:-rotate-1"
-            : "mb-6 mt-4 w-full overflow-hidden px-4 md:px-0",
+            : "h-[78dvh] min-h-[560px] w-full overflow-hidden bg-black md:mb-6 md:mt-4 md:h-auto md:min-h-0 md:px-0",
         ].join(" ")}
       >
         <Carousel
+          className={cn(
+            section.displayStyle !== "polaroid" && "h-full [&>div]:h-full"
+          )}
           setApi={setApi}
           opts={{ align: "start", loop: true }}
           plugins={hasMultipleImages ? [autoplayPlugin.current] : []}
         >
-          <CarouselContent className="-ml-0">
+          <CarouselContent
+            className={cn(
+              "-ml-0",
+              section.displayStyle !== "polaroid" && "h-full"
+            )}
+          >
             {images.map((image, index) => {
               const isVideo = image.kind === "video";
               const src = isExpanded
@@ -366,14 +383,32 @@ function CardapioFeaturedPromotionCarousel({
                   index + 1
                 } de ${images.length}`;
               return (
-                <CarouselItem key={`${src}-${index}`} className="pl-0">
-                  <div className="relative transform-gpu overflow-hidden rounded-[0.5rem] md:-rotate-1">
+                <CarouselItem
+                  key={`${src}-${index}`}
+                  className={cn(
+                    "pl-0",
+                    section.displayStyle !== "polaroid" && "h-full"
+                  )}
+                >
+                  <div
+                    className={cn(
+                      "relative transform-gpu overflow-hidden",
+                      section.displayStyle !== "polaroid"
+                        ? "h-full min-h-[560px] md:h-auto md:min-h-0 md:rounded-[0.5rem] md:-rotate-1"
+                        : "rounded-[0.5rem] md:-rotate-1"
+                    )}
+                  >
                     {isVideo ? (
                       <video
                         className={
                           isExpanded
                             ? "hidden h-[calc(100dvh-5rem)] w-full rounded-[0.5rem] object-contain [clip-path:inset(0_round_0.5rem)] md:block"
-                            : "block aspect-[4/5] w-full rounded-[0.5rem] object-cover [clip-path:inset(0_round_0.5rem)] md:max-h-[38vh]"
+                            : cn(
+                                "block w-full object-cover",
+                                section.displayStyle !== "polaroid"
+                                  ? "h-full min-h-[560px] md:aspect-[4/5] md:h-auto md:min-h-0 md:max-h-[38vh] md:rounded-[0.5rem] md:[clip-path:inset(0_round_0.5rem)]"
+                                  : "aspect-[4/5] rounded-[0.5rem] [clip-path:inset(0_round_0.5rem)] md:max-h-[38vh]"
+                              )
                         }
                         src={src}
                         autoPlay
@@ -387,7 +422,12 @@ function CardapioFeaturedPromotionCarousel({
                         className={
                           isExpanded
                             ? "hidden h-[calc(100dvh-5rem)] w-full object-contain md:block"
-                            : "aspect-[4/5] w-full object-cover"
+                            : cn(
+                                "w-full object-cover",
+                                section.displayStyle !== "polaroid"
+                                  ? "h-full min-h-[560px] md:aspect-[4/5] md:h-auto md:min-h-0"
+                                  : "aspect-[4/5]"
+                              )
                         }
                         src={src}
                         alt={altText}
@@ -395,6 +435,13 @@ function CardapioFeaturedPromotionCarousel({
                         decoding="async"
                       />
                     )}
+
+                    {section.displayStyle !== "polaroid" ? (
+                      <div
+                        className="pointer-events-none absolute inset-0 z-[5] bg-[radial-gradient(ellipse_88%_62%_at_58%_42%,transparent_24%,rgba(0,0,0,0.08)_54%,rgba(0,0,0,0.62)_100%),linear-gradient(to_bottom,rgba(0,0,0,0.68)_0%,transparent_24%,transparent_54%,rgba(0,0,0,0.42)_72%,rgba(0,0,0,0.94)_100%)] md:hidden"
+                        aria-hidden="true"
+                      />
+                    ) : null}
 
                     {hasMultipleImages ? (
                       <span className="pointer-events-none absolute left-2 top-2 z-10 rounded-full bg-black/65 px-2.5 py-1 font-neue text-[11px] font-semibold tabular-nums text-white shadow-sm backdrop-blur-sm">
@@ -448,6 +495,21 @@ function CardapioFeaturedPromotionCarousel({
                       imageIndex={index}
                       placement={isExpanded ? "desktop_modal" : "card"}
                     />
+
+                    {section.displayStyle !== "polaroid" &&
+                    !isExpanded &&
+                    section.showTitle ? (
+                      <header className="pointer-events-none absolute inset-x-0 bottom-20 z-20 px-5 text-left text-white md:hidden">
+                        <h2 className="font-lora text-2xl font-bold leading-tight drop-shadow-md">
+                          {section.title}
+                        </h2>
+                        {section.subtitle ? (
+                          <p className="mt-1.5 font-neue text-sm leading-snug text-white/85 drop-shadow-md">
+                            {section.subtitle}
+                          </p>
+                        ) : null}
+                      </header>
+                    ) : null}
                   </div>
                 </CarouselItem>
               );
@@ -463,7 +525,12 @@ function CardapioFeaturedPromotionCarousel({
         </Carousel>
 
         {!isExpanded && section.showTitle ? (
-          <header className="px-1 pt-3 text-left md:px-2 md:pt-2.5">
+          <header
+            className={cn(
+              "px-1 pt-3 text-left md:px-2 md:pt-2.5",
+              section.displayStyle !== "polaroid" && "hidden md:block"
+            )}
+          >
             <h2 className="font-lora text-lg font-bold leading-tight text-zinc-950 md:text-base">
               {section.title}
             </h2>
@@ -475,11 +542,21 @@ function CardapioFeaturedPromotionCarousel({
           </header>
         ) : null}
 
-        <div className="pt-3 text-center md:px-1 md:py-2">
+        <div
+          className={cn(
+            "pt-3 text-center md:px-1 md:py-2",
+            section.displayStyle !== "polaroid" &&
+              "absolute inset-x-0 bottom-9 z-20 pt-0 md:static md:pt-3"
+          )}
+        >
           {!isExpanded && section.showPromotionHint ? (
             <button
               type="button"
-              className="mb-2 inline-flex max-w-full items-center justify-center gap-2 rounded-full bg-zinc-900 px-4 py-2 font-neue text-[13px] font-semibold leading-snug text-white shadow-sm transition hover:bg-zinc-800 focus:outline-none focus:ring-2 focus:ring-zinc-400 focus:ring-offset-2 md:px-3 md:py-1.5 md:text-xs"
+              className={cn(
+                "mb-2 inline-flex max-w-full items-center justify-center gap-2 rounded-full bg-zinc-900 px-4 py-2 font-neue text-[13px] font-semibold leading-snug text-white shadow-sm transition hover:bg-zinc-800 focus:outline-none focus:ring-2 focus:ring-zinc-400 focus:ring-offset-2 md:px-3 md:py-1.5 md:text-xs",
+                section.displayStyle !== "polaroid" &&
+                  "border border-white/25 bg-black/70 shadow-lg backdrop-blur-md hover:bg-black/80"
+              )}
               onClick={() => {
                 trackCardapioFeatured({
                   action: "expand",

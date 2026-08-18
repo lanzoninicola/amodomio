@@ -123,6 +123,7 @@ export function CardapioCatalogSection({
   bannerText,
   bannerUrl,
   publication,
+  cinematicPublication = false,
 }: {
   items: CardapioIndexItem[] | GroupedItems[];
   tags: Tag[];
@@ -134,6 +135,7 @@ export function CardapioCatalogSection({
   bannerText: string;
   bannerUrl: string;
   publication?: React.ReactNode;
+  cinematicPublication?: boolean;
 }) {
   const [currentFilterTag, setCurrentFilterTag] = useState<Tag | null>(null);
   const [currentCollection, setCurrentCollection] = useState<CatalogCollection>(
@@ -150,8 +152,8 @@ export function CardapioCatalogSection({
       window.matchMedia("(max-width: 767px)").matches
         ? "highlights"
         : isGrouped(items)
-          ? items[0]?.productLineId ?? "highlights"
-          : "highlights"
+        ? items[0]?.productLineId ?? "highlights"
+        : "highlights"
     );
   }, [items]);
 
@@ -183,10 +185,10 @@ export function CardapioCatalogSection({
     () =>
       isGrouped(items)
         ? items
-          .filter((group) =>
-            group.productLine.toLocaleLowerCase("pt-BR").includes("pizza")
-          )
-          .flatMap((group) => getGroupedItemsList(group))
+            .filter((group) =>
+              group.productLine.toLocaleLowerCase("pt-BR").includes("pizza")
+            )
+            .flatMap((group) => getGroupedItemsList(group))
         : items,
     [items]
   );
@@ -194,8 +196,8 @@ export function CardapioCatalogSection({
     () =>
       isGrouped(items)
         ? items.find((group) =>
-          group.productLine.toLocaleLowerCase("pt-BR").includes("pizza")
-        )?.productLineId ?? null
+            group.productLine.toLocaleLowerCase("pt-BR").includes("pizza")
+          )?.productLineId ?? null
         : null,
     [items]
   );
@@ -263,8 +265,8 @@ export function CardapioCatalogSection({
       currentCollection === "highlights"
         ? new Set(highlightItems.map((item) => item.id))
         : currentCollection === "novelties"
-          ? new Set(noveltyItems.map((item) => item.id))
-          : null;
+        ? new Set(noveltyItems.map((item) => item.id))
+        : null;
     const matches = (item: CardapioIndexItem) => {
       if (collectionIds && !collectionIds.has(item.id)) return false;
       if (
@@ -340,15 +342,15 @@ export function CardapioCatalogSection({
 
     return groupedItems.length
       ? groupedItems
-        .filter(
-          (group) =>
-            currentCollection === "highlights" ||
-            currentCollection === "novelties" ||
-            selectedCommercialCategory ||
-            (selectedGroupId && group.groupId === selectedGroupId) ||
-            group.productLineId === currentCollection
-        )
-        .sort((a, b) => (a.sortOrderIndex ?? 0) - (b.sortOrderIndex ?? 0))
+          .filter(
+            (group) =>
+              currentCollection === "highlights" ||
+              currentCollection === "novelties" ||
+              selectedCommercialCategory ||
+              (selectedGroupId && group.groupId === selectedGroupId) ||
+              group.productLineId === currentCollection
+          )
+          .sort((a, b) => (a.sortOrderIndex ?? 0) - (b.sortOrderIndex ?? 0))
       : [];
   }, [currentCollection, groupedItems]);
   const visibleGroupChips = useMemo(
@@ -360,8 +362,8 @@ export function CardapioCatalogSection({
       orderedGroups.length
         ? orderedGroups.flatMap((group) => getGroupedItemsList(group))
         : isGrouped(currentItems)
-          ? []
-          : (currentItems as CardapioIndexItem[]),
+        ? []
+        : (currentItems as CardapioIndexItem[]),
     [currentItems, orderedGroups]
   );
   const visibleActiveItemId =
@@ -498,10 +500,10 @@ export function CardapioCatalogSection({
   const activeCollectionLabel = currentCollection.startsWith("category:")
     ? currentCollection.slice("category:".length)
     : currentCollection === "highlights"
-      ? "Destaques"
-      : currentCollection === "novelties"
-        ? "Novidades"
-        : null;
+    ? "Destaques"
+    : currentCollection === "novelties"
+    ? "Novidades"
+    : null;
   const hasActiveMobileFilter =
     Boolean(activeCollectionLabel) || Boolean(currentFilterTag);
 
@@ -525,341 +527,360 @@ export function CardapioCatalogSection({
     <div
       ref={catalogRef}
       className={cn(
-        "mx-4 mb-4 mt-1 flex flex-col",
+        "mx-4 mb-4 flex flex-col",
+        cinematicPublication ? "mt-0" : "mt-1",
         desktopFeedLayout &&
-        "md:mx-auto md:my-0 md:w-full md:max-w-[700px] md:px-6 md:py-6"
+          "md:mx-auto md:my-0 md:w-full md:max-w-[700px] md:px-6 md:py-6"
       )}
     >
-      {publication ? <div className="-mx-4 md:mx-0">{publication}</div> : null}
-
-      {productLines.length > 1 ? (
-        <nav
-          aria-label="Linhas de produtos"
-          className="mb-4 hidden overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:block"
+      {publication ? (
+        <div
+          className={cn(
+            "-mx-4 md:mx-0",
+            cinematicPublication &&
+              "sticky top-0 z-0 h-[78dvh] min-h-[560px] md:static md:h-auto md:min-h-0"
+          )}
         >
-          <div className="flex w-max min-w-full gap-2">
-            {productLines.map((line) => {
-              const selected = line.id === currentCollection;
-              return (
-                <button
-                  key={line.id}
-                  type="button"
-                  aria-current={selected ? "page" : undefined}
-                  onClick={() => {
-                    setCurrentCollection(line.id);
-                    trackFilterClick(
-                      "product_line",
-                      line.name,
-                      window.matchMedia("(min-width: 768px)").matches
-                        ? "desktop_nav"
-                        : "mobile_header"
-                    );
-                  }}
-                  className={cn(
-                    "whitespace-nowrap rounded-full border px-4 py-2 font-neue text-sm font-bold transition-colors",
-                    selected
-                      ? "border-zinc-950 bg-zinc-950 text-white"
-                      : "border-black/10 bg-white text-zinc-600 hover:bg-zinc-100 hover:text-black"
-                  )}
-                >
-                  {line.name}
-                </button>
-              );
-            })}
-          </div>
-        </nav>
+          {publication}
+        </div>
       ) : null}
 
-      {filterViewMode === "stories" ? (
-        <div className="mb-2 hidden overflow-x-auto pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:block">
-          <div className="flex w-max min-w-full gap-3">
-            <StoryFilter
-              label="Todos"
-              color="#18181b"
-              selected={!currentFilterTag}
-              onClick={() => {
-                trackFilterClick("tag", "todos", "stories");
-                onCurrentTagSelected(null);
-              }}
-            />
-            {tags.map((tag) => (
+      <div
+        data-cardapio-catalog-content
+        className={cn(
+          cinematicPublication &&
+            "relative z-10 -mx-4 -mt-8 rounded-t-[2rem] bg-white px-4 pt-6 shadow-[0_-14px_36px_rgba(0,0,0,0.14)] md:mx-0 md:mt-0 md:rounded-none md:px-0 md:pt-0 md:shadow-none"
+        )}
+      >
+        {productLines.length > 1 ? (
+          <nav
+            aria-label="Linhas de produtos"
+            className="mb-4 hidden overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:block"
+          >
+            <div className="flex w-max min-w-full gap-2">
+              {productLines.map((line) => {
+                const selected = line.id === currentCollection;
+                return (
+                  <button
+                    key={line.id}
+                    type="button"
+                    aria-current={selected ? "page" : undefined}
+                    onClick={() => {
+                      setCurrentCollection(line.id);
+                      trackFilterClick(
+                        "product_line",
+                        line.name,
+                        window.matchMedia("(min-width: 768px)").matches
+                          ? "desktop_nav"
+                          : "mobile_header"
+                      );
+                    }}
+                    className={cn(
+                      "whitespace-nowrap rounded-full border px-4 py-2 font-neue text-sm font-bold transition-colors",
+                      selected
+                        ? "border-zinc-950 bg-zinc-950 text-white"
+                        : "border-black/10 bg-white text-zinc-600 hover:bg-zinc-100 hover:text-black"
+                    )}
+                  >
+                    {line.name}
+                  </button>
+                );
+              })}
+            </div>
+          </nav>
+        ) : null}
+
+        {filterViewMode === "stories" ? (
+          <div className="mb-2 hidden overflow-x-auto pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:block">
+            <div className="flex w-max min-w-full gap-3">
               <StoryFilter
-                key={tag.id}
-                label={tag.name}
-                color={tag.colorHEX}
-                selected={currentFilterTag?.id === tag.id}
+                label="Todos"
+                color="#18181b"
+                selected={!currentFilterTag}
                 onClick={() => {
-                  trackFilterClick("tag", tag.name, "stories");
-                  onCurrentTagSelected(tag);
+                  trackFilterClick("tag", "todos", "stories");
+                  onCurrentTagSelected(null);
                 }}
               />
-            ))}
+              {tags.map((tag) => (
+                <StoryFilter
+                  key={tag.id}
+                  label={tag.name}
+                  color={tag.colorHEX}
+                  selected={currentFilterTag?.id === tag.id}
+                  onClick={() => {
+                    trackFilterClick("tag", tag.name, "stories");
+                    onCurrentTagSelected(tag);
+                  }}
+                />
+              ))}
+            </div>
           </div>
-        </div>
-      ) : (
-        <div id="cardapio-tag-filters" className="mb-4 hidden md:block">
-          <h2 className="hidden font-lora text-2xl font-bold tracking-tight leading-tight mb-3 md:block">
-            Sabores da casa
-          </h2>
-          <div className="flex flex-wrap gap-2 md:gap-x-4 md:gap-y-1">
-            <button
-              type="button"
-              onClick={() => {
-                trackFilterClick("tag", "todos", "desktop_nav");
-                onCurrentTagSelected(null);
-              }}
-              className={cn(
-                "rounded-full border px-4 py-2 font-neue text-[13px] font-bold uppercase leading-none tracking-wide shadow-sm transition-colors md:rounded-none md:border-0 md:px-0 md:py-0 md:text-xs md:font-semibold md:leading-normal md:tracking-widest md:shadow-none",
-                !currentFilterTag
-                  ? "border-zinc-950 bg-zinc-950 text-white md:bg-transparent md:text-black md:underline md:underline-offset-4"
-                  : "border-black/10 bg-white text-black active:bg-zinc-100 md:border-0 md:bg-transparent md:text-zinc-400 md:hover:text-black"
-              )}
-            >
-              Todos
-            </button>
-            {tags.map((tag) => (
+        ) : (
+          <div id="cardapio-tag-filters" className="mb-4 hidden md:block">
+            <h2 className="hidden font-lora text-2xl font-bold tracking-tight leading-tight mb-3 md:block">
+              Sabores da casa
+            </h2>
+            <div className="flex flex-wrap gap-2 md:gap-x-4 md:gap-y-1">
               <button
-                key={tag.id}
                 type="button"
                 onClick={() => {
-                  trackFilterClick("tag", tag.name, "desktop_nav");
-                  onCurrentTagSelected(tag);
+                  trackFilterClick("tag", "todos", "desktop_nav");
+                  onCurrentTagSelected(null);
                 }}
                 className={cn(
                   "rounded-full border px-4 py-2 font-neue text-[13px] font-bold uppercase leading-none tracking-wide shadow-sm transition-colors md:rounded-none md:border-0 md:px-0 md:py-0 md:text-xs md:font-semibold md:leading-normal md:tracking-widest md:shadow-none",
-                  currentFilterTag?.id === tag.id
+                  !currentFilterTag
                     ? "border-zinc-950 bg-zinc-950 text-white md:bg-transparent md:text-black md:underline md:underline-offset-4"
                     : "border-black/10 bg-white text-black active:bg-zinc-100 md:border-0 md:bg-transparent md:text-zinc-400 md:hover:text-black"
                 )}
               >
-                {tag.name}
+                Todos
               </button>
-            ))}
+              {tags.map((tag) => (
+                <button
+                  key={tag.id}
+                  type="button"
+                  onClick={() => {
+                    trackFilterClick("tag", tag.name, "desktop_nav");
+                    onCurrentTagSelected(tag);
+                  }}
+                  className={cn(
+                    "rounded-full border px-4 py-2 font-neue text-[13px] font-bold uppercase leading-none tracking-wide shadow-sm transition-colors md:rounded-none md:border-0 md:px-0 md:py-0 md:text-xs md:font-semibold md:leading-normal md:tracking-widest md:shadow-none",
+                    currentFilterTag?.id === tag.id
+                      ? "border-zinc-950 bg-zinc-950 text-white md:bg-transparent md:text-black md:underline md:underline-offset-4"
+                      : "border-black/10 bg-white text-black active:bg-zinc-100 md:border-0 md:bg-transparent md:text-zinc-400 md:hover:text-black"
+                  )}
+                >
+                  {tag.name}
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
-      <div className="mb-4 bg-white pb-3 md:hidden">
-        <nav
-          aria-label="Categorias do cardápio"
-          className="flex snap-x snap-proximity gap-3 overflow-x-auto pb-2 pt-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-        >
-          <CategoryFilterCard
-            label="Destaques"
-            items={pizzaItems}
-            selected={currentCollection === "highlights"}
-            icon={<Star className="h-3.5 w-3.5" fill="currentColor" />}
-            onClick={() => {
-              setCurrentFilterTag(null);
-              setCurrentCollection("highlights");
-              trackFilterClick("product_line", "Destaques", "mobile_header");
-            }}
-          />
-          <CategoryFilterCard
-            label="Novidades"
-            items={pizzaItems}
-            selected={currentCollection === "novelties"}
-            disabled={!noveltyItems.length}
-            icon={<Sparkles className="h-3.5 w-3.5" />}
-            onClick={() => {
-              setCurrentFilterTag(null);
-              setCurrentCollection("novelties");
-              trackFilterClick("product_line", "Novidades", "mobile_header");
-            }}
-          />
-          {featuredTagCategories.map(({ tag, items: tagItems }) => (
-            <CategoryFilterCard
-              key={`tag:${tag.id}`}
-              label={tag.name}
-              items={tagItems}
-              color={tag.colorHEX}
-              selected={currentFilterTag?.id === tag.id}
-              onClick={() => {
-                onCurrentTagSelected(tag);
-                trackFilterClick("tag", tag.name, "mobile_header");
-              }}
-            />
-          ))}
-          {pizzaCommercialCategories.map((category) => (
-            <CategoryFilterCard
-              key={category.name}
-              label={category.name}
-              items={category.items}
-              selected={currentCollection === `category:${category.name}`}
-              onClick={() => {
-                setCurrentCollection(`category:${category.name}`);
-                trackFilterClick("category", category.name, "mobile_header");
-              }}
-            />
-          ))}
-        </nav>
-
-        <div className="relative mt-1">
-          <div
-            className="flex gap-2 overflow-x-auto pr-14 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-            aria-label="Filtrar por tags"
+        <div className="mb-4 bg-white pb-3 md:hidden">
+          <nav
+            aria-label="Categorias do cardápio"
+            className="flex snap-x snap-proximity gap-3 overflow-x-auto pb-2 pt-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
           >
-            <TagFilterChip
-              label="Todos"
-              selected={!currentFilterTag}
+            <CategoryFilterCard
+              label="Destaques"
+              items={pizzaItems}
+              selected={currentCollection === "highlights"}
+              icon={<Star className="h-3.5 w-3.5" fill="currentColor" />}
               onClick={() => {
-                trackFilterClick("tag", "todos", "mobile_header");
-                onCurrentTagSelected(null);
+                setCurrentFilterTag(null);
+                setCurrentCollection("highlights");
+                trackFilterClick("product_line", "Destaques", "mobile_header");
               }}
             />
-            {tags.map((tag) => (
-              <TagFilterChip
-                key={tag.id}
+            <CategoryFilterCard
+              label="Novidades"
+              items={pizzaItems}
+              selected={currentCollection === "novelties"}
+              disabled={!noveltyItems.length}
+              icon={<Sparkles className="h-3.5 w-3.5" />}
+              onClick={() => {
+                setCurrentFilterTag(null);
+                setCurrentCollection("novelties");
+                trackFilterClick("product_line", "Novidades", "mobile_header");
+              }}
+            />
+            {featuredTagCategories.map(({ tag, items: tagItems }) => (
+              <CategoryFilterCard
+                key={`tag:${tag.id}`}
                 label={tag.name}
+                items={tagItems}
+                color={tag.colorHEX}
                 selected={currentFilterTag?.id === tag.id}
                 onClick={() => {
-                  trackFilterClick("tag", tag.name, "mobile_header");
                   onCurrentTagSelected(tag);
+                  trackFilterClick("tag", tag.name, "mobile_header");
                 }}
               />
             ))}
-          </div>
-          {tags.length > 2 ? (
+            {pizzaCommercialCategories.map((category) => (
+              <CategoryFilterCard
+                key={category.name}
+                label={category.name}
+                items={category.items}
+                selected={currentCollection === `category:${category.name}`}
+                onClick={() => {
+                  setCurrentCollection(`category:${category.name}`);
+                  trackFilterClick("category", category.name, "mobile_header");
+                }}
+              />
+            ))}
+          </nav>
+
+          <div className="relative mt-1">
             <div
-              className="pointer-events-none absolute inset-y-0 right-0 flex w-14 items-center justify-end bg-gradient-to-l from-white via-white/95 to-transparent pr-3"
-              aria-hidden="true"
+              className="flex gap-2 overflow-x-auto pr-14 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+              aria-label="Filtrar por tags"
             >
-              <ArrowRight className="h-4 w-4 animate-pulse text-zinc-700" />
+              <TagFilterChip
+                label="Todos"
+                selected={!currentFilterTag}
+                onClick={() => {
+                  trackFilterClick("tag", "todos", "mobile_header");
+                  onCurrentTagSelected(null);
+                }}
+              />
+              {tags.map((tag) => (
+                <TagFilterChip
+                  key={tag.id}
+                  label={tag.name}
+                  selected={currentFilterTag?.id === tag.id}
+                  onClick={() => {
+                    trackFilterClick("tag", tag.name, "mobile_header");
+                    onCurrentTagSelected(tag);
+                  }}
+                />
+              ))}
+            </div>
+            {tags.length > 2 ? (
+              <div
+                className="pointer-events-none absolute inset-y-0 right-0 flex w-14 items-center justify-end bg-gradient-to-l from-white via-white/95 to-transparent pr-3"
+                aria-hidden="true"
+              >
+                <ArrowRight className="h-4 w-4 animate-pulse text-zinc-700" />
+              </div>
+            ) : null}
+          </div>
+
+          {bannerEnabled ? (
+            <div className="mt-3">
+              <a
+                href={bannerUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block rounded-lg bg-[linear-gradient(90deg,#e1251b,#0072ce,#16a34a)] p-[1.5px] shadow-sm"
+              >
+                <div className="grid grid-cols-[20px_minmax(0,1fr)_16px] items-center gap-2 rounded-[7px] bg-white px-3 py-1.5 text-zinc-950">
+                  <Megaphone className="h-5 w-5" aria-hidden="true" />
+                  <p className="truncate font-neue text-[11px] font-semibold uppercase leading-5 tracking-tight">
+                    {bannerText}
+                  </p>
+                  <ArrowRight size={16} />
+                </div>
+              </a>
             </div>
           ) : null}
         </div>
 
-        {bannerEnabled ? (
-          <div className="mt-3">
-            <a
-              href={bannerUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="block rounded-lg bg-[linear-gradient(90deg,#e1251b,#0072ce,#16a34a)] p-[1.5px] shadow-sm"
+        {hasActiveMobileFilter ? (
+          <div className="sticky top-[calc(3.25rem+env(safe-area-inset-top))] z-40 -mx-4 mb-3 flex min-h-12 items-center justify-between gap-3 border-y border-zinc-200 bg-white/95 px-4 py-2 shadow-sm backdrop-blur-md md:hidden">
+            <p className="flex min-w-0 items-center gap-1.5 truncate font-neue text-[11px] text-zinc-500">
+              <span className="shrink-0">Exibindo:</span>
+              {activeCollectionLabel ? (
+                <strong
+                  className={cn(
+                    "truncate rounded-md px-2 py-1 font-bold leading-none text-zinc-950 ring-1 ring-black/5",
+                    CATEGORY_CARD_COLOR_CLASSES[
+                      getCategoryCardColorIndex(activeCollectionLabel)
+                    ]
+                  )}
+                >
+                  {activeCollectionLabel}
+                </strong>
+              ) : null}
+              {currentFilterTag ? (
+                <span className="truncate rounded-full bg-zinc-100 px-2 py-1 font-bold leading-none text-zinc-700">
+                  {currentFilterTag.name}
+                </span>
+              ) : null}
+            </p>
+            <button
+              type="button"
+              onClick={clearMobileFilters}
+              className="inline-flex min-h-8 shrink-0 items-center gap-1.5 rounded-full bg-transparent px-3 py-2 font-neue text-xs font-bold text-zinc-950 transition active:scale-[0.97]"
             >
-              <div className="grid grid-cols-[20px_minmax(0,1fr)_16px] items-center gap-2 rounded-[7px] bg-white px-3 py-1.5 text-zinc-950">
-                <Megaphone className="h-5 w-5" aria-hidden="true" />
-                <p className="truncate font-neue text-[11px] font-semibold uppercase leading-5 tracking-tight">
-                  {bannerText}
-                </p>
-                <ArrowRight size={16} />
-              </div>
-            </a>
+              <X className="h-3.5 w-3.5" />
+              Limpar filtros
+            </button>
           </div>
         ) : null}
-      </div>
 
-      {hasActiveMobileFilter ? (
-        <div className="sticky top-[calc(3.25rem+env(safe-area-inset-top))] z-40 -mx-4 mb-3 flex min-h-12 items-center justify-between gap-3 border-y border-zinc-200 bg-white/95 px-4 py-2 shadow-sm backdrop-blur-md md:hidden">
-          <p className="flex min-w-0 items-center gap-1.5 truncate font-neue text-[11px] text-zinc-500">
-            <span className="shrink-0">Exibindo:</span>
-            {activeCollectionLabel ? (
-              <strong
-                className={cn(
-                  "truncate rounded-md px-2 py-1 font-bold leading-none text-zinc-950 ring-1 ring-black/5",
-                  CATEGORY_CARD_COLOR_CLASSES[
-                  getCategoryCardColorIndex(activeCollectionLabel)
-                  ]
-                )}
+        {visibleGroupChips.length > 0 ? (
+          <div className="mt-1 hidden gap-2 overflow-x-auto pb-2 md:flex">
+            {visibleGroupChips.map((group) => (
+              <button
+                key={group.groupId}
+                type="button"
+                onClick={() => {
+                  trackFilterClick("group", group.group, "desktop_nav");
+                  scrollToGroup(group.groupId);
+                }}
+                className="whitespace-nowrap px-3 py-1 rounded-full bg-zinc-100 text-xs md:text-sm font-neue uppercase tracking-wider hover:bg-zinc-200 transition"
               >
-                {activeCollectionLabel}
-              </strong>
-            ) : null}
-            {currentFilterTag ? (
-              <span className="truncate rounded-full bg-zinc-100 px-2 py-1 font-bold leading-none text-zinc-700">
-                {currentFilterTag.name}
-              </span>
-            ) : null}
-          </p>
-          <button
-            type="button"
-            onClick={clearMobileFilters}
-            className="inline-flex min-h-8 shrink-0 items-center gap-1.5 rounded-full bg-transparent px-3 py-2 font-neue text-xs font-bold text-zinc-950 transition active:scale-[0.97]"
-          >
-            <X className="h-3.5 w-3.5" />
-            Limpar filtros
-          </button>
-        </div>
-      ) : null}
+                {group.group}
+              </button>
+            ))}
+          </div>
+        ) : null}
 
-      {visibleGroupChips.length > 0 ? (
-        <div className="mt-1 hidden gap-2 overflow-x-auto pb-2 md:flex">
-          {visibleGroupChips.map((group) => (
-            <button
+        {visibleCatalogItems.length > 1 ? (
+          <CardapioItemPositionRail
+            items={visibleCatalogItems}
+            activeItemId={visibleActiveItemId}
+            onSelect={scrollToCatalogItem}
+          />
+        ) : null}
+
+        {orderedGroups.length > 0 ? (
+          orderedGroups.map((group) => (
+            <section
               key={group.groupId}
-              type="button"
-              onClick={() => {
-                trackFilterClick("group", group.group, "desktop_nav");
-                scrollToGroup(group.groupId);
+              ref={(element) => {
+                groupRefs.current[group.groupId] = element;
               }}
-              className="whitespace-nowrap px-3 py-1 rounded-full bg-zinc-100 text-xs md:text-sm font-neue uppercase tracking-wider hover:bg-zinc-200 transition"
+              data-group-id={group.groupId}
+              className={cn(
+                "mb-6",
+                bannerEnabled ? "scroll-mt-28" : "scroll-mt-20"
+              )}
             >
-              {group.group}
+              <CardapioGroupHeader
+                title={group.group}
+                subtitle={getGroupedItemsDescription(group)}
+                profile={SECTION_THREAD_PROFILE_BY_SECTION.chef}
+                desktopFeedLayout={desktopFeedLayout}
+              />
+              <CardapioItemsGrid
+                items={getGroupedItemsList(group)}
+                interestTrackingEnabled={interestTrackingEnabled}
+                likesEnabled={likesEnabled}
+                desktopFeedLayout={desktopFeedLayout}
+              />
+            </section>
+          ))
+        ) : (
+          <CardapioItemsGrid
+            items={currentItems as CardapioIndexItem[]}
+            interestTrackingEnabled={interestTrackingEnabled}
+            likesEnabled={likesEnabled}
+            desktopFeedLayout={desktopFeedLayout}
+          />
+        )}
+
+        {hasActiveMobileFilter ? (
+          <aside className="mb-[calc(7rem+env(safe-area-inset-bottom))] mt-8 md:hidden">
+            <button
+              type="button"
+              onClick={showAllPizzas}
+              className="group flex min-h-[76px] w-full items-center gap-3 rounded-2xl bg-gradient-to-br from-[#d8a1ff] via-[#ead0ff] to-[#ffe64d] p-3 text-left text-zinc-950 shadow-[0_10px_28px_rgba(0,0,0,0.14)] ring-1 ring-black/5 transition active:scale-[0.98]"
+            >
+              <span className="min-w-0 flex-1 font-neue text-[18px] font-bold leading-tight">
+                Visualizar todos os sabores
+              </span>
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-zinc-950 text-white shadow-sm transition-transform group-active:translate-x-0.5">
+                <ArrowRight className="h-5 w-5" aria-hidden="true" />
+              </span>
             </button>
-          ))}
-        </div>
-      ) : null}
-
-      {visibleCatalogItems.length > 1 ? (
-        <CardapioItemPositionRail
-          items={visibleCatalogItems}
-          activeItemId={visibleActiveItemId}
-          onSelect={scrollToCatalogItem}
-        />
-      ) : null}
-
-      {orderedGroups.length > 0 ? (
-        orderedGroups.map((group) => (
-          <section
-            key={group.groupId}
-            ref={(element) => {
-              groupRefs.current[group.groupId] = element;
-            }}
-            data-group-id={group.groupId}
-            className={cn(
-              "mb-6",
-              bannerEnabled ? "scroll-mt-28" : "scroll-mt-20"
-            )}
-          >
-            <CardapioGroupHeader
-              title={group.group}
-              subtitle={getGroupedItemsDescription(group)}
-              profile={SECTION_THREAD_PROFILE_BY_SECTION.chef}
-              desktopFeedLayout={desktopFeedLayout}
-            />
-            <CardapioItemsGrid
-              items={getGroupedItemsList(group)}
-              interestTrackingEnabled={interestTrackingEnabled}
-              likesEnabled={likesEnabled}
-              desktopFeedLayout={desktopFeedLayout}
-            />
-          </section>
-        ))
-      ) : (
-        <CardapioItemsGrid
-          items={currentItems as CardapioIndexItem[]}
-          interestTrackingEnabled={interestTrackingEnabled}
-          likesEnabled={likesEnabled}
-          desktopFeedLayout={desktopFeedLayout}
-        />
-      )}
-
-      {hasActiveMobileFilter ? (
-        <aside className="mb-[calc(7rem+env(safe-area-inset-bottom))] mt-8 md:hidden">
-          <button
-            type="button"
-            onClick={showAllPizzas}
-            className="group flex min-h-[76px] w-full items-center gap-3 rounded-2xl bg-gradient-to-br from-[#d8a1ff] via-[#ead0ff] to-[#ffe64d] p-3 text-left text-zinc-950 shadow-[0_10px_28px_rgba(0,0,0,0.14)] ring-1 ring-black/5 transition active:scale-[0.98]"
-          >
-            <span className="min-w-0 flex-1 font-neue text-[18px] font-bold leading-tight">
-              Visualizar todos os sabores
-            </span>
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-zinc-950 text-white shadow-sm transition-transform group-active:translate-x-0.5">
-              <ArrowRight className="h-5 w-5" aria-hidden="true" />
-            </span>
-          </button>
-        </aside>
-      ) : null}
+          </aside>
+        ) : null}
+      </div>
     </div>
   );
 }
@@ -1013,12 +1034,12 @@ function StoryFilter({
   const symbol = /veg|salad|verde/.test(normalizedLabel)
     ? "leaf"
     : /doce|sobremesa|chocolate/.test(normalizedLabel)
-      ? "sparkle"
-      : /picante|apiment/.test(normalizedLabel)
-        ? "flame"
-        : /nov|destaque|promo/.test(normalizedLabel)
-          ? "star"
-          : "slice";
+    ? "sparkle"
+    : /picante|apiment/.test(normalizedLabel)
+    ? "flame"
+    : /nov|destaque|promo/.test(normalizedLabel)
+    ? "star"
+    : "slice";
 
   return (
     <button
@@ -1149,8 +1170,8 @@ function CardapioItemPositionRail({
                       ? "h-[3px] w-12 bg-black"
                       : "h-[2px] w-6 bg-zinc-300 group-hover:w-10 group-hover:bg-zinc-600"
                     : isActive
-                      ? "h-2.5 w-2.5 bg-black"
-                      : "h-1.5 w-1.5 bg-zinc-300/80 group-hover:h-2 group-hover:w-2 group-hover:bg-zinc-500"
+                    ? "h-2.5 w-2.5 bg-black"
+                    : "h-1.5 w-1.5 bg-zinc-300/80 group-hover:h-2 group-hover:w-2 group-hover:bg-zinc-500"
                 )}
               />
             </button>
@@ -1290,7 +1311,7 @@ export function CardapioItemsGrid({
       : null;
   const initialExpandedId = initialHash
     ? items.find((item) => item.slug === initialHash || item.id === initialHash)
-      ?.id ?? null
+        ?.id ?? null
     : null;
 
   const [expandedItemId, setExpandedItemId] = useState<string | null>(
@@ -1458,7 +1479,7 @@ export function CardapioItemsGrid({
       className={cn(
         "mt-4 columns-2 gap-4 md:grid md:grid-cols-3 md:columns-auto md:gap-3 lg:grid-cols-4 xl:grid-cols-4",
         desktopFeedLayout &&
-        "md:grid-cols-2 md:gap-5 lg:grid-cols-2 xl:grid-cols-2"
+          "md:grid-cols-2 md:gap-5 lg:grid-cols-2 xl:grid-cols-2"
       )}
     >
       {items.map((item, index) => (
@@ -1515,7 +1536,7 @@ function CardapioGridItem({
     featuredImage?.thumbnailUrl || item.imagePlaceholderURL || "";
   const featuredMediaKind =
     featuredImage?.kind === "video" ||
-      /\.(mp4|mov|webm|m4v|ogg|ogv)(\?|$)/i.test(featuredMediaUrl)
+    /\.(mp4|mov|webm|m4v|ogg|ogv)(\?|$)/i.test(featuredMediaUrl)
       ? "video"
       : "image";
   const featuredMediaSrcSet = buildImageSrcSet(featuredImage?.variants);
@@ -1615,8 +1636,8 @@ function CardapioGridItem({
         isMobileExpanded
           ? "fixed left-0 right-0 top-0 z-[90] mb-0 h-[88dvh] max-h-[88dvh] translate-y-0 rounded-b-[24px] rounded-t-none shadow-[0_20px_55px_rgba(15,23,42,0.34)]"
           : isExpanded
-            ? "max-h-none shadow-[0_14px_34px_rgba(15,23,42,0.22)]"
-            : "max-h-[460px] md:max-h-none",
+          ? "max-h-none shadow-[0_14px_34px_rgba(15,23,42,0.22)]"
+          : "max-h-[460px] md:max-h-none",
         isExpanded ? "md:col-span-2 lg:col-span-1" : "md:col-span-1"
       )}
     >
@@ -1626,8 +1647,8 @@ function CardapioGridItem({
           isMobileExpanded
             ? "order-1 mx-0 mb-3 mt-0 h-[32dvh] shrink-0 rounded-none"
             : isExpanded
-              ? "order-1 mb-3 mt-4 h-[min(24dvh,210px)] shrink-0 md:h-[220px]"
-              : `order-2 mb-5 ${mobileImageHeight} md:h-[160px]`,
+            ? "order-1 mb-3 mt-4 h-[min(24dvh,210px)] shrink-0 md:h-[220px]"
+            : `order-2 mb-5 ${mobileImageHeight} md:h-[160px]`,
           desktopFeedLayout && !isMobileExpanded && "md:h-[260px]"
         )}
       >
@@ -1686,8 +1707,8 @@ function CardapioGridItem({
           isMobileExpanded
             ? "order-2 min-h-0 overflow-y-auto pb-9 pt-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
             : isExpanded
-              ? "order-2 min-h-0 overflow-y-auto pt-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-              : "order-1"
+            ? "order-2 min-h-0 overflow-y-auto pt-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+            : "order-1"
         )}
         onClick={isDesktop ? undefined : onClick}
         role={isDesktop ? undefined : "button"}
@@ -1744,7 +1765,7 @@ function CardapioGridItem({
         ) : null}
 
         {clickablePublicTags.length > 0 &&
-          !showExpandedPublicTagDescriptions ? (
+        !showExpandedPublicTagDescriptions ? (
           <div className="mb-3 flex flex-wrap gap-1.5">
             {clickablePublicTags.map((tag) => {
               const passFinishingTag = isPassFinishingTag(tag);
@@ -1800,8 +1821,8 @@ function CardapioGridItem({
               {priceRange.minimum === priceRange.maximum
                 ? formatMoneyString(priceRange.minimum)
                 : `De ${formatMoneyString(
-                  priceRange.minimum
-                )} a ${formatMoneyString(priceRange.maximum)}`}
+                    priceRange.minimum
+                  )} a ${formatMoneyString(priceRange.maximum)}`}
             </span>
 
             {isDesktop ? (

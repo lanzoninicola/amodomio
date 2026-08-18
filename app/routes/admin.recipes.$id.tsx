@@ -1547,9 +1547,11 @@ export async function action({ request }: ActionFunctionArgs) {
     } catch (error) {
       return badRequest((error as Error)?.message || "Rendimento inválido");
     }
-    const costingChanged =
+    const costingModeChanged =
       String((recipe as any)?.costingMode || "") !==
-        String(costingInput.costingMode || "") ||
+      String(costingInput.costingMode || "");
+    const costingChanged =
+      costingModeChanged ||
       Number((recipe as any)?.yieldQuantity || 0) !==
         Number(costingInput.yieldQuantity || 0) ||
       String((recipe as any)?.yieldUnit || "")
@@ -1557,8 +1559,17 @@ export async function action({ request }: ActionFunctionArgs) {
         .toUpperCase() !==
         String(costingInput.yieldUnit || "").trim().toUpperCase();
 
+    const costingModeChangeConfirmed =
+      String(values.confirmCostingModeChange || "")
+        .trim()
+        .toLowerCase() === "yes";
+    if (costingModeChanged && !costingModeChangeConfirmed) {
+      return badRequest(
+        "Confirme a mudança do modo da receita e seus impactos antes de salvar."
+      );
+    }
+
     const nextRecipe = {
-      ...recipe,
       name: values.name as string,
       type: values.type as RecipeType,
       costingMode: costingInput.costingMode,
@@ -1569,13 +1580,9 @@ export async function action({ request }: ActionFunctionArgs) {
       isGlutenFree: values.isGlutenFree === "on" ? true : false,
       isVegetarian: values.isVegetarian === "on" ? true : false,
     };
-    delete nextRecipe.id;
 
     const [err] = await prismaIt(
-      recipeEntity.update(values.recipeId as string, {
-        ...recipe,
-        ...nextRecipe,
-      })
+      recipeEntity.update(values.recipeId as string, nextRecipe)
     );
 
     if (err) {

@@ -357,16 +357,17 @@ export default function AdminItemVendaComercialRoute() {
   const categories = payload.categories || [];
   const productLines = payload.productLines || [];
   const groups = payload.groups || [];
+  const sellingProductLineId =
+    groups.find((group) => group.id === sellingInfo?.itemGroupId)
+      ?.productLineId || "";
   const [categoryIdValue, setCategoryIdValue] = useState(
     sellingInfo?.categoryId || ""
   );
   const [groupIdValue, setGroupIdValue] = useState(
     sellingInfo?.itemGroupId || ""
   );
-  const [productLineIdValue, setProductLineIdValue] = useState(
-    groups.find((group) => group.id === sellingInfo?.itemGroupId)
-      ?.productLineId || ""
-  );
+  const [productLineIdValue, setProductLineIdValue] =
+    useState(sellingProductLineId);
   const [baseIngredientsValue, setBaseIngredientsValue] = useState(
     sellingInfo?.baseIngredients || ""
   );
@@ -395,10 +396,7 @@ export default function AdminItemVendaComercialRoute() {
   useEffect(() => {
     setCategoryIdValue(sellingInfo?.categoryId || "");
     setGroupIdValue(sellingInfo?.itemGroupId || "");
-    setProductLineIdValue(
-      groups.find((group) => group.id === sellingInfo?.itemGroupId)
-        ?.productLineId || ""
-    );
+    setProductLineIdValue(sellingProductLineId);
     setBaseIngredientsValue(sellingInfo?.baseIngredients || "");
     setIngredientsValue(sellingInfo?.ingredients || "");
     setLongDescriptionValue(sellingInfo?.longDescription || "");
@@ -408,7 +406,7 @@ export default function AdminItemVendaComercialRoute() {
     sellingInfo?.ingredients,
     sellingInfo?.itemGroupId,
     sellingInfo?.longDescription,
-    groups,
+    sellingProductLineId,
   ]);
 
   if (!item) {
