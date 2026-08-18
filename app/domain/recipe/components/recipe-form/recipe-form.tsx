@@ -1,6 +1,13 @@
 import { Recipe } from "@prisma/client";
-import { useEffect, useMemo, useState, type ChangeEvent } from "react";
-import { Check, ChevronsUpDown, SaveIcon } from "lucide-react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type FormEvent,
+} from "react";
+import { AlertTriangle, Check, ChevronsUpDown, SaveIcon } from "lucide-react";
 import { Form, Link } from "@remix-run/react";
 import { DecimalInput } from "~/components/inputs/inputs";
 import InputItem from "~/components/primitives/form/input-item/input-item";
@@ -30,6 +37,14 @@ import {
   SelectValue,
 } from "~/components/ui/select";
 import { Switch } from "~/components/ui/switch";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "~/components/ui/dialog";
 import { cn } from "~/lib/utils";
 
 type RecipeFormRecipe = Recipe & {
@@ -83,8 +98,14 @@ export default function RecipeForm({
   const [costingMode, setCostingMode] = useState(
     String(recipe?.costingMode || "per_variation")
   );
+  const [costingModeConfirmationOpen, setCostingModeConfirmationOpen] =
+    useState(false);
   const [itemComboboxOpen, setItemComboboxOpen] = useState(false);
   const [confirmItemRemap, setConfirmItemRemap] = useState(false);
+  const formRef = useRef<HTMLFormElement>(null);
+  const costingModeConfirmationInputRef = useRef<HTMLInputElement>(null);
+  const pendingSubmitterRef = useRef<HTMLButtonElement | null>(null);
+  const costingModeConfirmedRef = useRef(false);
 
   const selectedItem = useMemo(
     () => items.find((item) => item.id === linkedItemId) || null,
@@ -113,6 +134,14 @@ export default function RecipeForm({
   );
   const hasItemChanged =
     !isCreate && String(linkedItemId || "") !== initialLinkedItemId;
+  const initialCostingMode =
+    String(recipe?.costingMode || "per_variation") === "yield"
+      ? "yield"
+      : "per_variation";
+  const normalizedCostingMode =
+    costingMode === "yield" ? "yield" : "per_variation";
+  const hasCostingModeChanged =
+    !isCreate && normalizedCostingMode !== initialCostingMode;
 
   useEffect(() => {
     if (isCreate || !recipe) return;
@@ -144,8 +173,35 @@ export default function RecipeForm({
     }
   }, [hasItemChanged]);
 
+  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+    if (!hasCostingModeChanged || costingModeConfirmedRef.current) {
+      costingModeConfirmedRef.current = false;
+      return;
+    }
+
+    event.preventDefault();
+    const submitter = (event.nativeEvent as SubmitEvent).submitter;
+    pendingSubmitterRef.current =
+      submitter instanceof HTMLButtonElement ? submitter : null;
+    setCostingModeConfirmationOpen(true);
+  };
+
+  const confirmCostingModeChange = () => {
+    costingModeConfirmedRef.current = true;
+    if (costingModeConfirmationInputRef.current) {
+      costingModeConfirmationInputRef.current.value = "yes";
+    }
+    setCostingModeConfirmationOpen(false);
+    formRef.current?.requestSubmit(pendingSubmitterRef.current || undefined);
+  };
+
   return (
-    <Form method="post" action={formAction}>
+    <Form
+      ref={formRef}
+      method="post"
+      action={formAction}
+      onSubmit={handleSubmit}
+    >
       <input type="hidden" name="recipeId" value={recipe?.id} />
       <input type="hidden" name="_action" value={actionName} />
       <input
@@ -157,6 +213,12 @@ export default function RecipeForm({
         type="hidden"
         name="costingMode"
         value={costingMode === "yield" ? "yield" : "per_variation"}
+      />
+      <input
+        ref={costingModeConfirmationInputRef}
+        type="hidden"
+        name="confirmCostingModeChange"
+        defaultValue="no"
       />
       {hiddenFields.map((field) => (
         <input
@@ -527,6 +589,65 @@ export default function RecipeForm({
           </div>
         </div>
       </div>
+      <Dialog
+        open={costingModeConfirmationOpen}
+        onOpenChange={setCostingModeConfirmationOpen}
+      >
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-amber-600" />
+              Confirmar mudança do modo da receita
+            </DialogTitle>
+            <DialogDescription>
+              Você está mudando de{" "}
+              <strong>
+                {initialCostingMode === "yield"
+                  ? "Por rendimento"
+                  : "Por tamanho/variação"}
+              </strong>{" "}
+              para{" "}
+              <strong>
+                {normalizedCostingMode === "yield"
+                  ? "Por rendimento"
+                  : "Por tamanho/variação"}
+              </strong>
+              .
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 text-sm text-slate-600">
+            {normalizedCostingMode === "yield" ? (
+              <p>
+                As quantidades existentes serão preservadas, mas não serão
+                convertidas automaticamente. A composição passará a usar o
+                consumo do lote e o rendimento final informado.
+              </p>
+            ) : (
+              <p>
+                As quantidades existentes serão preservadas, mas o rendimento
+                final deixará de ser usado e seus valores serão removidos ao
+                salvar.
+              </p>
+            )}
+            <p>
+              As fichas técnicas vinculadas precisarão ser recalculadas para
+              atualizar os custos.
+            </p>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setCostingModeConfirmationOpen(false)}
+            >
+              Cancelar
+            </Button>
+            <Button type="button" onClick={confirmCostingModeChange}>
+              Confirmar e alterar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Form>
   );
 }
