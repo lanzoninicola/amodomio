@@ -1,6 +1,15 @@
-import { Form, Link, useOutletContext } from "@remix-run/react";
+import {
+  Form,
+  Link,
+  useLocation,
+  useNavigate,
+  useNavigation,
+  useOutletContext,
+  useSearchParams,
+} from "@remix-run/react";
 import type { ReactNode } from "react";
 import { useRef, useState } from "react";
+import { CheckCircle2, Loader2 } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -47,7 +56,24 @@ export default function AdminItemMainTab() {
   );
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [showDuplicateDialog, setShowDuplicateDialog] = useState(false);
+  const [searchParams] = useSearchParams();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const duplicatedItemId = searchParams.get("duplicatedItemId");
+  const duplicatedItemName = searchParams.get("duplicatedItemName");
+  const showDuplicationSuccess = Boolean(duplicatedItemId);
+  const navigation = useNavigation();
+  const isDuplicating =
+    navigation.state !== "idle" &&
+    navigation.formData?.get("_action") === "item-duplicate";
   const formRef = useRef<HTMLFormElement | null>(null);
+
+  const closeDuplicateDialog = () => {
+    setShowDuplicateDialog(false);
+    if (showDuplicationSuccess) {
+      navigate(location.pathname, { replace: true });
+    }
+  };
 
   useSaveShortcut({
     callback: () => {
@@ -71,8 +97,12 @@ export default function AdminItemMainTab() {
               </Link>
             </Button>
             <AlertDialog
-              open={showDuplicateDialog}
-              onOpenChange={setShowDuplicateDialog}
+              open={showDuplicateDialog || showDuplicationSuccess}
+              onOpenChange={(open) => {
+                if (isDuplicating) return;
+                if (open) setShowDuplicateDialog(true);
+                else closeDuplicateDialog();
+              }}
             >
               <AlertDialogTrigger asChild>
                 <Button type="button" variant="outline">
@@ -80,62 +110,141 @@ export default function AdminItemMainTab() {
                 </Button>
               </AlertDialogTrigger>
               <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Duplicar item</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    Crie um novo item a partir de <strong>{item.name}</strong>.
-                    O nome precisa ser diferente do original.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <Form method="post" action=".." className="space-y-4">
-                  <input type="hidden" name="_action" value="item-duplicate" />
-                  <div className="space-y-2">
-                    <Label htmlFor="duplicateName">Nome do novo item</Label>
-                    <Input
-                      id="duplicateName"
-                      name="duplicateName"
-                      defaultValue={`${item.name} (cópia)`}
-                      required
-                    />
-                  </div>
-                  {Number(item._linkedRecipeCount || 0) > 0 ||
-                  Number(item._itemCostSheetCount || 0) > 0 ? (
-                    <div className="space-y-3 rounded-md border border-slate-200 p-4">
-                      {Number(item._linkedRecipeCount || 0) > 0 ? (
-                        <label className="flex items-start gap-3 text-sm">
-                          <Checkbox name="duplicateRecipe" />
-                          <span>
-                            <span className="font-medium">
-                              Duplicar receita
-                            </span>
-                            <span className="block text-slate-500">
-                              Copia e vincula {Number(item._linkedRecipeCount)}{" "}
-                              receita(s) ao novo item.
-                            </span>
-                          </span>
-                        </label>
+                {showDuplicationSuccess ? (
+                  <>
+                    <AlertDialogHeader>
+                      <div className="mb-2 flex size-10 items-center justify-center rounded-full bg-emerald-50 text-emerald-600">
+                        <CheckCircle2 className="size-5" />
+                      </div>
+                      <AlertDialogTitle>
+                        Item duplicado com sucesso
+                      </AlertDialogTitle>
+                      <AlertDialogDescription>
+                        <strong>{duplicatedItemName || "O novo item"}</strong>{" "}
+                        foi criado com todos os vínculos selecionados. Agora
+                        você pode abrir e revisar o novo cadastro.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={closeDuplicateDialog}
+                      >
+                        Fechar
+                      </Button>
+                      <Button asChild>
+                        <Link
+                          to={`/admin/items/${duplicatedItemId}/main`}
+                          onClick={() => setShowDuplicateDialog(false)}
+                        >
+                          Abrir item novo
+                        </Link>
+                      </Button>
+                    </AlertDialogFooter>
+                  </>
+                ) : (
+                  <>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Duplicar item</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        Crie um novo item a partir de{" "}
+                        <strong>{item.name}</strong>. O nome precisa ser
+                        diferente do original.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <Form
+                      method="post"
+                      action=".."
+                      className="space-y-4"
+                      aria-busy={isDuplicating}
+                    >
+                      <input
+                        type="hidden"
+                        name="_action"
+                        value="item-duplicate"
+                      />
+                      <div className="space-y-2">
+                        <Label htmlFor="duplicateName">Nome do novo item</Label>
+                        <Input
+                          id="duplicateName"
+                          name="duplicateName"
+                          defaultValue={`${item.name} (cópia)`}
+                          required
+                          disabled={isDuplicating}
+                        />
+                      </div>
+                      {Number(item._linkedRecipeCount || 0) > 0 ||
+                      Number(item._itemCostSheetCount || 0) > 0 ? (
+                        <div className="space-y-3 rounded-md border border-slate-200 p-4">
+                          {Number(item._linkedRecipeCount || 0) > 0 ? (
+                            <label className="flex items-start gap-3 text-sm">
+                              <Checkbox
+                                name="duplicateRecipe"
+                                disabled={isDuplicating}
+                              />
+                              <span>
+                                <span className="font-medium">
+                                  Duplicar receita
+                                </span>
+                                <span className="block text-slate-500">
+                                  Copia e vincula{" "}
+                                  {Number(item._linkedRecipeCount)} receita(s)
+                                  ao novo item.
+                                </span>
+                              </span>
+                            </label>
+                          ) : null}
+                          {Number(item._itemCostSheetCount || 0) > 0 ? (
+                            <label className="flex items-start gap-3 text-sm">
+                              <Checkbox
+                                name="duplicateCostSheet"
+                                disabled={isDuplicating}
+                              />
+                              <span>
+                                <span className="font-medium">
+                                  Duplicar ficha de custo
+                                </span>
+                                <span className="block text-slate-500">
+                                  Copia a ficha mais recente, vincula às novas
+                                  variações e deixa ativa.
+                                </span>
+                              </span>
+                            </label>
+                          ) : null}
+                        </div>
                       ) : null}
-                      {Number(item._itemCostSheetCount || 0) > 0 ? (
-                        <label className="flex items-start gap-3 text-sm">
-                          <Checkbox name="duplicateCostSheet" />
+                      {isDuplicating ? (
+                        <div
+                          className="flex items-start gap-3 rounded-md bg-slate-50 p-3 text-sm text-slate-600"
+                          role="status"
+                          aria-live="polite"
+                        >
+                          <Loader2 className="mt-0.5 size-4 shrink-0 animate-spin" />
                           <span>
-                            <span className="font-medium">
-                              Duplicar ficha de custo
-                            </span>
-                            <span className="block text-slate-500">
-                              Copia a ficha mais recente, vincula às novas
-                              variações e deixa ativa.
-                            </span>
+                            Duplicando item e processando os vínculos
+                            selecionados. Aguarde até a conclusão.
                           </span>
-                        </label>
+                        </div>
                       ) : null}
-                    </div>
-                  ) : null}
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                    <Button type="submit">Duplicar item</Button>
-                  </AlertDialogFooter>
-                </Form>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel disabled={isDuplicating}>
+                          Cancelar
+                        </AlertDialogCancel>
+                        <Button type="submit" disabled={isDuplicating}>
+                          {isDuplicating ? (
+                            <>
+                              <Loader2 className="mr-2 size-4 animate-spin" />
+                              Duplicando...
+                            </>
+                          ) : (
+                            "Duplicar item"
+                          )}
+                        </Button>
+                      </AlertDialogFooter>
+                    </Form>
+                  </>
+                )}
               </AlertDialogContent>
             </AlertDialog>
             <AlertDialog

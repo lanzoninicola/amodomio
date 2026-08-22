@@ -476,6 +476,41 @@ export async function unpublishContentTarget(targetId: string) {
   await requestContentTargetRemoval(targetId);
 }
 
+export async function findOtherActiveContentTargets(
+  channel: ContentPostChannel,
+  contentPostId: string
+) {
+  return prismaClient.contentPublicationTarget.findMany({
+    where: {
+      channel,
+      contentPostId: { not: contentPostId },
+      status: "active",
+      lastPublishedAt: { not: null },
+      deletedAt: null,
+      ContentPost: {
+        status: CONTENT_POST_STATUSES.ACTIVE,
+        deletedAt: null,
+      },
+    },
+    select: {
+      id: true,
+      ContentPost: { select: { id: true, title: true } },
+    },
+    orderBy: { lastPublishedAt: "desc" },
+  });
+}
+
+export async function unpublishOtherActiveContentTargets(
+  channel: ContentPostChannel,
+  contentPostId: string
+) {
+  const targets = await findOtherActiveContentTargets(channel, contentPostId);
+  for (const target of targets) {
+    await requestContentTargetRemoval(target.id);
+  }
+  return targets;
+}
+
 export async function setContentPostStatus(id: string, statusValue: unknown) {
   const status = assertStatus(statusValue);
   const existing = await getContentPost(id);

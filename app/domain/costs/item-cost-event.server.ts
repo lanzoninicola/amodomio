@@ -1,5 +1,8 @@
 import prismaClient from "~/lib/prisma/client.server";
-import { itemCostVariationPrismaEntity, type ItemCostVariationSource } from "~/domain/item/item-cost-variation.prisma.entity.server";
+import {
+  itemCostVariationPrismaEntity,
+  type ItemCostVariationSource,
+} from "~/domain/item/item-cost-variation.prisma.entity.server";
 import {
   getDefaultDirectionForMovementType,
   normalizeStockMovementDirection,
@@ -47,15 +50,17 @@ export async function registerItemCostEvent(input: RegisterItemCostEventInput) {
   }
 
   const db = (input.client || prismaClient) as any;
-  const movementType = normalizeStockMovementType(input.movementType || input.source || "manual");
+  const movementType = normalizeStockMovementType(
+    input.movementType || input.source || "manual"
+  );
   const direction = normalizeStockMovementDirection(
     input.direction || getDefaultDirectionForMovementType(movementType)
   );
   const effectiveAt = input.validFrom || input.movementAt || new Date();
   const comparisonOnly = input.comparisonOnly === true;
 
-  return await db.$transaction(async (tx: any) => {
-    const itemVariation = await tx.itemVariation.findUnique({
+  const registerWithClient = async (client: any) => {
+    const itemVariation = await client.itemVariation.findUnique({
       where: { id: input.itemVariationId },
       select: {
         id: true,
@@ -68,7 +73,7 @@ export async function registerItemCostEvent(input: RegisterItemCostEventInput) {
       throw new Error("ItemVariation inválida ou removida");
     }
 
-    const currentCost = await tx.itemCostVariation.findUnique({
+    const currentCost = await client.itemCostVariation.findUnique({
       where: { itemVariationId: input.itemVariationId },
       select: {
         id: true,
@@ -87,7 +92,7 @@ export async function registerItemCostEvent(input: RegisterItemCostEventInput) {
       originRefId: input.originRefId || null,
     };
 
-    const movement = await tx.stockMovement.create({
+    const movement = await client.stockMovement.create({
       data: {
         direction,
         movementType,
@@ -101,7 +106,9 @@ export async function registerItemCostEvent(input: RegisterItemCostEventInput) {
         quantityAmount: input.quantityAmount ?? null,
         quantityUnit: input.quantityUnit || null,
         previousCostVariationId: currentCost?.id || null,
-        lastCostAtImport: currentCost ? Number(currentCost.costAmount || 0) : null,
+        lastCostAtImport: currentCost
+          ? Number(currentCost.costAmount || 0)
+          : null,
         lastCostUnitAtImport: currentCost?.unit || null,
         newCostAtImport: nextCost,
         newCostUnitAtImport: input.unit || null,
@@ -133,11 +140,23 @@ export async function registerItemCostEvent(input: RegisterItemCostEventInput) {
     };
 
     if (comparisonOnly) {
-      await itemCostVariationPrismaEntity.addHistoryEntryWithClient(tx, costInput);
+      await itemCostVariationPrismaEntity.addHistoryEntryWithClient(
+        client,
+        costInput
+      );
     } else {
-      await itemCostVariationPrismaEntity.setCurrentCostWithClient(tx, costInput);
+      await itemCostVariationPrismaEntity.setCurrentCostWithClient(
+        client,
+        costInput
+      );
     }
 
     return movement;
-  });
+  };
+
+  if (typeof db?.$transaction === "function") {
+    return db.$transaction(registerWithClient);
+  }
+
+  return registerWithClient(db);
 }

@@ -92,8 +92,8 @@ export async function resolveAdminActionNotificationTarget(
   if (targets.length === 0) return;
 
   const now = new Date();
-  await db.$transaction(async (tx: any) => {
-    await tx.adminActionNotificationTarget.updateMany({
+  const resolveTargets = async (client: any) => {
+    await client.adminActionNotificationTarget.updateMany({
       where: { id: { in: targets.map((row: any) => row.id) } },
       data: { resolvedAt: now },
     });
@@ -101,17 +101,24 @@ export async function resolveAdminActionNotificationTarget(
     for (const notificationId of new Set(
       targets.map((row: any) => String(row.notificationId))
     )) {
-      const pendingCount = await tx.adminActionNotificationTarget.count({
+      const pendingCount = await client.adminActionNotificationTarget.count({
         where: { notificationId, resolvedAt: null },
       });
       if (pendingCount === 0) {
-        await tx.adminActionNotification.update({
+        await client.adminActionNotification.update({
           where: { id: notificationId },
           data: { status: "resolved", resolvedAt: now },
         });
       }
     }
-  });
+  };
+
+  if (typeof db?.$transaction === "function") {
+    await db.$transaction(resolveTargets);
+    return;
+  }
+
+  await resolveTargets(db);
 }
 
 export async function listOpenAdminActionNotifications(

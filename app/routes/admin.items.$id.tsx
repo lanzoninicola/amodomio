@@ -691,7 +691,14 @@ export async function action({ request, params }: ActionFunctionArgs) {
           duplicateCostSheet: toBool(formData.get("duplicateCostSheet")),
         });
 
-        return redirect(`/admin/items/${duplicatedItem.id}/main`);
+        const duplicationResultParams = new URLSearchParams({
+          duplicatedItemId: duplicatedItem.id,
+          duplicatedItemName: duplicatedItem.name,
+        });
+
+        return redirect(
+          `/admin/items/${id}/main?${duplicationResultParams.toString()}`
+        );
       } catch (error) {
         return badRequest(
           (error as Error)?.message || "Não foi possível duplicar o item"

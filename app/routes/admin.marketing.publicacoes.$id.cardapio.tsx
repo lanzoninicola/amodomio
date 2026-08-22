@@ -6,8 +6,17 @@ import {
   useLoaderData,
   useNavigation,
 } from "@remix-run/react";
-import { Send, Undo2 } from "lucide-react";
-import type { ReactNode } from "react";
+import { Loader2, Send, Undo2 } from "lucide-react";
+import { useEffect, useState, type ReactNode } from "react";
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "~/components/ui/alert-dialog";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
@@ -22,9 +31,12 @@ import {
 import { Separator } from "~/components/ui/separator";
 import { Switch } from "~/components/ui/switch";
 import {
+  findOtherActiveContentTargets,
   getContentPost,
   runContentTargetOperation,
+  setContentPostStatus,
   unpublishContentTarget,
+  unpublishOtherActiveContentTargets,
   updateContentPostTarget,
 } from "~/domain/content-post/content-post.server";
 import {
@@ -45,13 +57,20 @@ export async function loader({ params }: LoaderFunctionArgs) {
     (item) => item.channel === CONTENT_POST_CHANNELS.CARDAPIO_FEATURED
   );
   if (!target) throw new Response("Canal não encontrado", { status: 404 });
-  return json({ post, target });
+  const activeTargets = await findOtherActiveContentTargets(
+    CONTENT_POST_CHANNELS.CARDAPIO_FEATURED,
+    post.id
+  );
+  return json({ post, target, activeTargets });
 }
 
 export async function action({ request, params }: ActionFunctionArgs) {
   const contentPostId = String(params.id || "");
   const form = await request.formData();
   const intent = String(form.get("_intent") || "save");
+  const isPublish = intent.startsWith("publish");
+  const activatePost = intent.includes("activate");
+  const replaceActive = intent.endsWith("replace");
   const displayStyle = String(form.get("displayStyle") || "polaroid");
   const post = await getContentPost(contentPostId);
   const target = post.Targets.find(
@@ -59,10 +78,65 @@ export async function action({ request, params }: ActionFunctionArgs) {
   );
   if (!target) throw new Response("Canal não encontrado", { status: 404 });
 
+  const activeTargets = isPublish
+    ? await findOtherActiveContentTargets(
+        CONTENT_POST_CHANNELS.CARDAPIO_FEATURED,
+        contentPostId
+      )
+    : [];
+
+  if (
+    isPublish &&
+    post.status === CONTENT_POST_STATUSES.DRAFT &&
+    !activatePost
+  ) {
+    return json(
+      {
+        ok: false,
+        requiresConfirmation: true,
+        requiresActivation: true,
+        activeTitles: activeTargets.map((item) => item.ContentPost.title),
+        message: "Confirme a ativação da publicação.",
+      },
+      { status: 409 }
+    );
+  }
+
+  if (
+    isPublish &&
+    post.status !== CONTENT_POST_STATUSES.ACTIVE &&
+    !(post.status === CONTENT_POST_STATUSES.DRAFT && activatePost)
+  ) {
+    return json(
+      {
+        ok: false,
+        message: "Apenas publicações em rascunho podem ser ativadas.",
+      },
+      { status: 409 }
+    );
+  }
+
+  if (isPublish && activeTargets.length && !replaceActive) {
+    return json(
+      {
+        ok: false,
+        requiresConfirmation: true,
+        requiresActivation: false,
+        activeTitles: activeTargets.map((item) => item.ContentPost.title),
+        message: "Confirme a substituição da publicação ativa.",
+      },
+      { status: 409 }
+    );
+  }
+
   if (intent === "unpublish") {
     await unpublishContentTarget(target.id);
     await invalidateCardapioIndexCache();
     return json({ ok: true, message: "Removido do cardápio." });
+  }
+
+  if (isPublish && activatePost) {
+    await setContentPostStatus(contentPostId, CONTENT_POST_STATUSES.ACTIVE);
   }
 
   await updateContentPostTarget({
@@ -78,11 +152,11 @@ export async function action({ request, params }: ActionFunctionArgs) {
     },
   });
 
-  if (intent === "publish") {
-    if (post.status !== CONTENT_POST_STATUSES.ACTIVE) {
-      return json(
-        { ok: false, message: "Ative o conteúdo primeiro." },
-        { status: 409 }
+  if (isPublish) {
+    if (replaceActive) {
+      await unpublishOtherActiveContentTargets(
+        CONTENT_POST_CHANNELS.CARDAPIO_FEATURED,
+        contentPostId
       );
     }
 
@@ -96,7 +170,12 @@ export async function action({ request, params }: ActionFunctionArgs) {
       response: (value) => value,
     });
     await invalidateCardapioIndexCache();
-    return json({ ok: true, message: "Publicado no cardápio." });
+    return json({
+      ok: true,
+      message: activatePost
+        ? "Publicação ativada e publicada no cardápio."
+        : "Publicado no cardápio.",
+    });
   }
 
   await invalidateCardapioIndexCache();
@@ -131,17 +210,60 @@ function ConfigSwitch({
 }
 
 export default function ContentPostCardapioPage() {
-  const { post, target } = useLoaderData<typeof loader>();
+  const { post, target, activeTargets } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const navigation = useNavigation();
+  const [replaceDialogOpen, setReplaceDialogOpen] = useState(false);
   const config = parseCardapioFeaturedConfig(target.config);
   const submitting = navigation.state === "submitting";
+  const publishingWithConfirmation =
+    navigation.state !== "idle" &&
+    String(navigation.formData?.get("_intent") || "").startsWith("publish-");
   const isPublished =
     target.status === "active" && Boolean(target.lastPublishedAt);
   const canUnpublish = isPublished;
+  const confirmationTitles =
+    actionData &&
+    "activeTitles" in actionData &&
+    Array.isArray(actionData.activeTitles)
+      ? actionData.activeTitles
+      : null;
+  const serverRequiresConfirmation = Boolean(
+    actionData &&
+      "requiresConfirmation" in actionData &&
+      actionData.requiresConfirmation
+  );
+  const serverRequiresActivation = Boolean(
+    actionData &&
+      "requiresActivation" in actionData &&
+      actionData.requiresActivation
+  );
+  const activeTitles =
+    confirmationTitles ?? activeTargets.map((item) => item.ContentPost.title);
+  const needsActivation =
+    post.status === CONTENT_POST_STATUSES.DRAFT || serverRequiresActivation;
+  const needsReplacement = activeTitles.length > 0;
+  const needsConfirmation = needsActivation || needsReplacement;
+  const confirmPublishIntent = `publish${needsActivation ? "-activate" : ""}${
+    needsReplacement ? "-replace" : ""
+  }`;
+
+  useEffect(() => {
+    if (serverRequiresConfirmation) setReplaceDialogOpen(true);
+  }, [serverRequiresConfirmation]);
+
+  useEffect(() => {
+    if (navigation.state === "idle" && actionData?.ok) {
+      setReplaceDialogOpen(false);
+    }
+  }, [actionData, navigation.state]);
 
   return (
-    <Form method="post" className="grid max-w-2xl gap-6">
+    <Form
+      id="cardapio-publication-form"
+      method="post"
+      className="grid max-w-2xl gap-6"
+    >
       <div className="flex items-start justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
@@ -175,16 +297,101 @@ export default function ContentPostCardapioPage() {
             {submitting ? "Removendo..." : "Despublicar"}
           </Button>
           <Button
-            type="submit"
-            name="_intent"
-            value="publish"
+            type={needsConfirmation ? "button" : "submit"}
+            name={needsConfirmation ? undefined : "_intent"}
+            value={needsConfirmation ? undefined : "publish"}
             size="sm"
             disabled={submitting}
             className="gap-2"
+            onClick={() => {
+              if (needsConfirmation) setReplaceDialogOpen(true);
+            }}
           >
             <Send className="h-4 w-4" aria-hidden="true" />
             {submitting ? "Publicando..." : "Publicar"}
           </Button>
+          <AlertDialog
+            open={replaceDialogOpen}
+            onOpenChange={(open) => {
+              if (!publishingWithConfirmation) setReplaceDialogOpen(open);
+            }}
+          >
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>
+                  {publishingWithConfirmation
+                    ? "Atualizando o Cardápio..."
+                    : needsActivation && needsReplacement
+                    ? "Ativar e substituir publicação?"
+                    : needsActivation
+                    ? "Ativar e publicar no Cardápio?"
+                    : "Substituir publicação ativa?"}
+                </AlertDialogTitle>
+                <AlertDialogDescription>
+                  {publishingWithConfirmation ? (
+                    <span className="flex items-center gap-2">
+                      <Loader2
+                        className="h-4 w-4 shrink-0 animate-spin"
+                        aria-hidden="true"
+                      />
+                      {needsActivation
+                        ? "Ativando esta publicação"
+                        : "Publicando esta publicação"}
+                      {needsReplacement
+                        ? " e substituindo a anterior."
+                        : " no Cardápio."}{" "}
+                      Aguarde a conclusão.
+                    </span>
+                  ) : (
+                    <>
+                      {needsActivation
+                        ? "Esta publicação está em Rascunho. Ao continuar, ela será ativada e publicada no Cardápio."
+                        : null}{" "}
+                      {needsReplacement ? (
+                        <>
+                          {activeTitles.length === 1
+                            ? `“${activeTitles[0]}” já está publicada no Cardápio.`
+                            : `${activeTitles.length} publicações já estão ativas no Cardápio.`}{" "}
+                          {activeTitles.length === 1
+                            ? "Ela será"
+                            : "Elas serão"}{" "}
+                          despublicada{activeTitles.length === 1 ? "" : "s"} e
+                          esta publicação ficará ativa.
+                        </>
+                      ) : null}
+                    </>
+                  )}
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel disabled={publishingWithConfirmation}>
+                  Cancelar
+                </AlertDialogCancel>
+                <Button
+                  type="submit"
+                  form="cardapio-publication-form"
+                  name="_intent"
+                  value={confirmPublishIntent}
+                  disabled={publishingWithConfirmation}
+                  className="gap-2"
+                >
+                  {publishingWithConfirmation ? (
+                    <Loader2
+                      className="h-4 w-4 animate-spin"
+                      aria-hidden="true"
+                    />
+                  ) : null}
+                  {publishingWithConfirmation
+                    ? "Atualizando Cardápio..."
+                    : needsActivation && needsReplacement
+                    ? "Ativar e substituir"
+                    : needsActivation
+                    ? "Ativar e publicar"
+                    : "Despublicar e publicar"}
+                </Button>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </div>
       </div>
 
