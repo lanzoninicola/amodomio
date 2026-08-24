@@ -30,6 +30,7 @@ import {
 } from "~/components/ui/select";
 import { Separator } from "~/components/ui/separator";
 import { Switch } from "~/components/ui/switch";
+import { CardapioMediaConfigFields } from "~/domain/content-post/components/cardapio-media-config-fields";
 import {
   findOtherActiveContentTargets,
   getContentPost,
@@ -43,8 +44,10 @@ import {
   CONTENT_POST_CHANNELS,
   CONTENT_POST_STATUSES,
   parseCardapioFeaturedConfig,
+  type CardapioFeaturedMediaConfig,
 } from "~/domain/content-post/content-post.shared";
 import { invalidateCardapioIndexCache } from "~/domain/cardapio/cardapio-cache.server";
+import prismaClient from "~/lib/prisma/client.server";
 
 function parseOrder(value: FormDataEntryValue | null) {
   const parsed = Number(value || 0);
@@ -52,7 +55,18 @@ function parseOrder(value: FormDataEntryValue | null) {
 }
 
 export async function loader({ params }: LoaderFunctionArgs) {
-  const post = await getContentPost(String(params.id || ""));
+  const [post, menuItems] = await Promise.all([
+    getContentPost(String(params.id || "")),
+    prismaClient.item.findMany({
+      where: {
+        active: true,
+        canSell: true,
+        ItemSellingInfo: { is: { slug: { not: null } } },
+      },
+      select: { id: true, name: true },
+      orderBy: { name: "asc" },
+    }),
+  ]);
   const target = post.Targets.find(
     (item) => item.channel === CONTENT_POST_CHANNELS.CARDAPIO_FEATURED
   );
@@ -61,7 +75,30 @@ export async function loader({ params }: LoaderFunctionArgs) {
     CONTENT_POST_CHANNELS.CARDAPIO_FEATURED,
     post.id
   );
-  return json({ post, target, activeTargets });
+  return json({ post, target, activeTargets, menuItems });
+}
+
+function parseMediaConfig(
+  form: FormData,
+  index: number
+): CardapioFeaturedMediaConfig {
+  const mode = String(form.get(`linkMode_${index}`) || "none");
+  const value = (name: string) =>
+    String(form.get(`${name}_${index}`) || "").trim() || null;
+  return {
+    linkUrl:
+      mode === "internal" || mode === "external" ? value("linkUrl") : null,
+    linkText: mode === "none" ? null : value("linkText"),
+    linkMenuItemId: mode === "item" ? value("linkMenuItemId") : null,
+    linkBackgroundColor: value("linkBackgroundColor"),
+    linkTextColor: value("linkTextColor"),
+    linkPosition:
+      form.get(`linkPosition_${index}`) === "bottom" ? "bottom" : "top",
+    linkNewTab: form.get(`linkNewTab_${index}`) !== "false",
+    chipAction: mode === "none" ? "none" : mode === "modal" ? "modal" : "link",
+    chipModalTitle: mode === "modal" ? value("chipModalTitle") : null,
+    chipModalBody: mode === "modal" ? value("chipModalBody") : null,
+  };
 }
 
 export async function action({ request, params }: ActionFunctionArgs) {
@@ -77,6 +114,14 @@ export async function action({ request, params }: ActionFunctionArgs) {
     (item) => item.channel === CONTENT_POST_CHANNELS.CARDAPIO_FEATURED
   );
   if (!target) throw new Response("Canal não encontrado", { status: 404 });
+  const availableMediaKeys = new Set(post.Media.map((media) => media.key));
+  const selectedMediaKeys = form
+    .getAll("cardapioMediaKey")
+    .map(String)
+    .filter((key) => availableMediaKeys.has(key));
+  const mediaConfigByKey = Object.fromEntries(
+    post.Media.map((media, index) => [media.key, parseMediaConfig(form, index)])
+  );
 
   const activeTargets = isPublish
     ? await findOtherActiveContentTargets(
@@ -129,6 +174,16 @@ export async function action({ request, params }: ActionFunctionArgs) {
     );
   }
 
+  if (isPublish && selectedMediaKeys.length === 0) {
+    return json(
+      {
+        ok: false,
+        message: "Selecione pelo menos uma mídia para publicar no Cardápio.",
+      },
+      { status: 400 }
+    );
+  }
+
   if (intent === "unpublish") {
     await unpublishContentTarget(target.id);
     await invalidateCardapioIndexCache();
@@ -149,6 +204,8 @@ export async function action({ request, params }: ActionFunctionArgs) {
       showPromotionHint: form.get("showPromotionHint") === "on",
       promotionHintText:
         String(form.get("promotionHintText") || "").trim() || null,
+      selectedMediaKeys,
+      mediaConfigByKey,
     },
   });
 
@@ -210,11 +267,19 @@ function ConfigSwitch({
 }
 
 export default function ContentPostCardapioPage() {
-  const { post, target, activeTargets } = useLoaderData<typeof loader>();
+  const { post, target, activeTargets, menuItems } =
+    useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const navigation = useNavigation();
   const [replaceDialogOpen, setReplaceDialogOpen] = useState(false);
   const config = parseCardapioFeaturedConfig(target.config);
+  const selectedMediaKeys = new Set(
+    config.selectedMediaKeys ?? post.Media.map((media) => media.key)
+  );
+  const itemOptions = menuItems.map((item) => ({
+    value: item.id,
+    label: item.name,
+  }));
   const submitting = navigation.state === "submitting";
   const publishingWithConfirmation =
     navigation.state !== "idle" &&
@@ -424,6 +489,81 @@ export default function ContentPostCardapioPage() {
       </div>
 
       <div className="grid gap-4">
+        <div className="grid gap-3">
+          <div>
+            <Label>Mídias do Cardápio</Label>
+            <p className="text-xs text-slate-500">
+              Selecione somente as mídias deste canal. O acervo completo
+              continua disponível na aba Mídias.
+            </p>
+          </div>
+          {post.Media.length ? (
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {post.Media.map((media, index) => {
+                const channelMedia = config.mediaConfigByKey[media.key] || {
+                  linkUrl: media.linkUrl,
+                  linkText: media.linkText,
+                  linkMenuItemId: media.linkMenuItemId,
+                  linkBackgroundColor: media.linkBackgroundColor,
+                  linkTextColor: media.linkTextColor,
+                  linkPosition:
+                    media.linkPosition === "bottom"
+                      ? ("bottom" as const)
+                      : ("top" as const),
+                  linkNewTab: media.linkNewTab,
+                  chipAction:
+                    media.chipAction === "none" || media.chipAction === "modal"
+                      ? media.chipAction
+                      : ("link" as const),
+                  chipModalTitle: media.chipModalTitle,
+                  chipModalBody: media.chipModalBody,
+                };
+                return (
+                  <div
+                    key={media.id}
+                    className="grid gap-3 rounded-lg border border-slate-200 p-3"
+                  >
+                    {media.kind === "video" ? (
+                      <video
+                        src={media.mediaUrl}
+                        className="aspect-[4/5] w-full rounded-md bg-slate-100 object-cover"
+                        muted
+                        playsInline
+                      />
+                    ) : (
+                      <img
+                        src={media.mediaUrl}
+                        alt={media.alt || media.title}
+                        className="aspect-[4/5] w-full rounded-md bg-slate-100 object-cover"
+                      />
+                    )}
+                    <label className="flex cursor-pointer items-start gap-3 text-sm">
+                      <input
+                        type="checkbox"
+                        name="cardapioMediaKey"
+                        value={media.key}
+                        defaultChecked={selectedMediaKeys.has(media.key)}
+                        className="mt-0.5 h-4 w-4"
+                      />
+                      <span className="font-medium">
+                        {media.title || `Mídia ${index + 1}`}
+                      </span>
+                    </label>
+                    <CardapioMediaConfigFields
+                      index={index}
+                      media={channelMedia}
+                      itemOptions={itemOptions}
+                    />
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+              Adicione mídias ao acervo antes de configurar este canal.
+            </div>
+          )}
+        </div>
         <div className="grid gap-2 sm:grid-cols-2">
           <div className="grid gap-2">
             <Label htmlFor="cardapioSortOrder">Ordem</Label>

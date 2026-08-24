@@ -123,6 +123,10 @@ export default function ContentPostWhatsappPage() {
 
   return (
     <Form method="post" className="grid gap-6">
+      <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+        Para o WhatsApp, vídeos não podem superar 10 minutos. Mantenha também o
+        arquivo em até 100 MB.
+      </div>
       <StatusPublicationMediaForm
         caption={whatsapp.caption || post.caption || ""}
         captionPlaceholder={post.caption || post.title}

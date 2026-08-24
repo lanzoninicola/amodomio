@@ -1,4 +1,5 @@
 export type UploadKind = "image" | "video" | "audio";
+export const MEDIA_UPLOAD_MAX_BYTES = 100 * 1024 * 1024;
 
 export type ImageVariants = Record<string, string>;
 

@@ -1,34 +1,21 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
 import { NavLink, Outlet, useFetcher, useLoaderData } from "@remix-run/react";
-import { LinkIcon, Save, Trash2 } from "lucide-react";
+import { Save, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { Button } from "~/components/ui/button";
-import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "~/components/ui/select";
-import {
-  SearchableSelect,
-  type SearchableSelectOption,
-} from "~/components/ui/searchable-select";
 import { Textarea } from "~/components/ui/textarea";
-import {
-  DEFAULT_CONTENT_LINK_BACKGROUND_COLOR,
-  DEFAULT_CONTENT_LINK_TEXT_COLOR,
-  parseContentPostMediaForm,
-} from "~/domain/content-post/content-post-media.shared";
+import { parseContentPostMediaForm } from "~/domain/content-post/content-post-media.shared";
 import {
   getContentPost,
   replaceContentPostMedia,
 } from "~/domain/content-post/content-post.server";
 import { invalidateCardapioIndexCache } from "~/domain/cardapio/cardapio-cache.server";
-import { normalizePath } from "~/domain/media/media.shared";
+import {
+  MEDIA_UPLOAD_MAX_BYTES,
+  normalizePath,
+} from "~/domain/media/media.shared";
 import prismaClient from "~/lib/prisma/client.server";
 
 export type ContentPostMediaOutletContext = {
@@ -38,23 +25,22 @@ export type ContentPostMediaOutletContext = {
 };
 
 export async function loader({ params }: LoaderFunctionArgs) {
-  const [post, menuItems] = await Promise.all([
-    getContentPost(String(params.id || "")),
-    prismaClient.item.findMany({
-      where: {
-        active: true,
-        canSell: true,
-        ItemSellingInfo: { is: { slug: { not: null } } },
-      },
-      select: {
-        id: true,
-        name: true,
-        ItemSellingInfo: { select: { slug: true } },
-      },
-      orderBy: { name: "asc" },
-    }),
-  ]);
-  return json({ post, menuItems });
+  const post = await getContentPost(String(params.id || ""));
+  const assets = post.Media.length
+    ? await prismaClient.mediaAsset.findMany({
+        where: { url: { in: post.Media.map((media) => media.mediaUrl) } },
+        select: { url: true, sizeBytes: true },
+      })
+    : [];
+  return json({
+    post,
+    sizeBytesByUrl: Object.fromEntries(
+      assets.map((asset) => [
+        asset.url,
+        asset.sizeBytes == null ? null : Number(asset.sizeBytes),
+      ])
+    ),
+  });
 }
 
 export async function action({ request, params }: ActionFunctionArgs) {
@@ -76,160 +62,59 @@ export async function action({ request, params }: ActionFunctionArgs) {
   }
 }
 
-function MediaLinkFields({
-  index,
-  media,
-  itemOptions,
-}: {
-  index: number;
-  media: {
-    linkUrl: string | null;
-    linkText: string | null;
-    linkMenuItemId: string | null;
-    chipAction: string | null;
-    chipModalTitle: string | null;
-    chipModalBody: string | null;
-  };
-  itemOptions: SearchableSelectOption[];
-}) {
-  const [mode, setMode] = useState<
-    "none" | "external" | "internal" | "item" | "modal"
-  >(
-    media.chipAction === "none"
-      ? "none"
-      : media.chipAction === "modal"
-      ? "modal"
-      : media.linkMenuItemId
-      ? "item"
-      : media.linkUrl?.startsWith("/")
-      ? "internal"
-      : "external"
-  );
-  const [menuItemId, setMenuItemId] = useState(media.linkMenuItemId || "");
-  const [linkText, setLinkText] = useState(media.linkText || "");
-  const isItemLink = mode === "item";
-
-  return (
-    <>
-      <div className="grid gap-2">
-        <Label>Tipo de chip</Label>
-        <Select
-          name={`linkMode_${index}`}
-          value={mode}
-          onValueChange={(value) => {
-            if (
-              value === "none" ||
-              value === "item" ||
-              value === "internal" ||
-              value === "modal"
-            ) {
-              setMode(value);
-              return;
-            }
-            setMode("external");
-          }}
-        >
-          <SelectTrigger>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="none">Não exibir chip</SelectItem>
-            <SelectItem value="item">Item do cardápio</SelectItem>
-            <SelectItem value="internal">Link interno</SelectItem>
-            <SelectItem value="external">Link externo</SelectItem>
-            <SelectItem value="modal">Modal</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-
-      {mode === "none" ? null : isItemLink ? (
-        <div className="grid gap-2">
-          <Label>Item do cardápio</Label>
-          <input
-            type="hidden"
-            name={`linkMenuItemId_${index}`}
-            value={menuItemId}
-          />
-          <SearchableSelect
-            value={menuItemId}
-            onValueChange={(value) => {
-              setMenuItemId(value);
-              if (!linkText) {
-                const option = itemOptions.find((item) => item.value === value);
-                if (option) setLinkText(option.label);
-              }
-            }}
-            options={itemOptions}
-            placeholder="Buscar item..."
-            triggerClassName="w-full max-w-none"
-          />
-        </div>
-      ) : mode === "modal" ? (
-        <>
-          <div className="grid gap-2">
-            <Label htmlFor={`chipModalTitle_${index}`}>Título do modal</Label>
-            <Input
-              id={`chipModalTitle_${index}`}
-              name={`chipModalTitle_${index}`}
-              defaultValue={media.chipModalTitle || ""}
-              placeholder="Regulamento do combo"
-            />
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor={`chipModalBody_${index}`}>Texto do modal</Label>
-            <Textarea
-              id={`chipModalBody_${index}`}
-              name={`chipModalBody_${index}`}
-              defaultValue={media.chipModalBody || ""}
-              rows={5}
-              placeholder="Descreva período, regras, itens inclusos e exceções."
-            />
-          </div>
-        </>
-      ) : (
-        <div className="grid gap-2">
-          <Label htmlFor={`linkUrl_${index}`}>
-            {mode === "internal" ? "Link interno" : "Link externo"}
-          </Label>
-          <Input
-            id={`linkUrl_${index}`}
-            name={`linkUrl_${index}`}
-            placeholder={
-              mode === "internal"
-                ? "/cardapio/dicas"
-                : "https://www.exemplo.com"
-            }
-            defaultValue={media.linkUrl || ""}
-          />
-          <p className="text-xs text-slate-500">
-            {mode === "internal"
-              ? "Use caminhos do site, como /cardapio ou /cardapio/dicas."
-              : "Use uma URL completa começando com https://."}
-          </p>
-        </div>
-      )}
-
-      {mode !== "none" ? (
-        <div className="grid gap-2">
-          <Label htmlFor={`linkText_${index}`}>Texto do link</Label>
-          <Input
-            id={`linkText_${index}`}
-            name={`linkText_${index}`}
-            value={linkText}
-            onChange={(event) => setLinkText(event.target.value)}
-          />
-        </div>
-      ) : null}
-    </>
-  );
-}
-
 function isVideoMediaUrl(mediaUrl: string) {
   return /\.(mp4|mov|webm)(?:$|\?)/i.test(mediaUrl);
 }
 
+function formatMegabytes(sizeBytes?: number | null) {
+  return sizeBytes == null
+    ? "Tamanho indisponível"
+    : `${(sizeBytes / 1024 / 1024).toFixed(2)} MB`;
+}
+
+function MediaFileDetails({
+  media,
+  sizeBytes,
+}: {
+  media: { kind: string; mediaUrl: string; alt: string | null };
+  sizeBytes?: number | null;
+}) {
+  const [durationSeconds, setDurationSeconds] = useState<number | null>(null);
+  const duration =
+    durationSeconds == null
+      ? "Duração carregando..."
+      : `${Math.floor(durationSeconds / 60)}:${String(
+          Math.round(durationSeconds % 60)
+        ).padStart(2, "0")}`;
+
+  return (
+    <>
+      {media.kind === "video" ? (
+        <video
+          src={media.mediaUrl}
+          controls
+          className="aspect-[4/5] w-full bg-black object-contain"
+          onLoadedMetadata={(event) =>
+            setDurationSeconds(event.currentTarget.duration)
+          }
+        />
+      ) : (
+        <img
+          src={media.mediaUrl}
+          alt={media.alt || ""}
+          className="aspect-[4/5] w-full bg-slate-100 object-cover"
+        />
+      )}
+      <p className="px-3 pt-3 text-xs text-slate-500">
+        {formatMegabytes(sizeBytes)}
+        {media.kind === "video" ? ` · ${duration}` : ""}
+      </p>
+    </>
+  );
+}
+
 export default function ContentPostMediaPage() {
-  const { post, menuItems } = useLoaderData<typeof loader>();
+  const { post, sizeBytesByUrl } = useLoaderData<typeof loader>();
   const fetcher = useFetcher<typeof action>();
   const actionData = fetcher.data;
   const [mediaUrls, setMediaUrls] = useState(() =>
@@ -241,10 +126,6 @@ export default function ContentPostMediaPage() {
     )
   );
   const isSubmitting = fetcher.state !== "idle";
-  const itemOptions: SearchableSelectOption[] = menuItems.map((item) => ({
-    value: item.id,
-    label: item.name,
-  }));
   const uploadPath = normalizePath(`marketing/publicacoes/${post.key}`);
   const mediaLines = mediaUrls
     .split(/\r?\n/g)
@@ -299,6 +180,10 @@ export default function ContentPostMediaPage() {
           <h2 className="text-lg font-semibold">Mídias</h2>
           <p className="text-sm text-slate-500">
             Arquivos canônicos reutilizados por todos os canais.
+          </p>
+          <p className="text-xs text-slate-500">
+            Tamanho máximo por arquivo na API:{" "}
+            {MEDIA_UPLOAD_MAX_BYTES / 1024 / 1024} MB.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -428,82 +313,14 @@ export default function ContentPostMediaPage() {
       </details>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {post.Media.map((media, index) => (
+        {post.Media.map((media) => (
           <div key={media.id} className="overflow-hidden rounded-lg border">
-            {media.kind === "video" ? (
-              <video
-                src={media.mediaUrl}
-                controls
-                className="aspect-[4/5] w-full bg-black object-contain"
-              />
-            ) : (
-              <img
-                src={media.mediaUrl}
-                alt={media.alt || media.title}
-                className="aspect-[4/5] w-full bg-slate-100 object-cover"
-              />
-            )}
-            <div className="grid gap-3 p-3">
-              <MediaLinkFields
-                index={index}
-                media={media}
-                itemOptions={itemOptions}
-              />
-              <div className="grid grid-cols-2 gap-3">
-                <Input
-                  name={`linkBackgroundColor_${index}`}
-                  type="color"
-                  defaultValue={
-                    media.linkBackgroundColor ||
-                    DEFAULT_CONTENT_LINK_BACKGROUND_COLOR
-                  }
-                />
-                <Input
-                  name={`linkTextColor_${index}`}
-                  type="color"
-                  defaultValue={
-                    media.linkTextColor || DEFAULT_CONTENT_LINK_TEXT_COLOR
-                  }
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label>Posição do link</Label>
-                <Select
-                  name={`linkPosition_${index}`}
-                  defaultValue={media.linkPosition || "top"}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="top">Topo</SelectItem>
-                    <SelectItem value="bottom">Rodapé</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="grid gap-2">
-                <Label>Abrir link</Label>
-                <Select
-                  name={`linkNewTab_${index}`}
-                  defaultValue={media.linkNewTab === false ? "false" : "true"}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="true">Nova aba</SelectItem>
-                    <SelectItem value="false">Mesma aba</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              {(media.linkUrl ||
-                media.linkMenuItemId ||
-                media.chipAction === "modal") &&
-              media.linkText ? (
-                <span className="inline-flex items-center gap-1 text-xs text-slate-500">
-                  <LinkIcon className="h-3 w-3" /> {media.linkText}
-                </span>
-              ) : null}
+            <MediaFileDetails
+              media={media}
+              sizeBytes={sizeBytesByUrl[media.mediaUrl]}
+            />
+            <div className="p-3">
+              <p className="truncate text-sm font-medium">{media.title}</p>
             </div>
           </div>
         ))}
