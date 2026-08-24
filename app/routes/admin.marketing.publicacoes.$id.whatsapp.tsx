@@ -118,23 +118,31 @@ export default function ContentPostWhatsappPage() {
       : post.Media.length === 0
       ? "Adicione mídias à publicação para poder publicar."
       : null;
-  const canUnpublish = target.status === "active" && Boolean(target.lastPublishedAt);
+  const canUnpublish =
+    target.status === "active" && Boolean(target.lastPublishedAt);
 
   return (
     <Form method="post" className="grid gap-6">
+      <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+        Para o WhatsApp, vídeos não podem superar 10 minutos. Mantenha também o
+        arquivo em até 100 MB.
+      </div>
       <StatusPublicationMediaForm
         caption={whatsapp.caption || post.caption || ""}
         captionPlaceholder={post.caption || post.title}
         mediaItems={post.Media.map((media) => ({
           key: media.id,
-          kind: media.kind === "video" ? ("video" as const) : ("image" as const),
+          kind:
+            media.kind === "video" ? ("video" as const) : ("image" as const),
           imageUrl: media.kind === "image" ? media.mediaUrl : null,
           videoUrl: media.kind === "video" ? media.mediaUrl : null,
           alt: media.alt,
           label: media.title,
         }))}
         publications={whatsapp.publications}
-        selectedKeys={whatsapp.selectedKeys}
+        selectedKeys={
+          post.Media.length === 1 ? [post.Media[0].id] : whatsapp.selectedKeys
+        }
         publishEndpoint={publishEndpoint}
         feedback={actionData || null}
         submitting={navigation.state === "submitting"}

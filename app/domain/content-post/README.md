@@ -43,7 +43,11 @@ No `cardapio-featured`, a publicação é uma projeção interna: o cardápio p�
 retorna apenas targets `active`, com `lastPublishedAt` preenchido e com
 `ContentPost.status = active`. Salvar ajustes de um Cardápio já publicado
 preserva `active`; configurar pela primeira vez deixa `needs_sync` até o
-operador publicar.
+operador publicar. As mídias exibidas são escolhidas na configuração do target
+por `selectedMediaKeys`; a aba Mídias mantém apenas o acervo canônico da
+publicação e não determina automaticamente o conteúdo de cada canal. Chip,
+link, cores, posição e comportamento de abertura ficam em `mediaConfigByKey`
+no target do Cardápio, pois são atributos de apresentação desse canal.
 
 No `whatsapp-status`, legenda e mídias selecionadas pertencem à configuração do
 grupo. Limpar o estado de publicação remove apenas dados de envio

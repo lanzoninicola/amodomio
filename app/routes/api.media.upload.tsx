@@ -7,6 +7,7 @@ import {
   getMediaUploadFailureStatus,
   getUnsupportedMediaUploadMessages,
   isSafePath,
+  MEDIA_UPLOAD_MAX_BYTES,
   normalizePath,
   type LibraryPayload,
   type UploadKind,
@@ -73,6 +74,21 @@ export async function action({ request }: ActionFunctionArgs) {
       return json<UploadActionData>(
         { ok: false, message: "Selecione ao menos um arquivo para upload." },
         { status: 400 }
+      );
+    }
+
+    const oversizedFiles = files.filter(
+      (file) => file.size > MEDIA_UPLOAD_MAX_BYTES
+    );
+    if (oversizedFiles.length) {
+      return json<UploadActionData>(
+        {
+          ok: false,
+          message: `${oversizedFiles
+            .map((file) => file.name)
+            .join(", ")}: o tamanho máximo por arquivo é 100 MB.`,
+        },
+        { status: 413 }
       );
     }
 

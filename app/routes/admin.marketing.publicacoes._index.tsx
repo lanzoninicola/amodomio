@@ -295,7 +295,7 @@ function parsePublicationStatusFilter(
 ): PublicationStatusFilter {
   return PUBLICATION_STATUS_FILTERS.some((item) => item.value === value)
     ? (value as PublicationStatusFilter)
-    : "all";
+    : "active";
 }
 
 function getPublicationStatusFilterValue(target: {

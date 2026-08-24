@@ -1,5 +1,5 @@
 import { useFetcher, useOutletContext } from "@remix-run/react";
-import { Check, Copy, Save } from "lucide-react";
+import { Calculator, Check, Copy, Save } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { NativeItemSellingPriceCard } from "~/components/admin/native-item-selling-price-card";
 import { Button } from "~/components/ui/button";
@@ -106,6 +106,21 @@ function ChannelPriceRow(props: {
                 disabled={fetcher.state !== "idle"}
               >
                 Copiar preços do cardápio
+              </Button>
+            ) : null}
+            {props.channel.isMarketplace ? (
+              <Button
+                type="submit"
+                form={formId}
+                name="_intent"
+                value="calculate-marketplace-and-save"
+                variant="secondary"
+                size="sm"
+                className="w-full justify-start gap-2 text-[11px] uppercase tracking-wide text-emerald-700"
+                disabled={fetcher.state !== "idle"}
+              >
+                <Calculator size={14} />
+                Calcular taxa e aplicar
               </Button>
             ) : null}
             {props.allItems.length > 0 ? (

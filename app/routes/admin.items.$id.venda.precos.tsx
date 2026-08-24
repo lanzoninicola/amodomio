@@ -335,6 +335,72 @@ export async function action({ request, params }: ActionFunctionArgs) {
       return ok(`Valores do cardápio duplicados e salvos para ${sourceRows.length} tamanho(s).`);
     }
 
+    if (intent === "calculate-marketplace-and-save") {
+      const [marketplaceChannel, cardapioChannel] = await Promise.all([
+        db.itemSellingChannel.findUnique({
+          where: { id: itemSellingChannelId },
+          select: { id: true, isMarketplace: true, taxPerc: true },
+        }),
+        db.itemSellingChannel.findFirst({
+          where: { key: "cardapio" },
+          select: { id: true },
+        }),
+      ]);
+
+      if (!marketplaceChannel?.isMarketplace) {
+        return badRequest("Este cálculo só se aplica a canais marketplace.");
+      }
+
+      const channelTaxPerc = Number(marketplaceChannel.taxPerc || 0);
+      if (channelTaxPerc < 0 || channelTaxPerc >= 100) {
+        return badRequest("A taxa percentual do canal precisa estar entre 0% e 99,99%.");
+      }
+
+      if (!cardapioChannel?.id) {
+        return badRequest("Canal cardápio não encontrado.");
+      }
+
+      const sourceRows = await db.itemSellingPriceVariation.findMany({
+        where: {
+          itemId,
+          itemSellingChannelId: cardapioChannel.id,
+          itemVariationId: { in: itemVariationIds },
+        },
+        select: { itemVariationId: true, priceAmount: true },
+      });
+
+      if ((sourceRows || []).length === 0) {
+        return badRequest("O cardápio ainda não tem preços salvos para calcular.");
+      }
+
+      for (const sourceRow of sourceRows) {
+        const basePriceAmount = Number(sourceRow.priceAmount || 0);
+        const marketplacePrice =
+          menuItemSellingPriceUtilityEntity.calculateSellingPriceForMarketplace(
+            {
+              withProfit: basePriceAmount,
+              breakEven: basePriceAmount,
+            },
+            0,
+            channelTaxPerc
+          ).priceAmount.withProfit;
+        const { upsertInput } = await buildNativeSellingPriceUpsertPayload({
+          db,
+          itemId,
+          itemVariationId: String(sourceRow.itemVariationId || ""),
+          itemSellingChannelId,
+          priceAmount: marketplacePrice,
+          updatedBy,
+        });
+
+        await itemSellingPriceVariationEntity.upsert(upsertInput);
+      }
+
+      return ok(
+        `Taxa de ${channelTaxPerc.toFixed(2).replace(".", ",")}% aplicada aos preços de ${sourceRows.length} tamanho(s).`
+      );
+    }
+
     if (intent === "copy-from-item-and-save") {
       const sourceItemId = String(formData.get("sourceItemId") || "").trim();
       if (!sourceItemId) return badRequest("Item fonte não selecionado.");

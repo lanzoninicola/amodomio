@@ -21,6 +21,21 @@ export type CardapioFeaturedConfig = {
   showTitle: boolean;
   showPromotionHint: boolean;
   promotionHintText: string | null;
+  selectedMediaKeys: string[] | null;
+  mediaConfigByKey: Record<string, CardapioFeaturedMediaConfig>;
+};
+
+export type CardapioFeaturedMediaConfig = {
+  linkUrl: string | null;
+  linkText: string | null;
+  linkMenuItemId: string | null;
+  linkBackgroundColor: string | null;
+  linkTextColor: string | null;
+  linkPosition: "top" | "bottom";
+  linkNewTab: boolean;
+  chipAction: "link" | "none" | "modal";
+  chipModalTitle: string | null;
+  chipModalBody: string | null;
 };
 
 export const DEFAULT_CARDAPIO_FEATURED_CONFIG: CardapioFeaturedConfig = {
@@ -28,7 +43,34 @@ export const DEFAULT_CARDAPIO_FEATURED_CONFIG: CardapioFeaturedConfig = {
   showTitle: true,
   showPromotionHint: true,
   promotionHintText: null,
+  selectedMediaKeys: null,
+  mediaConfigByKey: {},
 };
+
+function nullableString(value: unknown) {
+  return typeof value === "string" ? value.trim() || null : null;
+}
+
+function parseCardapioFeaturedMediaConfig(
+  value: unknown
+): CardapioFeaturedMediaConfig {
+  const source = value && typeof value === "object" ? (value as any) : {};
+  return {
+    linkUrl: nullableString(source.linkUrl),
+    linkText: nullableString(source.linkText),
+    linkMenuItemId: nullableString(source.linkMenuItemId),
+    linkBackgroundColor: nullableString(source.linkBackgroundColor),
+    linkTextColor: nullableString(source.linkTextColor),
+    linkPosition: source.linkPosition === "bottom" ? "bottom" : "top",
+    linkNewTab: source.linkNewTab !== false,
+    chipAction:
+      source.chipAction === "none" || source.chipAction === "modal"
+        ? source.chipAction
+        : "link",
+    chipModalTitle: nullableString(source.chipModalTitle),
+    chipModalBody: nullableString(source.chipModalBody),
+  };
+}
 
 export function parseCardapioFeaturedConfig(
   value: unknown
@@ -46,6 +88,24 @@ export function parseCardapioFeaturedConfig(
       typeof source.promotionHintText === "string"
         ? source.promotionHintText.trim() || null
         : null,
+    selectedMediaKeys: Array.isArray(source.selectedMediaKeys)
+      ? Array.from(
+          new Set(
+            source.selectedMediaKeys.filter(
+              (key): key is string => typeof key === "string" && Boolean(key)
+            )
+          )
+        )
+      : null,
+    mediaConfigByKey:
+      source.mediaConfigByKey && typeof source.mediaConfigByKey === "object"
+        ? Object.fromEntries(
+            Object.entries(source.mediaConfigByKey).map(([key, config]) => [
+              key,
+              parseCardapioFeaturedMediaConfig(config),
+            ])
+          )
+        : {},
   };
 }
 

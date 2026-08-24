@@ -78,8 +78,15 @@ export async function findPublishedCardapioFeatured(): Promise<
   const linkMenuItemIds = Array.from(
     new Set(
       targets
-        .flatMap((target) => target.ContentPost.Media)
-        .map((media) => media.linkMenuItemId)
+        .flatMap((target) => {
+          const config = parseCardapioFeaturedConfig(target.config);
+          return [
+            ...target.ContentPost.Media.map((media) => media.linkMenuItemId),
+            ...Object.values(config.mediaConfigByKey).map(
+              (media) => media.linkMenuItemId
+            ),
+          ];
+        })
         .filter((id): id is string => Boolean(id))
     )
   );
@@ -98,15 +105,30 @@ export async function findPublishedCardapioFeatured(): Promise<
   return targets
     .map((target) => {
       const config = parseCardapioFeaturedConfig(target.config);
+      const selectedMediaKeys = config.selectedMediaKeys
+        ? new Set(config.selectedMediaKeys)
+        : null;
+      const selectedMedia = selectedMediaKeys
+        ? target.ContentPost.Media.filter((media) =>
+            selectedMediaKeys.has(media.key)
+          )
+        : target.ContentPost.Media;
       return {
         id: target.id,
         key: target.ContentPost.key,
         title: target.ContentPost.title,
         subtitle: target.ContentPost.subtitle,
-        ...config,
-        images: target.ContentPost.Media.map((media) => {
-          const linkedSlug = media.linkMenuItemId
-            ? slugByMenuItemId.get(media.linkMenuItemId)
+        displayStyle: config.displayStyle,
+        showTitle: config.showTitle,
+        showPromotionHint: config.showPromotionHint,
+        promotionHintText: config.promotionHintText,
+        images: selectedMedia.map((media) => {
+          const channelMedia = config.mediaConfigByKey[media.key];
+          const linkMenuItemId =
+            channelMedia?.linkMenuItemId ??
+            (channelMedia ? null : media.linkMenuItemId);
+          const linkedSlug = linkMenuItemId
+            ? slugByMenuItemId.get(linkMenuItemId)
             : null;
 
           return {
@@ -117,15 +139,31 @@ export async function findPublishedCardapioFeatured(): Promise<
             alt: media.alt,
             linkUrl: linkedSlug
               ? getCardapioItemAnchorHref({ slug: linkedSlug })
+              : channelMedia
+              ? channelMedia.linkUrl
               : media.linkUrl,
-            linkText: media.linkText,
-            linkBackgroundColor: media.linkBackgroundColor,
-            linkTextColor: media.linkTextColor,
-            linkPosition: media.linkPosition,
-            linkNewTab: media.linkNewTab,
-            chipAction: media.chipAction,
-            chipModalTitle: media.chipModalTitle,
-            chipModalBody: media.chipModalBody,
+            linkText: channelMedia ? channelMedia.linkText : media.linkText,
+            linkBackgroundColor:
+              channelMedia?.linkBackgroundColor ??
+              (channelMedia ? null : media.linkBackgroundColor),
+            linkTextColor:
+              channelMedia?.linkTextColor ??
+              (channelMedia ? null : media.linkTextColor),
+            linkPosition: channelMedia
+              ? channelMedia.linkPosition
+              : media.linkPosition,
+            linkNewTab: channelMedia
+              ? channelMedia.linkNewTab
+              : media.linkNewTab,
+            chipAction: channelMedia
+              ? channelMedia.chipAction
+              : media.chipAction,
+            chipModalTitle:
+              channelMedia?.chipModalTitle ??
+              (channelMedia ? null : media.chipModalTitle),
+            chipModalBody:
+              channelMedia?.chipModalBody ??
+              (channelMedia ? null : media.chipModalBody),
           };
         }),
       };
