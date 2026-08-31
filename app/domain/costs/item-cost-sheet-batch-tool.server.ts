@@ -63,7 +63,9 @@ export type BatchMutationResult = {
 const STATIC_UNIT_OPTIONS = ["UN", "L", "ML", "KG", "G"];
 
 function normalizeUnit(value: unknown) {
-  const normalized = String(value || "").trim().toUpperCase();
+  const normalized = String(value || "")
+    .trim()
+    .toUpperCase();
   return normalized || null;
 }
 
@@ -115,10 +117,13 @@ async function getRootSheetGroup(db: any, rootSheetId: string) {
   });
   if (!root) throw new Error("Ficha raiz não encontrada");
   const resolvedRootId = root.baseItemCostSheetId || root.id;
-  if (resolvedRootId !== rootSheetId) throw new Error("Selecione a ficha raiz do grupo");
+  if (resolvedRootId !== rootSheetId)
+    throw new Error("Selecione a ficha raiz do grupo");
 
   const sheets = await db.itemCostSheet.findMany({
-    where: { OR: [{ id: resolvedRootId }, { baseItemCostSheetId: resolvedRootId }] },
+    where: {
+      OR: [{ id: resolvedRootId }, { baseItemCostSheetId: resolvedRootId }],
+    },
     include: {
       Item: { select: { id: true, name: true } },
       ItemVariation: {
@@ -132,8 +137,12 @@ async function getRootSheetGroup(db: any, rootSheetId: string) {
     orderBy: [{ createdAt: "asc" }],
   });
 
-  const activeSheets = sheets.filter((sheet: any) => !sheet.ItemVariation?.deletedAt);
-  const itemVariationIds = activeSheets.map((sheet: any) => String(sheet.itemVariationId || "")).filter(Boolean);
+  const activeSheets = sheets.filter(
+    (sheet: any) => !sheet.ItemVariation?.deletedAt
+  );
+  const itemVariationIds = activeSheets
+    .map((sheet: any) => String(sheet.itemVariationId || ""))
+    .filter(Boolean);
 
   return {
     root,
@@ -189,7 +198,11 @@ async function createComponentRow(params: {
   });
 }
 
-async function wouldCreateRecipeSheetCycle(db: any, sourceRootSheetId: string, targetRootSheetId: string) {
+async function wouldCreateRecipeSheetCycle(
+  db: any,
+  sourceRootSheetId: string,
+  targetRootSheetId: string
+) {
   if (!sourceRootSheetId || !targetRootSheetId) return false;
   if (sourceRootSheetId === targetRootSheetId) return true;
 
@@ -225,7 +238,9 @@ async function buildRootSheetOptions(db: any): Promise<BatchSheetOption[]> {
           Category: { select: { name: true } },
         },
       },
-      _count: { select: { derivedItemCostSheet: true, ItemCostSheetComponent: true } },
+      _count: {
+        select: { derivedItemCostSheet: true, ItemCostSheetComponent: true },
+      },
     },
     orderBy: [{ updatedAt: "desc" }],
     take: 500,
@@ -249,6 +264,7 @@ export async function getItemCostSheetBatchToolOptions(): Promise<BatchToolOptio
   const [rootSheets, recipes, presets, unitOptions] = await Promise.all([
     buildRootSheetOptions(db),
     db.recipe.findMany({
+      where: { status: "active" },
       select: { id: true, name: true, Item: { select: { name: true } } },
       orderBy: [{ name: "asc" }],
       take: 500,
@@ -286,7 +302,9 @@ export async function getItemCostSheetBatchToolOptions(): Promise<BatchToolOptio
   }
 
   return {
-    items: Array.from(itemMap.values()).sort((a, b) => a.name.localeCompare(b.name, "pt-BR")),
+    items: Array.from(itemMap.values()).sort((a, b) =>
+      a.name.localeCompare(b.name, "pt-BR")
+    ),
     rootSheets,
     recipes: (recipes || []).map((recipe: any) => ({
       id: String(recipe.id || ""),
@@ -317,11 +335,15 @@ export function resolveTargetSheets(params: {
   const sourceKind = params.sourceKind === "item" ? "item" : "sheet";
   if (sourceKind === "item") {
     const itemId = String(params.itemId || "").trim();
-    return itemId ? params.rootSheets.filter((sheet) => sheet.itemId === itemId) : [];
+    return itemId
+      ? params.rootSheets.filter((sheet) => sheet.itemId === itemId)
+      : [];
   }
 
   const rootSheetId = String(params.rootSheetId || "").trim();
-  return rootSheetId ? params.rootSheets.filter((sheet) => sheet.id === rootSheetId) : [];
+  return rootSheetId
+    ? params.rootSheets.filter((sheet) => sheet.id === rootSheetId)
+    : [];
 }
 
 export async function addComponentToItemCostSheets(params: {
@@ -346,12 +368,17 @@ export async function addComponentToItemCostSheets(params: {
   const notes = String(params.notes || "").trim() || null;
   const rows: BatchMutationResult["rows"] = [];
 
-  if (rootSheetIds.length === 0) throw new Error("Selecione ao menos uma ficha");
+  if (rootSheetIds.length === 0)
+    throw new Error("Selecione ao menos uma ficha");
   if (!(quantity > 0)) throw new Error("Informe uma quantidade válida");
-  if (!(unitCostAmount >= 0)) throw new Error("Informe um custo unitário válido");
+  if (!(unitCostAmount >= 0))
+    throw new Error("Informe um custo unitário válido");
 
   let preset: any = null;
-  if (params.presetId && (params.componentType === "manual" || params.componentType === "labor")) {
+  if (
+    params.presetId &&
+    (params.componentType === "manual" || params.componentType === "labor")
+  ) {
     preset = await db.itemCostSheetComponentPreset.findFirst({
       where: { id: params.presetId, active: true, type: params.componentType },
     });
@@ -371,23 +398,39 @@ export async function addComponentToItemCostSheets(params: {
         if (!recipeId) throw new Error("Selecione a receita");
 
         const existing = await db.itemCostSheetComponent.findFirst({
-          where: { itemCostSheetId: rootSheetId, type: "recipe", refId: recipeId },
+          where: {
+            itemCostSheetId: rootSheetId,
+            type: "recipe",
+            refId: recipeId,
+          },
           select: { id: true },
         });
         if (existing) {
-          rows.push({ rootSheetId, sheetName, itemName, status: "skipped", message: "Receita já existe na ficha" });
+          rows.push({
+            rootSheetId,
+            sheetName,
+            itemName,
+            status: "skipped",
+            message: "Receita já existe na ficha",
+          });
           continue;
         }
 
         const snapshot = await getRecipeCompositionCostSnapshot(db, recipeId);
         const variationEntries = await Promise.all(
           group.itemVariationIds.map(async (itemVariationId) => {
-            const perVariation = await getRecipeCompositionCostSnapshot(db, recipeId, itemVariationId);
+            const perVariation = await getRecipeCompositionCostSnapshot(
+              db,
+              recipeId,
+              itemVariationId
+            );
             return {
               itemVariationId,
               unit: "receita",
               quantity,
-              unitCostAmount: roundItemCostSheetMoney(perVariation.unitCostAmount),
+              unitCostAmount: roundItemCostSheetMoney(
+                perVariation.unitCostAmount
+              ),
               wastePerc,
             };
           })
@@ -407,29 +450,50 @@ export async function addComponentToItemCostSheets(params: {
       if (params.componentType === "recipeSheet") {
         const refSheetId = String(params.refSheetId || "").trim();
         if (!refSheetId) throw new Error("Selecione a ficha de referência");
-        if (refSheetId === rootSheetId) throw new Error("Não é permitido referenciar a própria ficha");
+        if (refSheetId === rootSheetId)
+          throw new Error("Não é permitido referenciar a própria ficha");
         if (await wouldCreateRecipeSheetCycle(db, rootSheetId, refSheetId)) {
           throw new Error("Esta referência criaria ciclo entre fichas");
         }
 
         const existing = await db.itemCostSheetComponent.findFirst({
-          where: { itemCostSheetId: rootSheetId, type: "recipeSheet", refId: refSheetId },
+          where: {
+            itemCostSheetId: rootSheetId,
+            type: "recipeSheet",
+            refId: refSheetId,
+          },
           select: { id: true },
         });
         if (existing) {
-          rows.push({ rootSheetId, sheetName, itemName, status: "skipped", message: "Ficha referenciada já existe na composição" });
+          rows.push({
+            rootSheetId,
+            sheetName,
+            itemName,
+            status: "skipped",
+            message: "Ficha referenciada já existe na composição",
+          });
           continue;
         }
 
-        const snapshot = await getItemCostSheetSnapshot(db, refSheetId, group.root.itemVariationId);
+        const snapshot = await getItemCostSheetSnapshot(
+          db,
+          refSheetId,
+          group.root.itemVariationId
+        );
         const variationEntries = await Promise.all(
           group.itemVariationIds.map(async (itemVariationId) => {
-            const perVariation = await getItemCostSheetSnapshot(db, refSheetId, itemVariationId);
+            const perVariation = await getItemCostSheetSnapshot(
+              db,
+              refSheetId,
+              itemVariationId
+            );
             return {
               itemVariationId,
               unit: "ficha",
               quantity,
-              unitCostAmount: roundItemCostSheetMoney(perVariation.unitCostAmount),
+              unitCostAmount: roundItemCostSheetMoney(
+                perVariation.unitCostAmount
+              ),
               wastePerc,
             };
           })
@@ -446,27 +510,53 @@ export async function addComponentToItemCostSheets(params: {
         });
       }
 
-      if (params.componentType === "manual" || params.componentType === "labor") {
-        const name = String(params.name || preset?.name || (params.componentType === "labor" ? "Mão de obra" : "")).trim();
+      if (
+        params.componentType === "manual" ||
+        params.componentType === "labor"
+      ) {
+        const name = String(
+          params.name ||
+            preset?.name ||
+            (params.componentType === "labor" ? "Mão de obra" : "")
+        ).trim();
         if (!name) throw new Error("Informe o nome do componente");
         const resolvedUnit = normalizeUnit(unit || preset?.unit);
         if (!resolvedUnit) throw new Error("Informe a unidade do componente");
 
         const existingWhere = preset
-          ? { itemCostSheetId: rootSheetId, type: params.componentType, presetId: preset.id }
+          ? {
+              itemCostSheetId: rootSheetId,
+              type: params.componentType,
+              presetId: preset.id,
+            }
           : { itemCostSheetId: rootSheetId, type: params.componentType, name };
         const existing = await db.itemCostSheetComponent.findFirst({
           where: existingWhere,
           select: { id: true },
         });
         if (existing) {
-          rows.push({ rootSheetId, sheetName, itemName, status: "skipped", message: "Componente já existe na ficha" });
+          rows.push({
+            rootSheetId,
+            sheetName,
+            itemName,
+            status: "skipped",
+            message: "Componente já existe na ficha",
+          });
           continue;
         }
 
-        const resolvedQuantity = params.quantity == null && preset ? Number(preset.quantity || 1) : quantity;
-        const resolvedUnitCost = params.unitCostAmount == null && preset ? Number(preset.unitCostAmount || 0) : unitCostAmount;
-        const resolvedWaste = params.wastePerc == null && preset ? Number(preset.wastePerc || 0) : wastePerc;
+        const resolvedQuantity =
+          params.quantity == null && preset
+            ? Number(preset.quantity || 1)
+            : quantity;
+        const resolvedUnitCost =
+          params.unitCostAmount == null && preset
+            ? Number(preset.unitCostAmount || 0)
+            : unitCostAmount;
+        const resolvedWaste =
+          params.wastePerc == null && preset
+            ? Number(preset.wastePerc || 0)
+            : wastePerc;
 
         await createComponentRow({
           db,
@@ -486,7 +576,13 @@ export async function addComponentToItemCostSheets(params: {
       }
 
       await recalcItemCostSheetTotals(db, rootSheetId);
-      rows.push({ rootSheetId, sheetName, itemName, status: "changed", message: "Componente adicionado e ficha recalculada" });
+      rows.push({
+        rootSheetId,
+        sheetName,
+        itemName,
+        status: "changed",
+        message: "Componente adicionado e ficha recalculada",
+      });
     } catch (error) {
       rows.push({
         rootSheetId,
@@ -524,9 +620,11 @@ export async function updateComponentsInItemCostSheets(params: {
   const notes = String(params.notes || "").trim();
   const rows: BatchMutationResult["rows"] = [];
 
-  if (rootSheetIds.length === 0) throw new Error("Selecione ao menos uma ficha");
+  if (rootSheetIds.length === 0)
+    throw new Error("Selecione ao menos uma ficha");
   if (!(quantity > 0)) throw new Error("Informe uma quantidade válida");
-  if (!(unitCostAmount >= 0)) throw new Error("Informe um custo unitário válido");
+  if (!(unitCostAmount >= 0))
+    throw new Error("Informe um custo unitário válido");
 
   for (const rootSheetId of rootSheetIds) {
     let sheetName = rootSheetId;
@@ -540,9 +638,14 @@ export async function updateComponentsInItemCostSheets(params: {
         itemCostSheetId: rootSheetId,
         type: params.componentType,
       };
-      if (params.componentType === "recipe") componentWhere.refId = String(params.recipeId || "").trim();
-      if (params.componentType === "recipeSheet") componentWhere.refId = String(params.refSheetId || "").trim();
-      if (params.componentType === "manual" || params.componentType === "labor") {
+      if (params.componentType === "recipe")
+        componentWhere.refId = String(params.recipeId || "").trim();
+      if (params.componentType === "recipeSheet")
+        componentWhere.refId = String(params.refSheetId || "").trim();
+      if (
+        params.componentType === "manual" ||
+        params.componentType === "labor"
+      ) {
         const presetId = String(params.presetId || "").trim();
         const currentName = String(params.currentName || "").trim();
         if (presetId) componentWhere.presetId = presetId;
@@ -550,7 +653,11 @@ export async function updateComponentsInItemCostSheets(params: {
         else throw new Error("Informe o preset ou nome atual do componente");
       }
 
-      if ((params.componentType === "recipe" || params.componentType === "recipeSheet") && !componentWhere.refId) {
+      if (
+        (params.componentType === "recipe" ||
+          params.componentType === "recipeSheet") &&
+        !componentWhere.refId
+      ) {
         throw new Error("Selecione a referência do componente");
       }
 
@@ -559,13 +666,23 @@ export async function updateComponentsInItemCostSheets(params: {
         include: { ItemCostSheetVariationComponent: true },
       });
       if (components.length === 0) {
-        rows.push({ rootSheetId, sheetName, itemName, status: "skipped", message: "Componente não encontrado nesta ficha" });
+        rows.push({
+          rootSheetId,
+          sheetName,
+          itemName,
+          status: "skipped",
+          message: "Componente não encontrado nesta ficha",
+        });
         continue;
       }
 
       for (const component of components) {
-        const isReference = (component.type === "recipe" || component.type === "recipeSheet") && component.refId;
-        const nextName = isReference ? component.name : String(params.newName || component.name || "").trim();
+        const isReference =
+          (component.type === "recipe" || component.type === "recipeSheet") &&
+          component.refId;
+        const nextName = isReference
+          ? component.name
+          : String(params.newName || component.name || "").trim();
         await db.itemCostSheetComponent.update({
           where: { id: component.id },
           data: {
@@ -575,18 +692,29 @@ export async function updateComponentsInItemCostSheets(params: {
         });
 
         for (const itemVariationId of group.itemVariationIds) {
-          const existingValue = (component.ItemCostSheetVariationComponent || []).find(
-            (value: any) => String(value.itemVariationId || "") === itemVariationId
+          const existingValue = (
+            component.ItemCostSheetVariationComponent || []
+          ).find(
+            (value: any) =>
+              String(value.itemVariationId || "") === itemVariationId
           );
           let nextUnit = unit || existingValue?.unit || null;
           let nextUnitCost = unitCostAmount;
 
           if (isReference && component.type === "recipe") {
-            const snapshot = await getRecipeCompositionCostSnapshot(db, String(component.refId), itemVariationId);
+            const snapshot = await getRecipeCompositionCostSnapshot(
+              db,
+              String(component.refId),
+              itemVariationId
+            );
             nextUnit = "receita";
             nextUnitCost = roundItemCostSheetMoney(snapshot.unitCostAmount);
           } else if (isReference && component.type === "recipeSheet") {
-            const snapshot = await getItemCostSheetSnapshot(db, String(component.refId), itemVariationId);
+            const snapshot = await getItemCostSheetSnapshot(
+              db,
+              String(component.refId),
+              itemVariationId
+            );
             nextUnit = "ficha";
             nextUnitCost = roundItemCostSheetMoney(snapshot.unitCostAmount);
           }
@@ -596,7 +724,11 @@ export async function updateComponentsInItemCostSheets(params: {
             quantity,
             unitCostAmount: nextUnitCost,
             wastePerc,
-            totalCostAmount: calcItemCostSheetTotalCostAmount(nextUnitCost, quantity, wastePerc),
+            totalCostAmount: calcItemCostSheetTotalCostAmount(
+              nextUnitCost,
+              quantity,
+              wastePerc
+            ),
           };
 
           if (existingValue?.id) {
@@ -617,7 +749,13 @@ export async function updateComponentsInItemCostSheets(params: {
       }
 
       await recalcItemCostSheetTotals(db, rootSheetId);
-      rows.push({ rootSheetId, sheetName, itemName, status: "changed", message: `${components.length} componente(s) editado(s)` });
+      rows.push({
+        rootSheetId,
+        sheetName,
+        itemName,
+        status: "changed",
+        message: `${components.length} componente(s) editado(s)`,
+      });
     } catch (error) {
       rows.push({
         rootSheetId,
@@ -632,7 +770,9 @@ export async function updateComponentsInItemCostSheets(params: {
   return summarizeBatchRows(rows);
 }
 
-function summarizeBatchRows(rows: BatchMutationResult["rows"]): BatchMutationResult {
+function summarizeBatchRows(
+  rows: BatchMutationResult["rows"]
+): BatchMutationResult {
   return {
     processed: rows.length,
     changed: rows.filter((row) => row.status === "changed").length,

@@ -1,6 +1,6 @@
 import type { MetaFunction } from "@remix-run/node";
 import { Link, NavLink, Outlet, useLocation } from "@remix-run/react";
-import { ChevronLeft } from "lucide-react";
+import { ChevronLeft, Printer } from "lucide-react";
 import Container from "~/components/layout/container/container";
 
 export const meta: MetaFunction = () => [
@@ -18,6 +18,12 @@ const viewTabs = [
     label: "Lista",
     dotClassName: "bg-sky-500",
   },
+  {
+    to: "brainstorming",
+    label: "Folha A4",
+    dotClassName: "bg-violet-500",
+    icon: Printer,
+  },
 ];
 
 export default function AdminVendasIngredientesSaboresLayout() {
@@ -26,7 +32,7 @@ export default function AdminVendasIngredientesSaboresLayout() {
   return (
     <Container fullWidth className="px-4">
       <div className="flex flex-col gap-6">
-        <section className="space-y-5 border-b border-slate-200/80 pb-5">
+        <section className="space-y-5 border-b border-slate-200/80 pb-5 print:hidden">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex flex-wrap items-center gap-2 text-sm">
               <Link
@@ -39,7 +45,9 @@ export default function AdminVendasIngredientesSaboresLayout() {
                 voltar
               </Link>
               <span className="text-slate-300">/</span>
-              <span className="font-medium text-slate-900">ingredientes por sabores</span>
+              <span className="font-medium text-slate-900">
+                ingredientes por sabores
+              </span>
             </div>
 
             <nav className="flex flex-wrap items-center gap-8 border-b border-slate-200">
@@ -57,6 +65,9 @@ export default function AdminVendasIngredientesSaboresLayout() {
                   }
                 >
                   <span className={`size-2 rounded-full ${tab.dotClassName}`} />
+                  {"icon" in tab && tab.icon ? (
+                    <tab.icon className="h-3.5 w-3.5" />
+                  ) : null}
                   {tab.label}
                 </NavLink>
               ))}

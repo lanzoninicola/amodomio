@@ -589,6 +589,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
         where: { id },
         select: {
           consumptionUm: true,
+          archivedAt: true,
           ItemSellingInfo: {
             select: {
               slug: true,
@@ -597,7 +598,9 @@ export async function action({ request, params }: ActionFunctionArgs) {
         },
       });
       const previousConsumptionUm = normalizeUnit(currentItem?.consumptionUm);
-      const canSell = toBool(formData.get("canSell"));
+      const canSell = currentItem?.archivedAt
+        ? false
+        : toBool(formData.get("canSell"));
 
       await db.item.update({
         where: { id },
@@ -608,7 +611,9 @@ export async function action({ request, params }: ActionFunctionArgs) {
           categoryId,
           recipeVariationPolicy,
           consumptionUm,
-          active: toBool(formData.get("active")),
+          active: currentItem?.archivedAt
+            ? false
+            : toBool(formData.get("active")),
           canPurchase: toBool(formData.get("canPurchase")),
           canTransform: toBool(formData.get("canTransform")),
           canSell,
@@ -661,6 +666,29 @@ export async function action({ request, params }: ActionFunctionArgs) {
             : "Item atualizado com sucesso",
         missingVariations: !hasConfiguredVariations,
         costUnitRelabel,
+      });
+    }
+
+    if (_action === "item-archive" || _action === "item-restore") {
+      const restoring = _action === "item-restore";
+      const result = await db.item.updateMany({
+        where: restoring
+          ? { id, archivedAt: { not: null } }
+          : { id, archivedAt: null },
+        data: restoring
+          ? { archivedAt: null }
+          : { archivedAt: new Date(), active: false, canSell: false },
+      });
+
+      if (result.count === 0) {
+        return badRequest("Item não encontrado ou estado já alterado");
+      }
+
+      return ok({
+        action: _action,
+        message: restoring
+          ? "Item restaurado. Ele permanece inativo e com a venda desativada até você reativá-lo."
+          : "Item arquivado e retirado das operações e canais de venda.",
       });
     }
 
@@ -1229,10 +1257,22 @@ export default function AdminItemDetailLayout() {
       <section className="space-y-5 border-b border-slate-200/80 pb-5">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
           <div className="space-y-1">
-            <h2 className="text-2xl font-semibold tracking-tight text-slate-950">
-              {item.name}
-            </h2>
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="text-2xl font-semibold tracking-tight text-slate-950">
+                {item.name}
+              </h2>
+              {item.archivedAt ? (
+                <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800">
+                  Arquivado
+                </span>
+              ) : null}
+            </div>
             <p className="text-sm text-slate-500">{item.id}</p>
+            {item.archivedAt ? (
+              <p className="text-sm text-amber-700">
+                Este item está fora das operações e dos canais de venda.
+              </p>
+            ) : null}
           </div>
         </div>
       </section>

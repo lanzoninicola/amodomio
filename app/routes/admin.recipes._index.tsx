@@ -13,10 +13,7 @@ import {
   useSubmit,
 } from "@remix-run/react";
 import { Suspense, useEffect, useRef, useState } from "react";
-import {
-  EditItemButton,
-  DeleteItemButton,
-} from "~/components/primitives/table-list";
+import { EditItemButton } from "~/components/primitives/table-list";
 import { Input } from "~/components/ui/input";
 import {
   SearchableSelect,
@@ -39,7 +36,6 @@ import {
 } from "~/components/ui/select";
 import { toast } from "~/components/ui/use-toast";
 import RecipeBadge from "~/domain/recipe/components/recipe-badge/recipe-badge";
-import { recipeEntity } from "~/domain/recipe/recipe.entity.server";
 import {
   Search,
   Check,
@@ -48,7 +44,7 @@ import {
   ChevronsRight,
 } from "lucide-react";
 
-import { ok, serverError } from "~/utils/http-response.server";
+import { ok } from "~/utils/http-response.server";
 import tryit from "~/utils/try-it";
 import prismaClient from "~/lib/prisma/client.server";
 import {
@@ -83,6 +79,7 @@ type SellingChannelOption = {
   name: string;
 };
 type ChannelVisibilityFilter = "all" | "visible" | "hidden";
+type RecipeStatusFilter = "active" | "draft" | "archived" | "all";
 type RecipesIndexPayload = {
   recipes: RecipeWithMeta[];
   items: FilterItem[];
@@ -92,6 +89,7 @@ type RecipesIndexPayload = {
     itemId: string;
     channelId: string;
     visibility: ChannelVisibilityFilter;
+    status: RecipeStatusFilter;
   };
   pagination: {
     page: number;
@@ -117,11 +115,26 @@ function parseVisibilityFilter(raw: string | null): ChannelVisibilityFilter {
   return "all";
 }
 
+function parseStatusFilter(raw: string | null): RecipeStatusFilter {
+  const normalized = String(raw || "active")
+    .trim()
+    .toLowerCase();
+  if (
+    normalized === "draft" ||
+    normalized === "archived" ||
+    normalized === "all"
+  ) {
+    return normalized;
+  }
+  return "active";
+}
+
 function buildPageHref(params: {
   q: string;
   itemId: string;
   channelId: string;
   visibility: ChannelVisibilityFilter;
+  status: RecipeStatusFilter;
   page: number;
 }) {
   const searchParams = new URLSearchParams();
@@ -130,6 +143,7 @@ function buildPageHref(params: {
   if (params.channelId) searchParams.set("channelId", params.channelId);
   if (params.visibility !== "all")
     searchParams.set("visibility", params.visibility);
+  if (params.status !== "active") searchParams.set("status", params.status);
   searchParams.set("page", String(params.page));
   return `/admin/recipes?${searchParams.toString()}`;
 }
@@ -144,9 +158,11 @@ async function loadRecipesIndexPayload(
   const itemId = String(url.searchParams.get("itemId") || "").trim();
   const channelId = String(url.searchParams.get("channelId") || "").trim();
   const visibility = parseVisibilityFilter(url.searchParams.get("visibility"));
+  const status = parseStatusFilter(url.searchParams.get("status"));
   const requestedPage = parsePage(url.searchParams.get("page"));
 
   const where: any = {};
+  if (status !== "all") where.status = status;
   if (q) {
     where.OR = [
       { name: { contains: q, mode: "insensitive" } },
@@ -256,6 +272,7 @@ async function loadRecipesIndexPayload(
       itemId,
       channelId,
       visibility,
+      status,
     },
     pagination: {
       page,
@@ -275,18 +292,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 }
 
 export async function action({ request }: ActionFunctionArgs) {
-  let formData = await request.formData();
-  const { _action, ...values } = Object.fromEntries(formData);
-
-  if (_action === "recipe-delete") {
-    const [err] = await tryit(recipeEntity.delete(values.id as string));
-
-    if (err) {
-      return serverError(err);
-    }
-
-    return ok({ message: "Receita deletada com sucesso" });
-  }
+  await request.formData();
 
   return null;
 }
@@ -332,19 +338,30 @@ function RecipesIndexContent({ payload }: { payload: RecipesIndexPayload }) {
   );
   const [filterVisibility, setFilterVisibility] =
     useState<ChannelVisibilityFilter>(filters?.visibility || "all");
+  const [filterStatus, setFilterStatus] = useState<RecipeStatusFilter>(
+    filters?.status || "active"
+  );
 
   useEffect(() => {
     setSearchTerm(filters?.q || "");
     setFilterItemId(filters?.itemId || "__all__");
     setFilterChannelId(filters?.channelId || "__all__");
     setFilterVisibility(filters?.visibility || "all");
-  }, [filters?.q, filters?.itemId, filters?.channelId, filters?.visibility]);
+    setFilterStatus(filters?.status || "active");
+  }, [
+    filters?.q,
+    filters?.itemId,
+    filters?.channelId,
+    filters?.visibility,
+    filters?.status,
+  ]);
 
   const triggerSubmit = (overrides?: {
     q?: string;
     itemId?: string;
     channelId?: string;
     visibility?: ChannelVisibilityFilter;
+    status?: RecipeStatusFilter;
   }) => {
     if (!formRef.current) return;
     const formData = new FormData(formRef.current);
@@ -363,6 +380,11 @@ function RecipesIndexContent({ payload }: { payload: RecipesIndexPayload }) {
       formData.set(
         "visibility",
         overrides.visibility === "all" ? "" : overrides.visibility
+      );
+    if (overrides?.status !== undefined)
+      formData.set(
+        "status",
+        overrides.status === "active" ? "" : overrides.status
       );
     formData.set("page", "1");
     submit(formData, { method: "get", replace: true });
@@ -414,6 +436,11 @@ function RecipesIndexContent({ payload }: { payload: RecipesIndexPayload }) {
                 type="hidden"
                 name="visibility"
                 value={filterVisibility === "all" ? "" : filterVisibility}
+              />
+              <input
+                type="hidden"
+                name="status"
+                value={filterStatus === "active" ? "" : filterStatus}
               />
               <RecipesSearch
                 value={searchTerm}
@@ -518,6 +545,24 @@ function RecipesIndexContent({ payload }: { payload: RecipesIndexPayload }) {
                   <SelectItem value="hidden">Ocultos no canal</SelectItem>
                 </SelectContent>
               </Select>
+              <Select
+                value={filterStatus}
+                onValueChange={(value) => {
+                  const nextValue = value as RecipeStatusFilter;
+                  setFilterStatus(nextValue);
+                  triggerSubmit({ status: nextValue });
+                }}
+              >
+                <SelectTrigger className="min-w-[170px] max-w-[210px] bg-white">
+                  <SelectValue placeholder="Status da receita" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="active">Somente ativas</SelectItem>
+                  <SelectItem value="draft">Rascunhos</SelectItem>
+                  <SelectItem value="archived">Arquivadas</SelectItem>
+                  <SelectItem value="all">Todos os status</SelectItem>
+                </SelectContent>
+              </Select>
             </Form>
 
             <div className="flex flex-wrap items-center gap-5 text-sm text-black">
@@ -546,6 +591,9 @@ function RecipesIndexContent({ payload }: { payload: RecipesIndexPayload }) {
               <TableHead className="h-10 px-4 text-xs font-semibold uppercase tracking-wide text-slate-500">
                 Tipo
               </TableHead>
+              <TableHead className="h-10 px-4 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Versão e status
+              </TableHead>
               <TableHead className="h-10 px-4 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">
                 Ações
               </TableHead>
@@ -555,7 +603,7 @@ function RecipesIndexContent({ payload }: { payload: RecipesIndexPayload }) {
             {recipes.length === 0 ? (
               <TableRow className="hover:bg-transparent">
                 <TableCell
-                  colSpan={4}
+                  colSpan={5}
                   className="px-4 py-8 text-sm text-slate-500"
                 >
                   Nenhuma receita encontrada.
@@ -599,6 +647,7 @@ function RecipesIndexContent({ payload }: { payload: RecipesIndexPayload }) {
                             itemId: filters?.itemId || "",
                             channelId: filters?.channelId || "",
                             visibility: filters?.visibility || "all",
+                            status: filters?.status || "active",
                             page: 1,
                           })
                         : "#"
@@ -622,6 +671,7 @@ function RecipesIndexContent({ payload }: { payload: RecipesIndexPayload }) {
                             itemId: filters?.itemId || "",
                             channelId: filters?.channelId || "",
                             visibility: filters?.visibility || "all",
+                            status: filters?.status || "active",
                             page: (pagination?.page || 1) - 1,
                           })
                         : "#"
@@ -645,6 +695,7 @@ function RecipesIndexContent({ payload }: { payload: RecipesIndexPayload }) {
                             itemId: filters?.itemId || "",
                             channelId: filters?.channelId || "",
                             visibility: filters?.visibility || "all",
+                            status: filters?.status || "active",
                             page: (pagination?.page || 1) + 1,
                           })
                         : "#"
@@ -668,6 +719,7 @@ function RecipesIndexContent({ payload }: { payload: RecipesIndexPayload }) {
                             itemId: filters?.itemId || "",
                             channelId: filters?.channelId || "",
                             visibility: filters?.visibility || "all",
+                            status: filters?.status || "active",
                             page: pagination?.totalPages || 1,
                           })
                         : "#"
@@ -808,12 +860,30 @@ function RecipeRow({ item }: RecipeItemProps) {
         </div>
       </TableCell>
       <TableCell className="px-4 py-3">
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-medium text-slate-500">
+            v{Number((item as any).version || 1)}
+          </span>
+          <span
+            className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
+              (item as any).status === "active"
+                ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                : (item as any).status === "archived"
+                ? "border-slate-200 bg-slate-100 text-slate-500"
+                : "border-amber-200 bg-amber-50 text-amber-700"
+            }`}
+          >
+            {(item as any).status === "active"
+              ? "Ativa"
+              : (item as any).status === "archived"
+              ? "Arquivada"
+              : "Rascunho"}
+          </span>
+        </div>
+      </TableCell>
+      <TableCell className="px-4 py-3">
         <div className="flex items-center justify-end gap-1">
           <EditItemButton to={`/admin/recipes/${item.id}`} />
-          <Form method="post">
-            <Input type="hidden" name="id" value={item.id} />
-            <DeleteItemButton actionName="recipe-delete" />
-          </Form>
         </div>
       </TableCell>
     </TableRow>

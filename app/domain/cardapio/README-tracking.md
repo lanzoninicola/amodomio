@@ -197,6 +197,13 @@ configuração adicional. O relatório fica em
 `/admin/marketing/relatorios/cardapio-featured` e apresenta alcance único, taxa
 de ampliação, CTR, desempenho por publicação e distribuição por posição.
 
+## Intenção de pedido
+
+O evento `cardapio_order_intent` é emitido quando o visitante clica em um CTA
+`Fazer pedido`. A posição diferencia `mobile_header`, `mobile_footer` e
+`desktop_menu`. Esse evento mede a saída do cardápio para o canal de pedido; não
+representa checkout nem venda confirmada.
+
 ## Decisão arquitetural
 
 Reutilizar:

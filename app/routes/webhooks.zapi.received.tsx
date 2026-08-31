@@ -13,6 +13,7 @@ import prisma from "~/lib/prisma/client.server";
 import { logCrmWhatsappSentEventByPhone } from "~/domain/crm/crm-whatsapp-events.server";
 import { normalize_phone_e164_br } from "~/domain/crm/normalize-phone.server";
 import { getOffHoursAutoresponderConfig, getStoreOpeningStatus } from "~/domain/store-opening/store-opening-status.server";
+import { enqueueWhatsappAgentMessage } from "~/domain/whatsapp-agent/whatsapp-agent-queue.server";
 
 const WEBHOOK_BODY_LIMIT_BYTES = 256 * 1024;
 const LOG_HEADERS = ["user-agent", "x-forwarded-for", "cf-connecting-ip", "x-real-ip", "content-type"];
@@ -295,11 +296,36 @@ export async function action({ request }: ActionFunctionArgs) {
     return { sent: false, reason: "error" };
   });
 
+  const agentQueueResult =
+    trafficResult.sent || offHoursResult.sent || offHoursResult.reason === "scheduled"
+      ? { queued: false, reason: "already_replied" }
+      : await enqueueWhatsappAgentMessage({
+          externalId: normalized.messageId
+            ? `zapi:${normalized.messageId}`
+            : correlationId,
+          phone: normalized.phone,
+          messageText: normalized.messageText,
+          customerId:
+            "customerId" in crmSyncResult ? crmSyncResult.customerId : undefined,
+        }).catch((error) => {
+          console.warn("[whatsapp-agent][webhook] enqueue failed", {
+            correlationId,
+            error: (error as Error)?.message,
+          });
+          return { queued: false, reason: "error" } as const;
+        });
+
   // if (normalized.phone) {
   //   void sendAutoReplySafe(normalized.phone);
   // }
 
-  return json({ ok: true, trafficResult, offHoursResult, crmSyncResult });
+  return json({
+    ok: true,
+    trafficResult,
+    offHoursResult,
+    agentQueueResult,
+    crmSyncResult,
+  });
 }
 
 async function maybeSendOffHoursAutoReply(

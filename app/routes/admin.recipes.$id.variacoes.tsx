@@ -1,13 +1,30 @@
-import { Form, Link, useOutletContext } from "@remix-run/react";
+import { Form, Link, useFetcher, useOutletContext } from "@remix-run/react";
 import {
   ArrowRight,
   CheckCircle2,
   CircleAlert,
+  Copy,
   Scale,
   Trash2,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "~/components/ui/button";
+import {
+  Command,
+  CommandEmpty,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "~/components/ui/command";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "~/components/ui/dialog";
+import { toast } from "~/components/ui/use-toast";
 import { cn } from "~/lib/utils";
 import type { AdminRecipeOutletContext } from "./admin.recipes.$id";
 import {
@@ -23,6 +40,229 @@ function formatQuantity(value: unknown, fractionDigits = 3) {
     minimumFractionDigits: 0,
     maximumFractionDigits: fractionDigits,
   });
+}
+
+type CopySourceCandidate = {
+  itemId: string;
+  itemName: string;
+  recipeId: string;
+  recipeName: string;
+  recipeIngredientId: string;
+  recipeStatus: string;
+  recipeVersion: number;
+  quantities: Array<{
+    variationId: string | null;
+    variationName: string;
+    quantity: number;
+  }>;
+};
+
+function CopyIngredientQuantitiesButton({
+  recipeId,
+  ingredientItemId,
+  targetRecipeIngredientId,
+  ingredientName,
+}: {
+  recipeId: string;
+  ingredientItemId: string;
+  targetRecipeIngredientId: string | null;
+  ingredientName: string;
+}) {
+  const sourcesFetcher = useFetcher();
+  const copyFetcher = useFetcher();
+  const [open, setOpen] = useState(false);
+  const [selectedSourceId, setSelectedSourceId] = useState("");
+  const candidates = ((sourcesFetcher.data as any)?.payload?.candidates ||
+    []) as CopySourceCandidate[];
+  const selectedCandidate =
+    candidates.find(
+      (candidate) => candidate.recipeIngredientId === selectedSourceId
+    ) || null;
+  const isLoading = sourcesFetcher.state !== "idle";
+  const isCopying = copyFetcher.state !== "idle";
+  const sourcesError =
+    Number((sourcesFetcher.data as any)?.status || 200) >= 400
+      ? String(
+          (sourcesFetcher.data as any)?.message ||
+            "Erro ao buscar itens com receita"
+        )
+      : "";
+
+  useEffect(() => {
+    if (copyFetcher.state !== "idle" || !copyFetcher.data) return;
+    const response = copyFetcher.data as any;
+    if (Number(response.status || 200) >= 400) {
+      toast({
+        title: "Não foi possível copiar",
+        description: response.message,
+        variant: "destructive",
+      });
+      return;
+    }
+    toast({
+      title: "Quantidades copiadas",
+      description: response.message,
+    });
+    setOpen(false);
+    setSelectedSourceId("");
+  }, [copyFetcher.state, copyFetcher.data]);
+
+  function handleOpenChange(nextOpen: boolean) {
+    setOpen(nextOpen);
+    if (!nextOpen) return;
+    setSelectedSourceId("");
+    sourcesFetcher.load(
+      `/admin/recipes/${recipeId}/ingredient-copy-sources?ingredientItemId=${encodeURIComponent(
+        ingredientItemId
+      )}`
+    );
+  }
+
+  function copyQuantities() {
+    if (!targetRecipeIngredientId || !selectedCandidate) return;
+    const formData = new FormData();
+    formData.set("_action", "recipe-ingredient-copy-quantities");
+    formData.set("recipeId", recipeId);
+    formData.set("tab", "variacoes");
+    formData.set("targetRecipeIngredientId", targetRecipeIngredientId);
+    formData.set(
+      "sourceRecipeIngredientId",
+      selectedCandidate.recipeIngredientId
+    );
+    copyFetcher.submit(formData, {
+      method: "post",
+      action: "..",
+      preventScrollReset: true,
+    });
+  }
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => handleOpenChange(true)}
+        disabled={!targetRecipeIngredientId}
+        className="mt-2 inline-flex items-center gap-1 text-left text-xs font-medium text-slate-500 transition-colors hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-40"
+      >
+        <Copy size={12} />
+        Copiar quantidades de outro item
+      </button>
+
+      <Dialog open={open} onOpenChange={handleOpenChange}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Copiar quantidades de variação</DialogTitle>
+            <DialogDescription>
+              Busque o item cuja receita será usada para preencher as
+              quantidades de {ingredientName}. As variações são correspondidas
+              pelo mesmo tipo cadastrado.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="overflow-hidden rounded-md border border-slate-200">
+            <Command>
+              <CommandInput placeholder="Buscar item..." />
+              <CommandList className="max-h-[240px]">
+                {isLoading ? (
+                  <div className="py-6 text-center text-sm text-slate-500">
+                    Buscando receitas...
+                  </div>
+                ) : sourcesError ? (
+                  <div className="space-y-3 px-4 py-5 text-center">
+                    <p className="text-sm text-red-600">{sourcesError}</p>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleOpenChange(true)}
+                    >
+                      Recarregar
+                    </Button>
+                  </div>
+                ) : (
+                  <>
+                    <CommandEmpty>
+                      Nenhum outro item possui receita com este ingrediente.
+                    </CommandEmpty>
+                    {candidates.map((candidate) => (
+                      <CommandItem
+                        key={candidate.recipeIngredientId}
+                        value={`${candidate.itemName} ${candidate.recipeName}`}
+                        onSelect={() =>
+                          setSelectedSourceId(candidate.recipeIngredientId)
+                        }
+                        className={cn(
+                          "flex items-start justify-between gap-3 py-2.5",
+                          selectedSourceId === candidate.recipeIngredientId &&
+                            "bg-slate-100"
+                        )}
+                      >
+                        <div className="min-w-0">
+                          <p className="truncate font-medium text-slate-900">
+                            {candidate.itemName}
+                          </p>
+                          <p className="truncate text-xs text-slate-500">
+                            {candidate.recipeName} · versão{" "}
+                            {candidate.recipeVersion}
+                            {candidate.recipeStatus === "active"
+                              ? " · ativa"
+                              : ""}
+                          </p>
+                        </div>
+                        {selectedSourceId === candidate.recipeIngredientId ? (
+                          <CheckCircle2
+                            className="mt-0.5 text-emerald-600"
+                            size={16}
+                          />
+                        ) : null}
+                      </CommandItem>
+                    ))}
+                  </>
+                )}
+              </CommandList>
+            </Command>
+          </div>
+
+          {selectedCandidate ? (
+            <div className="rounded-md bg-slate-50 px-3 py-2.5 text-sm">
+              <p className="font-medium text-slate-800">
+                Valores que serão copiados
+              </p>
+              <div className="mt-1.5 flex flex-wrap gap-2">
+                {selectedCandidate.quantities.map((quantity, index) => (
+                  <span
+                    key={`${quantity.variationId || "base"}-${index}`}
+                    className="rounded bg-white px-2 py-1 text-xs text-slate-600 ring-1 ring-slate-200"
+                  >
+                    {quantity.variationName}:{" "}
+                    {formatQuantity(quantity.quantity)}
+                  </span>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          <DialogFooter className="gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setOpen(false)}
+              disabled={isCopying}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              onClick={copyQuantities}
+              disabled={!selectedCandidate || isCopying}
+            >
+              {isCopying ? "Copiando..." : "Copiar quantidades"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
 }
 
 export default function AdminRecipeVariacoesTab() {
@@ -48,10 +288,10 @@ export default function AdminRecipeVariacoesTab() {
   const variationColumns = isYieldMode
     ? []
     : linkedVariations.filter(
-      (variation) =>
-        variation.variationId &&
-        !hiddenVariationIds.includes(variation.itemVariationId)
-    );
+        (variation) =>
+          variation.variationId &&
+          !hiddenVariationIds.includes(variation.itemVariationId)
+      );
   const columnToggleVariations = linkedVariations
     .filter((variation) => variation.variationId)
     .sort(
@@ -62,31 +302,31 @@ export default function AdminRecipeVariacoesTab() {
   );
   const effectiveVariationColumns = isYieldMode
     ? [
-      {
-        itemVariationId: "__yield__",
-        variationId: null,
-        variationName: "Qtd usada no lote",
-        isReference: false,
-      },
-    ]
+        {
+          itemVariationId: "__yield__",
+          variationId: null,
+          variationName: "Qtd usada no lote",
+          isReference: false,
+        },
+      ]
     : orderedVariationColumns.length > 0
-      ? orderedVariationColumns
-      : hasAnyLinkedVariation
-        ? []
-        : [
-          {
-            itemVariationId: "__base__",
-            variationId: null,
-            variationName: "Base/auto",
-          },
-        ];
+    ? orderedVariationColumns
+    : hasAnyLinkedVariation
+    ? []
+    : [
+        {
+          itemVariationId: "__base__",
+          variationId: null,
+          variationName: "Base/auto",
+        },
+      ];
   const compactMatrixWidthClass = isYieldMode
     ? ""
     : effectiveVariationColumns.length <= 1
-      ? "max-w-[760px]"
-      : effectiveVariationColumns.length === 2
-        ? "max-w-[980px]"
-        : "";
+    ? "max-w-[760px]"
+    : effectiveVariationColumns.length === 2
+    ? "max-w-[980px]"
+    : "";
 
   const groupedLines = recipeLines.reduce(
     (acc, line) => {
@@ -129,10 +369,10 @@ export default function AdminRecipeVariacoesTab() {
     const firstVisibleLine = isYieldMode
       ? getYieldLine(row)
       : effectiveVariationColumns
-        .map((variation) =>
-          row.linesByVariation.get(String(variation.itemVariationId))
-        )
-        .find(Boolean);
+          .map((variation) =>
+            row.linesByVariation.get(String(variation.itemVariationId))
+          )
+          .find(Boolean);
     const firstLine =
       firstVisibleLine || row.linesByVariation.values().next().value;
     const itemConsumptionUm = String(
@@ -178,25 +418,28 @@ export default function AdminRecipeVariacoesTab() {
   );
   const yieldExampleRow = isYieldMode
     ? compositionRowsWithUnit.find((row) => {
-      const line = getYieldLine(row);
-      return Number(line?.quantity || 0) > 0;
-    })
+        const line = getYieldLine(row);
+        return Number(line?.quantity || 0) > 0;
+      })
     : null;
   const yieldExampleLine = yieldExampleRow
     ? getYieldLine(yieldExampleRow)
     : null;
   const yieldExampleText =
     isYieldMode &&
-      yieldExampleRow &&
-      yieldExampleLine &&
-      Number(yieldExampleLine.quantity || 0) > 0 &&
-      recipeYieldQuantity > 0
+    yieldExampleRow &&
+    yieldExampleLine &&
+    Number(yieldExampleLine.quantity || 0) > 0 &&
+    recipeYieldQuantity > 0
       ? `Nesta receita: se o lote usa ${formatQuantity(
-        yieldExampleLine.quantity
-      )} ${yieldExampleRow.unit} de ${yieldExampleRow.itemName
-      } e resulta em ${formatQuantity(recipeYieldQuantity)} ${recipeYieldUnit || "UM"
-      }, informe ${formatQuantity(yieldExampleLine.quantity)} ${yieldExampleRow.unit
-      } na linha de ${yieldExampleRow.itemName}.`
+          yieldExampleLine.quantity
+        )} ${yieldExampleRow.unit} de ${
+          yieldExampleRow.itemName
+        } e resulta em ${formatQuantity(recipeYieldQuantity)} ${
+          recipeYieldUnit || "UM"
+        }, informe ${formatQuantity(yieldExampleLine.quantity)} ${
+          yieldExampleRow.unit
+        } na linha de ${yieldExampleRow.itemName}.`
       : "Exemplo: se o lote usa 1,345 KG de um ingrediente e resulta em 0,450 KG, aqui entra 1,345 KG na linha desse ingrediente.";
 
   const toggleVariationColumn = (itemVariationId: string) => {
@@ -230,7 +473,12 @@ export default function AdminRecipeVariacoesTab() {
                   </div>
                   <p className="mt-1 text-sm text-slate-600">
                     Preencha abaixo a quantidade total de cada ingrediente usada
-                    para um rendimento de <span className="font-semibold">{formatQuantity(recipeYieldQuantity)}{" "} {recipeYieldUnit || "UM"}</span>.
+                    para um rendimento de{" "}
+                    <span className="font-semibold">
+                      {formatQuantity(recipeYieldQuantity)}{" "}
+                      {recipeYieldUnit || "UM"}
+                    </span>
+                    .
                   </p>
                 </div>
               </div>
@@ -262,8 +510,9 @@ export default function AdminRecipeVariacoesTab() {
           <div className="space-y-2">
             <div className="flex items-center gap-2">
               <span
-                className={`h-1.5 w-1.5 rounded-full ${hasVariationPendingCells ? "bg-amber-400" : "bg-emerald-400"
-                  }`}
+                className={`h-1.5 w-1.5 rounded-full ${
+                  hasVariationPendingCells ? "bg-amber-400" : "bg-emerald-400"
+                }`}
               />
               <span className="text-sm text-slate-500">
                 {isYieldMode
@@ -271,8 +520,8 @@ export default function AdminRecipeVariacoesTab() {
                     ? "Informe as quantidades usadas no lote"
                     : "Ingredientes completos para o rendimento"
                   : hasVariationPendingCells
-                    ? "Células sem UM ou quantidade"
-                    : "Todas as variações completas"}
+                  ? "Células sem UM ou quantidade"
+                  : "Todas as variações completas"}
               </span>
             </div>
             {!isYieldMode ? (
@@ -391,6 +640,12 @@ export default function AdminRecipeVariacoesTab() {
                       >
                         {row.itemName}
                       </Link>
+                      <CopyIngredientQuantitiesButton
+                        recipeId={recipe.id}
+                        ingredientItemId={row.itemId}
+                        targetRecipeIngredientId={row.recipeIngredientId}
+                        ingredientName={row.itemName}
+                      />
                     </td>
                     <td className="border-t border-slate-100 px-3 py-4 align-top">
                       <IngredientUnitEditor
@@ -419,14 +674,15 @@ export default function AdminRecipeVariacoesTab() {
                       const line = isYieldMode
                         ? getYieldLine(row)
                         : row.linesByVariation.get(
-                          String(variation.itemVariationId)
-                        );
+                            String(variation.itemVariationId)
+                          );
                       if (!line) {
                         return (
                           <td
                             key={`${row.key}-${variation.itemVariationId}`}
-                            className={`border-t border-slate-100 px-3 py-4 align-top text-sm text-slate-300 ${variation.isReference ? "bg-slate-50" : ""
-                              }`}
+                            className={`border-t border-slate-100 px-3 py-4 align-top text-sm text-slate-300 ${
+                              variation.isReference ? "bg-slate-50" : ""
+                            }`}
                           >
                             —
                           </td>
@@ -435,8 +691,9 @@ export default function AdminRecipeVariacoesTab() {
                       return (
                         <td
                           key={`${row.key}-${variation.itemVariationId}`}
-                          className={`border-t border-slate-100 px-3 py-4 align-top ${variation.isReference ? "bg-slate-50" : ""
-                            }`}
+                          className={`border-t border-slate-100 px-3 py-4 align-top ${
+                            variation.isReference ? "bg-slate-50" : ""
+                          }`}
                         >
                           <InlineVariationCellEditor
                             recipeId={recipe.id}

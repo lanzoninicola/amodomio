@@ -63,6 +63,7 @@ import RouteProgressBar from "~/components/route-progress-bar/route-progress-bar
 import { isDatabaseConnectivityError } from "~/lib/errors/connectivity";
 import CardapioFacebookPixel from "~/domain/cardapio/components/cardapio-facebook-pixel";
 import { trackCardapioFacebookPixelTrigger } from "~/domain/cardapio/facebook-pixel.client";
+import { trackCardapioOrderIntent } from "~/domain/cardapio/tracking/cardapio-tracking.client";
 import {
   CARDAPIO_REDIRECT_TO_SAIPOS_SETTING_NAME,
   DEFAULT_CARDAPIO_REDIRECT_TO_SAIPOS,
@@ -409,9 +410,10 @@ function CardapioHeader() {
                     compact
                     headerCompact
                     externalLinkURL={url}
-                    onClick={() =>
-                      trackCardapioFacebookPixelTrigger("fazer_pedido_click")
-                    }
+                    onClick={() => {
+                      trackCardapioOrderIntent("mobile_header");
+                      trackCardapioFacebookPixelTrigger("fazer_pedido_click");
+                    }}
                   />
                 </div>
               )}
@@ -489,11 +491,12 @@ function CardapioHeader() {
                           <FazerPedidoButton
                             cnLabel="text-2xl tracking-wider"
                             externalLinkURL={url}
-                            onClick={() =>
+                            onClick={() => {
+                              trackCardapioOrderIntent("desktop_menu");
                               trackCardapioFacebookPixelTrigger(
                                 "fazer_pedido_click"
-                              )
-                            }
+                              );
+                            }}
                           />
                         );
                       }}
@@ -695,9 +698,10 @@ function CardapioFooter() {
               <CardapioOrderCtaButton
                 compact
                 externalLinkURL={url}
-                onClick={() =>
-                  trackCardapioFacebookPixelTrigger("fazer_pedido_click")
-                }
+                onClick={() => {
+                  trackCardapioOrderIntent("mobile_footer");
+                  trackCardapioFacebookPixelTrigger("fazer_pedido_click");
+                }}
               />
             </div>
           )}

@@ -5,9 +5,7 @@ import {
   updateRecipeCompositionIngredientDefaultLoss,
   updateRecipeCompositionLine,
 } from "~/domain/recipe/recipe-composition.server";
-import {
-  ensureItemCostSheetForRecipe as ensureItemCostSheetForRecipeLink,
-} from "~/domain/recipe/recipe-item-cost-sheet.server";
+import { ensureItemCostSheetForRecipe as ensureItemCostSheetForRecipeLink } from "~/domain/recipe/recipe-item-cost-sheet.server";
 
 function parseDecimalInput(value: unknown): number | null {
   const normalized = String(value ?? "").trim();
@@ -98,8 +96,12 @@ export function parseItemRecipeChatGptImportPayload(value: string): {
     throw new Error("recipe.name é obrigatório");
   }
 
-  const ingredientsRaw = Array.isArray(parsed?.ingredients) ? parsed.ingredients : [];
-  const missingIngredientsRaw = Array.isArray(parsed?.missingIngredients) ? parsed.missingIngredients : [];
+  const ingredientsRaw = Array.isArray(parsed?.ingredients)
+    ? parsed.ingredients
+    : [];
+  const missingIngredientsRaw = Array.isArray(parsed?.missingIngredients)
+    ? parsed.missingIngredients
+    : [];
   if (ingredientsRaw.length === 0 && missingIngredientsRaw.length === 0) {
     throw new Error("Nenhum ingrediente encontrado no JSON importado");
   }
@@ -107,12 +109,18 @@ export function parseItemRecipeChatGptImportPayload(value: string): {
   const seenItemIds = new Set<string>();
   const ingredients = ingredientsRaw.map((ingredient, index) => {
     const itemId = String(ingredient?.itemId || "").trim();
-    const unit = String(ingredient?.unit || "").trim().toUpperCase();
+    const unit = String(ingredient?.unit || "")
+      .trim()
+      .toUpperCase();
     const defaultLossPctParsed = parseDecimalInput(ingredient?.defaultLossPct);
-    const variationEntries = Object.entries(ingredient?.variationQuantities || {});
+    const variationEntries = Object.entries(
+      ingredient?.variationQuantities || {}
+    );
 
-    if (!itemId) throw new Error(`Ingrediente ${index + 1}: itemId é obrigatório`);
-    if (seenItemIds.has(itemId)) throw new Error(`Ingrediente ${index + 1}: itemId duplicado (${itemId})`);
+    if (!itemId)
+      throw new Error(`Ingrediente ${index + 1}: itemId é obrigatório`);
+    if (seenItemIds.has(itemId))
+      throw new Error(`Ingrediente ${index + 1}: itemId duplicado (${itemId})`);
     seenItemIds.add(itemId);
     if (!unit) throw new Error(`Ingrediente ${index + 1}: unit é obrigatório`);
     if (
@@ -127,17 +135,26 @@ export function parseItemRecipeChatGptImportPayload(value: string): {
       throw new Error(`Ingrediente ${index + 1}: informe variationQuantities`);
     }
 
-    const variationQuantities = variationEntries.reduce((acc, [variationKey, quantityRaw]) => {
-      const quantity = parseDecimalInput(quantityRaw);
-      if (!variationKey.trim()) {
-        throw new Error(`Ingrediente ${index + 1}: chave de variação inválida`);
-      }
-      if (quantity === null || Number.isNaN(quantity) || quantity < 0) {
-        throw new Error(`Ingrediente ${index + 1}: quantidade inválida para a variação ${variationKey}`);
-      }
-      acc[String(variationKey).trim()] = quantity;
-      return acc;
-    }, {} as Record<string, number>);
+    const variationQuantities = variationEntries.reduce(
+      (acc, [variationKey, quantityRaw]) => {
+        const quantity = parseDecimalInput(quantityRaw);
+        if (!variationKey.trim()) {
+          throw new Error(
+            `Ingrediente ${index + 1}: chave de variação inválida`
+          );
+        }
+        if (quantity === null || Number.isNaN(quantity) || quantity < 0) {
+          throw new Error(
+            `Ingrediente ${
+              index + 1
+            }: quantidade inválida para a variação ${variationKey}`
+          );
+        }
+        acc[String(variationKey).trim()] = quantity;
+        return acc;
+      },
+      {} as Record<string, number>
+    );
 
     return {
       itemId,
@@ -149,9 +166,12 @@ export function parseItemRecipeChatGptImportPayload(value: string): {
 
   const missingIngredients = missingIngredientsRaw.map((ingredient, index) => {
     const name = String(ingredient?.name || "").trim();
-    const unitRaw = String(ingredient?.unit || "").trim().toUpperCase();
+    const unitRaw = String(ingredient?.unit || "")
+      .trim()
+      .toUpperCase();
     const notes = String(ingredient?.notes || "").trim();
-    if (!name) throw new Error(`Ingrediente faltante ${index + 1}: name é obrigatório`);
+    if (!name)
+      throw new Error(`Ingrediente faltante ${index + 1}: name é obrigatório`);
     return {
       name,
       unit: unitRaw || null,
@@ -174,13 +194,15 @@ export function parseItemRecipeChatGptImportPayload(value: string): {
 
 async function ensureSingleItemRecipeGroup(db: any, itemId: string) {
   const recipes = await db.recipe.findMany({
-    where: { itemId },
+    where: { itemId, status: "active" },
     select: { id: true, name: true, createdAt: true },
     orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
     take: 10,
   });
   if (recipes.length > 1) {
-    throw new Error("Este item já possui mais de uma receita vinculada. Use o módulo de receitas para escolher manualmente.");
+    throw new Error(
+      "Este item já possui mais de uma receita vinculada. Use o módulo de receitas para escolher manualmente."
+    );
   }
   return recipes[0] || null;
 }
@@ -240,7 +262,8 @@ async function ensureItemCostSheetForRecipe(params: {
     db,
     item,
     recipe,
-    componentNotes: "Componente gerado automaticamente pelo assistente de receita",
+    componentNotes:
+      "Componente gerado automaticamente pelo assistente de receita",
   });
   return result.rootSheetId;
 }
@@ -258,7 +281,9 @@ export async function buildItemRecipeChatGptImportPreview(params: {
     existingRecipeImportMode = "replace_existing",
   } = params;
   const itemCatalog = await db.item.findMany({
-    where: { id: { in: payload.ingredients.map((ingredient) => ingredient.itemId) } },
+    where: {
+      id: { in: payload.ingredients.map((ingredient) => ingredient.itemId) },
+    },
     select: { id: true, name: true, consumptionUm: true },
   });
   const itemById = new Map<
@@ -272,21 +297,33 @@ export async function buildItemRecipeChatGptImportPreview(params: {
     itemVariationId: String(variation.id),
     variationName: variation?.Variation?.name || "Base",
   }));
-  const linkedVariationIds = new Set(linkedVariations.map((variation) => variation.itemVariationId));
+  const linkedVariationIds = new Set(
+    linkedVariations.map((variation) => variation.itemVariationId)
+  );
   const variationNameById = new Map(
-    linkedVariations.map((variation) => [variation.itemVariationId, variation.variationName])
+    linkedVariations.map((variation) => [
+      variation.itemVariationId,
+      variation.variationName,
+    ])
   );
 
   if (linkedVariations.length === 0) {
-    throw new Error("Configure ao menos uma variação no item antes de usar o assistente");
+    throw new Error(
+      "Configure ao menos uma variação no item antes de usar o assistente"
+    );
   }
 
   const importableIngredients = payload.ingredients.map((ingredient) => {
     const catalogItem = itemById.get(ingredient.itemId);
-    if (!catalogItem) throw new Error(`Ingrediente não encontrado para itemId ${ingredient.itemId}`);
+    if (!catalogItem)
+      throw new Error(
+        `Ingrediente não encontrado para itemId ${ingredient.itemId}`
+      );
 
     const variationKeys = Object.keys(ingredient.variationQuantities);
-    const invalidVariationId = variationKeys.find((variationId) => !linkedVariationIds.has(variationId));
+    const invalidVariationId = variationKeys.find(
+      (variationId) => !linkedVariationIds.has(variationId)
+    );
     if (invalidVariationId) {
       throw new Error(`Variação inválida no JSON: ${invalidVariationId}`);
     }
@@ -306,8 +343,6 @@ export async function buildItemRecipeChatGptImportPreview(params: {
   });
 
   const existingRecipe = await ensureSingleItemRecipeGroup(db, item.id);
-  const existingSheetRootId = await ensureSingleItemCostSheetGroup(db, item.id);
-
   return {
     itemById,
     preview: {
@@ -323,14 +358,17 @@ export async function buildItemRecipeChatGptImportPreview(params: {
           : "Uma nova receita vinculada será criada para o item.",
       },
       itemCostSheet: {
-        mode: existingSheetRootId ? "reuse" : "create",
+        mode: "create",
       },
       importableIngredients,
       missingIngredients: payload.missingIngredients,
       totals: {
         importableIngredients: importableIngredients.length,
         missingIngredients: payload.missingIngredients.length,
-        variationCells: importableIngredients.reduce((acc, ingredient) => acc + ingredient.variationCount, 0),
+        variationCells: importableIngredients.reduce(
+          (acc, ingredient) => acc + ingredient.variationCount,
+          0
+        ),
       },
     },
   };
@@ -369,7 +407,10 @@ export async function importItemRecipeFromChatGpt(params: {
 
   for (const ingredient of payload.ingredients) {
     const catalogItem = itemById.get(ingredient.itemId);
-    const defaultUnit = String(ingredient.unit || catalogItem?.consumptionUm || "UN").trim().toUpperCase() || "UN";
+    const defaultUnit =
+      String(ingredient.unit || catalogItem?.consumptionUm || "UN")
+        .trim()
+        .toUpperCase() || "UN";
     await createRecipeCompositionIngredientSkeleton({
       db,
       recipeId: recipe.id,
@@ -385,7 +426,10 @@ export async function importItemRecipeFromChatGpt(params: {
 
   for (const line of refreshedLines) {
     if (line.recipeIngredientId) {
-      ingredientByItemId.set(String(line.itemId), String(line.recipeIngredientId));
+      ingredientByItemId.set(
+        String(line.itemId),
+        String(line.recipeIngredientId)
+      );
     }
     const itemVariationId = String(line.ItemVariation?.id || "");
     if (itemVariationId) {
@@ -396,7 +440,9 @@ export async function importItemRecipeFromChatGpt(params: {
   for (const ingredient of payload.ingredients) {
     const recipeIngredientId = ingredientByItemId.get(ingredient.itemId);
     if (!recipeIngredientId) {
-      throw new Error(`Não foi possível preparar a composição para o item ${ingredient.itemId}`);
+      throw new Error(
+        `Não foi possível preparar a composição para o item ${ingredient.itemId}`
+      );
     }
 
     await updateRecipeCompositionIngredientDefaultLoss({
@@ -407,10 +453,16 @@ export async function importItemRecipeFromChatGpt(params: {
       applyToVariationLines: false,
     });
 
-    for (const [itemVariationId, quantity] of Object.entries(ingredient.variationQuantities)) {
-      const line = lineByItemAndVariation.get(`${ingredient.itemId}::${itemVariationId}`);
+    for (const [itemVariationId, quantity] of Object.entries(
+      ingredient.variationQuantities
+    )) {
+      const line = lineByItemAndVariation.get(
+        `${ingredient.itemId}::${itemVariationId}`
+      );
       if (!line) {
-        throw new Error(`Linha não encontrada para item ${ingredient.itemId} na variação ${itemVariationId}`);
+        throw new Error(
+          `Linha não encontrada para item ${ingredient.itemId} na variação ${itemVariationId}`
+        );
       }
 
       await updateRecipeCompositionLine({
@@ -424,7 +476,11 @@ export async function importItemRecipeFromChatGpt(params: {
     }
   }
 
-  const itemCostSheetId = await ensureItemCostSheetForRecipe({ db, item, recipe });
+  const itemCostSheetId = await ensureItemCostSheetForRecipe({
+    db,
+    item,
+    recipe,
+  });
 
   return {
     recipeId: recipe.id,

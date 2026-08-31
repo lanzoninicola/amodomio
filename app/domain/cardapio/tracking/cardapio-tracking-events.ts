@@ -1,6 +1,7 @@
 export const CARDAPIO_TRACKING_ENDPOINT = "/api/cardapio-interaction";
 
 export const CARDAPIO_NAVIGATION_EVENT = "cardapio_navigation_click";
+export const CARDAPIO_ORDER_INTENT_EVENT = "cardapio_order_intent";
 export const BIO_PAGE_VIEW_EVENT = "bio_page_view";
 export const BIO_LINK_CLICK_EVENT = "bio_link_click";
 export const CARDAPIO_FEATURED_IMPRESSION_EVENT =
@@ -54,6 +55,12 @@ export const CARDAPIO_FEATURED_EVENTS = [
 ] as const;
 
 export const BIO_EVENTS = [BIO_PAGE_VIEW_EVENT, BIO_LINK_CLICK_EVENT] as const;
+export const CARDAPIO_ORDER_CONTROLS = ["order_cta"] as const;
+export const CARDAPIO_ORDER_PLACEMENTS = [
+  "mobile_header",
+  "mobile_footer",
+  "desktop_menu",
+] as const;
 export const BIO_CONTROLS = ["page", "link"] as const;
 export const BIO_PLACEMENTS = ["bio_page"] as const;
 
@@ -70,6 +77,7 @@ export type CardapioFeaturedEventName =
 export type BioEventName = (typeof BIO_EVENTS)[number];
 export type BioControl = (typeof BIO_CONTROLS)[number];
 export type BioPlacement = (typeof BIO_PLACEMENTS)[number];
+export type CardapioOrderPlacement = (typeof CARDAPIO_ORDER_PLACEMENTS)[number];
 
 export type CardapioNavigationTrackingRecord = {
   eventName: typeof CARDAPIO_NAVIGATION_EVENT;
@@ -92,9 +100,17 @@ export type BioTrackingRecord = {
   placement: BioPlacement;
 };
 
+export type CardapioOrderTrackingRecord = {
+  eventName: typeof CARDAPIO_ORDER_INTENT_EVENT;
+  control: "order_cta";
+  value: "fazer_pedido";
+  placement: CardapioOrderPlacement;
+};
+
 export type CardapioTrackingRecord =
   | CardapioNavigationTrackingRecord
   | CardapioFeaturedTrackingRecord
+  | CardapioOrderTrackingRecord
   | BioTrackingRecord;
 
 const navigationControls = new Set<string>(CARDAPIO_NAVIGATION_CONTROLS);
@@ -105,6 +121,7 @@ const featuredPlacements = new Set<string>(CARDAPIO_FEATURED_PLACEMENTS);
 const bioEvents = new Set<string>(BIO_EVENTS);
 const bioControls = new Set<string>(BIO_CONTROLS);
 const bioPlacements = new Set<string>(BIO_PLACEMENTS);
+const orderPlacements = new Set<string>(CARDAPIO_ORDER_PLACEMENTS);
 
 const normalizeString = (value: unknown, maxLength: number) =>
   typeof value === "string" ? value.trim().slice(0, maxLength) : "";
@@ -121,6 +138,20 @@ export function parseCardapioTrackingRecord(
   const placement = normalizeString(data.placement, 32);
 
   if (!value) return null;
+
+  if (
+    eventName === CARDAPIO_ORDER_INTENT_EVENT &&
+    control === "order_cta" &&
+    value === "fazer_pedido" &&
+    orderPlacements.has(placement)
+  ) {
+    return {
+      eventName,
+      control: "order_cta",
+      value: "fazer_pedido",
+      placement: placement as CardapioOrderPlacement,
+    };
+  }
 
   if (
     eventName === CARDAPIO_NAVIGATION_EVENT &&

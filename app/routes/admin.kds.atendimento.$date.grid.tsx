@@ -570,7 +570,7 @@ async function buildOrderTimingDashboard(
   const lastWeekDateInt = ymdToDateInt(addDaysToYmd(dateStr, -7));
   const averageStartInt = ymdToDateInt(addMonthsToYmd(dateStr, -3));
   const selectedWeekday = getYmdWeekday(dateStr);
-  const currentRows = await prisma.kdsDailyOrderDetail.findMany({
+  const currentRowsPromise = prisma.kdsDailyOrderDetail.findMany({
     where: {
       dateInt,
       novoPedidoAt: { not: null },
@@ -579,7 +579,7 @@ async function buildOrderTimingDashboard(
     orderBy: { novoPedidoAt: "asc" },
   });
 
-  const lastWeekRows = await prisma.kdsDailyOrderDetail.findMany({
+  const lastWeekRowsPromise = prisma.kdsDailyOrderDetail.findMany({
     where: {
       dateInt: lastWeekDateInt,
       novoPedidoAt: { not: null },
@@ -588,13 +588,19 @@ async function buildOrderTimingDashboard(
     orderBy: { novoPedidoAt: "asc" },
   });
 
-  const previousRows = await prisma.kdsDailyOrderDetail.findMany({
+  const previousRowsPromise = prisma.kdsDailyOrderDetail.findMany({
     where: {
       dateInt: { gte: averageStartInt, lt: dateInt },
       novoPedidoAt: { not: null },
     },
     select: { dateInt: true, novoPedidoAt: true },
   });
+
+  const [currentRows, lastWeekRows, previousRows] = await Promise.all([
+    currentRowsPromise,
+    lastWeekRowsPromise,
+    previousRowsPromise,
+  ]);
 
   const currentCounts = ORDER_TIMING_BUCKETS.map(() => 0);
   currentRows.forEach((row) => {
@@ -707,50 +713,55 @@ export async function loader({ params }: LoaderFunctionArgs) {
 
   // Dados já existentes
   const listPromise = listByDate(dateInt);
-  const header = await prisma.kdsDailyOrder.findUnique({
+  const doughStockPromise = getDoughStock(dateInt);
+  const availableSizesPromise = getAvailableDoughSizes();
+  const orderTimingDashboard = buildOrderTimingDashboard(dateStr, dateInt);
+  const settingsRowPromise = prisma.setting.findFirst({
+    where: { context: "kds_prediction", name: "config" },
+  });
+  const headerPromise = prisma.kdsDailyOrder.findUnique({
     where: { dateInt },
     select: { id: true, operationStatus: true, financialDailyGoalId: true },
   });
 
-  const deliveryZones = await prisma.deliveryZone.findMany({
+  const deliveryZonesPromise = prisma.deliveryZone.findMany({
     select: { id: true, name: true },
     orderBy: { name: "asc" },
   });
 
-  const dzTimes = await prisma.deliveryZoneDistance.findMany({
+  const dzTimesPromise = prisma.deliveryZoneDistance.findMany({
     select: {
       deliveryZoneId: true,
       estimatedTimeInMin: true,
       distanceInKm: true,
     },
   });
-
   // ⬇️ Novos cálculos para o painel-resumo
   // Somas do dia
-  const grossRow = await prisma.kdsDailyOrderDetail.aggregate({
+  const grossRowPromise = prisma.kdsDailyOrderDetail.aggregate({
     where: { dateInt },
     _sum: { orderAmount: true },
   });
-  const cardRow = await prisma.kdsDailyOrderDetail.aggregate({
+  const cardRowPromise = prisma.kdsDailyOrderDetail.aggregate({
     where: { dateInt, isCreditCard: true },
     _sum: { orderAmount: true },
   });
-  const motoRow = await prisma.kdsDailyOrderDetail.aggregate({
+  const motoRowPromise = prisma.kdsDailyOrderDetail.aggregate({
     where: { dateInt, hasMoto: true },
     _sum: { motoValue: true },
   });
-  const grossMonthRow = await prisma.kdsDailyOrderDetail.aggregate({
+  const grossMonthRowPromise = prisma.kdsDailyOrderDetail.aggregate({
     where: { dateInt: { gte: monthStartInt, lte: dateInt } },
     _sum: { orderAmount: true },
   });
-  const grossPrevMonthRow = await prisma.kdsDailyOrderDetail.aggregate({
+  const grossPrevMonthRowPromise = prisma.kdsDailyOrderDetail.aggregate({
     where: { dateInt: { gte: prevMonthStartInt, lte: prevMonthEndInt } },
     _sum: { orderAmount: true },
   });
 
   const aiqfomeChannelStr = CHANNELS[2];
   const ifoodChannelStr = CHANNELS[3];
-  const marketplaceRow = await prisma.kdsDailyOrderDetail.aggregate({
+  const marketplaceRowPromise = prisma.kdsDailyOrderDetail.aggregate({
     where: {
       AND: {
         dateInt,
@@ -761,6 +772,28 @@ export async function loader({ params }: LoaderFunctionArgs) {
     },
     _sum: { orderAmount: true },
   });
+
+  const [
+    header,
+    deliveryZones,
+    dzTimes,
+    grossRow,
+    cardRow,
+    motoRow,
+    grossMonthRow,
+    grossPrevMonthRow,
+    marketplaceRow,
+  ] = await Promise.all([
+    headerPromise,
+    deliveryZonesPromise,
+    dzTimesPromise,
+    grossRowPromise,
+    cardRowPromise,
+    motoRowPromise,
+    grossMonthRowPromise,
+    grossPrevMonthRowPromise,
+    marketplaceRowPromise,
+  ]);
 
   const grossAmount = Number(grossRow._sum.orderAmount ?? 0);
   const cardAmount = Number(cardRow._sum.orderAmount ?? 0);
@@ -924,14 +957,12 @@ export async function loader({ params }: LoaderFunctionArgs) {
   const estimatedProfitPrevMonth =
     grossPrevMonthAmount * (1 - totalCostPerc / 100);
 
-  const doughStock = await getDoughStock(dateInt);
   const doughUsage = listPromise.then((rows) => sumSizes(rows));
-  const availableSizes = await getAvailableDoughSizes();
-  const orderTimingDashboard = buildOrderTimingDashboard(dateStr, dateInt);
-
-  const settingsRow = await prisma.setting.findFirst({
-    where: { context: "kds_prediction", name: "config" },
-  });
+  const [doughStock, availableSizes, settingsRow] = await Promise.all([
+    doughStockPromise,
+    availableSizesPromise,
+    settingsRowPromise,
+  ]);
   let predictionSettings = {
     ...DEFAULT_PREDICTION_SETTINGS,
     operatorCount: getOperatorCountByDate(dateStr),

@@ -5,6 +5,7 @@ import {
   BIO_PAGE_VIEW_EVENT,
   CARDAPIO_FEATURED_CTA_EVENT,
   CARDAPIO_NAVIGATION_EVENT,
+  CARDAPIO_ORDER_INTENT_EVENT,
   parseCardapioTrackingRecord,
 } from "./cardapio-tracking-events";
 
@@ -67,6 +68,17 @@ describe("parseCardapioTrackingRecord", () => {
       value: "promocao-junina",
       placement: "desktop_card",
     });
+  });
+
+  it("accepts an order intent without claiming a completed sale", () => {
+    expect(
+      parseCardapioTrackingRecord({
+        eventName: CARDAPIO_ORDER_INTENT_EVENT,
+        control: "order_cta",
+        value: "fazer_pedido",
+        placement: "mobile_footer",
+      })
+    ).toMatchObject({ eventName: CARDAPIO_ORDER_INTENT_EVENT });
   });
 
   it("rejects dimensions from a different event family", () => {
