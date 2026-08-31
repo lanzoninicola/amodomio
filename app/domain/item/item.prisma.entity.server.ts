@@ -12,8 +12,11 @@ export type ItemClassification =
 
 type ItemFindManyParams = {
   includeInactive?: boolean;
+  includeArchived?: boolean;
   where?: Record<string, unknown>;
-  orderBy?: Record<string, "asc" | "desc"> | Array<Record<string, "asc" | "desc">>;
+  orderBy?:
+    | Record<string, "asc" | "desc">
+    | Array<Record<string, "asc" | "desc">>;
 };
 
 type CreateItemInput = {
@@ -46,6 +49,9 @@ class ItemPrismaEntity {
     const where = { ...(params.where || {}) } as Record<string, unknown>;
     if (!params.includeInactive && where.active === undefined) {
       where.active = true;
+    }
+    if (!params.includeArchived && where.archivedAt === undefined) {
+      where.archivedAt = null;
     }
 
     return await this.model.findMany({

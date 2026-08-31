@@ -324,12 +324,6 @@ export default function AdminCostImpactRoute() {
               Importação de movimentações
             </Link>
             <Link
-              to="/admin/gerenciamento/cardapio/cost-management"
-              className="font-semibold leading-5 whitespace-nowrap transition hover:text-slate-950"
-            >
-              Custos do cardápio
-            </Link>
-            <Link
               to="/admin/gerenciamento/cardapio/sell-price-management"
               className="font-semibold leading-5 whitespace-nowrap transition hover:text-slate-950"
             >
@@ -477,12 +471,7 @@ export default function AdminCostImpactRoute() {
                     </td>
                     <td className="px-4 py-3 align-top">
                       <div className="font-medium text-slate-900">
-                        <Link
-                          to={`/admin/gerenciamento/cardapio/cost-management/${row.menuItemId}`}
-                          className="hover:underline"
-                        >
-                          {row.menuItemName || "-"}
-                        </Link>
+                        {row.menuItemName || "-"}
                       </div>
                       <div className="text-xs text-slate-500">
                         {row.sizeName || "-"} · {row.channelName || "-"}

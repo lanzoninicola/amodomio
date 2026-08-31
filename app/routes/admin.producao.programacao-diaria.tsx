@@ -1,8 +1,8 @@
 // app/routes/admin.kds.producao.tsx
 import type { LoaderFunctionArgs } from "@remix-run/node";
-import { defer } from "@remix-run/node";
-import { useLoaderData, useSearchParams, Await } from "@remix-run/react";
-import { format } from "date-fns";
+import { defer, json } from "@remix-run/node";
+import { useFetcher, useLoaderData, useSearchParams, Await } from "@remix-run/react";
+import { endOfWeek, format, startOfWeek, subWeeks } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import * as React from "react";
 import { Prisma } from "@prisma/client";
@@ -26,6 +26,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { NumericInput } from "~/components/numeric-input/numeric-input";
 import prismaClient from "~/lib/prisma/client.server";
 import {
@@ -33,7 +41,7 @@ import {
   AlertDescription,
   AlertTitle,
 } from "~/components/ui/alert";
-import { Info } from "lucide-react";
+import { BarChart3, Info } from "lucide-react";
 
 // -----------------------------
 // Utilidades de data/weekday
@@ -86,6 +94,73 @@ function toDateInt(date: Date): number {
   return Number(`${y}${m}${d}`);
 }
 
+async function loadWeeklyHistoryData(request: Request) {
+  const url = new URL(request.url);
+  const requestedWeeks = Number(url.searchParams.get("weeks") || 3);
+  const weeksCount = Number.isFinite(requestedWeeks)
+    ? Math.max(1, Math.min(12, Math.floor(requestedWeeks)))
+    : 3;
+  const currentWeekStart = startOfWeek(new Date(), { weekStartsOn: 1 });
+  const completeWeeks = Array.from(
+    { length: weeksCount },
+    (_, index) => weeksCount - index
+  ).map((weeksAgo) => {
+    const start = subWeeks(currentWeekStart, weeksAgo);
+    const end = endOfWeek(start, { weekStartsOn: 1 });
+
+    return {
+      startDateInt: toDateInt(start),
+      endDateInt: toDateInt(end),
+    };
+  });
+  type WeeklyRow = {
+    dateInt: number;
+    f: number;
+    m: number;
+    p: number;
+    i: number;
+  };
+  const rows = await prismaClient.$queryRaw<WeeklyRow[]>`
+    SELECT
+      d."date_int" AS "dateInt",
+      COALESCE( (SUM( (d."size"::jsonb->>'F')::int ))::int, 0 ) AS f,
+      COALESCE( (SUM( (d."size"::jsonb->>'M')::int ))::int, 0 ) AS m,
+      COALESCE( (SUM( (d."size"::jsonb->>'P')::int ))::int, 0 ) AS p,
+      COALESCE( (SUM( (d."size"::jsonb->>'I')::int ))::int, 0 ) AS i
+    FROM "kds_daily_order_details" d
+    WHERE d."deleted_at" IS NULL
+      AND d."date_int" BETWEEN ${completeWeeks[0].startDateInt}
+        AND ${completeWeeks[completeWeeks.length - 1].endDateInt}
+    GROUP BY d."date_int"
+  `;
+  const valueBySize = {
+    Família: (row: WeeklyRow) => row.f ?? 0,
+    Médio: (row: WeeklyRow) => row.m ?? 0,
+    Individual: (row: WeeklyRow) => row.i ?? 0,
+    Pequena: (row: WeeklyRow) => row.p ?? 0,
+  };
+  const weeklyBySize = PROGRAMACAO_SIZES.map((size) => {
+    const totals = completeWeeks.map((week) =>
+      rows
+        .filter(
+          (row) =>
+            row.dateInt >= week.startDateInt &&
+            row.dateInt <= week.endDateInt
+        )
+        .reduce((sum, row) => sum + valueBySize[size](row), 0)
+    );
+
+    return {
+      size,
+      total: totals.reduce((sum, value) => sum + value, 0),
+      min: Math.min(...totals),
+      max: Math.max(...totals),
+    };
+  });
+
+  return { weeksCount, weeklyBySize };
+}
+
 // -----------------------------
 // Tipos
 // -----------------------------
@@ -134,6 +209,9 @@ function createDefaultStock(): StockBySize {
 // -----------------------------
 export async function loader({ request }: LoaderFunctionArgs) {
   const url = new URL(request.url);
+  if (url.searchParams.get("weeklyHistory") === "1") {
+    return json(await loadWeeklyHistoryData(request));
+  }
   const currentWeekday = WEEKDAY_NAMES[new Date().getDay()];
   const weekdayParam = (
     url.searchParams.get("weekday") || currentWeekday
@@ -292,8 +370,104 @@ export async function loader({ request }: LoaderFunctionArgs) {
 // -----------------------------
 // Componente
 // -----------------------------
+function WeeklyHistoryDialog() {
+  const fetcher = useFetcher<any>();
+  const [open, setOpen] = React.useState(false);
+  const [weeksCount, setWeeksCount] = React.useState("3");
+
+  function loadWeeks(value: string) {
+    setWeeksCount(value);
+    fetcher.load(
+      `/admin/producao/programacao-diaria?weeklyHistory=1&weeks=${value}`
+    );
+  }
+
+  function handleOpenChange(nextOpen: boolean) {
+    setOpen(nextOpen);
+    if (nextOpen && !fetcher.data) {
+      loadWeeks(weeksCount);
+    }
+  }
+
+  const isLoading = fetcher.state !== "idle";
+
+  return (
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      <DialogTrigger asChild>
+        <Button type="button" variant="outline">
+          <BarChart3 className="mr-2 h-5 w-5" />
+          Ver histórico semanal
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="max-w-3xl">
+        <DialogHeader>
+          <DialogTitle>Histórico por tamanho</DialogTitle>
+          <DialogDescription>
+            Totais das semanas completas, sem considerar o filtro de dia.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="w-44 space-y-2">
+          <Label>Semanas</Label>
+          <Select value={weeksCount} onValueChange={loadWeeks}>
+            <SelectTrigger>
+              <SelectValue placeholder="Quantidade" />
+            </SelectTrigger>
+            <SelectContent>
+              {Array.from({ length: 12 }, (_, index) => index + 1).map(
+                (amount) => (
+                  <SelectItem key={amount} value={String(amount)}>
+                    {amount} {amount === 1 ? "semana" : "semanas"}
+                  </SelectItem>
+                )
+              )}
+            </SelectContent>
+          </Select>
+        </div>
+
+        {isLoading || !fetcher.data ? (
+          <div className="grid grid-cols-2 gap-3">
+            <Skeleton className="h-24 w-full" />
+            <Skeleton className="h-24 w-full" />
+            <Skeleton className="h-24 w-full" />
+            <Skeleton className="h-24 w-full" />
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 gap-3">
+            {fetcher.data.weeklyBySize.map((item: any) => (
+              <div
+                key={item.size}
+                className="rounded-lg border bg-background px-4 py-3"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <div className="text-lg font-bold uppercase tracking-wide text-slate-950">
+                      {item.size}
+                    </div>
+                    <div className="mt-1 text-sm font-bold tabular-nums text-muted-foreground">
+                      mín {item.min} · máx {item.max}
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-xs font-medium uppercase text-muted-foreground">
+                      Total
+                    </div>
+                    <div className="font-mono text-5xl font-bold leading-none tracking-tight text-blue-700">
+                      {item.total}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export default function KdsProducaoPage() {
-  const data = useLoaderData<typeof loader>();
+  const data = useLoaderData<any>();
   const [searchParams, setSearchParams] = useSearchParams();
   const [stockBySize, setStockBySize] =
     React.useState<StockBySize>(createDefaultStock);
@@ -364,18 +538,22 @@ export default function KdsProducaoPage() {
   return (
     <div className="container mx-auto p-0 md:p-4 space-y-6">
       <header className="flex flex-col gap-4">
-        <div>
-          <h1 className="text-2xl font-bold">
-            Produção diária por tamanho
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            Selecione o dia da semana e ajuste a previsão por %.
-          </p>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h1 className="text-2xl font-bold">
+              Produção diária por tamanho
+            </h1>
+            <p className="text-sm text-muted-foreground">
+              Selecione o dia da semana e ajuste a previsão por %.
+            </p>
+          </div>
+          <WeeklyHistoryDialog />
         </div>
+
         <div className="grid gap-4 lg:grid-cols-2 lg:items-stretch">
           <div className="rounded-xl border bg-card p-4">
             <div className="grid gap-4 md:grid-cols-2 md:items-start">
-              <div>
+              <div className="space-y-2">
                 <Label>Dia da semana</Label>
                 <Select
                   value={weekday}
@@ -396,7 +574,7 @@ export default function KdsProducaoPage() {
                   </SelectContent>
                 </Select>
               </div>
-              <div>
+              <div className="space-y-2">
                 <Label>Previsão (±%)</Label>
                 <Input
                   type="number"
@@ -451,6 +629,7 @@ export default function KdsProducaoPage() {
               </div>
             </div>
           </div>
+
           <Suspense
             fallback={
               <div className="rounded-xl border bg-card p-4">

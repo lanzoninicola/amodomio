@@ -1,8 +1,19 @@
 import { NavLink, Outlet, useLocation } from "@remix-run/react";
-import { BarChart3, Eye, MousePointerClick, Utensils } from "lucide-react";
+import {
+  BarChart3,
+  Eye,
+  LayoutDashboard,
+  MousePointerClick,
+  Utensils,
+} from "lucide-react";
 import { cn } from "~/lib/utils";
 
 const dashboardTabs = [
+  {
+    label: "Visão geral",
+    href: "/admin/gerenciamento/cardapio/dashboard/overview",
+    icon: LayoutDashboard,
+  },
   {
     label: "Visitas",
     href: "/admin/gerenciamento/cardapio/dashboard/visitas",
@@ -53,7 +64,7 @@ export default function CardapioDashboardLayout() {
               const Icon = tab.icon;
               const isActive =
                 location.pathname === tab.href ||
-                location.pathname.startsWith(`${tab.href}/`);
+                (!tab.exact && location.pathname.startsWith(`${tab.href}/`));
 
               return (
                 <NavLink

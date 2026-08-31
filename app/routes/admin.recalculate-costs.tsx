@@ -27,17 +27,26 @@ import { ChevronLeft } from "lucide-react";
 
 export function loader({ request: _request }: LoaderFunctionArgs) {
   const db = prismaClient as any;
-  const itemOptions = db.item.findMany({
-    where: { active: true, classification: "insumo" },
-    select: {
-      id: true,
-      name: true,
-      purchaseUm: true,
-      consumptionUm: true,
-    },
-    orderBy: [{ name: "asc" }],
-    take: 300,
-  }) as Promise<Array<{ id: string; name: string; purchaseUm: string | null; consumptionUm: string | null }>>;
+  // Remix defer tracks native Promises; normalize Prisma's thenable first.
+  const itemOptions = (async () =>
+    db.item.findMany({
+      where: { active: true, classification: "insumo" },
+      select: {
+        id: true,
+        name: true,
+        purchaseUm: true,
+        consumptionUm: true,
+      },
+      orderBy: [{ name: "asc" }],
+      take: 300,
+    }))() as Promise<
+    Array<{
+      id: string;
+      name: string;
+      purchaseUm: string | null;
+      consumptionUm: string | null;
+    }>
+  >;
 
   return defer({ itemOptions });
 }

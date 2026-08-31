@@ -6,11 +6,13 @@ import {
   CARDAPIO_FEATURED_IMPRESSION_EVENT,
   CARDAPIO_FEATURED_SLIDE_EVENT,
   CARDAPIO_NAVIGATION_EVENT,
+  CARDAPIO_ORDER_INTENT_EVENT,
   CARDAPIO_TRACKING_ENDPOINT,
   type CardapioFeaturedControl,
   type CardapioFeaturedPlacement,
   type CardapioNavigationControl,
   type CardapioNavigationPlacement,
+  type CardapioOrderPlacement,
   type CardapioTrackingRecord,
 } from "./cardapio-tracking-events";
 import { getOrCreateCardapioVisitorId } from "./cardapio-visitor.client";
@@ -39,6 +41,15 @@ export function collectCardapioTrackingRecord(record: CardapioTrackingRecord) {
     keepalive: true,
   }).catch(() => {
     // Tracking nunca deve interferir na experiência do cardápio.
+  });
+}
+
+export function trackCardapioOrderIntent(placement: CardapioOrderPlacement) {
+  collectCardapioTrackingRecord({
+    eventName: CARDAPIO_ORDER_INTENT_EVENT,
+    control: "order_cta",
+    value: "fazer_pedido",
+    placement,
   });
 }
 

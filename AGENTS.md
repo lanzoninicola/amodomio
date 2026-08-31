@@ -41,6 +41,10 @@ Durante desenvolvimento:
 - execute apenas verificacoes localizadas
 - evite validacoes globais desnecessarias
 
+## Componentes de UI
+
+O componente `Select` deve sempre usar a implementacao do shadcn/ui.
+
 ## Remix loaders
 
 Use `defer` + `Suspense`/`Await`, ou o padrao equivalente mais atual do Remix, como default para loaders de rotas que carregam dados de banco, listas, relatorios, dashboards ou payloads pesados.

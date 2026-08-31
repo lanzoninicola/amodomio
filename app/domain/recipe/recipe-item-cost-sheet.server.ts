@@ -14,7 +14,9 @@ export async function ensureSingleItemCostSheetGroup(db: any, itemId: string) {
   const rootIds = Array.from(
     new Set(
       sheets
-        .map((sheet: any) => String(sheet.baseItemCostSheetId || sheet.id || "").trim())
+        .map((sheet: any) =>
+          String(sheet.baseItemCostSheetId || sheet.id || "").trim()
+        )
         .filter(Boolean)
     )
   );
@@ -36,19 +38,15 @@ export async function ensureItemCostSheetForRecipe(params: {
   sheetDescription?: string | null;
   componentNotes?: string | null;
 }) {
-  const {
-    db,
-    item,
-    recipe,
-    sheetName,
-    sheetDescription,
-    componentNotes,
-  } = params;
+  const { db, item, recipe, sheetName, sheetDescription, componentNotes } =
+    params;
 
-  let rootSheetId = await ensureSingleItemCostSheetGroup(db, item.id);
+  let rootSheetId: string | null = null;
 
-  if (!rootSheetId) {
-    const itemVariations = await itemVariationPrismaEntity.findManyByItemId(item.id);
+  {
+    const itemVariations = await itemVariationPrismaEntity.findManyByItemId(
+      item.id
+    );
     const primaryVariation =
       await itemVariationPrismaEntity.findPrimaryVariationForItem(item.id, {
         ensureBaseIfMissing: true,
@@ -57,21 +55,24 @@ export async function ensureItemCostSheetForRecipe(params: {
       itemVariations.length > 0
         ? itemVariations
         : primaryVariation
-          ? [primaryVariation]
-          : [];
+        ? [primaryVariation]
+        : [];
 
     if (targetVariations.length === 0) {
       throw new Error("Nenhuma variação disponível para criar a ficha técnica");
     }
 
     const primaryTargetVariation =
-      targetVariations.find((variation: any) => variation.id === primaryVariation?.id) ||
-      targetVariations[0];
+      targetVariations.find(
+        (variation: any) => variation.id === primaryVariation?.id
+      ) || targetVariations[0];
 
     const latestVersions = await db.itemCostSheet.findMany({
       where: {
         itemId: item.id,
-        itemVariationId: { in: targetVariations.map((variation: any) => variation.id) },
+        itemVariationId: {
+          in: targetVariations.map((variation: any) => variation.id),
+        },
       },
       select: { version: true },
       orderBy: [{ version: "desc" }],
@@ -101,7 +102,8 @@ export async function ensureItemCostSheetForRecipe(params: {
           itemVariationId: itemVariation.id,
           name: sheetName || `Ficha tecnica ${item.name}`,
           description:
-            sheetDescription || `Ficha tecnica gerada a partir da receita ${recipe.name}`,
+            sheetDescription ||
+            `Ficha tecnica gerada a partir da receita ${recipe.name}`,
           version: nextVersion,
           status: "draft",
           isActive: false,
@@ -120,43 +122,28 @@ export async function ensureItemCostSheetForRecipe(params: {
     .map((sheet: any) => String(sheet.itemVariationId || ""))
     .filter(Boolean);
 
-  const existingComponent = await db.itemCostSheetComponent.findFirst({
-    where: {
+  await db.itemCostSheetComponent.create({
+    data: {
       itemCostSheetId: rootSheetId,
       type: "recipe",
       refId: recipe.id,
-    },
-    select: { id: true },
-  });
-
-  if (!existingComponent) {
-    await db.itemCostSheetComponent.create({
-      data: {
-        itemCostSheetId: rootSheetId,
-        type: "recipe",
-        refId: recipe.id,
-        name: recipe.name,
-        notes:
-          componentNotes ||
-          "Componente de producao referenciado automaticamente pela receita",
-        sortOrderIndex: Number(
-          await db.itemCostSheetComponent.count({
-            where: { itemCostSheetId: rootSheetId },
-          })
-        ),
-        ItemCostSheetVariationComponent: {
-          create: targetItemVariationIds.map((itemVariationId: string) => ({
-            itemVariationId,
-            unit: "receita",
-            quantity: 1,
-            unitCostAmount: 0,
-            wastePerc: 0,
-            totalCostAmount: calcItemCostSheetTotalCostAmount(0, 1, 0),
-          })),
-        },
+      name: recipe.name,
+      notes:
+        componentNotes ||
+        "Componente de producao referenciado automaticamente pela receita",
+      sortOrderIndex: 0,
+      ItemCostSheetVariationComponent: {
+        create: targetItemVariationIds.map((itemVariationId: string) => ({
+          itemVariationId,
+          unit: "receita",
+          quantity: 1,
+          unitCostAmount: 0,
+          wastePerc: 0,
+          totalCostAmount: calcItemCostSheetTotalCostAmount(0, 1, 0),
+        })),
       },
-    });
-  }
+    },
+  });
 
   await recalcItemCostSheetTotals(db, rootSheetId);
 

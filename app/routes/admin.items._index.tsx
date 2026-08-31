@@ -65,7 +65,7 @@ const ITEM_CLASSIFICATIONS = [
   "outro",
 ] as const;
 const ITEM_CLASSIFICATION_ORDER = [...ITEM_CLASSIFICATIONS] as const;
-const ITEM_STATUS_FILTERS = ["active", "inactive", "all"] as const;
+const ITEM_STATUS_FILTERS = ["active", "inactive", "all", "archived"] as const;
 
 const PAGE_SIZE = 20;
 const BRL_FORMATTER = new Intl.NumberFormat("pt-BR", {
@@ -115,8 +115,13 @@ function buildBaseItemWhere(params: {
 }) {
   const where: any = { AND: [] as any[] };
 
-  if (params.status === "active") where.active = true;
-  if (params.status === "inactive") where.active = false;
+  if (params.status === "archived") {
+    where.archivedAt = { not: null };
+  } else {
+    where.archivedAt = null;
+    if (params.status === "active") where.active = true;
+    if (params.status === "inactive") where.active = false;
+  }
 
   if (params.q) {
     where.AND.push({
@@ -488,6 +493,29 @@ export async function action({ request }: ActionFunctionArgs) {
     const _action = String(formData.get("_action") || "");
 
     if (_action !== "items-bulk-update") {
+      if (_action === "item-archive" || _action === "item-restore") {
+        const itemId = String(formData.get("id") || "").trim();
+        if (!itemId) return badRequest("Item inválido");
+
+        const restoring = _action === "item-restore";
+        const result = await db.item.updateMany({
+          where: restoring
+            ? { id: itemId, archivedAt: { not: null } }
+            : { id: itemId, archivedAt: null },
+          data: restoring
+            ? { archivedAt: null }
+            : { archivedAt: new Date(), active: false, canSell: false },
+        });
+
+        if (result.count === 0)
+          return badRequest("Item não encontrado ou estado já alterado");
+        return ok({
+          message: restoring
+            ? "Item restaurado. Ele permanece inativo e com a venda desativada até você reativá-lo."
+            : "Item arquivado e retirado das operações e canais de venda.",
+        });
+      }
+
       if (_action === "item-delete") {
         const itemId = String(formData.get("id") || "").trim();
         if (!itemId) {
@@ -586,7 +614,7 @@ export async function action({ request }: ActionFunctionArgs) {
     }
 
     const result = await db.item.updateMany({
-      where: { id: { in: itemIds } },
+      where: { id: { in: itemIds }, archivedAt: null },
       data,
     });
 
@@ -782,6 +810,8 @@ export default function AdminItemsIndex() {
                 ? "produtos ativos"
                 : statusFilterValue === "inactive"
                 ? "produtos inativos"
+                : statusFilterValue === "archived"
+                ? "produtos arquivados"
                 : "todos os produtos"}
             </SelectValue>
           </SelectTrigger>
@@ -789,6 +819,7 @@ export default function AdminItemsIndex() {
             <SelectItem value="active">produtos ativos</SelectItem>
             <SelectItem value="inactive">produtos inativos</SelectItem>
             <SelectItem value="all">todos os produtos</SelectItem>
+            <SelectItem value="archived">produtos arquivados</SelectItem>
           </SelectContent>
         </Select>
 
@@ -1140,7 +1171,14 @@ export default function AdminItemsIndex() {
                       )}
                     </TableCell>
                     <TableCell className="px-4 py-3">
-                      {item.active ? (
+                      {item.archivedAt ? (
+                        <Badge
+                          variant="outline"
+                          className="border-amber-200 bg-amber-50 text-amber-800"
+                        >
+                          Arquivado
+                        </Badge>
+                      ) : item.active ? (
                         <Badge
                           variant="outline"
                           className="border-emerald-200 bg-emerald-50 text-emerald-700"
@@ -1163,7 +1201,30 @@ export default function AdminItemsIndex() {
                       {avgLabel}
                     </TableCell>
                     <TableCell className="px-4 py-3">
-                      <div className="flex items-center justify-end">
+                      <div className="flex items-center justify-end gap-2">
+                        <Form
+                          method="post"
+                          onSubmit={(event) => {
+                            const confirmed = window.confirm(
+                              item.archivedAt
+                                ? `Restaurar ${item.name}? O item continuará inativo e com a venda desativada.`
+                                : `Arquivar ${item.name}? O item será desativado, sairá dos canais de venda e manterá todo o histórico.`
+                            );
+                            if (!confirmed) event.preventDefault();
+                          }}
+                        >
+                          <input type="hidden" name="id" value={item.id} />
+                          <button
+                            type="submit"
+                            name="_action"
+                            value={
+                              item.archivedAt ? "item-restore" : "item-archive"
+                            }
+                            className="text-xs font-medium text-slate-500 hover:text-slate-900"
+                          >
+                            {item.archivedAt ? "Restaurar" : "Arquivar"}
+                          </button>
+                        </Form>
                         <Form method="post">
                           <input type="hidden" name="id" value={item.id} />
                           <DeleteItemButton actionName="item-delete" />

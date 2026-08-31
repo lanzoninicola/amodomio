@@ -4,6 +4,21 @@
 
 O módulo CRM gerencia a base de clientes (contatos), seus eventos, tags de segmentação, imagens de perfil, campanhas e envios. A chave de identidade de cada cliente é o telefone no formato E.164.
 
+## Importação guiada de clientes do ERP
+
+A rota `/admin/crm/importar` recebe o CSV de clientes do ERP em três etapas: leitura, revisão e aplicação. O upload cria um rascunho em `ImportSession`/`ImportSessionRecord`; ele não altera `CrmCustomer` até a confirmação final.
+
+- o telefone normalizado em E.164 é a identidade do cliente;
+- telefone novo sugere criação;
+- telefone existente com nome compatível sugere merge;
+- telefone existente com nome divergente fica pendente para decisão humana;
+- nome e bairro já preenchidos no CRM não são sobrescritos;
+- datas usam a primeira compra mais antiga e a última compra mais recente;
+- métricas do ERP só substituem as atuais quando o dado importado não é mais antigo;
+- classificações do ERP viram tags com prefixo `erp-classificacao-`;
+- aniversário permanece no payload e no evento de auditoria, pois o modelo atual não possui campo próprio;
+- a aplicação é protegida contra clique duplicado e registra eventos idempotentes com `source=erp-crm-csv`.
+
 ---
 
 ## Modelos de dados (Prisma)

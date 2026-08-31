@@ -18,6 +18,7 @@ describe("parseRouteFilters", () => {
     expect(result.rootSheetId).toBeUndefined();
     expect(result.itemId).toBeUndefined();
     expect(result.search).toBeUndefined();
+    expect(result.channelId).toBeUndefined();
     expect(result.onlyActive).toBe(true);
     expect(result.onlyWithComponents).toBe(true);
   });
@@ -63,6 +64,11 @@ describe("parseRouteFilters", () => {
     expect(result.search).toBe("pizza");
   });
 
+  it("parseia o canal de venda", () => {
+    const result = parseRouteFilters(params({ channelId: "channel-1" }));
+    expect(result.channelId).toBe("channel-1");
+  });
+
   it("trim em valores vazios resulta em undefined", () => {
     const result = parseRouteFilters(params({ rootSheetId: "  ", itemId: "" }));
     expect(result.rootSheetId).toBeUndefined();
@@ -92,6 +98,15 @@ describe("buildFiltersQuery", () => {
     expect(result).toContain("onlyWithComponents=0");
   });
 
+  it("preserva o canal de venda na query", () => {
+    const result = buildFiltersQuery({
+      channelId: "channel-1",
+      onlyActive: true,
+      onlyWithComponents: true,
+    });
+    expect(result).toContain("channelId=channel-1");
+  });
+
   it("inclui search quando presente", () => {
     const result = buildFiltersQuery({
       search: "frango",
@@ -106,7 +121,12 @@ describe("buildFilterOptions", () => {
   const sheets: RootSheetOption[] = [
     { id: "s1", name: "Ficha Pizza", itemName: "Pizza", itemId: "item-1" },
     { id: "s2", name: "Ficha Frango", itemName: "Frango", itemId: "item-2" },
-    { id: "s3", name: "Ficha Pizza Especial", itemName: "Pizza", itemId: "item-1" },
+    {
+      id: "s3",
+      name: "Ficha Pizza Especial",
+      itemName: "Pizza",
+      itemId: "item-1",
+    },
   ];
 
   it("gera opções de ficha para cada sheet", () => {
@@ -123,13 +143,17 @@ describe("buildFilterOptions", () => {
 
   it("opção de ficha tem value prefixado com 'sheet:'", () => {
     const options = buildFilterOptions(sheets);
-    const sheetOption = options.find((o) => o.kind === "sheet" && o.rootSheetId === "s1");
+    const sheetOption = options.find(
+      (o) => o.kind === "sheet" && o.rootSheetId === "s1"
+    );
     expect(sheetOption?.value).toBe("sheet:s1");
   });
 
   it("opção de item tem value prefixado com 'item:'", () => {
     const options = buildFilterOptions(sheets);
-    const itemOption = options.find((o) => o.kind === "item" && o.itemId === "item-1");
+    const itemOption = options.find(
+      (o) => o.kind === "item" && o.itemId === "item-1"
+    );
     expect(itemOption?.value).toBe("item:item-1");
   });
 
@@ -150,13 +174,23 @@ describe("buildFilterOptions", () => {
 describe("getInitialFilterValue", () => {
   it("retorna 'sheet:<id>' quando filterKind é sheet", () => {
     expect(
-      getInitialFilterValue({ filterKind: "sheet", rootSheetId: "s1", onlyActive: true, onlyWithComponents: true })
+      getInitialFilterValue({
+        filterKind: "sheet",
+        rootSheetId: "s1",
+        onlyActive: true,
+        onlyWithComponents: true,
+      })
     ).toBe("sheet:s1");
   });
 
   it("retorna 'item:<id>' quando filterKind é item", () => {
     expect(
-      getInitialFilterValue({ filterKind: "item", itemId: "item-1", onlyActive: true, onlyWithComponents: true })
+      getInitialFilterValue({
+        filterKind: "item",
+        itemId: "item-1",
+        onlyActive: true,
+        onlyWithComponents: true,
+      })
     ).toBe("item:item-1");
   });
 
@@ -168,7 +202,11 @@ describe("getInitialFilterValue", () => {
 
   it("retorna string vazia quando filterKind é sheet mas sem rootSheetId", () => {
     expect(
-      getInitialFilterValue({ filterKind: "sheet", onlyActive: true, onlyWithComponents: true })
+      getInitialFilterValue({
+        filterKind: "sheet",
+        onlyActive: true,
+        onlyWithComponents: true,
+      })
     ).toBe("");
   });
 });

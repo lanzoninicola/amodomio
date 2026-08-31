@@ -27,7 +27,10 @@ export async function buildCostImpactGraphForItem(
   const affectedMenuItemIds = new Set<string>();
 
   const directRecipes = await db.recipeIngredient.findMany({
-    where: { ingredientItemId: sourceItemId },
+    where: {
+      ingredientItemId: sourceItemId,
+      Recipe: { is: { status: "active" } },
+    },
     select: { recipeId: true },
   });
   for (const row of directRecipes) {

@@ -55,6 +55,7 @@ export default function AdminItemMainTab() {
     item.recipeVariationPolicy || "auto"
   );
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [showArchiveDialog, setShowArchiveDialog] = useState(false);
   const [showDuplicateDialog, setShowDuplicateDialog] = useState(false);
   const [searchParams] = useSearchParams();
   const location = useLocation();
@@ -245,6 +246,61 @@ export default function AdminItemMainTab() {
                     </Form>
                   </>
                 )}
+              </AlertDialogContent>
+            </AlertDialog>
+            <AlertDialog
+              open={showArchiveDialog}
+              onOpenChange={setShowArchiveDialog}
+            >
+              <AlertDialogTrigger asChild>
+                <Button type="button" variant="outline">
+                  {item.archivedAt ? "Restaurar item" : "Arquivar item"}
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>
+                    {item.archivedAt ? "Restaurar item?" : "Arquivar item?"}
+                  </AlertDialogTitle>
+                  <AlertDialogDescription>
+                    {item.archivedAt ? (
+                      <>
+                        <strong>{item.name}</strong> voltará à lista de itens,
+                        mas continuará inativo e com a venda desativada até você
+                        decidir reativá-lo.
+                      </>
+                    ) : (
+                      <>
+                        <strong>{item.name}</strong> será desativado, terá a
+                        venda interrompida e deixará de aparecer nas listas
+                        operacionais. Receitas, custos e histórico serão
+                        preservados.
+                      </>
+                    )}
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                  <Form
+                    method="post"
+                    action=".."
+                    onSubmit={() => setShowArchiveDialog(false)}
+                  >
+                    <input
+                      type="hidden"
+                      name="_action"
+                      value={item.archivedAt ? "item-restore" : "item-archive"}
+                    />
+                    <Button
+                      type="submit"
+                      variant={item.archivedAt ? "default" : "destructive"}
+                    >
+                      {item.archivedAt
+                        ? "Confirmar restauração"
+                        : "Confirmar arquivamento"}
+                    </Button>
+                  </Form>
+                </AlertDialogFooter>
               </AlertDialogContent>
             </AlertDialog>
             <AlertDialog

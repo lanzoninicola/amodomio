@@ -337,12 +337,15 @@ async function buildRecipeCompositionBreakdownMap(
       const uniqueItemIds = [
         ...new Set(allLines.map((l: any) => l.itemId).filter(Boolean)),
       ] as string[];
-      const subRecipeByItemId = new Map<string, { id: string; itemId: string }>();
+      const subRecipeByItemId = new Map<
+        string,
+        { id: string; itemId: string }
+      >();
       const subRecipeLinesByRecipeId = new Map<string, any[]>();
 
       if (uniqueItemIds.length > 0) {
         const subRecipes = await db.recipe.findMany({
-          where: { itemId: { in: uniqueItemIds } },
+          where: { itemId: { in: uniqueItemIds }, status: "active" },
           select: {
             id: true,
             itemId: true,
@@ -466,15 +469,17 @@ async function buildRecipeCompositionBreakdownMap(
                   subRecipeYield > 0;
                 const parentQty = Number(quantity || 0);
                 const scaleFactor =
-                  isYieldMode && subRecipeYield ? parentQty / subRecipeYield : 1;
+                  isYieldMode && subRecipeYield
+                    ? parentQty / subRecipeYield
+                    : 1;
 
                 const rawSubLines =
-                  recipeData?.subRecipeLinesByRecipeId.get(linkedSubRecipe.id) ||
-                  [];
+                  recipeData?.subRecipeLinesByRecipeId.get(
+                    linkedSubRecipe.id
+                  ) || [];
                 subRecipeLines = await Promise.all(
                   rawSubLines.map(async (subLine: any) => {
-                    const subVarId =
-                      subLine.ItemVariation?.variationId || null;
+                    const subVarId = subLine.ItemVariation?.variationId || null;
                     const subCost = await getAvgCost(subLine.itemId, subVarId);
                     const batchQty = Number(subLine.quantity || 0);
                     const scaledQty = batchQty * scaleFactor;
@@ -772,11 +777,15 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       }),
       isCostsTabRequest
         ? db.recipe.findMany({
-            where: {},
+            where: currentSheet.isActive
+              ? { status: "active" }
+              : { status: { in: ["active", "draft"] } },
             select: {
               id: true,
               name: true,
               type: true,
+              version: true,
+              status: true,
               variationId: true,
               Variation: { select: { id: true, name: true, kind: true } },
             },
@@ -853,6 +862,8 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           id: recipe.id,
           name: recipe.name,
           type: recipe.type,
+          version: Number(recipe.version || 1),
+          status: String(recipe.status || "draft"),
           variationLabel: recipe.Variation?.name || null,
         }))
       : [];
@@ -901,29 +912,47 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     });
 
     // Detect recipe lines whose item has no active cost sheet (cost is dynamic)
-    let recipeLinesWithDynamicCost: Array<{ lineId: string; lineName: string }> = [];
+    let recipeLinesWithDynamicCost: Array<{
+      lineId: string;
+      lineName: string;
+    }> = [];
     if (isCostsTabRequest) {
-      const recipeLines = compositionRows.filter((l: any) => l.type === "recipe" && l.refId);
+      const recipeLines = compositionRows.filter(
+        (l: any) => l.type === "recipe" && l.refId
+      );
       if (recipeLines.length > 0) {
-        const recipeIds = [...new Set(recipeLines.map((l: any) => String(l.refId)))] as string[];
+        const recipeIds = [
+          ...new Set(recipeLines.map((l: any) => String(l.refId))),
+        ] as string[];
         const subRecipes = await db.recipe.findMany({
           where: { id: { in: recipeIds } },
           select: { id: true, itemId: true },
         });
-        const subRecipeItemIds = subRecipes.filter((r: any) => r.itemId).map((r: any) => String(r.itemId));
+        const subRecipeItemIds = subRecipes
+          .filter((r: any) => r.itemId)
+          .map((r: any) => String(r.itemId));
         const activeSheetSet = new Set<string>();
         if (subRecipeItemIds.length > 0) {
           const activeSheets = await db.itemCostSheet.findMany({
             where: { itemId: { in: subRecipeItemIds }, isActive: true },
             select: { itemId: true },
           });
-          for (const sheet of activeSheets) activeSheetSet.add(String(sheet.itemId));
+          for (const sheet of activeSheets)
+            activeSheetSet.add(String(sheet.itemId));
         }
-        const recipeItemIdMap = new Map(subRecipes.map((r: any) => [String(r.id), r.itemId ? String(r.itemId) : null]));
+        const recipeItemIdMap = new Map(
+          subRecipes.map((r: any) => [
+            String(r.id),
+            r.itemId ? String(r.itemId) : null,
+          ])
+        );
         for (const line of recipeLines) {
           const recipeItemId = recipeItemIdMap.get(String(line.refId));
           if (!recipeItemId || !activeSheetSet.has(recipeItemId)) {
-            recipeLinesWithDynamicCost.push({ lineId: String(line.id), lineName: String((line as any).name || "") });
+            recipeLinesWithDynamicCost.push({
+              lineId: String(line.id),
+              lineName: String((line as any).name || ""),
+            });
           }
         }
       }
@@ -1044,6 +1073,50 @@ export async function action({ request, params }: ActionFunctionArgs) {
       if (itemCostSheetId !== currentSheet.id)
         return badRequest("Ficha de custo divergente");
 
+      if (isActive) {
+        const draftRecipeDependency = await db.itemCostSheetComponent.findFirst(
+          {
+            where: {
+              itemCostSheetId: rootSheetId,
+              type: "recipe",
+              refId: { not: null },
+            },
+            select: {
+              refId: true,
+            },
+          }
+        );
+        if (draftRecipeDependency?.refId) {
+          const referencedRecipes = await db.itemCostSheetComponent.findMany({
+            where: {
+              itemCostSheetId: rootSheetId,
+              type: "recipe",
+              refId: { not: null },
+            },
+            select: { refId: true },
+          });
+          const referencedRecipeIds = Array.from(
+            new Set(
+              referencedRecipes
+                .map((row: any) => String(row.refId || ""))
+                .filter(Boolean)
+            )
+          );
+          const nonActiveRecipe = await db.recipe.findFirst({
+            where: {
+              id: { in: referencedRecipeIds },
+              status: { not: "active" },
+            },
+            select: { name: true, version: true },
+          });
+          if (nonActiveRecipe) {
+            return badRequest(
+              `Ative a receita ${nonActiveRecipe.name} v${nonActiveRecipe.version} antes de ativar esta ficha.`
+            );
+          }
+        }
+      }
+
       await db.itemCostSheet.updateMany({
         where: {
           OR: [{ id: rootSheetId }, { baseItemCostSheetId: rootSheetId }],
@@ -1077,6 +1150,17 @@ export async function action({ request, params }: ActionFunctionArgs) {
       if (!(quantity > 0)) return badRequest("Informe uma quantidade válida");
       if (itemCostSheetId !== currentSheet.id)
         return badRequest("Ficha de custo divergente");
+
+      const selectedRecipe = await db.recipe.findUnique({
+        where: { id: recipeId },
+        select: { status: true },
+      });
+      if (currentSheet.isActive && selectedRecipe?.status !== "active") {
+        return badRequest("Uma ficha ativa só pode receber receitas ativas");
+      }
+      if (!selectedRecipe || selectedRecipe.status === "archived") {
+        return badRequest("Receita indisponível para vínculo");
+      }
 
       const snapshot = await getRecipeCompositionCostSnapshot(db, recipeId);
       const variationEntries = await Promise.all(
@@ -1742,6 +1826,8 @@ export type AdminItemCostSheetDetailOutletContext = {
     id: string;
     name: string;
     type: string;
+    version: number;
+    status: string;
     variationLabel?: string | null;
   }>;
   referenceSheetOptions: Array<{
@@ -1792,6 +1878,8 @@ export default function AdminItemCostSheetDetail() {
     id: string;
     name: string;
     type: string;
+    version: number;
+    status: string;
     variationLabel?: string | null;
   }>;
   const referenceSheetOptions = (payload.referenceSheetOptions || []) as Array<{
@@ -1843,7 +1931,8 @@ export default function AdminItemCostSheetDetail() {
     0
   );
   const detailPath = sheetDetailHref(selectedSheet?.id || rootSheetId);
-  const recipeLinesWithDynamicCost = (payload.recipeLinesWithDynamicCost || []) as Array<{ lineId: string; lineName: string }>;
+  const recipeLinesWithDynamicCost = (payload.recipeLinesWithDynamicCost ||
+    []) as Array<{ lineId: string; lineName: string }>;
   const infoTabs = [
     { href: "dados-gerais", label: "dados gerais" },
     { href: "custos", label: "custos" },

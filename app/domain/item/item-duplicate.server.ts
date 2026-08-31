@@ -130,6 +130,8 @@ export async function duplicateItemWithLinkedRecords(
               itemId: duplicatedItem.id,
               variationId: recipe.variationId,
               type: recipe.type,
+              status: recipe.status === "active" ? "active" : "draft",
+              activatedAt: recipe.status === "active" ? new Date() : null,
               costingMode: recipe.costingMode,
               yieldQuantity: recipe.yieldQuantity,
               yieldUnit: recipe.yieldUnit,

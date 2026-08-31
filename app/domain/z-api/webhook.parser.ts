@@ -130,6 +130,22 @@ function extractMessageText(payload: any): string | undefined {
   return trimmed || undefined;
 }
 
+function extractMessageId(payload: any): string | undefined {
+  const candidates = [
+    payload?.messageId,
+    payload?.message_id,
+    payload?.data?.messageId,
+    payload?.data?.message_id,
+    payload?.message?.messageId,
+    payload?.message?.id,
+    payload?.id,
+  ];
+  const found = candidates.find(
+    (value) => typeof value === "string" && value.trim()
+  );
+  return typeof found === "string" ? found.trim() : undefined;
+}
+
 function extractMessageType(payload: any): string | undefined {
   const messageType = deepFindByKeys(payload, MESSAGE_TYPE_KEYS);
   const trimmed = messageType?.trim();
@@ -198,6 +214,7 @@ export function normalizeWebhookPayload(
     messageText: extractMessageText(payload),
     messageType: extractMessageType(payload),
     instanceId: extractInstanceId(payload),
+    messageId: extractMessageId(payload),
     contactName: extractContactName(payload),
     contactPhoto: extractContactPhoto(payload),
     raw: payload,

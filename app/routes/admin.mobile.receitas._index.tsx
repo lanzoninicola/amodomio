@@ -9,6 +9,7 @@ export const meta: MetaFunction = () => [{ title: "Admin Mobile | Receitas" }];
 
 export async function loader(_: LoaderFunctionArgs) {
   const recipes = await prismaClient.recipe.findMany({
+    where: { status: "active" },
     select: {
       id: true,
       name: true,

@@ -19,6 +19,10 @@ function normalizeSourceLabels(labels: string[]) {
 }
 
 async function getRecipeCostSheetRootSources(db: any, recipeId: string) {
+  const recipe = await db.recipe.findUnique({
+    where: { id: recipeId },
+    select: { status: true },
+  });
   const componentRows = await db.itemCostSheetComponent.findMany({
     where: { type: "recipe", refId: recipeId },
     select: {
@@ -42,10 +46,13 @@ async function getRecipeCostSheetRootSources(db: any, recipeId: string) {
         })
       : [];
 
-  const variationRows = await db.itemCostSheet.findMany({
-    where: { ItemVariation: { is: { recipeId } } },
-    select: { id: true, baseItemCostSheetId: true },
-  });
+  const variationRows =
+    recipe?.status === "active"
+      ? await db.itemCostSheet.findMany({
+          where: { ItemVariation: { is: { recipeId } } },
+          select: { id: true, baseItemCostSheetId: true },
+        })
+      : [];
 
   const sourceLabelsByRootId = new Map<string, string[]>();
   const addSource = (sheet: any, label: string) => {

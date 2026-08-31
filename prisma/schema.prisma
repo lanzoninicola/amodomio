@@ -17,6 +17,12 @@ enum RecipeType {
   pizzaTopping @map("pizza-topping")
 }
 
+enum RecipeStatus {
+  draft
+  active
+  archived
+}
+
 enum FacebookPixelIntegrationMode {
   direct
   gtm
@@ -24,6 +30,11 @@ enum FacebookPixelIntegrationMode {
 
 model Recipe {
   id                  String                    @id @default(uuid())
+  groupId             String                    @default(uuid()) @map("group_id")
+  version             Int                       @default(1)
+  status              RecipeStatus              @default(draft)
+  activatedAt         DateTime?                 @map("activated_at")
+  archivedAt          DateTime?                 @map("archived_at")
   name                String
   itemId              String?                   @map("item_id")
   variationId         String?                   @map("variation_id")
@@ -47,8 +58,10 @@ model Recipe {
   RecipePreheating    RecipePreheating?
   RecipeBaking        RecipeBaking?
 
+  @@unique([groupId, version], map: "recipes_group_id_version_unique")
   @@index([itemId], map: "recipes_item_id_idx")
   @@index([variationId], map: "recipes_variation_id_idx")
+  @@index([groupId, status], map: "recipes_group_id_status_idx")
   @@map("recipes")
 }
 
@@ -240,22 +253,23 @@ model PurchaseShoppingListItem {
 }
 
 model Item {
-  id                          String   @id @default(uuid())
+  id                          String    @id @default(uuid())
   name                        String
   description                 String?
   classification              String
-  recipeVariationPolicy       String   @default("auto") @map("recipe_variation_policy") // auto | hide | show
-  categoryId                  String?  @map("category_id")
-  purchaseUm                  String?  @map("purchase_um")
-  consumptionUm               String?  @map("consumption_um")
-  purchaseToConsumptionFactor Float?   @map("purchase_to_consumption_factor")
-  active                      Boolean  @default(true)
-  canPurchase                 Boolean  @default(false) @map("can_purchase")
-  canTransform                Boolean  @default(false) @map("can_transform")
-  canSell                     Boolean  @default(false) @map("can_sell")
-  canStock                    Boolean  @default(false) @map("can_stock")
-  createdAt                   DateTime @default(now()) @map("created_at")
-  updatedAt                   DateTime @default(now()) @updatedAt @map("updated_at")
+  recipeVariationPolicy       String    @default("auto") @map("recipe_variation_policy") // auto | hide | show
+  categoryId                  String?   @map("category_id")
+  purchaseUm                  String?   @map("purchase_um")
+  consumptionUm               String?   @map("consumption_um")
+  purchaseToConsumptionFactor Float?    @map("purchase_to_consumption_factor")
+  active                      Boolean   @default(true)
+  canPurchase                 Boolean   @default(false) @map("can_purchase")
+  canTransform                Boolean   @default(false) @map("can_transform")
+  canSell                     Boolean   @default(false) @map("can_sell")
+  canStock                    Boolean   @default(false) @map("can_stock")
+  archivedAt                  DateTime? @map("archived_at")
+  createdAt                   DateTime  @default(now()) @map("created_at")
+  updatedAt                   DateTime  @default(now()) @updatedAt @map("updated_at")
 
   Category                     Category?                      @relation(fields: [categoryId], references: [id])
   MenuItem                     MenuItem[]
@@ -283,6 +297,7 @@ model Item {
   @@index([categoryId], map: "items_category_id_idx")
   @@index([classification], map: "items_classification_idx")
   @@index([active, classification], map: "items_active_classification_idx")
+  @@index([archivedAt], map: "items_archived_at_idx")
   @@map("items")
 }
 
@@ -1697,6 +1712,28 @@ model Setting {
   updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
 
   @@map("settings")
+}
+
+model WhatsappAgentJob {
+  id            String    @id @default(uuid())
+  externalId    String    @unique @map("external_id") @db.VarChar(150)
+  phone         String    @db.VarChar(20)
+  customerId    String?   @map("customer_id")
+  inboundText   String    @map("inbound_text") @db.Text
+  status        String    @default("pending") @db.VarChar(30)
+  responseText  String?   @map("response_text") @db.Text
+  attempts      Int       @default(0)
+  availableAt   DateTime  @default(now()) @map("available_at")
+  lockedAt      DateTime? @map("locked_at")
+  lockedBy      String?   @map("locked_by") @db.VarChar(120)
+  lastError     String?   @map("last_error") @db.Text
+  sentMessageId String?   @map("sent_message_id") @db.VarChar(150)
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @default(now()) @updatedAt @map("updated_at")
+
+  @@index([status, availableAt], map: "whatsapp_agent_jobs_status_available_at_idx")
+  @@index([phone, createdAt], map: "whatsapp_agent_jobs_phone_created_at_idx")
+  @@map("whatsapp_agent_jobs")
 }
 
 model CardapioFacebookPixelConfig {

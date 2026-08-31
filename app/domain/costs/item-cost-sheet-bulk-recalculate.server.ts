@@ -3,6 +3,7 @@ import { buildCostImpactGraphForItem } from "~/domain/costs/cost-impact-graph.se
 import { recalcItemCostSheetTotals } from "~/domain/costs/item-cost-sheet-recalc.server";
 
 const DEFAULT_COST_CHANGE_WINDOW_DAYS = 60;
+const DEFAULT_PAGE_SIZE = 25;
 
 export interface ItemCostSheetBulkScanFilters {
   rootSheetId?: string;
@@ -10,6 +11,9 @@ export interface ItemCostSheetBulkScanFilters {
   search?: string;
   onlyActive?: boolean;
   onlyWithComponents?: boolean;
+  page?: number;
+  pageSize?: number;
+  channelId?: string;
 }
 
 export interface ItemCostSheetBulkScanReason {
@@ -26,6 +30,12 @@ export interface ItemCostSheetBulkCostChange {
   previousCostAmount: number;
 }
 
+export type ItemCostSheetBulkCostTrend =
+  | "increase"
+  | "decrease"
+  | "mixed"
+  | "unchanged";
+
 export interface ItemCostSheetBulkScanRow {
   rootSheetId: string;
   itemId: string;
@@ -38,7 +48,8 @@ export interface ItemCostSheetBulkScanRow {
   updatedAt: Date;
   reasonSummary: string;
   reasons: ItemCostSheetBulkScanReason[];
-  costChanges: ItemCostSheetBulkCostChange[];
+  costChangeTrend: ItemCostSheetBulkCostTrend;
+  costChangeCount: number;
 }
 
 export interface ItemCostSheetBulkScanResult {
@@ -46,6 +57,9 @@ export interface ItemCostSheetBulkScanResult {
   activeSheets: number;
   sheetsWithComponents: number;
   totalComponents: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
   sheets: ItemCostSheetBulkScanRow[];
 }
 
@@ -82,29 +96,35 @@ async function supportsComponentModel(db: any) {
   }
 }
 
-function summarizeNames(values: string[], fallback: string) {
-  const names = values.map((value) => String(value || "").trim()).filter(Boolean);
-  if (names.length === 0) return fallback;
-  const visible = names.slice(0, 2).join(", ");
-  const remaining = names.length - 2;
-  return remaining > 0 ? `${visible} +${remaining}` : visible;
-}
-
-function hasMeaningfulCostChange(currentCostAmount: number, previousCostAmount: number) {
+function hasMeaningfulCostChange(
+  currentCostAmount: number,
+  previousCostAmount: number
+) {
   return (
     Number(currentCostAmount || 0).toFixed(4) !==
     Number(previousCostAmount || 0).toFixed(4)
   );
 }
 
-function formatCostChange(change: ItemCostSheetBulkCostChange) {
-  const previous = Number(change.previousCostAmount || 0).toFixed(2);
-  const current = Number(change.costAmount || 0).toFixed(2);
-  return `${change.itemName} (${previous} -> ${current})`;
+function getCostChangeTrend(
+  changes: ItemCostSheetBulkCostChange[]
+): ItemCostSheetBulkCostTrend {
+  const hasIncrease = changes.some(
+    (change) => change.costAmount > change.previousCostAmount
+  );
+  const hasDecrease = changes.some(
+    (change) => change.costAmount < change.previousCostAmount
+  );
+
+  if (hasIncrease && hasDecrease) return "mixed";
+  if (hasIncrease) return "increase";
+  if (hasDecrease) return "decrease";
+  return "unchanged";
 }
 
 async function getCostChangeWindowDays(db: any) {
-  if (typeof db.setting?.findFirst !== "function") return DEFAULT_COST_CHANGE_WINDOW_DAYS;
+  if (typeof db.setting?.findFirst !== "function")
+    return DEFAULT_COST_CHANGE_WINDOW_DAYS;
 
   const setting = await db.setting.findFirst({
     where: {
@@ -115,7 +135,8 @@ async function getCostChangeWindowDays(db: any) {
     select: { value: true },
   });
   const parsed = Number(setting?.value ?? DEFAULT_COST_CHANGE_WINDOW_DAYS);
-  if (!Number.isFinite(parsed) || parsed <= 0) return DEFAULT_COST_CHANGE_WINDOW_DAYS;
+  if (!Number.isFinite(parsed) || parsed <= 0)
+    return DEFAULT_COST_CHANGE_WINDOW_DAYS;
   return Math.max(Math.round(parsed), DEFAULT_COST_CHANGE_WINDOW_DAYS);
 }
 
@@ -123,9 +144,14 @@ async function findRecentCostChangesByAffectedSheetId(
   db: any,
   candidateRootIds: string[]
 ): Promise<Map<string, ItemCostSheetBulkCostChange[]>> {
-  const rootIds = new Set(candidateRootIds.map((id) => String(id || "").trim()).filter(Boolean));
+  const rootIds = new Set(
+    candidateRootIds.map((id) => String(id || "").trim()).filter(Boolean)
+  );
   const changesBySheetId = new Map<string, ItemCostSheetBulkCostChange[]>();
-  if (rootIds.size === 0 || typeof db.itemCostVariationHistory?.findMany !== "function") {
+  if (
+    rootIds.size === 0 ||
+    typeof db.itemCostVariationHistory?.findMany !== "function"
+  ) {
     return changesBySheetId;
   }
 
@@ -165,21 +191,48 @@ async function findRecentCostChangesByAffectedSheetId(
     }
   }
 
-  for (const change of latestByItemId.values()) {
-    const graph = await buildCostImpactGraphForItem(db, change.itemId);
-    for (const affectedSheetId of graph.affectedItemCostSheetIds) {
-      const rootSheetId = String(affectedSheetId || "").trim();
-      if (!rootIds.has(rootSheetId)) continue;
+  const changes = Array.from(latestByItemId.values());
+  const concurrency = 8;
+  for (let index = 0; index < changes.length; index += concurrency) {
+    const batch = changes.slice(index, index + concurrency);
+    const impacts = await Promise.all(
+      batch.map(async (change) => ({
+        change,
+        graph: await buildCostImpactGraphForItem(db, change.itemId),
+      }))
+    );
 
-      const existing = changesBySheetId.get(rootSheetId) || [];
-      if (!existing.some((row) => row.itemId === change.itemId)) {
-        existing.push(change);
-        changesBySheetId.set(rootSheetId, existing);
+    for (const { change, graph } of impacts) {
+      for (const affectedSheetId of graph.affectedItemCostSheetIds) {
+        const rootSheetId = String(affectedSheetId || "").trim();
+        if (!rootIds.has(rootSheetId)) continue;
+
+        const existing = changesBySheetId.get(rootSheetId) || [];
+        if (!existing.some((row) => row.itemId === change.itemId)) {
+          existing.push(change);
+          changesBySheetId.set(rootSheetId, existing);
+        }
       }
     }
   }
 
   return changesBySheetId;
+}
+
+export async function getItemCostSheetRecalculationCostChanges(
+  rootSheetId: string
+): Promise<ItemCostSheetBulkCostChange[]> {
+  const normalizedRootSheetId = String(rootSheetId || "").trim();
+  if (!normalizedRootSheetId) return [];
+
+  const changesBySheetId = await findRecentCostChangesByAffectedSheetId(
+    prismaClient as any,
+    [normalizedRootSheetId]
+  );
+
+  return (changesBySheetId.get(normalizedRootSheetId) || []).sort((a, b) =>
+    a.itemName.localeCompare(b.itemName, "pt-BR")
+  );
 }
 
 function buildRecalculationReasons(params: {
@@ -194,10 +247,7 @@ function buildRecalculationReasons(params: {
     reasons.push({
       code: "costChange",
       label: "Reajuste de insumo",
-      detail: `Insumo(s) com custo alterado: ${summarizeNames(
-        params.costChanges.map(formatCostChange),
-        "historico recente de custo"
-      )}`,
+      detail: `${costChangeCount} insumo(s) com alteração recente de custo.`,
       count: costChangeCount,
     });
   }
@@ -217,7 +267,8 @@ function buildRecalculationReasons(params: {
     reasons.push({
       code: "noComponents",
       label: "Sem composição",
-      detail: "Sem componentes cadastrados; recálculo normalmente não altera custo",
+      detail:
+        "Sem componentes cadastrados; recálculo normalmente não altera custo",
       count: 0,
     });
   }
@@ -234,22 +285,64 @@ export async function scanItemCostSheetsForBulkRecalculation(
   const search = String(filters.search || "").trim();
   const onlyActive = Boolean(filters.onlyActive);
   const onlyWithComponents = Boolean(filters.onlyWithComponents);
+  const channelId = String(filters.channelId || "").trim();
+  const requestedPage = Math.max(1, Math.floor(Number(filters.page) || 1));
+  const pageSize = Math.min(
+    100,
+    Math.max(1, Math.floor(Number(filters.pageSize) || DEFAULT_PAGE_SIZE))
+  );
+
+  const rootWhere = {
+    baseItemCostSheetId: null,
+    ...(rootSheetId ? { id: rootSheetId } : {}),
+    ...(!rootSheetId && itemId ? { itemId } : {}),
+    ...(onlyActive ? { isActive: true } : {}),
+    ...(onlyWithComponents ? { ItemCostSheetComponent: { some: {} } } : {}),
+    ...(channelId
+      ? {
+          Item: {
+            is: {
+              ItemSellingChannelItem: {
+                some: { itemSellingChannelId: channelId, visible: true },
+              },
+            },
+          },
+        }
+      : {}),
+    ...(!rootSheetId && !itemId && search
+      ? {
+          OR: [
+            { name: { contains: search, mode: "insensitive" } },
+            { Item: { name: { contains: search, mode: "insensitive" } } },
+          ],
+        }
+      : {}),
+  };
+
+  const [totalSheets, activeSheets, countedSheetsWithComponents] =
+    await Promise.all([
+      db.itemCostSheet.count({ where: rootWhere }),
+      db.itemCostSheet.count({
+        where: { ...rootWhere, isActive: true },
+      }),
+      onlyWithComponents
+        ? Promise.resolve(null)
+        : db.itemCostSheet.count({
+            where: {
+              ...rootWhere,
+              ItemCostSheetComponent: { some: {} },
+            },
+          }),
+    ]);
+  const sheetsWithComponents = onlyWithComponents
+    ? totalSheets
+    : Number(countedSheetsWithComponents || 0);
+
+  const totalPages = Math.max(1, Math.ceil(totalSheets / pageSize));
+  const page = Math.min(requestedPage, totalPages);
 
   const roots = await db.itemCostSheet.findMany({
-    where: {
-      baseItemCostSheetId: null,
-      ...(rootSheetId ? { id: rootSheetId } : {}),
-      ...(!rootSheetId && itemId ? { itemId } : {}),
-      ...(onlyActive ? { isActive: true } : {}),
-      ...(!rootSheetId && !itemId && search
-        ? {
-            OR: [
-              { name: { contains: search, mode: "insensitive" } },
-              { Item: { name: { contains: search, mode: "insensitive" } } },
-            ],
-          }
-        : {}),
-    },
+    where: rootWhere,
     select: {
       id: true,
       itemId: true,
@@ -264,40 +357,48 @@ export async function scanItemCostSheetsForBulkRecalculation(
       },
     },
     orderBy: [{ updatedAt: "desc" }],
+    skip: (page - 1) * pageSize,
+    take: pageSize,
   });
 
-  const rootIds = roots.map((sheet: any) => String(sheet.id || "")).filter(Boolean);
+  const rootIds = roots
+    .map((sheet: any) => String(sheet.id || ""))
+    .filter(Boolean);
   if (rootIds.length === 0) {
     return {
-      totalSheets: 0,
-      activeSheets: 0,
-      sheetsWithComponents: 0,
+      totalSheets,
+      activeSheets,
+      sheetsWithComponents,
       totalComponents: 0,
+      page,
+      pageSize,
+      totalPages,
       sheets: [],
     };
   }
 
-  const allSheets = await db.itemCostSheet.findMany({
-    where: {
-      OR: [{ id: { in: rootIds } }, { baseItemCostSheetId: { in: rootIds } }],
-    },
-    select: {
-      id: true,
-      baseItemCostSheetId: true,
-    },
-  });
-
-  const componentRows = (await supportsComponentModel(db))
-    ? await db.itemCostSheetComponent.findMany({
-        where: { itemCostSheetId: { in: rootIds } },
-        select: { itemCostSheetId: true },
-      })
-    : await db.itemCostSheetLine.findMany({
-        where: { itemCostSheetId: { in: rootIds } },
-        select: { itemCostSheetId: true },
-      });
-
-  const costChangesBySheetId = await findRecentCostChangesByAffectedSheetId(db, rootIds);
+  const hasComponentModel = await supportsComponentModel(db);
+  const [allSheets, componentRows, costChangesBySheetId] = await Promise.all([
+    db.itemCostSheet.findMany({
+      where: {
+        OR: [{ id: { in: rootIds } }, { baseItemCostSheetId: { in: rootIds } }],
+      },
+      select: {
+        id: true,
+        baseItemCostSheetId: true,
+      },
+    }),
+    hasComponentModel
+      ? db.itemCostSheetComponent.findMany({
+          where: { itemCostSheetId: { in: rootIds } },
+          select: { itemCostSheetId: true },
+        })
+      : db.itemCostSheetLine.findMany({
+          where: { itemCostSheetId: { in: rootIds } },
+          select: { itemCostSheetId: true },
+        }),
+    findRecentCostChangesByAffectedSheetId(db, rootIds),
+  ]);
 
   const variationCountByRootId = new Map<string, number>();
   for (const row of allSheets) {
@@ -319,44 +420,46 @@ export async function scanItemCostSheetsForBulkRecalculation(
     );
   }
 
-  const sheets = roots
-    .map((sheet: any) => {
-      const rootSheetId = String(sheet.id || "");
-      const componentCount = Number(componentCountByRootId.get(rootSheetId) || 0);
-      const isActive = Boolean(sheet.isActive);
-      const costChanges = costChangesBySheetId.get(rootSheetId) || [];
-      const reasons = buildRecalculationReasons({
-        componentCount,
-        isActive,
-        costChanges,
-      });
-      return {
-        rootSheetId,
-        itemId: String(sheet.itemId || ""),
-        itemName: String(sheet.Item?.name || "Item sem nome"),
-        sheetName:
-          String(sheet.name || "").trim() ||
-          `Ficha tecnica ${String(sheet.Item?.name || "Item")}`,
-        isActive,
-        componentCount,
-        variationCount: Number(variationCountByRootId.get(rootSheetId) || 1),
-        costAmount: Number(sheet.costAmount || 0),
-        updatedAt: new Date(sheet.updatedAt),
-        reasonSummary: reasons.map((reason) => reason.label).join(", "),
-        reasons,
-        costChanges,
-      };
-    })
-    .filter((sheet) => (onlyWithComponents ? sheet.componentCount > 0 : true));
+  const sheets = roots.map((sheet: any) => {
+    const rootSheetId = String(sheet.id || "");
+    const componentCount = Number(componentCountByRootId.get(rootSheetId) || 0);
+    const isActive = Boolean(sheet.isActive);
+    const costChanges = costChangesBySheetId.get(rootSheetId) || [];
+    const reasons = buildRecalculationReasons({
+      componentCount,
+      isActive,
+      costChanges,
+    });
+    return {
+      rootSheetId,
+      itemId: String(sheet.itemId || ""),
+      itemName: String(sheet.Item?.name || "Item sem nome"),
+      sheetName:
+        String(sheet.name || "").trim() ||
+        `Ficha tecnica ${String(sheet.Item?.name || "Item")}`,
+      isActive,
+      componentCount,
+      variationCount: Number(variationCountByRootId.get(rootSheetId) || 1),
+      costAmount: Number(sheet.costAmount || 0),
+      updatedAt: new Date(sheet.updatedAt),
+      reasonSummary: reasons.map((reason) => reason.label).join(", "),
+      reasons,
+      costChangeTrend: getCostChangeTrend(costChanges),
+      costChangeCount: costChanges.length,
+    };
+  });
 
   return {
-    totalSheets: sheets.length,
-    activeSheets: sheets.filter((sheet) => sheet.isActive).length,
-    sheetsWithComponents: sheets.filter((sheet) => sheet.componentCount > 0).length,
+    totalSheets,
+    activeSheets,
+    sheetsWithComponents,
     totalComponents: sheets.reduce(
       (acc, sheet) => acc + Number(sheet.componentCount || 0),
       0
     ),
+    page,
+    pageSize,
+    totalPages,
     sheets,
   };
 }
@@ -366,7 +469,9 @@ export async function recalculateItemCostSheetsInBulk(
 ): Promise<ItemCostSheetBulkRecalculateResult> {
   const db = prismaClient as any;
   const uniqueRootIds = Array.from(
-    new Set(rootSheetIds.map((value) => String(value || "").trim()).filter(Boolean))
+    new Set(
+      rootSheetIds.map((value) => String(value || "").trim()).filter(Boolean)
+    )
   );
 
   if (uniqueRootIds.length === 0) {

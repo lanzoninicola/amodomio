@@ -1,6 +1,16 @@
 import React from "react";
 import { Form, Link, useNavigation, useOutletContext } from "@remix-run/react";
-import { AlertTriangle, Calculator, ChevronDown, ChevronRight, ExternalLink, Loader2, RefreshCw, Settings2, Trash2 } from "lucide-react";
+import {
+  AlertTriangle,
+  Calculator,
+  ChevronDown,
+  ChevronRight,
+  ExternalLink,
+  Loader2,
+  RefreshCw,
+  Settings2,
+  Trash2,
+} from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { MoneyInput } from "~/components/money-input/MoneyInput";
 import { NumericInput } from "~/components/numeric-input/numeric-input";
@@ -57,10 +67,10 @@ function formatDifference(value: number) {
 function presetVariationText(
   preset:
     | {
-      variationLabel?: string | null;
-      variationCode?: string | null;
-      variationKind?: string | null;
-    }
+        variationLabel?: string | null;
+        variationCode?: string | null;
+        variationKind?: string | null;
+      }
     | null
     | undefined
 ) {
@@ -174,8 +184,9 @@ export default function AdminItemCostSheetCustosTab() {
     () =>
       recipeOptions.map((recipe) => ({
         value: recipe.id,
-        label: `${recipe.name}${recipe.variationLabel ? ` (${recipe.variationLabel})` : ""
-          }`,
+        label: `${recipe.name} · v${recipe.version}${
+          recipe.status === "draft" ? " · rascunho" : ""
+        }${recipe.variationLabel ? ` (${recipe.variationLabel})` : ""}`,
         searchText: [
           recipe.name,
           recipe.variationLabel || "",
@@ -216,38 +227,38 @@ export default function AdminItemCostSheetCustosTab() {
   );
   const manualPresetUnit =
     selectedManualPreset?.unit &&
-      unitOptions.includes(String(selectedManualPreset.unit).toUpperCase())
+    unitOptions.includes(String(selectedManualPreset.unit).toUpperCase())
       ? String(selectedManualPreset.unit).toUpperCase()
       : defaultManualUnit;
   const laborPresetUnit =
     selectedLaborPreset?.unit &&
-      unitOptions.includes(String(selectedLaborPreset.unit).toUpperCase())
+    unitOptions.includes(String(selectedLaborPreset.unit).toUpperCase())
       ? String(selectedLaborPreset.unit).toUpperCase()
       : defaultLaborUnit;
   const selectedRecipeBreakdown = selectedRecipeBreakdownTarget
     ? recipeCompositionBreakdownByLineId[
-    selectedRecipeBreakdownTarget.lineId
-    ]?.[selectedRecipeBreakdownTarget.itemVariationId] || null
+        selectedRecipeBreakdownTarget.lineId
+      ]?.[selectedRecipeBreakdownTarget.itemVariationId] || null
     : null;
   const selectedRecipeLine = selectedRecipeBreakdownTarget
     ? compositionRows.find(
-      (line) => line.id === selectedRecipeBreakdownTarget.lineId
-    ) || null
+        (line) => line.id === selectedRecipeBreakdownTarget.lineId
+      ) || null
     : null;
   const selectedRecipeValue =
     selectedRecipeBreakdownTarget && selectedRecipeLine
       ? selectedRecipeLine.variationValues.find(
-        (row) =>
-          row.itemVariationId ===
-          selectedRecipeBreakdownTarget.itemVariationId
-      ) || null
+          (row) =>
+            row.itemVariationId ===
+            selectedRecipeBreakdownTarget.itemVariationId
+        ) || null
       : null;
   const selectedVariationSheet = selectedRecipeBreakdownTarget
     ? variationSheets.find(
-      (sheet: any) =>
-        sheet.itemVariationId ===
-        selectedRecipeBreakdownTarget.itemVariationId
-    ) || null
+        (sheet: any) =>
+          sheet.itemVariationId ===
+          selectedRecipeBreakdownTarget.itemVariationId
+      ) || null
     : null;
   const selectedVariationLabel = selectedVariationSheet
     ? variationLabel(selectedVariationSheet)
@@ -308,8 +319,8 @@ export default function AdminItemCostSheetCustosTab() {
           const breakdown =
             line.type === "recipe"
               ? recipeCompositionBreakdownByLineId[line.id]?.[
-              itemVariationId
-              ] || null
+                  itemVariationId
+                ] || null
               : null;
 
           return {
@@ -398,12 +409,17 @@ export default function AdminItemCostSheetCustosTab() {
                   : `${recipeLinesWithDynamicCost.length} receitas`}
               </div>
               <p className="mt-1 text-xs text-slate-500">
-                {recipeLinesWithDynamicCost.map((l) => l.lineName).join(", ")}{" "}
-                — {recipeLinesWithDynamicCost.length === 1 ? "não tem" : "não têm"} ficha de
-                custo ativa. O custo é derivado dinamicamente dos ingredientes a
-                cada consulta, sem histórico nem rastreabilidade. Para ter
-                controle, crie e ative uma ficha de custo para{" "}
-                {recipeLinesWithDynamicCost.length === 1 ? "esse item" : "esses itens"}.
+                {recipeLinesWithDynamicCost.map((l) => l.lineName).join(", ")} —{" "}
+                {recipeLinesWithDynamicCost.length === 1
+                  ? "não tem"
+                  : "não têm"}{" "}
+                ficha de custo ativa. O custo é derivado dinamicamente dos
+                ingredientes a cada consulta, sem histórico nem rastreabilidade.
+                Para ter controle, crie e ative uma ficha de custo para{" "}
+                {recipeLinesWithDynamicCost.length === 1
+                  ? "esse item"
+                  : "esses itens"}
+                .
               </p>
             </div>
           </div>
@@ -416,10 +432,11 @@ export default function AdminItemCostSheetCustosTab() {
               Custos
             </div>
             <span
-              className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider ${isActive
-                ? "bg-emerald-100 text-emerald-700"
-                : "bg-amber-100 text-amber-800"
-                }`}
+              className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider ${
+                isActive
+                  ? "bg-emerald-100 text-emerald-700"
+                  : "bg-amber-100 text-amber-800"
+              }`}
             >
               {isActive ? "Ativa" : "Rascunho"}
             </span>
@@ -461,18 +478,27 @@ export default function AdminItemCostSheetCustosTab() {
               action="/api/item-cost-sheets/recalculate"
               onSubmit={() => setRecalcLoading(true)}
             >
-              <input type="hidden" name="itemCostSheetId" value={selectedSheet?.id} />
-              <input type="hidden" name="redirectTo" value={`${detailPath}/custos`} />
+              <input
+                type="hidden"
+                name="itemCostSheetId"
+                value={selectedSheet?.id}
+              />
+              <input
+                type="hidden"
+                name="redirectTo"
+                value={`${detailPath}/custos`}
+              />
               <Button
                 type="submit"
                 variant="outline"
                 size="sm"
                 className="h-8 gap-1.5 border-slate-200 text-xs text-slate-600 hover:bg-slate-50"
               >
-                {recalcLoading
-                  ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  : <RefreshCw className="h-3.5 w-3.5" />
-                }
+                {recalcLoading ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <RefreshCw className="h-3.5 w-3.5" />
+                )}
                 Recalcular
               </Button>
             </Form>
@@ -482,8 +508,16 @@ export default function AdminItemCostSheetCustosTab() {
 
             {/* Destructive */}
             <Form method="post" action={detailPath}>
-              <input type="hidden" name="itemCostSheetId" value={selectedSheet?.id} />
-              <input type="hidden" name="redirectTo" value={`${detailPath}/custos`} />
+              <input
+                type="hidden"
+                name="itemCostSheetId"
+                value={selectedSheet?.id}
+              />
+              <input
+                type="hidden"
+                name="redirectTo"
+                value={`${detailPath}/custos`}
+              />
               <Button
                 type="submit"
                 variant="ghost"
@@ -510,10 +544,11 @@ export default function AdminItemCostSheetCustosTab() {
                 <button
                   key={option.key}
                   type="button"
-                  className={`rounded-md px-3 py-1.5 text-xs font-medium transition ${isSelected
-                    ? "bg-slate-900 text-white"
-                    : "border border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50"
-                    }`}
+                  className={`rounded-md px-3 py-1.5 text-xs font-medium transition ${
+                    isSelected
+                      ? "bg-slate-900 text-white"
+                      : "border border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50"
+                  }`}
                   onClick={() =>
                     setActiveAddForm(isSelected ? null : option.key)
                   }
@@ -944,8 +979,9 @@ export default function AdminItemCostSheetCustosTab() {
                       Nome
                     </label>
                     <input
-                      key={`manual-name-${selectedManualPreset?.id || "custom"
-                        }`}
+                      key={`manual-name-${
+                        selectedManualPreset?.id || "custom"
+                      }`}
                       id="manualName"
                       name="name"
                       defaultValue={selectedManualPreset?.name || ""}
@@ -963,8 +999,9 @@ export default function AdminItemCostSheetCustosTab() {
                         Unidade
                       </label>
                       <Select
-                        key={`manual-unit-${selectedManualPreset?.id || "custom"
-                          }`}
+                        key={`manual-unit-${
+                          selectedManualPreset?.id || "custom"
+                        }`}
                         name="unit"
                         required
                         defaultValue={manualPresetUnit}
@@ -992,8 +1029,9 @@ export default function AdminItemCostSheetCustosTab() {
                         Quantidade
                       </label>
                       <NumericInput
-                        key={`manual-quantity-${selectedManualPreset?.id || "custom"
-                          }`}
+                        key={`manual-quantity-${
+                          selectedManualPreset?.id || "custom"
+                        }`}
                         id="manualQuantity"
                         name="quantity"
                         min="0.01"
@@ -1014,8 +1052,9 @@ export default function AdminItemCostSheetCustosTab() {
                         Custo unit.
                       </label>
                       <MoneyInput
-                        key={`manual-cost-${selectedManualPreset?.id || "custom"
-                          }`}
+                        key={`manual-cost-${
+                          selectedManualPreset?.id || "custom"
+                        }`}
                         id="manualUnitCostAmount"
                         name="unitCostAmount"
                         defaultValue={Number(
@@ -1033,8 +1072,9 @@ export default function AdminItemCostSheetCustosTab() {
                         Perda %
                       </label>
                       <NumericInput
-                        key={`manual-waste-${selectedManualPreset?.id || "custom"
-                          }`}
+                        key={`manual-waste-${
+                          selectedManualPreset?.id || "custom"
+                        }`}
                         id="manualWastePerc"
                         name="wastePerc"
                         min="0"
@@ -1149,8 +1189,9 @@ export default function AdminItemCostSheetCustosTab() {
                         Unidade
                       </label>
                       <Select
-                        key={`labor-unit-${selectedLaborPreset?.id || "custom"
-                          }`}
+                        key={`labor-unit-${
+                          selectedLaborPreset?.id || "custom"
+                        }`}
                         name="unit"
                         required
                         defaultValue={laborPresetUnit}
@@ -1178,8 +1219,9 @@ export default function AdminItemCostSheetCustosTab() {
                         Quantidade
                       </label>
                       <NumericInput
-                        key={`labor-quantity-${selectedLaborPreset?.id || "custom"
-                          }`}
+                        key={`labor-quantity-${
+                          selectedLaborPreset?.id || "custom"
+                        }`}
                         id="laborQuantity"
                         name="quantity"
                         min="0.01"
@@ -1200,8 +1242,9 @@ export default function AdminItemCostSheetCustosTab() {
                         Custo unit.
                       </label>
                       <MoneyInput
-                        key={`labor-cost-${selectedLaborPreset?.id || "custom"
-                          }`}
+                        key={`labor-cost-${
+                          selectedLaborPreset?.id || "custom"
+                        }`}
                         id="laborUnitCostAmount"
                         name="unitCostAmount"
                         defaultValue={Number(
@@ -1219,8 +1262,9 @@ export default function AdminItemCostSheetCustosTab() {
                         Perda %
                       </label>
                       <NumericInput
-                        key={`labor-waste-${selectedLaborPreset?.id || "custom"
-                          }`}
+                        key={`labor-waste-${
+                          selectedLaborPreset?.id || "custom"
+                        }`}
                         id="laborWastePerc"
                         name="wastePerc"
                         min="0"
@@ -1368,7 +1412,7 @@ export default function AdminItemCostSheetCustosTab() {
                         {formatMoney(
                           Number(
                             totalsByVariationId[
-                            String(sheet.itemVariationId)
+                              String(sheet.itemVariationId)
                             ] || 0
                           )
                         )}
@@ -1438,7 +1482,7 @@ export default function AdminItemCostSheetCustosTab() {
                                 </span>
                               ) : null}
                               {rowAlerts[line.id]?.hasZeroCost ||
-                                rowAlerts[line.id]?.hasZeroIngredient ? (
+                              rowAlerts[line.id]?.hasZeroIngredient ? (
                                 <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0 text-amber-500" />
                               ) : null}
                             </div>
@@ -1474,10 +1518,11 @@ export default function AdminItemCostSheetCustosTab() {
                                   name="name"
                                   defaultValue={line.name}
                                   readOnly={refLocked}
-                                  className={`h-9 w-full rounded-lg border px-3 text-sm ${refLocked
-                                    ? "border-slate-100 bg-slate-50 text-slate-500"
-                                    : "border-slate-200 bg-white"
-                                    }`}
+                                  className={`h-9 w-full rounded-lg border px-3 text-sm ${
+                                    refLocked
+                                      ? "border-slate-100 bg-slate-50 text-slate-500"
+                                      : "border-slate-200 bg-white"
+                                  }`}
                                 />
                               )}
                             </div>
@@ -1520,10 +1565,11 @@ export default function AdminItemCostSheetCustosTab() {
                               className="min-w-[292px] border-t border-slate-100 px-3 py-4 align-top"
                             >
                               <div
-                                className={`rounded-[22px] border p-3 ${isZeroRefCost
-                                  ? "border-amber-300 bg-amber-50/70"
-                                  : "border-slate-200 bg-slate-50/65"
-                                  }`}
+                                className={`rounded-[22px] border p-3 ${
+                                  isZeroRefCost
+                                    ? "border-amber-300 bg-amber-50/70"
+                                    : "border-slate-200 bg-slate-50/65"
+                                }`}
                               >
                                 <div className="grid grid-cols-[78px_74px_94px] gap-2">
                                   <div className="space-y-1">
@@ -1550,10 +1596,10 @@ export default function AdminItemCostSheetCustosTab() {
                                             ).toUpperCase()
                                           )
                                             ? String(
-                                              value?.unit || ""
-                                            ).toUpperCase()
+                                                value?.unit || ""
+                                              ).toUpperCase()
                                             : String(value?.unit || "") ||
-                                            defaultManualUnit
+                                              defaultManualUnit
                                         }
                                       >
                                         <SelectTrigger className="h-8 w-full rounded-lg border border-slate-200 bg-white px-2.5 text-xs">
@@ -1566,9 +1612,9 @@ export default function AdminItemCostSheetCustosTab() {
                                             </SelectItem>
                                           ))}
                                           {value?.unit &&
-                                            !unitOptions.includes(
-                                              String(value.unit).toUpperCase()
-                                            ) ? (
+                                          !unitOptions.includes(
+                                            String(value.unit).toUpperCase()
+                                          ) ? (
                                             <SelectItem
                                               value={String(value.unit)}
                                             >
@@ -1607,10 +1653,11 @@ export default function AdminItemCostSheetCustosTab() {
                                         value?.unitCostAmount || 0
                                       )}
                                       readOnly={refLocked}
-                                      className={`h-8 w-full rounded-lg px-2 text-xs text-right ${refLocked
-                                        ? "border border-slate-100 bg-slate-50 text-slate-500"
-                                        : "border-slate-200 bg-white"
-                                        }`}
+                                      className={`h-8 w-full rounded-lg px-2 text-xs text-right ${
+                                        refLocked
+                                          ? "border border-slate-100 bg-slate-50 text-slate-500"
+                                          : "border-slate-200 bg-white"
+                                      }`}
                                       required
                                     />
                                   </div>
@@ -1793,7 +1840,7 @@ export default function AdminItemCostSheetCustosTab() {
           </div>
         </section>
       </div>
-      <Dialog open={recalcLoading} onOpenChange={() => { }}>
+      <Dialog open={recalcLoading} onOpenChange={() => {}}>
         <DialogContent className="max-w-sm rounded-2xl p-8 [&>button]:hidden">
           <div className="flex flex-col items-center gap-4 text-center">
             <Loader2 className="h-8 w-8 animate-spin text-slate-500" />
@@ -1886,10 +1933,11 @@ export default function AdminItemCostSheetCustosTab() {
                         Diferenca
                       </div>
                       <div
-                        className={`font-mono text-sm font-semibold ${Math.abs(variation.difference) >= 0.005
-                          ? "text-amber-700"
-                          : "text-emerald-700"
-                          }`}
+                        className={`font-mono text-sm font-semibold ${
+                          Math.abs(variation.difference) >= 0.005
+                            ? "text-amber-700"
+                            : "text-emerald-700"
+                        }`}
                       >
                         {formatDifference(variation.difference)}
                       </div>
@@ -2043,7 +2091,7 @@ export default function AdminItemCostSheetCustosTab() {
                   )}
                 </div>
                 {String(selectedRecipeBreakdown?.recipeCostingMode || "") ===
-                  "yield" ? (
+                "yield" ? (
                   <div className="mt-1 text-xs text-slate-500">
                     Ingredientes{" "}
                     {formatMoney(
@@ -2095,22 +2143,43 @@ export default function AdminItemCostSheetCustosTab() {
               </div>
             </div>
 
-            {String(selectedRecipeBreakdown?.recipeCostingMode || "") === "yield" ? (
+            {String(selectedRecipeBreakdown?.recipeCostingMode || "") ===
+            "yield" ? (
               <div className="rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-xs text-blue-800">
-                <span className="font-semibold">Por que o custo base difere do total dos ingredientes?</span>
-                {" "}Esta receita usa modo <span className="font-semibold">rendimento</span>: os ingredientes produzem{" "}
                 <span className="font-semibold">
-                  {formatQuantity(Number(selectedRecipeBreakdown?.yieldQuantity || 0), 3)}{" "}
+                  Por que o custo base difere do total dos ingredientes?
+                </span>{" "}
+                Esta receita usa modo{" "}
+                <span className="font-semibold">rendimento</span>: os
+                ingredientes produzem{" "}
+                <span className="font-semibold">
+                  {formatQuantity(
+                    Number(selectedRecipeBreakdown?.yieldQuantity || 0),
+                    3
+                  )}{" "}
                   {selectedRecipeBreakdown?.yieldUnit || "UN"}
                 </span>{" "}
-                de produto final. O custo base é calculado dividindo o total dos ingredientes pelo rendimento:{" "}
+                de produto final. O custo base é calculado dividindo o total dos
+                ingredientes pelo rendimento:{" "}
                 <span className="font-semibold font-mono">
-                  {formatMoney(Number(selectedRecipeBreakdown?.ingredientsTotalCostAmount || 0))} ÷{" "}
-                  {formatQuantity(Number(selectedRecipeBreakdown?.yieldQuantity || 0), 3)}{" "}
+                  {formatMoney(
+                    Number(
+                      selectedRecipeBreakdown?.ingredientsTotalCostAmount || 0
+                    )
+                  )}{" "}
+                  ÷{" "}
+                  {formatQuantity(
+                    Number(selectedRecipeBreakdown?.yieldQuantity || 0),
+                    3
+                  )}{" "}
                   {selectedRecipeBreakdown?.yieldUnit || "UN"} ={" "}
-                  {formatMoney(Number(selectedRecipeBreakdown?.unitCostAmount || 0))}/{selectedRecipeBreakdown?.yieldUnit || "UN"}
-                </span>.
-                {" "}O custo na ficha é esse valor por unidade multiplicado pela quantidade usada.
+                  {formatMoney(
+                    Number(selectedRecipeBreakdown?.unitCostAmount || 0)
+                  )}
+                  /{selectedRecipeBreakdown?.yieldUnit || "UN"}
+                </span>
+                . O custo na ficha é esse valor por unidade multiplicado pela
+                quantidade usada.
               </div>
             ) : null}
 
@@ -2182,7 +2251,11 @@ export default function AdminItemCostSheetCustosTab() {
                                 )}
                                 <div>
                                   <div
-                                    className={`font-medium ${hasSubRecipe ? "text-emerald-800" : "text-slate-900"}`}
+                                    className={`font-medium ${
+                                      hasSubRecipe
+                                        ? "text-emerald-800"
+                                        : "text-slate-900"
+                                    }`}
                                   >
                                     {ingredient.itemName}
                                   </div>
@@ -2214,18 +2287,25 @@ export default function AdminItemCostSheetCustosTab() {
                           </tr>
                           {hasSubRecipe && isExpanded ? (
                             <tr key={`sub-card-${ingredient.ingredientId}`}>
-                              <td colSpan={4} className="border-b border-slate-100 px-3 pb-4 pt-1">
+                              <td
+                                colSpan={4}
+                                className="border-b border-slate-100 px-3 pb-4 pt-1"
+                              >
                                 {(() => {
-                                  const subLines = ingredient.subRecipeLines || [];
+                                  const subLines =
+                                    ingredient.subRecipeLines || [];
                                   const isYield =
-                                    ingredient.subRecipeCostingMode === "yield" &&
+                                    ingredient.subRecipeCostingMode ===
+                                      "yield" &&
                                     (ingredient.subRecipeYield ?? 0) > 0;
                                   const yieldQty = Number(
                                     ingredient.subRecipeYield || 0
                                   );
                                   const yieldUnit =
                                     ingredient.subRecipeYieldUnit || "UN";
-                                  const usedQty = Number(ingredient.quantity || 0);
+                                  const usedQty = Number(
+                                    ingredient.quantity || 0
+                                  );
                                   const scaleFactor =
                                     isYield && yieldQty > 0
                                       ? usedQty / yieldQty
@@ -2234,7 +2314,7 @@ export default function AdminItemCostSheetCustosTab() {
                                     (acc, l) =>
                                       acc +
                                       Number(l.avgUnitCostAmount || 0) *
-                                      Number(l.batchQuantity || 0),
+                                        Number(l.batchQuantity || 0),
                                     0
                                   );
                                   const scaledTotal = subLines.reduce(
@@ -2245,7 +2325,6 @@ export default function AdminItemCostSheetCustosTab() {
                                   return (
                                     <div className="ml-5 overflow-hidden  bg-white">
                                       <div className="border-b border-emerald-100 bg-emerald-50/70 px-4 py-2.5">
-
                                         {isYield ? (
                                           <div className="mt-1 flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-emerald-800">
                                             <span>
@@ -2273,7 +2352,8 @@ export default function AdminItemCostSheetCustosTab() {
                                               <span className="font-semibold">
                                                 {formatQuantity(usedQty)} ÷{" "}
                                                 {formatQuantity(yieldQty)} ={" "}
-                                                {formatQuantity(scaleFactor, 4)}×
+                                                {formatQuantity(scaleFactor, 4)}
+                                                ×
                                               </span>
                                             </span>
                                           </div>
@@ -2297,9 +2377,7 @@ export default function AdminItemCostSheetCustosTab() {
                                               </th>
                                             ) : null}
                                             <th className="border-b border-emerald-100 px-3 py-2 text-right text-[10px] font-semibold uppercase tracking-wide text-slate-400">
-                                              {isYield
-                                                ? "Qtd. usada"
-                                                : "Qtd."}
+                                              {isYield ? "Qtd. usada" : "Qtd."}
                                             </th>
                                             <th className="border-b border-emerald-100 px-3 py-2 text-right text-[10px] font-semibold uppercase tracking-wide text-slate-400">
                                               Custo un.
@@ -2328,7 +2406,9 @@ export default function AdminItemCostSheetCustosTab() {
                                                 </td>
                                               ) : null}
                                               <td className="border-b border-emerald-50 px-3 py-2 text-right font-mono text-slate-600">
-                                                {formatQuantity(subLine.quantity)}
+                                                {formatQuantity(
+                                                  subLine.quantity
+                                                )}
                                               </td>
                                               <td className="border-b border-emerald-50 px-3 py-2 text-right font-mono text-slate-600">
                                                 {formatMoney(
@@ -2349,7 +2429,8 @@ export default function AdminItemCostSheetCustosTab() {
                                               colSpan={isYield ? 4 : 3}
                                               className="px-4 py-2 text-right text-[10px] font-semibold uppercase tracking-wide text-emerald-700"
                                             >
-                                              Custo para {formatQuantity(usedQty)}{" "}
+                                              Custo para{" "}
+                                              {formatQuantity(usedQty)}{" "}
                                               {yieldUnit} usados
                                             </td>
                                             <td className="px-4 py-2 text-right font-mono font-semibold text-emerald-800">

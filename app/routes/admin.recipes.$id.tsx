@@ -22,7 +22,6 @@ import {
   ExternalLink,
   FileSpreadsheet,
   RefreshCw,
-  Trash2,
   X,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
@@ -34,6 +33,7 @@ import {
   SelectValue,
 } from "~/components/ui/select";
 import { Button } from "~/components/ui/button";
+import { Switch } from "~/components/ui/switch";
 import {
   Dialog,
   DialogContent,
@@ -782,6 +782,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
       chatGptProjectUrlSetting,
       recipeCostSheetCount,
       recipeLinksCount,
+      recipeVersions,
     ] = await Promise.all([
       listRecipeCompositionLines(db, recipeId),
       listRecipeLinkedVariations(db, recipeId),
@@ -796,6 +797,18 @@ export async function loader({ params }: LoaderFunctionArgs) {
       }),
       countRecipeCostSheetUsage(db, recipeId),
       countParentRecipes(db, String((recipe as any)?.itemId || "") || null),
+      db.recipe.findMany({
+        where: { groupId: String((recipe as any).groupId || recipe.id) },
+        select: {
+          id: true,
+          version: true,
+          status: true,
+          activatedAt: true,
+          archivedAt: true,
+          updatedAt: true,
+        },
+        orderBy: [{ version: "desc" }],
+      }),
     ]);
 
     return ok({
@@ -806,6 +819,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
       unitOptions,
       recipeCostSheetCount,
       recipeLinksCount,
+      recipeVersions,
       chatGptProjectUrl:
         String(chatGptProjectUrlSetting?.value || "").trim() ||
         DEFAULT_RECIPE_CHATGPT_PROJECT_URL,
@@ -822,20 +836,6 @@ export async function action({ request }: ActionFunctionArgs) {
   const { _action, ...values } = Object.fromEntries(formData);
   const currentSection = resolveRecipeSection(values.tab);
 
-  if (_action === "recipe-delete") {
-    const recipeId = String(values.recipeId || "").trim();
-    if (!recipeId) return badRequest("Receita inválida");
-
-    try {
-      await recipeEntity.delete(recipeId);
-      return redirect("/admin/recipes");
-    } catch (error) {
-      return badRequest(
-        (error as Error)?.message || "Erro ao eliminar receita"
-      );
-    }
-  }
-
   if (_action === "recipe-duplicate") {
     const recipeId = String(values.recipeId || "").trim();
     if (!recipeId) return badRequest("Receita inválida");
@@ -846,6 +846,69 @@ export async function action({ request }: ActionFunctionArgs) {
     } catch (error) {
       return badRequest(
         (error as Error)?.message || "Erro ao duplicar receita"
+      );
+    }
+  }
+
+  if (_action === "recipe-create-draft-version") {
+    const recipeId = String(values.recipeId || "").trim();
+    if (!recipeId) return badRequest("Receita inválida");
+
+    try {
+      const draftRecipe = await recipeEntity.createDraftVersion(recipeId);
+      return redirect(buildRecipeSectionHref(draftRecipe.id, "cadastro"));
+    } catch (error) {
+      return badRequest(
+        (error as Error)?.message || "Erro ao criar nova versão da receita"
+      );
+    }
+  }
+
+  if (_action === "recipe-activate-version") {
+    const recipeId = String(values.recipeId || "").trim();
+    if (!recipeId) return badRequest("Receita inválida");
+
+    try {
+      await recipeEntity.activateVersion(recipeId);
+      return redirect(buildRecipeSectionHref(recipeId, currentSection));
+    } catch (error) {
+      return badRequest(
+        (error as Error)?.message || "Erro ao ativar versão da receita"
+      );
+    }
+  }
+
+  if (_action === "recipe-archive-version") {
+    const recipeId = String(values.recipeId || "").trim();
+    if (!recipeId) return badRequest("Receita inválida");
+
+    try {
+      await recipeEntity.archiveVersion(recipeId);
+      return redirect(buildRecipeSectionHref(recipeId, currentSection));
+    } catch (error) {
+      return badRequest(
+        (error as Error)?.message || "Erro ao arquivar versão da receita"
+      );
+    }
+  }
+
+  if (_action === "recipe-status-update") {
+    const recipeId = String(values.recipeId || "").trim();
+    const desiredStatus = String(values.status || "draft").trim();
+    if (!recipeId) return badRequest("Receita inválida");
+
+    try {
+      if (desiredStatus === "active") {
+        await recipeEntity.activateVersion(recipeId);
+      } else if (desiredStatus === "archived") {
+        await recipeEntity.archiveVersion(recipeId);
+      } else {
+        await recipeEntity.moveVersionToDraft(recipeId);
+      }
+      return ok({ message: "Status da receita atualizado" });
+    } catch (error) {
+      return badRequest(
+        (error as Error)?.message || "Erro ao atualizar status da receita"
       );
     }
   }
@@ -1263,7 +1326,10 @@ export async function action({ request }: ActionFunctionArgs) {
     try {
       const db = prismaClient as any;
       await deleteRecipeCompositionLine(db, recipeLineId);
-      return buildRecipeCostSheetRecalculationRedirect(recipeId, currentSection);
+      return buildRecipeCostSheetRecalculationRedirect(
+        recipeId,
+        currentSection
+      );
     } catch (error) {
       return badRequest(
         (error as Error)?.message || "Erro ao remover item da composição"
@@ -1394,10 +1460,109 @@ export async function action({ request }: ActionFunctionArgs) {
         lossPct: null,
       });
 
-      return buildRecipeCostSheetRecalculationRedirect(recipeId, currentSection);
+      return buildRecipeCostSheetRecalculationRedirect(
+        recipeId,
+        currentSection
+      );
     } catch (error) {
       return badRequest(
         (error as Error)?.message || "Erro ao atualizar item da composição"
+      );
+    }
+  }
+
+  if (_action === "recipe-ingredient-copy-quantities") {
+    const recipeId = String(values.recipeId || "").trim();
+    const targetRecipeIngredientId = String(
+      values.targetRecipeIngredientId || ""
+    ).trim();
+    const sourceRecipeIngredientId = String(
+      values.sourceRecipeIngredientId || ""
+    ).trim();
+
+    if (!recipeId || !targetRecipeIngredientId || !sourceRecipeIngredientId) {
+      return badRequest("Selecione um item com receita para copiar");
+    }
+
+    try {
+      const db = prismaClient as any;
+      const [targetIngredient, sourceIngredient] = await Promise.all([
+        db.recipeIngredient.findFirst({
+          where: { id: targetRecipeIngredientId, recipeId },
+          select: {
+            ingredientItemId: true,
+            RecipeVariationIngredient: {
+              select: {
+                id: true,
+                ItemVariation: { select: { variationId: true } },
+              },
+            },
+          },
+        }),
+        db.recipeIngredient.findUnique({
+          where: { id: sourceRecipeIngredientId },
+          select: {
+            recipeId: true,
+            ingredientItemId: true,
+            RecipeVariationIngredient: {
+              select: {
+                quantity: true,
+                ItemVariation: { select: { variationId: true } },
+              },
+            },
+          },
+        }),
+      ]);
+
+      if (!targetIngredient || !sourceIngredient) {
+        return badRequest("Receita de origem ou ingrediente não encontrado");
+      }
+      if (sourceIngredient.recipeId === recipeId) {
+        return badRequest("Escolha a receita de outro item");
+      }
+      if (
+        sourceIngredient.ingredientItemId !== targetIngredient.ingredientItemId
+      ) {
+        return badRequest("A receita escolhida não contém este ingrediente");
+      }
+
+      const sourceQuantityByVariationId = new Map(
+        sourceIngredient.RecipeVariationIngredient.map((line: any) => [
+          String(line.ItemVariation.variationId),
+          Number(line.quantity || 0),
+        ])
+      );
+      const updates = targetIngredient.RecipeVariationIngredient.flatMap(
+        (line: any) => {
+          const variationId = String(line.ItemVariation.variationId);
+          const quantity = sourceQuantityByVariationId.get(variationId);
+          return quantity == null
+            ? []
+            : [
+                db.recipeVariationIngredient.update({
+                  where: { id: line.id },
+                  data: { quantity },
+                }),
+              ];
+        }
+      );
+
+      if (updates.length === 0) {
+        return badRequest(
+          "As receitas não possuem variações correspondentes para copiar"
+        );
+      }
+
+      await db.$transaction(updates);
+      await notifyRecipeCostSheetRecalculationRequired(db, recipeId);
+      return ok({
+        message: `Quantidades copiadas para ${updates.length} variação${
+          updates.length === 1 ? "" : "ões"
+        }`,
+      });
+    } catch (error) {
+      return badRequest(
+        (error as Error)?.message || "Erro ao copiar quantidades da receita"
       );
     }
   }
@@ -1431,7 +1596,10 @@ export async function action({ request }: ActionFunctionArgs) {
         variationIds,
       });
 
-      return buildRecipeCostSheetRecalculationRedirect(recipeId, currentSection);
+      return buildRecipeCostSheetRecalculationRedirect(
+        recipeId,
+        currentSection
+      );
     } catch (error) {
       return badRequest(
         (error as Error)?.message ||
@@ -1466,7 +1634,10 @@ export async function action({ request }: ActionFunctionArgs) {
           lossPct: null,
         });
       }
-      return buildRecipeCostSheetRecalculationRedirect(recipeId, currentSection);
+      return buildRecipeCostSheetRecalculationRedirect(
+        recipeId,
+        currentSection
+      );
     } catch (error) {
       return badRequest(
         (error as Error)?.message || "Erro ao atualizar UM do ingrediente"
@@ -1517,7 +1688,10 @@ export async function action({ request }: ActionFunctionArgs) {
         });
       }
 
-      return buildRecipeCostSheetRecalculationRedirect(recipeId, currentSection);
+      return buildRecipeCostSheetRecalculationRedirect(
+        recipeId,
+        currentSection
+      );
     } catch (error) {
       return badRequest(
         (error as Error)?.message || "Erro ao atualizar perda padrão"
@@ -1557,7 +1731,9 @@ export async function action({ request }: ActionFunctionArgs) {
       String((recipe as any)?.yieldUnit || "")
         .trim()
         .toUpperCase() !==
-        String(costingInput.yieldUnit || "").trim().toUpperCase();
+        String(costingInput.yieldUnit || "")
+          .trim()
+          .toUpperCase();
 
     const costingModeChangeConfirmed =
       String(values.confirmCostingModeChange || "")
@@ -2228,6 +2404,78 @@ export type AdminRecipeOutletContext = {
   }>;
 };
 
+function RecipeStatusSwitches({
+  recipeId,
+  status,
+  version,
+}: {
+  recipeId: string;
+  status: string;
+  version: number;
+}) {
+  const fetcher = useFetcher();
+  const isSubmitting = fetcher.state !== "idle";
+
+  useEffect(() => {
+    if (fetcher.state !== "idle" || !fetcher.data) return;
+    const response = fetcher.data as { status?: number; message?: string };
+    if (Number(response.status || 200) >= 400) {
+      toast({
+        title: "Erro ao atualizar status",
+        description: response.message,
+        variant: "destructive",
+      });
+    }
+  }, [fetcher.state, fetcher.data]);
+
+  function updateStatus(nextStatus: "draft" | "active" | "archived") {
+    if (
+      nextStatus === "active" &&
+      !window.confirm(
+        `Ativar a versão ${version}? Outra versão ativa desta receita será arquivada.`
+      )
+    ) {
+      return;
+    }
+
+    const formData = new FormData();
+    formData.set("_action", "recipe-status-update");
+    formData.set("recipeId", recipeId);
+    formData.set("status", nextStatus);
+    fetcher.submit(formData, { method: "post", action: "." });
+  }
+
+  return (
+    <div className="flex items-center gap-4 rounded-lg border border-slate-200 bg-white px-3 py-2">
+      <label className="flex items-center gap-2 text-xs font-medium text-slate-700">
+        <Switch
+          checked={status === "active"}
+          disabled={isSubmitting}
+          onCheckedChange={(checked) =>
+            updateStatus(checked ? "active" : "draft")
+          }
+          aria-label="Receita ativa"
+        />
+        Ativa
+      </label>
+      <label className="flex items-center gap-2 text-xs font-medium text-slate-700">
+        <Switch
+          checked={status === "archived"}
+          disabled={isSubmitting}
+          onCheckedChange={(checked) =>
+            updateStatus(checked ? "archived" : "draft")
+          }
+          aria-label="Receita arquivada"
+        />
+        Arquivada
+      </label>
+      {isSubmitting ? (
+        <span className="text-[11px] text-slate-400">Salvando...</span>
+      ) : null}
+    </div>
+  );
+}
+
 const recipeNavigation: Array<{
   name: string;
   key: string;
@@ -2292,6 +2540,12 @@ export default function AdminRecipeDetailLayout() {
     loaderData?.payload?.recipeCostSheetCount || 0
   );
   const recipeLinksCount = Number(loaderData?.payload?.recipeLinksCount || 0);
+  const recipeVersions = (loaderData?.payload?.recipeVersions || []) as Array<{
+    id: string;
+    version: number;
+    status: "draft" | "active" | "archived";
+  }>;
+  const recipeStatus = String((recipe as any)?.status || "draft");
   const isYieldRecipe = String((recipe as any)?.costingMode || "") === "yield";
   const recipeYieldQuantityText = isYieldRecipe
     ? formatRecipeQuantity((recipe as any)?.yieldQuantity)
@@ -2488,8 +2742,8 @@ export default function AdminRecipeDetailLayout() {
               É necessário recalcular a ficha técnica
             </p>
             <p className="text-xs text-amber-800">
-              A composição ou o rendimento da receita mudou. Recalcule as
-              fichas vinculadas para atualizar os custos.
+              A composição ou o rendimento da receita mudou. Recalcule as fichas
+              vinculadas para atualizar os custos.
             </p>
           </div>
           <div className="flex shrink-0 items-center gap-2">
@@ -2519,6 +2773,24 @@ export default function AdminRecipeDetailLayout() {
             <h1 className="text-[30px] font-semibold tracking-[-0.03em] text-slate-950">
               {recipe.name}
             </h1>
+            <span className="inline-flex items-center rounded-full bg-white px-2.5 py-0.5 text-xs font-semibold text-slate-600 ring-1 ring-slate-200">
+              v{Number((recipe as any)?.version || 1)}
+            </span>
+            <span
+              className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold uppercase tracking-wide ring-1 ${
+                recipeStatus === "active"
+                  ? "bg-emerald-50 text-emerald-700 ring-emerald-200"
+                  : recipeStatus === "archived"
+                  ? "bg-slate-100 text-slate-500 ring-slate-200"
+                  : "bg-amber-50 text-amber-700 ring-amber-200"
+              }`}
+            >
+              {recipeStatus === "active"
+                ? "Ativa"
+                : recipeStatus === "archived"
+                ? "Arquivada"
+                : "Rascunho"}
+            </span>
             <span
               className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ring-1 ${
                 recipe.type === "pizzaTopping"
@@ -2554,6 +2826,28 @@ export default function AdminRecipeDetailLayout() {
         </div>
 
         <div className="flex flex-wrap items-center gap-6 text-sm">
+          <RecipeStatusSwitches
+            recipeId={recipe.id}
+            status={recipeStatus}
+            version={Number((recipe as any)?.version || 1)}
+          />
+          {recipeStatus === "active" ? (
+            <Form method="post">
+              <input type="hidden" name="recipeId" value={recipe.id} />
+              <input type="hidden" name="tab" value={activeTab} />
+              <Button
+                type="submit"
+                name="_action"
+                value="recipe-create-draft-version"
+                variant="outline"
+                size="sm"
+                className="flex gap-x-2"
+              >
+                <Copy size={14} />
+                Criar nova versão
+              </Button>
+            </Form>
+          ) : null}
           <Form method="post">
             <input type="hidden" name="recipeId" value={recipe.id} />
             <input type="hidden" name="tab" value={activeTab} />
@@ -2584,31 +2878,6 @@ export default function AdminRecipeDetailLayout() {
               Duplicar receita
             </Button>
           </Form>
-          <Form
-            method="post"
-            onSubmit={(e) => {
-              if (
-                !window.confirm(
-                  `Eliminar a receita "${recipe.name}"? Esta ação não pode ser desfeita.`
-                )
-              ) {
-                e.preventDefault();
-              }
-            }}
-          >
-            <input type="hidden" name="recipeId" value={recipe.id} />
-            <Button
-              type="submit"
-              name="_action"
-              value="recipe-delete"
-              variant="outline"
-              size="sm"
-              className="flex gap-x-2 text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
-            >
-              <Trash2 size={14} />
-              Eliminar receita
-            </Button>
-          </Form>
           <div className="space-y-1">
             <div className="text-xs font-medium text-slate-400">
               Ingredientes
@@ -2617,6 +2886,34 @@ export default function AdminRecipeDetailLayout() {
               {recipeLineCount}
             </div>
           </div>
+          {recipeVersions.length > 1 ? (
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-medium text-slate-400">
+                Versões
+              </span>
+              {recipeVersions.map((version) => (
+                <Link
+                  key={version.id}
+                  to={buildRecipeSectionHref(version.id, activeTab)}
+                  className={cn(
+                    "rounded-full border px-2 py-1 text-xs font-medium",
+                    version.id === recipe.id
+                      ? "border-slate-900 bg-slate-900 text-white"
+                      : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                  )}
+                  title={
+                    version.status === "active"
+                      ? "Ativa"
+                      : version.status === "archived"
+                      ? "Arquivada"
+                      : "Rascunho"
+                  }
+                >
+                  v{version.version}
+                </Link>
+              ))}
+            </div>
+          ) : null}
         </div>
       </div>
 

@@ -6,6 +6,7 @@ export type RouteFilters = {
   search?: string;
   onlyActive: boolean;
   onlyWithComponents: boolean;
+  channelId?: string;
 };
 
 export type RootSheetOption = {
@@ -38,6 +39,7 @@ export function parseRouteFilters(searchParams: URLSearchParams): RouteFilters {
     selectedFilterLabel:
       String(searchParams.get("selectedFilterLabel") || "").trim() || undefined,
     search: String(searchParams.get("search") || "").trim() || undefined,
+    channelId: String(searchParams.get("channelId") || "").trim() || undefined,
     onlyActive: onlyActiveParam === null ? true : onlyActiveParam === "1",
     onlyWithComponents:
       onlyWithComponentsParam === null ? true : onlyWithComponentsParam === "1",
@@ -53,6 +55,7 @@ export function buildFiltersQuery(filters: RouteFilters): string {
   if (filters.selectedFilterLabel)
     params.set("selectedFilterLabel", filters.selectedFilterLabel);
   if (filters.search) params.set("search", filters.search);
+  if (filters.channelId) params.set("channelId", filters.channelId);
   params.set("onlyActive", filters.onlyActive ? "1" : "0");
   params.set("onlyWithComponents", filters.onlyWithComponents ? "1" : "0");
 

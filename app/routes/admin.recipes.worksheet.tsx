@@ -177,6 +177,7 @@ async function loadRecipeWorksheetPayload(): Promise<RecipeWorksheetPayload> {
   const [err, result] = await tryit(
     Promise.all([
       db.recipe.findMany({
+        where: { status: "draft" },
         include: {
           Item: { select: { id: true, name: true } },
           Variation: { select: { id: true, name: true, kind: true } },

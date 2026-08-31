@@ -15,7 +15,9 @@ import {
   AlertTriangle,
   ArrowUpDown,
   BarChart3,
+  ChevronDown,
   ChevronLeft,
+  ChevronRight,
   ChevronsLeft,
   ChevronsRight,
   CheckCircle2,
@@ -29,7 +31,7 @@ import {
   SlidersHorizontal,
   XCircle,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import {
@@ -128,6 +130,15 @@ type SellingRow = {
   activeCostSheetCount: number;
   hasActiveCostSheet: boolean;
   activeCostSheetId: string | null;
+  variationCosts: Array<{
+    variationId: string;
+    variationName: string;
+    isReference: boolean;
+    costSheetId: string | null;
+    costSheetName: string | null;
+    costAmount: number | null;
+    updatedAt: string | null;
+  }>;
   referenceVariationName: string | null;
   referencePriceAmount: number | null;
   referenceBaseDnaCostAmount: number | null;
@@ -519,6 +530,32 @@ function mapSellingRow(
       ? Number((referenceBaseCostAmount + referenceDnaAmount).toFixed(2))
       : null;
   const activeCostSheetId = displayActiveSheet?.id || null;
+  const variationCosts = (item.ItemVariation || []).map((variation: any) => {
+    const activeSheet = pickLatestActiveSheet(
+      (item.ItemCostSheet || []).filter(
+        (sheet: any) =>
+          String(sheet.itemVariationId || "") === String(variation.id)
+      )
+    );
+
+    return {
+      variationId: String(variation.id),
+      variationName: variation.Variation?.name || "Variação sem nome",
+      isReference: Boolean(variation.isReference),
+      costSheetId: activeSheet?.id ? String(activeSheet.id) : null,
+      costSheetName: activeSheet?.name || null,
+      costAmount:
+        activeSheet?.costAmount == null ? null : Number(activeSheet.costAmount),
+      updatedAt: activeSheet?.updatedAt
+        ? new Date(activeSheet.updatedAt).toISOString()
+        : null,
+    };
+  });
+  variationCosts.sort(
+    (a: any, b: any) =>
+      Number(b.isReference) - Number(a.isReference) ||
+      a.variationName.localeCompare(b.variationName, "pt-BR")
+  );
   const upcoming = Boolean(item.ItemSellingInfo?.upcoming);
   const channelVisible = channelLink?.visible === true;
   const sortOrderIndex = Number(channelLink?.sortOrderIndex || 0);
@@ -557,6 +594,7 @@ function mapSellingRow(
     activeCostSheetCount: (item.ItemCostSheet || []).length,
     hasActiveCostSheet: (item.ItemCostSheet || []).length > 0,
     activeCostSheetId: activeCostSheetId ? String(activeCostSheetId) : null,
+    variationCosts,
     referenceVariationName:
       referencePrice?.ItemVariation?.Variation?.name || null,
     referencePriceAmount,
@@ -1478,6 +1516,9 @@ export default function AdminVendasItensVendidosPage() {
   const [search, setSearch] = useState(filters.q || "");
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const [flavorLookupOpen, setFlavorLookupOpen] = useState(false);
+  const [expandedCostItemIds, setExpandedCostItemIds] = useState<Set<string>>(
+    () => new Set()
+  );
 
   const currentChannel = filters.channel || "";
   const currentStatus = filters.status || "visible";
@@ -1986,7 +2027,7 @@ export default function AdminVendasItensVendidosPage() {
         </div>
 
         <div className="overflow-hidden bg-white">
-          <Table className="min-w-[1220px]">
+          <Table className="min-w-[1380px]">
             <TableHeader className="bg-slate-50/90">
               <TableRow className="hover:bg-slate-50/90">
                 <TableHead>Item</TableHead>
@@ -1994,6 +2035,7 @@ export default function AdminVendasItensVendidosPage() {
                 <TableHead>Canal</TableHead>
                 <TableHead>Preço referência</TableHead>
                 <TableHead>Ficha técnica</TableHead>
+                <TableHead>Custos por variação</TableHead>
                 <TableHead>% ficha / venda</TableHead>
                 <TableHead>Publicação</TableHead>
                 <TableHead>Estrutura comercial</TableHead>
@@ -2004,7 +2046,7 @@ export default function AdminVendasItensVendidosPage() {
               {rows.length === 0 ? (
                 <TableRow>
                   <TableCell
-                    colSpan={9}
+                    colSpan={10}
                     className="h-28 text-center text-sm text-slate-500"
                   >
                     Nenhum item encontrado para este canal com os filtros
@@ -2013,215 +2055,342 @@ export default function AdminVendasItensVendidosPage() {
                 </TableRow>
               ) : null}
 
-              {rows.map((row) => (
-                <TableRow
-                  key={row.id}
-                  className="border-slate-100 align-top hover:bg-slate-50/50"
-                >
-                  <TableCell className="min-w-[18rem]">
-                    <div className="space-y-2">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <Link
-                          to={`/admin/items/${row.id}/venda`}
-                          className="font-semibold text-slate-900 hover:underline"
-                        >
-                          {row.name}
-                        </Link>
-                        {!row.active ? (
-                          <Badge
-                            variant="outline"
-                            className="border-slate-200 bg-slate-100 text-slate-600"
-                          >
-                            inativo
-                          </Badge>
-                        ) : null}
-                        {!row.canSell ? (
-                          <Badge
-                            variant="outline"
-                            className="border-amber-200 bg-amber-50 text-amber-700"
-                          >
-                            venda off
-                          </Badge>
-                        ) : null}
-                      </div>
+              {rows.map((row) => {
+                const costsExpanded = expandedCostItemIds.has(row.id);
+                const costSheetVariationCount = row.variationCosts.filter(
+                  (variation) => variation.costAmount != null
+                ).length;
 
-                      <div className="text-xs text-slate-500">
-                        {row.groupName ||
-                          row.sellingCategoryName ||
-                          row.categoryName ||
-                          "Sem grupo comercial"}
-                        {row.slug ? ` · /${row.slug}` : ""}
-                      </div>
-                    </div>
-                  </TableCell>
-
-                  <TableCell>
-                    {row.menuEngineeringTag ? (
-                      <>
-                        <Badge
-                          variant="outline"
-                          className="border-transparent bg-slate-50"
-                          style={{
-                            color: row.menuEngineeringTag.colorHEX,
-                          }}
-                        >
-                          {row.menuEngineeringTag.title}
-                        </Badge>
-                        {row.menuEngineeringLinkedElapsedLabel ? (
-                          <div className="mt-1 text-[11px] text-slate-500">
-                            {row.menuEngineeringLinkedElapsedLabel}
+                return (
+                  <Fragment key={row.id}>
+                    <TableRow className="border-slate-100 align-top hover:bg-slate-50/50">
+                      <TableCell className="min-w-[18rem]">
+                        <div className="space-y-2">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Link
+                              to={`/admin/items/${row.id}/venda`}
+                              className="font-semibold text-slate-900 hover:underline"
+                            >
+                              {row.name}
+                            </Link>
+                            {!row.active ? (
+                              <Badge
+                                variant="outline"
+                                className="border-slate-200 bg-slate-100 text-slate-600"
+                              >
+                                inativo
+                              </Badge>
+                            ) : null}
+                            {!row.canSell ? (
+                              <Badge
+                                variant="outline"
+                                className="border-amber-200 bg-amber-50 text-amber-700"
+                              >
+                                venda off
+                              </Badge>
+                            ) : null}
                           </div>
-                        ) : null}
-                      </>
-                    ) : (
-                      <span className="text-sm text-slate-400">-</span>
-                    )}
-                  </TableCell>
 
-                  <TableCell>
-                    <div className="space-y-2 text-sm">
-                      <div className="font-medium text-slate-900">
-                        {filters.channelName}
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        <Badge
-                          variant="outline"
-                          className={
-                            row.channelVisible
-                              ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                              : "border-slate-200 bg-slate-50 text-slate-600"
+                          <div className="text-xs text-slate-500">
+                            {row.groupName ||
+                              row.sellingCategoryName ||
+                              row.categoryName ||
+                              "Sem grupo comercial"}
+                            {row.slug ? ` · /${row.slug}` : ""}
+                          </div>
+                        </div>
+                      </TableCell>
+
+                      <TableCell>
+                        {row.menuEngineeringTag ? (
+                          <>
+                            <Badge
+                              variant="outline"
+                              className="border-transparent bg-slate-50"
+                              style={{
+                                color: row.menuEngineeringTag.colorHEX,
+                              }}
+                            >
+                              {row.menuEngineeringTag.title}
+                            </Badge>
+                            {row.menuEngineeringLinkedElapsedLabel ? (
+                              <div className="mt-1 text-[11px] text-slate-500">
+                                {row.menuEngineeringLinkedElapsedLabel}
+                              </div>
+                            ) : null}
+                          </>
+                        ) : (
+                          <span className="text-sm text-slate-400">-</span>
+                        )}
+                      </TableCell>
+
+                      <TableCell>
+                        <div className="space-y-2 text-sm">
+                          <div className="font-medium text-slate-900">
+                            {filters.channelName}
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            <Badge
+                              variant="outline"
+                              className={
+                                row.channelVisible
+                                  ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                                  : "border-slate-200 bg-slate-50 text-slate-600"
+                              }
+                            >
+                              {row.channelVisible ? "visível" : "oculto"}
+                            </Badge>
+                            {row.upcoming ? (
+                              <Badge
+                                variant="outline"
+                                className="border-amber-200 bg-amber-50 text-amber-700"
+                              >
+                                lançamento
+                              </Badge>
+                            ) : null}
+                          </div>
+                        </div>
+                      </TableCell>
+
+                      <TableCell>
+                        <div className="space-y-1">
+                          <div className="flex items-end gap-x-1">
+                            <div className="font-semibold text-slate-900">
+                              {formatMoney(row.referencePriceAmount)}
+                            </div>
+                            <div className="text-xs text-slate-500">
+                              {row.referenceBaseDnaCostAmount != null
+                                ? `(${formatMoney(
+                                    row.referenceBaseDnaCostAmount
+                                  )})`
+                                : "(0)"}
+                            </div>
+                          </div>
+                          <div className="text-xs text-slate-500">
+                            {row.referenceVariationName
+                              ? `Base: ${row.referenceVariationName}`
+                              : "Sem variação precificada"}
+                          </div>
+                        </div>
+                      </TableCell>
+
+                      <TableCell>
+                        <div className="space-y-2">
+                          <Link
+                            to={`/admin/items/${row.id}/item-cost-sheets`}
+                            className={`inline-flex items-center gap-2 px-2.5 py-1.5 text-sm font-medium transition hover:bg-slate-50 ${
+                              row.hasActiveCostSheet
+                                ? "border-emerald-200 text-emerald-700"
+                                : "border-amber-200  text-red-500"
+                            }`}
+                            title={
+                              row.hasActiveCostSheet
+                                ? "Ficha técnica ativa encontrada"
+                                : "Sem ficha técnica ativa"
+                            }
+                          >
+                            {row.hasActiveCostSheet ? (
+                              <CheckCircle2
+                                className="h-4 w-4"
+                                aria-hidden="true"
+                              />
+                            ) : (
+                              <AlertTriangle
+                                className="h-4 w-4"
+                                aria-hidden="true"
+                              />
+                            )}
+
+                            <span className="text-xs font-normal opacity-75">
+                              {row.activeCostSheetCount} ativa(s)
+                            </span>
+                          </Link>
+                          <RecalculateCostSheetButton
+                            itemCostSheetId={row.activeCostSheetId}
+                            itemName={row.name}
+                          />
+                        </div>
+                      </TableCell>
+
+                      <TableCell>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setExpandedCostItemIds((current) => {
+                              const next = new Set(current);
+                              if (next.has(row.id)) next.delete(row.id);
+                              else next.add(row.id);
+                              return next;
+                            })
+                          }
+                          className="inline-flex min-h-8 items-center gap-2 rounded-md px-2 text-left text-sm font-medium text-slate-700 transition hover:bg-slate-100 hover:text-slate-950"
+                          aria-expanded={costsExpanded}
+                          aria-controls={`variation-costs-${row.id}`}
+                          title={
+                            costsExpanded
+                              ? "Ocultar custos das variações"
+                              : "Ver custos das variações"
                           }
                         >
-                          {row.channelVisible ? "visível" : "oculto"}
-                        </Badge>
-                        {row.upcoming ? (
+                          {costsExpanded ? (
+                            <ChevronDown
+                              className="h-4 w-4"
+                              aria-hidden="true"
+                            />
+                          ) : (
+                            <ChevronRight
+                              className="h-4 w-4"
+                              aria-hidden="true"
+                            />
+                          )}
+                          <span>
+                            {costSheetVariationCount}/
+                            {row.variationCosts.length}
+                          </span>
+                        </button>
+                      </TableCell>
+
+                      <TableCell>
+                        <div className="space-y-1">
+                          <div
+                            className={`text-sm font-semibold ${getCostPercentageClass(
+                              row.referenceCostPercentage
+                            )}`}
+                          >
+                            {formatPercent(row.referenceCostPercentage)}
+                          </div>
+                          <div className="text-xs text-slate-500">
+                            {row.referenceBaseCostAmount != null &&
+                            row.referencePriceAmount != null
+                              ? `${formatMoney(
+                                  row.referenceBaseCostAmount
+                                )} / ${formatMoney(row.referencePriceAmount)}`
+                              : "Sem custo/preço"}
+                          </div>
+                        </div>
+                      </TableCell>
+
+                      <TableCell>
+                        <div className="space-y-2">
+                          <div className="text-sm font-medium text-slate-900">
+                            {row.channelPriceEntries}/{row.totalPriceEntries}{" "}
+                            preço(s) no canal
+                          </div>
                           <Badge
                             variant="outline"
-                            className="border-amber-200 bg-amber-50 text-amber-700"
+                            className={
+                              row.commerciallyReady
+                                ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                                : "border-slate-200 bg-slate-50 text-slate-700"
+                            }
                           >
-                            lançamento
+                            {row.commerciallyReady
+                              ? "item vendido"
+                              : "pendência comercial"}
                           </Badge>
-                        ) : null}
-                      </div>
-                    </div>
-                  </TableCell>
-
-                  <TableCell>
-                    <div className="space-y-1">
-                      <div className="flex items-end gap-x-1">
-                        <div className="font-semibold text-slate-900">
-                          {formatMoney(row.referencePriceAmount)}
                         </div>
-                        <div className="text-xs text-slate-500">
-                          {row.referenceBaseDnaCostAmount != null
-                            ? `(${formatMoney(row.referenceBaseDnaCostAmount)})`
-                            : "(0)"}
+                      </TableCell>
+
+                      <TableCell>
+                        <div className="space-y-1 text-sm text-slate-600">
+                          <div>{row.totalVariations} variação(ões)</div>
+                          <div>{row.totalPriceEntries} entrada(s) de preço</div>
                         </div>
-                      </div>
-                      <div className="text-xs text-slate-500">
-                        {row.referenceVariationName
-                          ? `Base: ${row.referenceVariationName}`
-                          : "Sem variação precificada"}
-                      </div>
-                    </div>
-                  </TableCell>
+                      </TableCell>
 
-                  <TableCell>
-                    <div className="space-y-2">
-                      <Link
-                        to={`/admin/items/${row.id}/item-cost-sheets`}
-                        className={`inline-flex items-center gap-2 px-2.5 py-1.5 text-sm font-medium transition hover:bg-slate-50 ${
-                          row.hasActiveCostSheet
-                            ? "border-emerald-200 text-emerald-700"
-                            : "border-amber-200  text-red-500"
-                        }`}
-                        title={
-                          row.hasActiveCostSheet
-                            ? "Ficha técnica ativa encontrada"
-                            : "Sem ficha técnica ativa"
-                        }
+                      <TableCell>
+                        <div className="space-y-1 text-sm text-slate-600">
+                          <div>{formatDate(row.updatedAt)}</div>
+                          <div className="text-xs text-slate-500">
+                            {row.updatedBy || "Sem usuário registrado"}
+                          </div>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                    {costsExpanded ? (
+                      <TableRow
+                        id={`variation-costs-${row.id}`}
+                        className="border-slate-200 bg-slate-50/70 hover:bg-slate-50/70"
                       >
-                        {row.hasActiveCostSheet ? (
-                          <CheckCircle2
-                            className="h-4 w-4"
-                            aria-hidden="true"
-                          />
-                        ) : (
-                          <AlertTriangle
-                            className="h-4 w-4"
-                            aria-hidden="true"
-                          />
-                        )}
-
-                        <span className="text-xs font-normal opacity-75">
-                          {row.activeCostSheetCount} ativa(s)
-                        </span>
-                      </Link>
-                      <RecalculateCostSheetButton
-                        itemCostSheetId={row.activeCostSheetId}
-                        itemName={row.name}
-                      />
-                    </div>
-                  </TableCell>
-
-                  <TableCell>
-                    <div className="space-y-1">
-                      <div
-                        className={`text-sm font-semibold ${getCostPercentageClass(
-                          row.referenceCostPercentage
-                        )}`}
-                      >
-                        {formatPercent(row.referenceCostPercentage)}
-                      </div>
-                      <div className="text-xs text-slate-500">
-                        {row.referenceBaseCostAmount != null &&
-                        row.referencePriceAmount != null
-                          ? `${formatMoney(
-                              row.referenceBaseCostAmount
-                            )} / ${formatMoney(row.referencePriceAmount)}`
-                          : "Sem custo/preço"}
-                      </div>
-                    </div>
-                  </TableCell>
-
-                  <TableCell>
-                    <div className="space-y-2">
-                      <div className="text-sm font-medium text-slate-900">
-                        {row.channelPriceEntries}/{row.totalPriceEntries}{" "}
-                        preço(s) no canal
-                      </div>
-                      <Badge
-                        variant="outline"
-                        className={
-                          row.commerciallyReady
-                            ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                            : "border-slate-200 bg-slate-50 text-slate-700"
-                        }
-                      >
-                        {row.commerciallyReady
-                          ? "item vendido"
-                          : "pendência comercial"}
-                      </Badge>
-                    </div>
-                  </TableCell>
-
-                  <TableCell>
-                    <div className="space-y-1 text-sm text-slate-600">
-                      <div>{row.totalVariations} variação(ões)</div>
-                      <div>{row.totalPriceEntries} entrada(s) de preço</div>
-                    </div>
-                  </TableCell>
-
-                  <TableCell>
-                    <div className="space-y-1 text-sm text-slate-600">
-                      <div>{formatDate(row.updatedAt)}</div>
-                      <div className="text-xs text-slate-500">
-                        {row.updatedBy || "Sem usuário registrado"}
-                      </div>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
+                        <TableCell colSpan={10} className="px-6 py-4">
+                          <div className="mb-3 flex items-center justify-between gap-3">
+                            <div className="text-sm font-semibold text-slate-900">
+                              Custos da ficha técnica por variação
+                            </div>
+                            <Link
+                              to={`/admin/items/${row.id}/item-cost-sheets`}
+                              className="text-xs font-medium text-slate-600 hover:text-slate-950 hover:underline"
+                            >
+                              Abrir fichas técnicas
+                            </Link>
+                          </div>
+                          <div className="overflow-hidden rounded-md border border-slate-200 bg-white">
+                            <table className="w-full text-sm">
+                              <thead className="bg-slate-50 text-xs text-slate-500">
+                                <tr>
+                                  <th className="px-3 py-2 text-left font-medium">
+                                    Variação
+                                  </th>
+                                  <th className="px-3 py-2 text-left font-medium">
+                                    Ficha ativa
+                                  </th>
+                                  <th className="px-3 py-2 text-right font-medium">
+                                    Custo total
+                                  </th>
+                                  <th className="px-3 py-2 text-right font-medium">
+                                    Atualização
+                                  </th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {row.variationCosts.map((variation) => (
+                                  <tr
+                                    key={variation.variationId}
+                                    className="border-t border-slate-100"
+                                  >
+                                    <td className="px-3 py-2.5 font-medium text-slate-900">
+                                      {variation.variationName}
+                                      {variation.isReference ? (
+                                        <Badge
+                                          variant="outline"
+                                          className="ml-2 border-slate-200 bg-slate-50 text-[10px] text-slate-600"
+                                        >
+                                          referência
+                                        </Badge>
+                                      ) : null}
+                                    </td>
+                                    <td className="px-3 py-2.5 text-slate-600">
+                                      {variation.costSheetId ? (
+                                        <Link
+                                          to={`/admin/item-cost-sheets/${variation.costSheetId}/custos`}
+                                          className="hover:text-slate-950 hover:underline"
+                                        >
+                                          {variation.costSheetName ||
+                                            "Ficha técnica"}
+                                        </Link>
+                                      ) : (
+                                        <span className="text-amber-700">
+                                          Sem ficha ativa
+                                        </span>
+                                      )}
+                                    </td>
+                                    <td className="px-3 py-2.5 text-right font-mono font-semibold text-slate-900">
+                                      {formatMoney(variation.costAmount)}
+                                    </td>
+                                    <td className="px-3 py-2.5 text-right text-xs text-slate-500">
+                                      {formatDate(variation.updatedAt)}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ) : null}
+                  </Fragment>
+                );
+              })}
             </TableBody>
           </Table>
         </div>

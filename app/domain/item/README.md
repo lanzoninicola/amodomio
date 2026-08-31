@@ -197,6 +197,13 @@ Uso esperado:
 - `canSell`: item pode ser vendido.
 - `canStock`: item movimenta e mantém estado de estoque.
 - `active`: item está operacional no sistema.
+- `archivedAt`: item foi retirado definitivamente das operações normais, sem apagar receitas, custos, vendas ou histórico.
+
+Arquivar e desativar não são equivalentes:
+
+- desativar (`active = false`) é uma pausa operacional que pode ser revertida normalmente;
+- arquivar preenche `archivedAt`, força `active = false` e `canSell = false` e oculta o item das listas operacionais por padrão;
+- restaurar limpa `archivedAt`, mas mantém o item inativo e sem venda até uma reativação explícita.
 
 Heurísticas úteis:
 

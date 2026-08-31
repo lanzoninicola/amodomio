@@ -235,7 +235,7 @@ const ADMIN_NAVIGATION_LINKS: WebsiteNavigationConfig = {
           items: [
             {
               title: "Análises do Cardápio",
-              href: "/admin/gerenciamento/cardapio/dashboard",
+              href: "/admin/gerenciamento/cardapio/dashboard/overview",
               items: [],
               disabled: false,
               tags: [
@@ -347,6 +347,27 @@ const ADMIN_NAVIGATION_LINKS: WebsiteNavigationConfig = {
           ],
         },
         {
+          title: "Relatorios",
+          href: "",
+          items: [
+            {
+              title: "Itens vendidos e custos",
+              href: "/admin/vendas/relatorio-itens-vendidos-custos",
+              items: [],
+              disabled: false,
+              tags: [
+                "relatorio",
+                "itens vendidos",
+                "custos",
+                "variacoes",
+                "sabores",
+              ],
+            },
+          ],
+          disabled: false,
+          tags: ["relatorio", "custos", "margem", "analise"],
+        },
+        {
           title: "Monitoramento",
           href: "",
           items: [
@@ -423,21 +444,6 @@ const ADMIN_NAVIGATION_LINKS: WebsiteNavigationConfig = {
           ],
           disabled: false,
           tags: ["ferramentas", "recalculo", "custo"],
-        },
-        {
-          title: "Comercial",
-          href: "",
-          items: [
-            {
-              title: "Custo cardápio",
-              href: "/admin/gerenciamento/cardapio/cost-management",
-              items: [],
-              disabled: false,
-              tags: ["custo", "cardapio", "margem", "preco", "lucratividade"],
-            },
-          ],
-          disabled: false,
-          tags: ["comercial", "custo", "margem"],
         },
       ],
     },
@@ -595,6 +601,20 @@ const ADMIN_NAVIGATION_LINKS: WebsiteNavigationConfig = {
                 "composicao",
                 "alergenico",
                 "componente",
+              ],
+            },
+            {
+              title: "Brainstorming de sabores",
+              href: "/admin/vendas/ingredientes-sabores/brainstorming",
+              items: [],
+              disabled: false,
+              tags: [
+                "brainstorming",
+                "novo sabor",
+                "ingrediente",
+                "vendas",
+                "impressao",
+                "a4",
               ],
             },
           ],

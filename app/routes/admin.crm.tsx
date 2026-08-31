@@ -1,6 +1,6 @@
 import type { MetaFunction } from "@remix-run/node";
 import { Link, Outlet, useNavigation } from "@remix-run/react";
-import { ChevronLeft, PlusCircle } from "lucide-react";
+import { ChevronLeft, FileUp, PlusCircle } from "lucide-react";
 import Container from "~/components/layout/container/container";
 import Loading from "~/components/loading/loading";
 
@@ -30,6 +30,13 @@ export default function AdminCrmLayout() {
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
+              <Link
+                to="/admin/crm/importar"
+                className="inline-flex h-9 items-center justify-center gap-2 rounded-full border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+              >
+                <FileUp size={15} />
+                Importar clientes
+              </Link>
               <Link
                 to="/admin/crm/relatorios"
                 className="inline-flex h-9 items-center justify-center rounded-full border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
