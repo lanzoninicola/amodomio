@@ -790,6 +790,13 @@ const ADMIN_NAVIGATION_LINKS: WebsiteNavigationConfig = {
             "entrega",
           ],
         },
+        {
+          title: "Respostas determinísticas",
+          href: "/admin/bot/auto-responder",
+          items: [],
+          disabled: false,
+          tags: ["ai", "ia", "resposta", "gatilho", "regra", "whatsapp"],
+        },
       ],
     },
     {
@@ -802,19 +809,6 @@ const ADMIN_NAVIGATION_LINKS: WebsiteNavigationConfig = {
           items: [],
           disabled: false,
           tags: ["debug", "teste", "whatsapp", "wpp", "log"],
-        },
-        {
-          title: "Auto Responder",
-          href: "/admin/bot/auto-responder",
-          items: [],
-          disabled: false,
-          tags: [
-            "resposta automatica",
-            "bot",
-            "whatsapp",
-            "mensagem",
-            "automatico",
-          ],
         },
         {
           title: "Configurar Auto Responder",

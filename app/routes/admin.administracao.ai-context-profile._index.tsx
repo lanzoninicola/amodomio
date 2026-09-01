@@ -347,6 +347,18 @@ export default function AdminAiContextProfilePage() {
         />
       </div>
 
+      <p className="text-xs text-muted-foreground">
+        Algumas perguntas podem ser atendidas antes da AI por uma{" "}
+        <Link
+          to="/admin/bot/auto-responder"
+          className="underline underline-offset-4"
+        >
+          resposta determinística
+        </Link>
+        . Essas regras definem como responder, mas não substituem as fontes
+        oficiais acima.
+      </p>
+
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-base">Idioma</CardTitle>
