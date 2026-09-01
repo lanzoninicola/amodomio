@@ -70,7 +70,10 @@ export async function action({ request }: ActionFunctionArgs) {
   const provider = String(
     form.get("provider") || "openrouter"
   ) as AgentProvider;
-  const testPhone = normalizePhone(form.get("testPhone"));
+  const testPhones = [
+    normalizePhone(form.get("testPhone")),
+    normalizePhone(form.get("testPhone2")),
+  ].filter((phone, index, phones) => phone && phones.indexOf(phone) === index);
   const model = String(form.get("model") || "").trim();
   const currentSettings = await getWhatsappAgentSettings();
 
@@ -82,7 +85,8 @@ export async function action({ request }: ActionFunctionArgs) {
   if (
     enabled &&
     mode === "test" &&
-    (testPhone.length < 10 || testPhone.length > 15)
+    (testPhones.length === 0 ||
+      testPhones.some((phone) => phone.length < 10 || phone.length > 15))
   ) {
     errors.push("Informe o telefone de teste com DDI e DDD.");
   }
@@ -111,7 +115,7 @@ export async function action({ request }: ActionFunctionArgs) {
   await saveWhatsappAgentSettings({
     enabled: String(enabled),
     mode,
-    testPhone,
+    testPhone: testPhones.join(","),
     provider,
     model,
     pollIntervalMs: numericValues.pollIntervalMs,
@@ -136,6 +140,11 @@ export default function WhatsappAiAgentSettingsPage() {
   const actionData = useActionData<typeof action>();
   const navigation = useNavigation();
   const isSubmitting = navigation.state !== "idle";
+  const configuredTestPhones = settings.testPhone
+    .split(",")
+    .map((phone) => phone.trim())
+    .filter(Boolean)
+    .slice(0, 2);
 
   return (
     <div className="space-y-6 pb-10">
@@ -214,16 +223,23 @@ export default function WhatsappAiAgentSettingsPage() {
               </FieldHelp>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="testPhone">Telefone autorizado no teste</Label>
+              <Label htmlFor="testPhone">Telefones autorizados no teste</Label>
               <Input
                 id="testPhone"
                 name="testPhone"
-                defaultValue={settings.testPhone}
+                defaultValue={configuredTestPhones[0] ?? ""}
                 placeholder="5546999999999"
                 inputMode="tel"
               />
+              <Input
+                id="testPhone2"
+                name="testPhone2"
+                defaultValue={configuredTestPhones[1] ?? ""}
+                placeholder="Segundo número (opcional)"
+                inputMode="tel"
+              />
               <FieldHelp>
-                Use somente um numero com DDI e DDD. Outros telefones nao sao
+                Informe até dois números com DDI e DDD. Outros telefones não são
                 reservados pelo worker.
               </FieldHelp>
             </div>
