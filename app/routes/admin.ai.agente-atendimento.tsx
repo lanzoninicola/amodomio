@@ -7,6 +7,7 @@ import {
 } from "@remix-run/node";
 import {
   Form,
+  Link,
   useActionData,
   useLoaderData,
   useNavigation,
@@ -25,7 +26,6 @@ import {
   SelectValue,
 } from "~/components/ui/select";
 import { Switch } from "~/components/ui/switch";
-import { Textarea } from "~/components/ui/textarea";
 import {
   getWhatsappAgentSettings,
   saveWhatsappAgentSettings,
@@ -72,9 +72,7 @@ export async function action({ request }: ActionFunctionArgs) {
   ) as AgentProvider;
   const testPhone = normalizePhone(form.get("testPhone"));
   const model = String(form.get("model") || "").trim();
-  const businessInstructions = String(
-    form.get("businessInstructions") || ""
-  ).trim();
+  const currentSettings = await getWhatsappAgentSettings();
 
   const errors: string[] = [];
   if (!["test", "approval", "auto"].includes(mode))
@@ -92,11 +90,6 @@ export async function action({ request }: ActionFunctionArgs) {
     errors.push("OpenRouter e permitido somente no modo de teste.");
   }
   if (!model || model.length > 150) errors.push("Informe um modelo valido.");
-  if (businessInstructions.length > 4_000) {
-    errors.push(
-      "As instrucoes comerciais podem ter no maximo 4.000 caracteres."
-    );
-  }
 
   let numericValues: Record<string, string> = {};
   try {
@@ -126,7 +119,7 @@ export async function action({ request }: ActionFunctionArgs) {
     maxAttempts: numericValues.maxAttempts,
     historyLimit: numericValues.historyLimit,
     maxJobAgeMinutes: numericValues.maxJobAgeMinutes,
-    businessInstructions,
+    businessInstructions: currentSettings.businessInstructions,
   } satisfies Record<WhatsappAgentSettingName, string>);
 
   return redirect("/admin/ai/agente-atendimento?saved=1");
@@ -282,21 +275,20 @@ export default function WhatsappAiAgentSettingsPage() {
                 qualidade podem variar.
               </FieldHelp>
             </div>
-            <div className="space-y-2 md:col-span-2">
-              <Label htmlFor="businessInstructions">
-                Instrucoes comerciais
-              </Label>
-              <Textarea
-                id="businessInstructions"
-                name="businessInstructions"
-                defaultValue={settings.businessInstructions}
-                rows={6}
-                placeholder="Tom de voz, informacoes permitidas e regras de encaminhamento..."
-              />
-              <FieldHelp>
-                Estas instrucoes sao usadas apenas com OpenAI. Por privacidade,
-                nao sao enviadas ao OpenRouter.
-              </FieldHelp>
+            <div className="space-y-3 rounded-lg border p-4 md:col-span-2">
+              <div>
+                <Label>Conhecimento e instruções</Label>
+                <FieldHelp>
+                  Identidade, tom, regras, cardápio, horários e entregas são
+                  administrados em uma fonte central reutilizável por todos os
+                  agentes.
+                </FieldHelp>
+              </div>
+              <Button asChild type="button" variant="outline">
+                <Link to="/admin/ai/conhecimento">
+                  Gerenciar conhecimento da empresa
+                </Link>
+              </Button>
             </div>
           </CardContent>
         </Card>
