@@ -757,6 +757,27 @@ const ADMIN_NAVIGATION_LINKS: WebsiteNavigationConfig = {
       ],
     },
     {
+      title: "AI",
+      disabled: false,
+      items: [
+        {
+          title: "Agente de atendimento",
+          href: "/admin/ai/agente-atendimento",
+          items: [],
+          disabled: false,
+          tags: [
+            "ai",
+            "ia",
+            "agente",
+            "atendimento",
+            "whatsapp",
+            "openrouter",
+            "openai",
+          ],
+        },
+      ],
+    },
+    {
       title: "BOT",
       disabled: false,
       items: [

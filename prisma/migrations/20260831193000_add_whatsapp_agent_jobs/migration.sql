@@ -33,12 +33,13 @@ FROM (VALUES
     ('whatsapp-ai-agent', 'enabled', 'boolean', 'false'),
     ('whatsapp-ai-agent', 'mode', 'string', 'test'),
     ('whatsapp-ai-agent', 'testPhone', 'string', ''),
-    ('whatsapp-ai-agent', 'model', 'string', 'gpt-5-mini'),
-    ('whatsapp-ai-agent', 'pollIntervalMs', 'integer', '2000'),
-    ('whatsapp-ai-agent', 'lockSeconds', 'integer', '120'),
-    ('whatsapp-ai-agent', 'maxAttempts', 'integer', '5'),
-    ('whatsapp-ai-agent', 'historyLimit', 'integer', '8'),
-    ('whatsapp-ai-agent', 'maxJobAgeMinutes', 'integer', '15'),
+    ('whatsapp-ai-agent', 'provider', 'string', 'openrouter'),
+    ('whatsapp-ai-agent', 'model', 'string', 'openrouter/free'),
+    ('whatsapp-ai-agent', 'pollIntervalMs', 'int', '2000'),
+    ('whatsapp-ai-agent', 'lockSeconds', 'int', '120'),
+    ('whatsapp-ai-agent', 'maxAttempts', 'int', '5'),
+    ('whatsapp-ai-agent', 'historyLimit', 'int', '8'),
+    ('whatsapp-ai-agent', 'maxJobAgeMinutes', 'int', '15'),
     ('whatsapp-ai-agent', 'businessInstructions', 'string', '')
 ) AS defaults(context, name, type, value)
 WHERE NOT EXISTS (
