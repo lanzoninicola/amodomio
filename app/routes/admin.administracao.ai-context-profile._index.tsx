@@ -1,6 +1,16 @@
-import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
+import type {
+  ActionFunctionArgs,
+  LoaderFunctionArgs,
+  MetaFunction,
+} from "@remix-run/node";
 import { json, redirect } from "@remix-run/node";
-import { Form, Link, useActionData, useLoaderData, useNavigation } from "@remix-run/react";
+import {
+  Form,
+  Link,
+  useActionData,
+  useLoaderData,
+  useNavigation,
+} from "@remix-run/react";
 import { useEffect, useMemo, useState } from "react";
 import { Prisma } from "@prisma/client";
 import { randomUUID } from "node:crypto";
@@ -12,6 +22,7 @@ import { Label } from "~/components/ui/label";
 import { Separator } from "~/components/ui/separator";
 import { Textarea } from "~/components/ui/textarea";
 import prismaClient from "~/lib/prisma/client.server";
+import { getAiKnowledgeOverview } from "~/domain/ai/ai-knowledge.server";
 
 const LANGUAGES = ["pt-BR", "en-US"] as const;
 type Language = (typeof LANGUAGES)[number];
@@ -34,6 +45,7 @@ type LoaderData = {
   selectedLanguage: Language;
   versionsByLanguage: Record<Language, ProfileVersion[]>;
   activeByLanguage: Record<Language, ProfileVersion | null>;
+  overview: Awaited<ReturnType<typeof getAiKnowledgeOverview>>;
 };
 
 type ActionData = {
@@ -44,7 +56,9 @@ type ActionData = {
   };
 };
 
-export const meta: MetaFunction = () => ([{ title: "AI Context Profile" }]);
+export const meta: MetaFunction = () => [
+  { title: "Conhecimento da empresa | AI" },
+];
 
 function isLanguage(value: unknown): value is Language {
   return typeof value === "string" && LANGUAGES.includes(value as Language);
@@ -77,7 +91,9 @@ async function createVersion(params: { language: Language; content: string }) {
 
     return tx.$executeRaw`
       INSERT INTO ai_context_profile_versions (id, language, version, content, is_active, created_at, updated_at)
-      VALUES (${randomUUID()}, ${params.language}, ${nextVersion}, ${params.content}, true, NOW(), NOW())
+      VALUES (${randomUUID()}, ${params.language}, ${nextVersion}, ${
+      params.content
+    }, true, NOW(), NOW())
     `;
   });
 }
@@ -85,21 +101,28 @@ async function createVersion(params: { language: Language; content: string }) {
 export async function loader({ request }: LoaderFunctionArgs) {
   const selectedLanguage = getLanguageFromUrl(request);
 
-  const records = await prismaClient.$queryRaw<
-    Array<{
-      id: string;
-      language: string;
-      version: number;
-      content: string;
-      is_active: boolean;
-      created_at: Date;
-    }>
-  >(Prisma.sql`
+  const [records, overview] = await Promise.all([
+    prismaClient
+      .$queryRaw<
+        Array<{
+          id: string;
+          language: string;
+          version: number;
+          content: string;
+          is_active: boolean;
+          created_at: Date;
+        }>
+      >(
+        Prisma.sql`
     SELECT id, language, version, content, is_active, created_at
     FROM ai_context_profile_versions
     WHERE language IN (${Prisma.join(LANGUAGES)})
     ORDER BY language ASC, version DESC
-  `).catch(() => []);
+  `
+      )
+      .catch(() => []),
+    getAiKnowledgeOverview(),
+  ]);
 
   const versionsByLanguage: Record<Language, ProfileVersion[]> = {
     "pt-BR": [],
@@ -120,14 +143,21 @@ export async function loader({ request }: LoaderFunctionArgs) {
   }
 
   const activeByLanguage: Record<Language, ProfileVersion | null> = {
-    "pt-BR": versionsByLanguage["pt-BR"].find((version) => version.isActive) ?? versionsByLanguage["pt-BR"][0] ?? null,
-    "en-US": versionsByLanguage["en-US"].find((version) => version.isActive) ?? versionsByLanguage["en-US"][0] ?? null,
+    "pt-BR":
+      versionsByLanguage["pt-BR"].find((version) => version.isActive) ??
+      versionsByLanguage["pt-BR"][0] ??
+      null,
+    "en-US":
+      versionsByLanguage["en-US"].find((version) => version.isActive) ??
+      versionsByLanguage["en-US"][0] ??
+      null,
   };
 
   return json<LoaderData>({
     selectedLanguage,
     versionsByLanguage,
     activeByLanguage,
+    overview,
   });
 }
 
@@ -143,7 +173,10 @@ export async function action({ request }: ActionFunctionArgs) {
   const language = languageValue;
   const content = String(formData.get("content") || "");
 
-  if ((actionName === "save" || actionName === "update-current") && !content.trim()) {
+  if (
+    (actionName === "save" || actionName === "update-current") &&
+    !content.trim()
+  ) {
     return json<ActionData>(
       {
         error: "O conteúdo não pode ficar vazio.",
@@ -156,7 +189,9 @@ export async function action({ request }: ActionFunctionArgs) {
   if (actionName === "save") {
     await createVersion({ language, content });
 
-    return redirect(`/admin/administracao/ai-context-profile?lang=${encodeURIComponent(language)}`);
+    return redirect(
+      `/admin/ai/conhecimento?lang=${encodeURIComponent(language)}`
+    );
   }
 
   if (actionName === "update-current") {
@@ -176,7 +211,9 @@ export async function action({ request }: ActionFunctionArgs) {
       await createVersion({ language, content });
     }
 
-    return redirect(`/admin/administracao/ai-context-profile?lang=${encodeURIComponent(language)}`);
+    return redirect(
+      `/admin/ai/conhecimento?lang=${encodeURIComponent(language)}`
+    );
   }
 
   if (actionName === "rollback") {
@@ -195,19 +232,25 @@ export async function action({ request }: ActionFunctionArgs) {
     `;
 
     if (!sourceVersion || sourceVersion.language !== language) {
-      return json<ActionData>({ error: "Versão não encontrada para este idioma." }, { status: 404 });
+      return json<ActionData>(
+        { error: "Versão não encontrada para este idioma." },
+        { status: 404 }
+      );
     }
 
     await createVersion({ language, content: sourceVersion.content });
 
-    return redirect(`/admin/administracao/ai-context-profile?lang=${encodeURIComponent(language)}`);
+    return redirect(
+      `/admin/ai/conhecimento?lang=${encodeURIComponent(language)}`
+    );
   }
 
   return json<ActionData>({ error: "Ação inválida." }, { status: 400 });
 }
 
 export default function AdminAiContextProfilePage() {
-  const { selectedLanguage, versionsByLanguage, activeByLanguage } = useLoaderData<typeof loader>();
+  const { selectedLanguage, versionsByLanguage, activeByLanguage, overview } =
+    useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const navigation = useNavigation();
 
@@ -219,7 +262,12 @@ export default function AdminAiContextProfilePage() {
     }
 
     return activeVersion?.content ?? DEFAULT_CONTENT[selectedLanguage];
-  }, [actionData?.submitted?.content, actionData?.submitted?.language, activeVersion?.content, selectedLanguage]);
+  }, [
+    actionData?.submitted?.content,
+    actionData?.submitted?.language,
+    activeVersion?.content,
+    selectedLanguage,
+  ]);
 
   const [editorValue, setEditorValue] = useState(initialContent);
 
@@ -233,11 +281,70 @@ export default function AdminAiContextProfilePage() {
   return (
     <div className="space-y-6">
       <div className="space-y-2">
-        <Badge variant="secondary" className="w-fit">Administração</Badge>
-        <h1 className="text-2xl font-semibold">AI Context Profile</h1>
+        <Badge variant="secondary" className="w-fit">
+          AI / Fonte de verdade
+        </Badge>
+        <h1 className="text-2xl font-semibold">Conhecimento da empresa</h1>
         <p className="text-sm text-muted-foreground">
-          Edite o contexto profissional em Markdown, com histórico versionado por idioma (pt-BR e en-US).
+          Gerencie as instruções editoriais e acompanhe os dados estruturados
+          que todos os agentes devem consultar.
         </p>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Como esta fonte funciona</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2 text-sm text-muted-foreground">
+          <p>
+            As instruções abaixo definem identidade, tom, limites e regras de
+            atendimento.
+          </p>
+          <p>
+            Cardápio, preços, horários, unidades e entregas continuam sendo
+            editados nos módulos próprios. Esta página não mantém cópias que
+            poderiam ficar desatualizadas.
+          </p>
+          <p>
+            Outros agentes podem consumir o contrato{" "}
+            <code className="rounded bg-muted px-1.5 py-0.5">
+              GET /api/ai/knowledge
+            </code>{" "}
+            usando o header{" "}
+            <code className="rounded bg-muted px-1.5 py-0.5">x-api-key</code>.
+          </p>
+        </CardContent>
+      </Card>
+
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <KnowledgeSourceCard
+          title="Cardápio publicado"
+          value={`${overview.cardapioItemsCount} itens visíveis`}
+          detail="Sabores, descrições, ingredientes, variações e preços do canal Cardápio."
+          href="/admin/gerenciamento/cardapio/sell-price-management/cardapio/edit-items"
+          action="Gerenciar cardápio"
+        />
+        <KnowledgeSourceCard
+          title="Horários da loja"
+          value={overview.isStoreOpen ? "Aberta agora" : "Fechada agora"}
+          detail={`Agenda semanal e override atual: ${overview.storeOverride}.`}
+          href="/admin/atendimento/horarios"
+          action="Gerenciar horários"
+        />
+        <KnowledgeSourceCard
+          title="Unidades"
+          value={`${overview.locationsCount} cadastradas`}
+          detail="Endereço, telefone e identificação da unidade principal."
+          href="/admin/administracao/settings"
+          action="Ver configurações"
+        />
+        <KnowledgeSourceCard
+          title="Áreas de entrega"
+          value={`${overview.deliveryZonesCount} zonas`}
+          detail="Bairros atendidos, taxas, distâncias e estimativas."
+          href="/admin/delivery-zone"
+          action="Gerenciar entregas"
+        />
       </div>
 
       <Card>
@@ -251,9 +358,10 @@ export default function AdminAiContextProfilePage() {
                 <Link
                   key={language}
                   to={`?lang=${encodeURIComponent(language)}`}
-                  className={isSelected
-                    ? "inline-flex items-center rounded-full bg-primary px-3 py-1 text-xs font-semibold text-primary-foreground"
-                    : "inline-flex items-center rounded-full border border-border bg-background px-3 py-1 text-xs font-semibold text-muted-foreground hover:text-foreground"
+                  className={
+                    isSelected
+                      ? "inline-flex items-center rounded-full bg-primary px-3 py-1 text-xs font-semibold text-primary-foreground"
+                      : "inline-flex items-center rounded-full border border-border bg-background px-3 py-1 text-xs font-semibold text-muted-foreground hover:text-foreground"
                   }
                 >
                   {language}
@@ -295,14 +403,26 @@ export default function AdminAiContextProfilePage() {
 
             <div className="flex items-center justify-between">
               <p className="text-xs text-muted-foreground">
-                Versão ativa: {activeVersion ? `v${activeVersion.version}` : "nenhuma"}
+                Versão ativa:{" "}
+                {activeVersion ? `v${activeVersion.version}` : "nenhuma"}
               </p>
 
               <div className="flex items-center gap-2">
-                <Button type="submit" name="_action" value="update-current" variant="outline" disabled={isSubmitting}>
+                <Button
+                  type="submit"
+                  name="_action"
+                  value="update-current"
+                  variant="outline"
+                  disabled={isSubmitting}
+                >
                   {isSubmitting ? "Salvando..." : "Atualizar versão atual"}
                 </Button>
-                <Button type="submit" name="_action" value="save" disabled={isSubmitting}>
+                <Button
+                  type="submit"
+                  name="_action"
+                  value="save"
+                  disabled={isSubmitting}
+                >
                   {isSubmitting ? "Salvando..." : "Salvar nova versão"}
                 </Button>
               </div>
@@ -312,10 +432,14 @@ export default function AdminAiContextProfilePage() {
           <Separator />
 
           <div className="space-y-3">
-            <h2 className="text-sm font-semibold">Histórico de versões ({selectedLanguage})</h2>
+            <h2 className="text-sm font-semibold">
+              Histórico de versões ({selectedLanguage})
+            </h2>
 
             {!versions.length ? (
-              <p className="text-sm text-muted-foreground">Nenhuma versão salva para este idioma.</p>
+              <p className="text-sm text-muted-foreground">
+                Nenhuma versão salva para este idioma.
+              </p>
             ) : (
               <div className="overflow-auto rounded-md border">
                 <table className="w-full min-w-[620px] text-sm">
@@ -330,7 +454,9 @@ export default function AdminAiContextProfilePage() {
                   <tbody>
                     {versions.map((version) => (
                       <tr key={version.id} className="border-t">
-                        <td className="px-3 py-2 font-mono">v{version.version}</td>
+                        <td className="px-3 py-2 font-mono">
+                          v{version.version}
+                        </td>
                         <td className="px-3 py-2">
                           {version.isActive ? (
                             <Badge className="bg-emerald-600">Ativa</Badge>
@@ -339,14 +465,33 @@ export default function AdminAiContextProfilePage() {
                           )}
                         </td>
                         <td className="px-3 py-2 text-muted-foreground">
-                          {new Date(version.createdAt).toLocaleString(version.language === "pt-BR" ? "pt-BR" : "en-US")}
+                          {new Date(version.createdAt).toLocaleString(
+                            version.language === "pt-BR" ? "pt-BR" : "en-US"
+                          )}
                         </td>
                         <td className="px-3 py-2">
                           <Form method="post">
-                            <input type="hidden" name="_action" value="rollback" />
-                            <input type="hidden" name="language" value={selectedLanguage} />
-                            <input type="hidden" name="versionId" value={version.id} />
-                            <Button type="submit" variant="outline" size="sm" disabled={version.isActive || isSubmitting}>
+                            <input
+                              type="hidden"
+                              name="_action"
+                              value="rollback"
+                            />
+                            <input
+                              type="hidden"
+                              name="language"
+                              value={selectedLanguage}
+                            />
+                            <input
+                              type="hidden"
+                              name="versionId"
+                              value={version.id}
+                            />
+                            <Button
+                              type="submit"
+                              variant="outline"
+                              size="sm"
+                              disabled={version.isActive || isSubmitting}
+                            >
                               Restaurar
                             </Button>
                           </Form>
@@ -361,5 +506,36 @@ export default function AdminAiContextProfilePage() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+function KnowledgeSourceCard({
+  title,
+  value,
+  detail,
+  href,
+  action,
+}: {
+  title: string;
+  value: string;
+  detail: string;
+  href: string;
+  action: string;
+}) {
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-sm">{title}</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <p className="text-xl font-semibold">{value}</p>
+        <p className="min-h-10 text-xs leading-relaxed text-muted-foreground">
+          {detail}
+        </p>
+        <Button asChild variant="outline" size="sm" className="w-full">
+          <Link to={href}>{action}</Link>
+        </Button>
+      </CardContent>
+    </Card>
   );
 }

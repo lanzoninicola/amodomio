@@ -775,6 +775,21 @@ const ADMIN_NAVIGATION_LINKS: WebsiteNavigationConfig = {
             "openai",
           ],
         },
+        {
+          title: "Conhecimento da empresa",
+          href: "/admin/ai/conhecimento",
+          items: [],
+          disabled: false,
+          tags: [
+            "ai",
+            "ia",
+            "conhecimento",
+            "contexto",
+            "cardapio",
+            "horarios",
+            "entrega",
+          ],
+        },
       ],
     },
     {
@@ -873,13 +888,6 @@ const ADMIN_NAVIGATION_LINKS: WebsiteNavigationConfig = {
           items: [],
           disabled: false,
           tags: ["configuracao", "sistema", "global", "admin", "parametros"],
-        },
-        {
-          title: "AI Context Profile",
-          href: "/admin/administracao/ai-context-profile",
-          items: [],
-          disabled: false,
-          tags: ["ai", "inteligencia artificial", "perfil", "contexto", "ia"],
         },
         {
           title: "Usuários",
