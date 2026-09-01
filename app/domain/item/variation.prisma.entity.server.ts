@@ -14,7 +14,9 @@ export type VariationCreateInput = {
 export type VariationUpdateInput = Partial<VariationCreateInput>;
 
 function normalizeKind(value: string) {
-  return String(value || "").trim().toLowerCase();
+  return String(value || "")
+    .trim()
+    .toLowerCase();
 }
 
 function normalizeCode(value: string) {
@@ -63,7 +65,12 @@ class VariationPrismaEntity {
 
   async findById(id: string) {
     if (!id) return null;
-    return await this.model.findUnique({ where: { id } });
+    return await this.model.findUnique({
+      where: { id },
+      include: {
+        VariationDetail: { orderBy: { key: "asc" } },
+      },
+    });
   }
 
   async findByKindAndCode(kind: string, code: string) {
@@ -84,7 +91,9 @@ class VariationPrismaEntity {
     const code = normalizeCode(data.code);
     const name = normalizeName(data.name);
     const sortOrderIndex = normalizeSortOrderIndex(data.sortOrderIndex);
-    const additionalInformation = normalizeAdditionalInformation(data.additionalInformation);
+    const additionalInformation = normalizeAdditionalInformation(
+      data.additionalInformation
+    );
 
     if (!kind) throw new Error("Variation.kind é obrigatório");
     if (!code) throw new Error("Variation.code é obrigatório");
@@ -108,16 +117,27 @@ class VariationPrismaEntity {
     if (data.kind != null) nextData.kind = normalizeKind(data.kind);
     if (data.code != null) nextData.code = normalizeCode(data.code);
     if (data.name != null) nextData.name = normalizeName(data.name);
-    if (data.sortOrderIndex != null || Object.prototype.hasOwnProperty.call(data, "sortOrderIndex")) {
+    if (
+      data.sortOrderIndex != null ||
+      Object.prototype.hasOwnProperty.call(data, "sortOrderIndex")
+    ) {
       nextData.sortOrderIndex = normalizeSortOrderIndex(data.sortOrderIndex);
     }
-    if (data.additionalInformation != null || Object.prototype.hasOwnProperty.call(data, "additionalInformation")) {
-      nextData.additionalInformation = normalizeAdditionalInformation(data.additionalInformation);
+    if (
+      data.additionalInformation != null ||
+      Object.prototype.hasOwnProperty.call(data, "additionalInformation")
+    ) {
+      nextData.additionalInformation = normalizeAdditionalInformation(
+        data.additionalInformation
+      );
     }
 
-    if ("kind" in nextData && !nextData.kind) throw new Error("Variation.kind inválido");
-    if ("code" in nextData && !nextData.code) throw new Error("Variation.code inválido");
-    if ("name" in nextData && !nextData.name) throw new Error("Variation.name inválido");
+    if ("kind" in nextData && !nextData.kind)
+      throw new Error("Variation.kind inválido");
+    if ("code" in nextData && !nextData.code)
+      throw new Error("Variation.code inválido");
+    if ("name" in nextData && !nextData.name)
+      throw new Error("Variation.name inválido");
 
     return await this.model.update({
       where: { id },
@@ -128,7 +148,9 @@ class VariationPrismaEntity {
   async softDelete(id: string) {
     if (!id) throw new Error("Variation.id é obrigatório");
 
-    const linkedSellingPrices = await (this.client as any).itemSellingPriceVariation.count({
+    const linkedSellingPrices = await (
+      this.client as any
+    ).itemSellingPriceVariation.count({
       where: {
         ItemVariation: {
           variationId: id,
@@ -138,7 +160,9 @@ class VariationPrismaEntity {
     });
 
     if (linkedSellingPrices > 0) {
-      throw new Error("Esta variação possui preços de venda vinculados e não pode ser excluída");
+      throw new Error(
+        "Esta variação possui preços de venda vinculados e não pode ser excluída"
+      );
     }
 
     return await this.model.update({

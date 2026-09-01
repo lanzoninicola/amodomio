@@ -1,5 +1,6 @@
 import prisma from "~/lib/prisma/client.server";
 import { getStoreOpeningStatus } from "~/domain/store-opening/store-opening-status.server";
+import { findPublishedCardapioFeatured } from "~/domain/content-post/cardapio-featured.server";
 
 export const AI_KNOWLEDGE_LANGUAGE = "pt-BR";
 
@@ -12,6 +13,7 @@ export async function getAiKnowledgeSnapshot() {
     cardapio,
     deterministicResponses,
     orderLinkSetting,
+    featured,
   ] = await Promise.all([
     prisma.aiContextProfileVersion.findFirst({
       where: { language: AI_KNOWLEDGE_LANGUAGE, isActive: true },
@@ -99,7 +101,16 @@ export async function getAiKnowledgeSnapshot() {
                   where: { deletedAt: null },
                   select: {
                     Variation: {
-                      select: { kind: true, code: true, name: true },
+                      select: {
+                        kind: true,
+                        code: true,
+                        name: true,
+                        additionalInformation: true,
+                        VariationDetail: {
+                          orderBy: { key: "asc" },
+                          select: { key: true, value: true, updatedAt: true },
+                        },
+                      },
                     },
                     ItemSellingPriceVariation: {
                       where: {
@@ -134,6 +145,7 @@ export async function getAiKnowledgeSnapshot() {
       where: { context: "cardapio", name: "fazer_pedido.public.url" },
       select: { value: true, updatedAt: true },
     }),
+    findPublishedCardapioFeatured(),
   ]);
 
   return {
@@ -150,6 +162,7 @@ export async function getAiKnowledgeSnapshot() {
         menu: "https://www.amodomio.com.br/cardapio",
         order: orderLinkSetting?.value?.trim() || null,
       },
+      featured,
       cardapio: {
         channel: cardapio ? { key: cardapio.key, name: cardapio.name } : null,
         items: cardapio?.ItemSellingChannelItem ?? [],
