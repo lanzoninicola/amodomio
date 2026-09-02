@@ -12,12 +12,33 @@ import {
   useLoaderData,
   useNavigation,
 } from "@remix-run/react";
-import { AlertTriangle, Bot, CheckCircle2, FlaskConical } from "lucide-react";
-import type { ReactNode } from "react";
+import {
+  AlertTriangle,
+  Bot,
+  Check,
+  CheckCircle2,
+  ChevronsUpDown,
+  FlaskConical,
+} from "lucide-react";
+import { useState, type ReactNode } from "react";
 import { Button } from "~/components/ui/button";
+import { Badge } from "~/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "~/components/ui/command";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "~/components/ui/popover";
 import {
   Select,
   SelectContent,
@@ -31,6 +52,11 @@ import {
   saveWhatsappAgentSettings,
   type WhatsappAgentSettingName,
 } from "~/domain/whatsapp-agent/whatsapp-agent-settings.server";
+import {
+  getOpenRouterModels,
+  type OpenRouterModelOption,
+} from "~/domain/whatsapp-agent/openrouter-models.server";
+import { cn } from "~/lib/utils";
 
 type AgentMode = "test" | "approval" | "auto";
 type AgentProvider = "openrouter" | "openai";
@@ -58,9 +84,19 @@ function normalizePhone(value: FormDataEntryValue | null) {
 }
 
 export async function loader({ request }: LoaderFunctionArgs) {
-  const settings = await getWhatsappAgentSettings();
+  const [settings, catalogResult] = await Promise.all([
+    getWhatsappAgentSettings(),
+    getOpenRouterModels()
+      .then((models) => ({ models, error: false }))
+      .catch(() => ({ models: [] as OpenRouterModelOption[], error: true })),
+  ]);
   const saved = new URL(request.url).searchParams.get("saved") === "1";
-  return json({ settings, saved });
+  return json({
+    settings,
+    saved,
+    openRouterModels: catalogResult.models,
+    modelCatalogError: catalogResult.error,
+  });
 }
 
 export async function action({ request }: ActionFunctionArgs) {
@@ -94,6 +130,16 @@ export async function action({ request }: ActionFunctionArgs) {
     errors.push("OpenRouter e permitido somente no modo de teste.");
   }
   if (!model || model.length > 150) errors.push("Informe um modelo valido.");
+  if (provider === "openrouter" && model !== "openrouter/free") {
+    const catalog = await getOpenRouterModels().catch(() => null);
+    if (catalog && !catalog.some((entry) => entry.id === model)) {
+      errors.push(
+        "Selecione um modelo gratuito disponivel no catalogo do OpenRouter."
+      );
+    } else if (!catalog && !/^[a-z0-9._-]+\/[a-z0-9._:-]+$/i.test(model)) {
+      errors.push("O identificador do modelo OpenRouter e invalido.");
+    }
+  }
 
   let numericValues: Record<string, string> = {};
   try {
@@ -135,11 +181,135 @@ function FieldHelp({ children }: { children: ReactNode }) {
   );
 }
 
+function formatPrice(value: number | null) {
+  if (value == null) return "preço não informado";
+  if (value === 0) return "grátis";
+  return `US$ ${value.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}/M`;
+}
+
+function OpenRouterModelCombobox({
+  models,
+  value,
+  onChange,
+  catalogError,
+}: {
+  models: OpenRouterModelOption[];
+  value: string;
+  onChange: (value: string) => void;
+  catalogError: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const selected = models.find((model) => model.id === value);
+
+  return (
+    <>
+      <input type="hidden" name="model" value={value} />
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <Button
+            type="button"
+            variant="outline"
+            role="combobox"
+            aria-expanded={open}
+            className="h-auto min-h-10 w-full justify-between py-2 text-left font-normal"
+          >
+            <span className="min-w-0 truncate">
+              {value === "openrouter/free"
+                ? "OpenRouter Free Router — modelo aleatório"
+                : selected?.name ?? value}
+            </span>
+            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent
+          align="start"
+          className="w-[min(42rem,calc(100vw-2rem))] p-0"
+        >
+          <Command>
+            <CommandInput placeholder="Buscar por nome ou identificador..." />
+            <CommandList className="max-h-96">
+              <CommandEmpty>Nenhum modelo encontrado.</CommandEmpty>
+              <CommandGroup heading="Roteamento automático">
+                <CommandItem
+                  value="OpenRouter Free Router openrouter/free gratuito aleatório"
+                  onSelect={() => {
+                    onChange("openrouter/free");
+                    setOpen(false);
+                  }}
+                >
+                  <Check
+                    className={cn(
+                      "h-4 w-4",
+                      value === "openrouter/free" ? "opacity-100" : "opacity-0"
+                    )}
+                  />
+                  <div>
+                    <p>OpenRouter Free Router</p>
+                    <p className="text-xs text-muted-foreground">
+                      openrouter/free · escolhe um modelo gratuito
+                      aleatoriamente
+                    </p>
+                  </div>
+                  <Badge variant="secondary" className="ml-auto">
+                    Grátis
+                  </Badge>
+                </CommandItem>
+              </CommandGroup>
+              <CommandGroup
+                heading={`Modelos gratuitos específicos (${models.length})`}
+              >
+                {models.map((model) => (
+                  <CommandItem
+                    key={model.id}
+                    value={`${model.name} ${model.id} gratis free`}
+                    onSelect={() => {
+                      onChange(model.id);
+                      setOpen(false);
+                    }}
+                    className="items-start"
+                  >
+                    <Check
+                      className={cn(
+                        "mt-0.5 h-4 w-4",
+                        value === model.id ? "opacity-100" : "opacity-0"
+                      )}
+                    />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate">{model.name}</p>
+                      <p className="truncate text-xs text-muted-foreground">
+                        {model.id} · entrada{" "}
+                        {formatPrice(model.promptPricePerMillion)} · saída{" "}
+                        {formatPrice(model.completionPricePerMillion)}
+                      </p>
+                    </div>
+                    <Badge variant="secondary">Grátis</Badge>
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            </CommandList>
+          </Command>
+        </PopoverContent>
+      </Popover>
+      {catalogError ? (
+        <FieldHelp>
+          O catálogo está indisponível. O modelo atualmente salvo foi
+          preservado.
+        </FieldHelp>
+      ) : null}
+    </>
+  );
+}
+
 export default function WhatsappAiAgentSettingsPage() {
-  const { settings, saved } = useLoaderData<typeof loader>();
+  const { settings, saved, openRouterModels, modelCatalogError } =
+    useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const navigation = useNavigation();
   const isSubmitting = navigation.state !== "idle";
+  const [provider, setProvider] = useState<AgentProvider>(
+    settings.provider as AgentProvider
+  );
+  const [model, setModel] = useState(settings.model);
   const configuredTestPhones = settings.testPhone
     .split(",")
     .map((phone) => phone.trim())
@@ -262,7 +432,11 @@ export default function WhatsappAiAgentSettingsPage() {
           <CardContent className="grid gap-6 md:grid-cols-2">
             <div className="space-y-2">
               <Label>Provedor</Label>
-              <Select name="provider" defaultValue={settings.provider}>
+              <Select
+                name="provider"
+                value={provider}
+                onValueChange={(value) => setProvider(value as AgentProvider)}
+              >
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -280,15 +454,26 @@ export default function WhatsappAiAgentSettingsPage() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="model">Modelo</Label>
-              <Input
-                id="model"
-                name="model"
-                defaultValue={settings.model}
-                placeholder="openrouter/free"
-              />
+              {provider === "openrouter" ? (
+                <OpenRouterModelCombobox
+                  models={openRouterModels}
+                  value={model}
+                  onChange={setModel}
+                  catalogError={modelCatalogError}
+                />
+              ) : (
+                <Input
+                  id="model"
+                  name="model"
+                  value={model}
+                  onChange={(event) => setModel(event.target.value)}
+                  placeholder="gpt-4.1-mini"
+                />
+              )}
               <FieldHelp>
-                Para o teste gratuito use openrouter/free. A disponibilidade e a
-                qualidade podem variar.
+                {provider === "openrouter"
+                  ? "Catálogo atualizado pela API do OpenRouter e limitado a modelos gratuitos. Escolha um modelo específico para respostas mais previsíveis."
+                  : "Informe o identificador de um modelo disponível diretamente na OpenAI."}
               </FieldHelp>
             </div>
             <div className="space-y-3 rounded-lg border p-4 md:col-span-2">
