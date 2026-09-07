@@ -133,9 +133,7 @@ export async function action({ request }: ActionFunctionArgs) {
   if (provider === "openrouter" && model !== "openrouter/free") {
     const catalog = await getOpenRouterModels().catch(() => null);
     if (catalog && !catalog.some((entry) => entry.id === model)) {
-      errors.push(
-        "Selecione um modelo gratuito disponivel no catalogo do OpenRouter."
-      );
+      errors.push("Selecione um modelo disponivel no catalogo do OpenRouter.");
     } else if (!catalog && !/^[a-z0-9._-]+\/[a-z0-9._:-]+$/i.test(model)) {
       errors.push("O identificador do modelo OpenRouter e invalido.");
     }
@@ -200,6 +198,41 @@ function OpenRouterModelCombobox({
 }) {
   const [open, setOpen] = useState(false);
   const selected = models.find((model) => model.id === value);
+  const freeModels = models.filter((model) => model.isFree);
+  const paidModels = models.filter((model) => !model.isFree);
+
+  function renderModel(model: OpenRouterModelOption) {
+    return (
+      <CommandItem
+        key={model.id}
+        value={`${model.name} ${model.id} ${
+          model.isFree ? "gratis free" : "pago paid"
+        }`}
+        onSelect={() => {
+          onChange(model.id);
+          setOpen(false);
+        }}
+        className="items-start"
+      >
+        <Check
+          className={cn(
+            "mt-0.5 h-4 w-4",
+            value === model.id ? "opacity-100" : "opacity-0"
+          )}
+        />
+        <div className="min-w-0 flex-1">
+          <p className="truncate">{model.name}</p>
+          <p className="truncate text-xs text-muted-foreground">
+            {model.id} · entrada {formatPrice(model.promptPricePerMillion)} ·
+            saída {formatPrice(model.completionPricePerMillion)}
+          </p>
+        </div>
+        <Badge variant={model.isFree ? "secondary" : "outline"}>
+          {model.isFree ? "Grátis" : "Pago"}
+        </Badge>
+      </CommandItem>
+    );
+  }
 
   return (
     <>
@@ -255,36 +288,11 @@ function OpenRouterModelCombobox({
                   </Badge>
                 </CommandItem>
               </CommandGroup>
-              <CommandGroup
-                heading={`Modelos gratuitos específicos (${models.length})`}
-              >
-                {models.map((model) => (
-                  <CommandItem
-                    key={model.id}
-                    value={`${model.name} ${model.id} gratis free`}
-                    onSelect={() => {
-                      onChange(model.id);
-                      setOpen(false);
-                    }}
-                    className="items-start"
-                  >
-                    <Check
-                      className={cn(
-                        "mt-0.5 h-4 w-4",
-                        value === model.id ? "opacity-100" : "opacity-0"
-                      )}
-                    />
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate">{model.name}</p>
-                      <p className="truncate text-xs text-muted-foreground">
-                        {model.id} · entrada{" "}
-                        {formatPrice(model.promptPricePerMillion)} · saída{" "}
-                        {formatPrice(model.completionPricePerMillion)}
-                      </p>
-                    </div>
-                    <Badge variant="secondary">Grátis</Badge>
-                  </CommandItem>
-                ))}
+              <CommandGroup heading={`Gratuitos (${freeModels.length})`}>
+                {freeModels.map(renderModel)}
+              </CommandGroup>
+              <CommandGroup heading={`Pagos (${paidModels.length})`}>
+                {paidModels.map(renderModel)}
               </CommandGroup>
             </CommandList>
           </Command>
@@ -472,7 +480,7 @@ export default function WhatsappAiAgentSettingsPage() {
               )}
               <FieldHelp>
                 {provider === "openrouter"
-                  ? "Catálogo atualizado pela API do OpenRouter e limitado a modelos gratuitos. Escolha um modelo específico para respostas mais previsíveis."
+                  ? "Catálogo atualizado pela API do OpenRouter, dividido entre modelos gratuitos e pagos. Os valores exibidos são por milhão de tokens."
                   : "Informe o identificador de um modelo disponível diretamente na OpenAI."}
               </FieldHelp>
             </div>
