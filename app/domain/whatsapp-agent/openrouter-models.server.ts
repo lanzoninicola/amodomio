@@ -19,7 +19,7 @@ export async function getOpenRouterModels() {
   if (cache && cache.expiresAt > Date.now()) return cache.models;
 
   const response = await fetch(
-    "https://openrouter.ai/api/v1/models?output_modalities=text&max_price=0&sort=most-popular",
+    "https://openrouter.ai/api/v1/models?output_modalities=text&sort=most-popular",
     { signal: AbortSignal.timeout(8_000) }
   );
   if (!response.ok) {
@@ -56,9 +56,10 @@ export async function getOpenRouterModels() {
         } satisfies OpenRouterModelOption,
       ];
     })
-    // max_price filters input price server-side; verify output price locally too.
-    .filter((model) => model.isFree)
-    .sort((left, right) => left.name.localeCompare(right.name, "pt-BR"));
+    .sort((left, right) => {
+      if (left.isFree !== right.isFree) return left.isFree ? -1 : 1;
+      return left.name.localeCompare(right.name, "pt-BR");
+    });
 
   cache = { expiresAt: Date.now() + CACHE_TTL_MS, models };
   return models;
