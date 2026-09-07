@@ -19,6 +19,7 @@ import {
   CheckCircle2,
   ChevronsUpDown,
   FlaskConical,
+  Activity,
 } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { Button } from "~/components/ui/button";
@@ -342,6 +343,11 @@ export default function WhatsappAiAgentSettingsPage() {
             </code>
             da tabela settings e entram em vigor sem novo deploy.
           </p>
+          <Button asChild type="button" variant="outline" size="sm">
+            <Link to="/admin/ai/agente-atendimento/monitoramento">
+              <Activity className="mr-2 h-4 w-4" /> Monitorar jobs e erros
+            </Link>
+          </Button>
         </div>
       </div>
 

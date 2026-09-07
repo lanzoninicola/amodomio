@@ -776,6 +776,13 @@ const ADMIN_NAVIGATION_LINKS: WebsiteNavigationConfig = {
           ],
         },
         {
+          title: "Monitoramento do agente",
+          href: "/admin/ai/agente-atendimento/monitoramento",
+          items: [],
+          disabled: false,
+          tags: ["ai", "ia", "agente", "monitoramento", "erro", "jobs", "429"],
+        },
+        {
           title: "Conhecimento da empresa",
           href: "/admin/ai/conhecimento",
           items: [],
