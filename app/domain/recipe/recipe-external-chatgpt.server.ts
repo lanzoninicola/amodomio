@@ -6,6 +6,7 @@ import {
   updateRecipeCompositionIngredientDefaultLoss,
   updateRecipeCompositionLine,
 } from "./recipe-composition.server";
+import { resolveRecipeBuilderContext } from "./recipe-composition-chatgpt-assistant";
 
 function parseDecimalInput(value: unknown): number | null {
   const normalized = String(value ?? "").trim();
@@ -252,9 +253,28 @@ export async function buildExternalRecipeChatGptImportPreview(params: {
   importMode?: ExternalRecipeImportMode;
 }) {
   const { db, recipeId, payload, importMode = "replace_current" } = params;
-  const linkedVariations = await listRecipeLinkedVariations(db, recipeId);
+  const [recipe, linkedVariations] = await Promise.all([
+    db.recipe.findUnique({
+      where: { id: recipeId },
+      select: {
+        id: true,
+        name: true,
+        costingMode: true,
+        yieldQuantity: true,
+        yieldUnit: true,
+      },
+    }),
+    listRecipeLinkedVariations(db, recipeId),
+  ]);
+  if (!recipe) throw new Error("Receita não encontrada");
+  const builderContext = resolveRecipeBuilderContext({
+    recipe,
+    linkedVariations,
+  });
   const linkedVariationIds = new Set(
-    linkedVariations.map((variation: any) => String(variation.itemVariationId))
+    builderContext.allowedVariations.map((variation) =>
+      String(variation.itemVariationId)
+    )
   );
   if (linkedVariationIds.size === 0) {
     throw new Error(
@@ -262,7 +282,7 @@ export async function buildExternalRecipeChatGptImportPreview(params: {
     );
   }
   const variationNameById = new Map(
-    linkedVariations.map((variation: any) => [
+    builderContext.allowedVariations.map((variation) => [
       String(variation.itemVariationId),
       variation.variationName || "Base",
     ])

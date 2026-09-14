@@ -552,8 +552,9 @@ export default function WhatsappAiAgentSettingsPage() {
             ))}
             <div className="sm:col-span-2 lg:col-span-5 rounded-lg border bg-muted/30 p-4 text-xs leading-relaxed text-muted-foreground">
               Consulta controla a frequencia do banco; lock permite recuperar
-              jobs presos; tentativas usa backoff; historico limita conversas
-              enviadas somente a OpenAI; validade impede respostas atrasadas.
+              jobs presos; tentativas usa backoff; histórico limita conversas
+              enviadas ao provedor configurado; validade impede respostas
+              atrasadas.
             </div>
           </CardContent>
         </Card>

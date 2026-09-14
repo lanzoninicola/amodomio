@@ -798,6 +798,13 @@ const ADMIN_NAVIGATION_LINKS: WebsiteNavigationConfig = {
           ],
         },
         {
+          title: "Conhecimento das conversas",
+          href: "/admin/ai/conhecimento/conversas",
+          items: [],
+          disabled: false,
+          tags: ["ai", "ia", "conhecimento", "crm", "conversas", "revisao"],
+        },
+        {
           title: "Respostas determinísticas",
           href: "/admin/bot/auto-responder",
           items: [],

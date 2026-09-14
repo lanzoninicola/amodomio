@@ -3,6 +3,7 @@ import type {
   RecipeChatGptPromptLinkedVariation,
   RecipeChatGptPromptRecipe,
 } from "./recipe-composition-chatgpt-assistant";
+import { resolveRecipeBuilderContext } from "./recipe-composition-chatgpt-assistant";
 
 export type ExternalRecipeChatGptPromptParams = {
   recipe: RecipeChatGptPromptRecipe;
@@ -14,14 +15,11 @@ export function buildExternalRecipeChatGptPrompt(
   params: ExternalRecipeChatGptPromptParams
 ) {
   const { recipe, items, linkedVariations } = params;
-  const allowedVariations = linkedVariations
-    .filter((variation) => variation.itemVariationId)
-    .map((variation) => ({
-      itemVariationId: variation.itemVariationId,
-      variationId: variation.variationId,
-      variationName: variation.variationName || "Base",
-      isReference: Boolean(variation.isReference),
-    }));
+  const builderContext = resolveRecipeBuilderContext({
+    recipe,
+    linkedVariations,
+  });
+  const { allowedVariations } = builderContext;
   const allowedItems = items.map((item) => ({
     itemId: item.id,
     name: item.name,
@@ -68,7 +66,17 @@ export function buildExternalRecipeChatGptPrompt(
     "Use itemId somente quando houver correspondencia clara no CATALOGO_DE_ITENS_EXISTENTES.",
     "Quando o ingrediente necessario nao existir no catalogo, deixe itemId como null e preencha itemName com o nome limpo do item que deve ser criado.",
     "Nao invente IDs. Nao use itemId parecido se o ingrediente for diferente.",
+    `MODALIDADE DA RECEITA: ${builderContext.modeLabel}.`,
+    builderContext.isYieldMode
+      ? `Converta a receita para um lote completo com rendimento liquido de ${
+          builderContext.yieldQuantity
+        } ${
+          builderContext.yieldUnit || "UM"
+        } e use somente a coluna tecnica \"Lote por rendimento\".`
+      : "Converta as quantidades separadamente para cada variacao/tamanho permitido.",
     "Para todo ingrediente, retorne unit, defaultLossPct e variationQuantities para todas as variacoes permitidas.",
+    "defaultLossPct representa a perda eventual do ingrediente em percentual. Use 0 quando nao houver perda e estime a perda previsivel de limpeza, descarte, evaporacao ou quebra quando houver.",
+    "Informe em variationQuantities a quantidade bruta usada no preparo; o rendimento e o resultado liquido esperado.",
     "Se uma variacao nao usa o ingrediente, informe quantidade 0.",
     "Use classification 'insumo' para ingredientes comprados e 'semi_acabado' quando o ingrediente for uma preparacao intermediaria.",
     "Quando faltar informacao suficiente para criar/importar um ingrediente, liste em missingIngredients e nao inclua em ingredients.",
@@ -81,6 +89,10 @@ export function buildExternalRecipeChatGptPrompt(
         recipeName: recipe.name,
         recipeType: recipe.type,
         recipeDescription: recipe.description || "",
+        costingMode: builderContext.mode,
+        costingModeLabel: builderContext.modeLabel,
+        yieldQuantity: builderContext.yieldQuantity,
+        yieldUnit: builderContext.yieldUnit,
       },
       null,
       2
@@ -120,9 +132,19 @@ export function buildExternalRecipeRequestPrompt(
   params: Pick<ExternalRecipeChatGptPromptParams, "recipe">
 ) {
   const recipeName = params.recipe.name || "esta receita";
+  const isYieldMode = String(params.recipe.costingMode || "") === "yield";
+  const yieldQuantity = Number(params.recipe.yieldQuantity || 0);
+  const yieldUnit = String(params.recipe.yieldUnit || "")
+    .trim()
+    .toUpperCase();
 
   return [
     `Crie uma receita para "${recipeName}" em formato culinario claro e operacional.`,
+    isYieldMode
+      ? `A receita deve resultar em ${yieldQuantity} ${
+          yieldUnit || "UM"
+        } liquidos. Considere perdas previsiveis no preparo ao definir as quantidades brutas.`
+      : "A receita sera posteriormente dimensionada por variacao/tamanho.",
     "",
     "Depois da descricao da receita, inclua obrigatoriamente uma tabela Markdown de ingredientes com exatamente estas duas colunas:",
     "",

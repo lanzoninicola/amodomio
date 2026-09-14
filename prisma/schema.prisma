@@ -1927,6 +1927,28 @@ model AiContextProfileVersion {
   @@map("ai_context_profile_versions")
 }
 
+model AiConversationKnowledgeCandidate {
+  id                String    @id @default(uuid())
+  fingerprint       String    @unique @db.VarChar(255)
+  status            String    @default("pending") @db.VarChar(30)
+  category          String    @default("geral") @db.VarChar(80)
+  canonicalQuestion String    @map("canonical_question") @db.Text
+  answer            String?   @db.Text
+  occurrenceCount   Int       @default(0) @map("occurrence_count")
+  confidence        Float     @default(0)
+  examples          Json
+  firstSeenAt       DateTime? @map("first_seen_at")
+  lastSeenAt        DateTime? @map("last_seen_at")
+  reviewedAt        DateTime? @map("reviewed_at")
+  publishedAt       DateTime? @map("published_at")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @default(now()) @updatedAt @map("updated_at")
+
+  @@index([status, occurrenceCount], map: "ai_conversation_knowledge_candidates_status_count_idx")
+  @@index([category, status], map: "ai_conversation_knowledge_candidates_category_status_idx")
+  @@map("ai_conversation_knowledge_candidates")
+}
+
 // model OrderDeliveryTimeLeftOrdersInbound {
 //   id          String    @id @default(uuid())
 //   orderNumber String    @map("order_number")

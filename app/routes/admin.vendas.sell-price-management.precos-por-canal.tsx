@@ -1,5 +1,15 @@
-import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
-import { Form, Link, useActionData, useLoaderData, useSearchParams } from "@remix-run/react";
+import type {
+  ActionFunctionArgs,
+  LoaderFunctionArgs,
+  MetaFunction,
+} from "@remix-run/node";
+import {
+  Form,
+  Link,
+  useActionData,
+  useLoaderData,
+  useSearchParams,
+} from "@remix-run/react";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Download } from "lucide-react";
 import { MoneyInput } from "~/components/money-input/MoneyInput";
@@ -17,7 +27,13 @@ import {
 } from "~/components/ui/dialog";
 import { Separator } from "~/components/ui/separator";
 import { Input } from "~/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "~/components/ui/select";
 import { toast } from "~/components/ui/use-toast";
 import { authenticator } from "~/domain/auth/google.server";
 import { menuItemSellingPriceUtilityEntity } from "~/domain/cardapio/menu-item-selling-price-utility.entity";
@@ -42,9 +58,13 @@ export const meta: MetaFunction = () => [
 ];
 
 function parseMoneyInput(value: FormDataEntryValue | null) {
-  const raw = String(value || "").trim().replace(/\s+/g, "");
+  const raw = String(value || "")
+    .trim()
+    .replace(/\s+/g, "");
   if (!raw) return null;
-  const normalized = raw.includes(",") ? raw.replace(/\./g, "").replace(",", ".") : raw;
+  const normalized = raw.includes(",")
+    ? raw.replace(/\./g, "").replace(",", ".")
+    : raw;
   const parsed = Number(normalized);
   if (!Number.isFinite(parsed)) return null;
   return parsed;
@@ -65,8 +85,14 @@ export async function loader({ request }: LoaderFunctionArgs) {
       authenticator.isAuthenticated(request),
       listSizeMapByKey(),
       menuItemSellingPriceUtilityEntity.getSellingPriceConfig(),
-      settingPrismaEntity.findByContextAndName("sell-price-management", "dnaHelpUrl"),
-      settingPrismaEntity.findByContextAndName("sell-price-management", "profitPriceHelpUrl"),
+      settingPrismaEntity.findByContextAndName(
+        "sell-price-management",
+        "dnaHelpUrl"
+      ),
+      settingPrismaEntity.findByContextAndName(
+        "sell-price-management",
+        "profitPriceHelpUrl"
+      ),
     ]);
 
     const channelIds = (channels || []).map((c: any) => String(c.id || ""));
@@ -98,7 +124,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
         })),
         userEmail: user ? user.email : null,
         dnaHelpUrl: String(dnaHelpSetting?.value || "").trim() || null,
-        profitPriceHelpUrl: String(profitPriceHelpSetting?.value || "").trim() || null,
+        profitPriceHelpUrl:
+          String(profitPriceHelpSetting?.value || "").trim() || null,
         rows: [],
       });
     }
@@ -116,7 +143,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
           select: {
             id: true,
             isReference: true,
-            Variation: { select: { code: true, name: true, sortOrderIndex: true } },
+            Variation: {
+              select: { code: true, name: true, sortOrderIndex: true },
+            },
           },
           orderBy: [{ createdAt: "asc" }],
         },
@@ -132,12 +161,15 @@ export async function loader({ request }: LoaderFunctionArgs) {
           },
         },
         ItemCostSheet: {
-          where: { isActive: true },
+          where: { status: { in: ["active", "draft"] } },
           select: {
             id: true,
             name: true,
             itemId: true,
             itemVariationId: true,
+            version: true,
+            status: true,
+            isActive: true,
             costAmount: true,
             updatedAt: true,
             activatedAt: true,
@@ -153,11 +185,13 @@ export async function loader({ request }: LoaderFunctionArgs) {
       for (const p of item.ItemSellingPriceVariation || []) {
         const varId = String(p.itemVariationId || "");
         const chanId = String(p.itemSellingChannelId || "");
-        if (!priceByVarAndChannel.has(varId)) priceByVarAndChannel.set(varId, new Map());
+        if (!priceByVarAndChannel.has(varId))
+          priceByVarAndChannel.set(varId, new Map());
         priceByVarAndChannel.get(varId)!.set(chanId, p);
       }
 
-      const itemChannelLinks = channelLinkMap.get(String(item.id || "")) || new Map();
+      const itemChannelLinks =
+        channelLinkMap.get(String(item.id || "")) || new Map();
 
       const variations = [...(item.ItemVariation || [])]
         .sort(
@@ -171,11 +205,12 @@ export async function loader({ request }: LoaderFunctionArgs) {
             )
         )
         .map((variation: any) => {
+          const variationSheets = (item.ItemCostSheet || []).filter(
+            (sheet: any) =>
+              String(sheet.itemVariationId || "") === String(variation.id || "")
+          );
           const activeSheet = pickLatestActiveSheet(
-            (item.ItemCostSheet || []).filter(
-              (sheet: any) =>
-                String(sheet.itemVariationId || "") === String(variation.id || "")
-            )
+            variationSheets.filter((sheet: any) => Boolean(sheet.isActive))
           );
           const sizeKey = resolveVariationSizeKey({
             variationCode: variation.Variation?.code,
@@ -185,8 +220,38 @@ export async function loader({ request }: LoaderFunctionArgs) {
           const priceByChannel =
             priceByVarAndChannel.get(String(variation.id || "")) || new Map();
 
+          const costSheets = [...variationSheets]
+            .sort(
+              (a: any, b: any) =>
+                Number(Boolean(b.isActive)) - Number(Boolean(a.isActive)) ||
+                Number(b.version || 0) - Number(a.version || 0)
+            )
+            .map((sheet: any) => ({
+              id: sheet.id,
+              name: sheet.name,
+              version: Number(sheet.version || 1),
+              status: sheet.status,
+              isActive: Boolean(sheet.isActive),
+              costAmount: Number(sheet.costAmount || 0),
+              updatedAt: sheet.updatedAt
+                ? new Date(sheet.updatedAt).toISOString()
+                : null,
+              breakdownByChannel: Object.fromEntries(
+                (channels || []).map((channel: any) => [
+                  String(channel.id),
+                  computeNativeItemSellingPriceBreakdown({
+                    channel,
+                    itemCostAmount: Number(sheet.costAmount || 0),
+                    sellingPriceConfig,
+                    size,
+                  }),
+                ])
+              ),
+            }));
+
           const channelData = (channels || []).map((channel: any) => {
-            const currentRow = priceByChannel.get(String(channel.id || "")) || null;
+            const currentRow =
+              priceByChannel.get(String(channel.id || "")) || null;
             const computedBreakdown = computeNativeItemSellingPriceBreakdown({
               channel,
               itemCostAmount: Number(activeSheet?.costAmount || 0),
@@ -198,11 +263,14 @@ export async function loader({ request }: LoaderFunctionArgs) {
               channelKey: channel.key,
               channelName: channel.name,
               channelLinked: itemChannelLinks.has(String(channel.id || "")),
-              visibleForChannel: itemChannelLinks.get(String(channel.id || "")) === true,
+              visibleForChannel:
+                itemChannelLinks.get(String(channel.id || "")) === true,
               currentRow: currentRow
                 ? {
                     priceAmount: Number(currentRow.priceAmount || 0),
-                    previousPriceAmount: Number(currentRow.previousPriceAmount || 0),
+                    previousPriceAmount: Number(
+                      currentRow.previousPriceAmount || 0
+                    ),
                     updatedBy: currentRow.updatedBy || null,
                   }
                 : null,
@@ -217,7 +285,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
             variationCode: variation.Variation?.code || null,
             activeSheetId: activeSheet?.id || null,
             activeSheetName: activeSheet?.name || null,
-            activeSheetUpdatedAt: activeSheet?.updatedAt ? new Date(activeSheet.updatedAt).toISOString() : null,
+            activeSheetUpdatedAt: activeSheet?.updatedAt
+              ? new Date(activeSheet.updatedAt).toISOString()
+              : null,
+            costSheets,
             channelData,
           };
         });
@@ -243,7 +314,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
       })),
       userEmail: user ? user.email : null,
       dnaHelpUrl: String(dnaHelpSetting?.value || "").trim() || null,
-      profitPriceHelpUrl: String(profitPriceHelpSetting?.value || "").trim() || null,
+      profitPriceHelpUrl:
+        String(profitPriceHelpSetting?.value || "").trim() || null,
       rows,
     });
   } catch (error) {
@@ -261,8 +333,12 @@ export async function action({ request }: ActionFunctionArgs) {
     }
 
     const itemId = String(formData.get("itemId") || "").trim();
-    const itemVariationId = String(formData.get("itemVariationId") || "").trim();
-    const itemSellingChannelId = String(formData.get("itemSellingChannelId") || "").trim();
+    const itemVariationId = String(
+      formData.get("itemVariationId") || ""
+    ).trim();
+    const itemSellingChannelId = String(
+      formData.get("itemSellingChannelId") || ""
+    ).trim();
     const updatedBy = String(formData.get("updatedBy") || "").trim() || null;
     const priceAmount = parseMoneyInput(formData.get("priceAmount"));
 
@@ -271,9 +347,12 @@ export async function action({ request }: ActionFunctionArgs) {
     if (!itemSellingChannelId) return badRequest("Canal inválido");
     if (priceAmount == null) return badRequest("Preço inválido");
 
-    const nativeModelAvailable = await itemSellingPriceVariationEntity.isAvailable();
+    const nativeModelAvailable =
+      await itemSellingPriceVariationEntity.isAvailable();
     if (!nativeModelAvailable) {
-      return badRequest("Modelo nativo de venda ainda não disponível nesta execução.");
+      return badRequest(
+        "Modelo nativo de venda ainda não disponível nesta execução."
+      );
     }
 
     const itemChannel = await db.itemSellingChannelItem.findFirst({
@@ -281,7 +360,9 @@ export async function action({ request }: ActionFunctionArgs) {
       select: { id: true },
     });
     if (!itemChannel) {
-      return badRequest("Este item não está habilitado para o canal selecionado.");
+      return badRequest(
+        "Este item não está habilitado para o canal selecionado."
+      );
     }
 
     const { upsertInput } = await buildNativeSellingPriceUpsertPayload({
@@ -338,6 +419,16 @@ type PriceManagementRow = {
     activeSheetId: string | null;
     activeSheetName: string | null;
     activeSheetUpdatedAt: string | null;
+    costSheets: Array<{
+      id: string;
+      name: string;
+      version: number;
+      status: "active" | "draft";
+      isActive: boolean;
+      costAmount: number;
+      updatedAt: string | null;
+      breakdownByChannel: Record<string, ComputedSellingPriceBreakdown>;
+    }>;
     channelData: ChannelData[];
   }>;
 };
@@ -354,9 +445,14 @@ function buildChannelPriceExport({
   filters: { search: string; variation: string | null };
 }) {
   const selectedChannelIdSet = new Set(selectedChannelIds);
-  const selectedChannels = channels.filter((channel) => selectedChannelIdSet.has(channel.id));
+  const selectedChannels = channels.filter((channel) =>
+    selectedChannelIdSet.has(channel.id)
+  );
   const itemCount = rows.length;
-  const variationCount = rows.reduce((total, row) => total + row.variations.length, 0);
+  const variationCount = rows.reduce(
+    (total, row) => total + row.variations.length,
+    0
+  );
   const generatedAt = new Date().toISOString();
 
   return {
@@ -407,31 +503,40 @@ function buildChannelPriceExport({
         "Se activeSheet for null, a variacao nao possui ficha tecnica ativa no export e o custo pode estar incompleto.",
       ],
       importantFields: {
-        "items": "Lista principal de itens analisaveis.",
+        items: "Lista principal de itens analisaveis.",
         "items[].id": "Identificador do item.",
         "items[].name": "Nome comercial do item.",
         "items[].canSell": "Indica se o item esta liberado para venda.",
         "items[].active": "Indica se o item esta ativo no cadastro.",
         "items[].upcoming": "Indica item futuro/proximo lancamento.",
         "items[].variations": "Variacoes/tamanhos/sabores vinculados ao item.",
-        "items[].variations[].isReference": "Marca a variacao de referencia do item.",
-        "items[].variations[].activeSheet": "Ficha tecnica ativa usada como fonte de custo.",
-        "items[].variations[].channels": "Dados de preco, custo e lucro da variacao por canal selecionado.",
-        "linked": "Indica se o item esta vinculado ao canal de venda.",
-        "visible": "Indica se o item esta visivel/publicado naquele canal.",
-        "currentPriceAmount": "Preco de venda atual salvo para a variacao no canal.",
-        "previousPriceAmount": "Preco anterior salvo, quando disponivel.",
-        "recommendedPriceAmount": "Preco recomendado calculado para atingir a margem alvo do canal.",
-        "breakEvenPriceAmount": "Preco minimo estimado para empatar custos antes da margem alvo.",
-        "baseCostAmount": "Custo base da ficha tecnica somado ao desperdicio considerado no calculo.",
-        "dnaPerc": "Percentual de DNA/custo operacional usado no calculo.",
-        "dnaAmount": "Valor monetario do DNA aplicado ao preco.",
-        "channelTaxPerc": "Percentual de taxa do canal, relevante principalmente em marketplaces.",
-        "channelTaxAmount": "Valor monetario da taxa do canal.",
-        "operationalCostAmount": "Custo operacional total usado contra o preco de venda.",
-        "profitAmount": "Lucro em reais calculado para o preco atual.",
-        "profitPerc": "Margem de lucro percentual calculada para o preco atual.",
-        "targetMarginPerc": "Margem alvo configurada para o canal.",
+        "items[].variations[].isReference":
+          "Marca a variacao de referencia do item.",
+        "items[].variations[].activeSheet":
+          "Ficha tecnica ativa usada como fonte de custo.",
+        "items[].variations[].channels":
+          "Dados de preco, custo e lucro da variacao por canal selecionado.",
+        linked: "Indica se o item esta vinculado ao canal de venda.",
+        visible: "Indica se o item esta visivel/publicado naquele canal.",
+        currentPriceAmount:
+          "Preco de venda atual salvo para a variacao no canal.",
+        previousPriceAmount: "Preco anterior salvo, quando disponivel.",
+        recommendedPriceAmount:
+          "Preco recomendado calculado para atingir a margem alvo do canal.",
+        breakEvenPriceAmount:
+          "Preco minimo estimado para empatar custos antes da margem alvo.",
+        baseCostAmount:
+          "Custo base da ficha tecnica somado ao desperdicio considerado no calculo.",
+        dnaPerc: "Percentual de DNA/custo operacional usado no calculo.",
+        dnaAmount: "Valor monetario do DNA aplicado ao preco.",
+        channelTaxPerc:
+          "Percentual de taxa do canal, relevante principalmente em marketplaces.",
+        channelTaxAmount: "Valor monetario da taxa do canal.",
+        operationalCostAmount:
+          "Custo operacional total usado contra o preco de venda.",
+        profitAmount: "Lucro em reais calculado para o preco atual.",
+        profitPerc: "Margem de lucro percentual calculada para o preco atual.",
+        targetMarginPerc: "Margem alvo configurada para o canal.",
       },
     },
     items: rows.map((row) => ({
@@ -453,18 +558,24 @@ function buildChannelPriceExport({
             }
           : null,
         channels: variation.channelData
-          .filter((channelData) => selectedChannelIdSet.has(channelData.channelId))
+          .filter((channelData) =>
+            selectedChannelIdSet.has(channelData.channelId)
+          )
           .map((channelData) => {
-            const priceAmount = Number(channelData.currentRow?.priceAmount || 0);
+            const priceAmount = Number(
+              channelData.currentRow?.priceAmount || 0
+            );
             const profitSummary = calculateSellingPriceProfit({
               priceAmount,
               breakdown: channelData.computedBreakdown,
             });
             const recommendedPrice = Number(
-              channelData.computedBreakdown.minimumPrice?.priceAmount?.withProfit || 0
+              channelData.computedBreakdown.minimumPrice?.priceAmount
+                ?.withProfit || 0
             );
             const breakEvenPrice = Number(
-              channelData.computedBreakdown.minimumPrice?.priceAmount?.breakEven || 0
+              channelData.computedBreakdown.minimumPrice?.priceAmount
+                ?.breakEven || 0
             );
             const baseCostAmount =
               Number(channelData.computedBreakdown.custoFichaTecnica || 0) +
@@ -477,7 +588,9 @@ function buildChannelPriceExport({
               linked: channelData.channelLinked,
               visible: channelData.visibleForChannel,
               currentPriceAmount: priceAmount,
-              previousPriceAmount: Number(channelData.currentRow?.previousPriceAmount || 0),
+              previousPriceAmount: Number(
+                channelData.currentRow?.previousPriceAmount || 0
+              ),
               recommendedPriceAmount: recommendedPrice,
               breakEvenPriceAmount: breakEvenPrice,
               baseCostAmount,
@@ -485,7 +598,10 @@ function buildChannelPriceExport({
               dnaAmount: profitSummary.dnaAmount,
               channelTaxPerc: profitSummary.channelTaxPerc,
               channelTaxAmount: profitSummary.channelTaxAmount,
-              operationalCostAmount: profitSummary.baseCostAmount + profitSummary.dnaAmount + profitSummary.channelTaxAmount,
+              operationalCostAmount:
+                profitSummary.baseCostAmount +
+                profitSummary.dnaAmount +
+                profitSummary.channelTaxAmount,
               profitAmount: profitSummary.profitAmount,
               profitPerc: profitSummary.profitPerc,
               targetMarginPerc: Number(
@@ -549,7 +665,9 @@ function ChannelPriceCell({
   const recommendedPrice = Number(
     channelData.computedBreakdown.minimumPrice?.priceAmount?.withProfit || 0
   );
-  const previousPrice = Number(channelData.currentRow?.previousPriceAmount || 0);
+  const previousPrice = Number(
+    channelData.currentRow?.previousPriceAmount || 0
+  );
   const recommendedPriceControl = (
     <button
       type="submit"
@@ -567,28 +685,40 @@ function ChannelPriceCell({
         isTargetChannel
           ? "bg-sky-100"
           : lucroPerc < 0
-            ? "bg-red-50"
-            : lucroPerc <= 5
-              ? "bg-orange-50"
-              : ""
+          ? "bg-red-50"
+          : lucroPerc <= 5
+          ? "bg-orange-50"
+          : ""
       }`}
     >
       <Form method="post" className="space-y-2" ref={formRef}>
         <input type="hidden" name="_action" value="upsert-native-price" />
         <input type="hidden" name="itemId" value={itemId} />
         <input type="hidden" name="itemVariationId" value={itemVariationId} />
-        <input type="hidden" name="itemSellingChannelId" value={channelData.channelId} />
+        <input
+          type="hidden"
+          name="itemSellingChannelId"
+          value={channelData.channelId}
+        />
         <input
           type="hidden"
           name="updatedBy"
           value={userEmail || channelData.currentRow?.updatedBy || ""}
         />
-        <input type="hidden" name="recommendedPriceAmount" value={recommendedPrice} />
+        <input
+          type="hidden"
+          name="recommendedPriceAmount"
+          value={recommendedPrice}
+        />
 
         <div className="grid grid-cols-2 gap-2 items-start">
           <div className="flex flex-col justify-center">
-            <span className="text-[9px] uppercase tracking-wide text-slate-400">PV anterior</span>
-            <span className="font-mono text-xs text-slate-600">R$ {formatDecimalPlaces(previousPrice)}</span>
+            <span className="text-[9px] uppercase tracking-wide text-slate-400">
+              PV anterior
+            </span>
+            <span className="font-mono text-xs text-slate-600">
+              R$ {formatDecimalPlaces(previousPrice)}
+            </span>
           </div>
           <div className="flex gap-1 items-center justify-end">
             <MoneyInput
@@ -617,7 +747,6 @@ function ChannelPriceCell({
           showMissingSheetWarning={false}
           recommendedPriceControl={recommendedPriceControl}
         />
-
       </Form>
     </td>
   );
@@ -633,10 +762,16 @@ export default function AdminGerenciamentoCardapioSellPriceManagementAllChannels
   const [search, setSearch] = useState("");
   const [variationFilter, setVariationFilter] = useState<string | null>(null);
   const [selectedChannelIds, setSelectedChannelIds] = useState<string[]>([]);
-  const [channelSelectionInitialized, setChannelSelectionInitialized] = useState(false);
+  const [channelSelectionInitialized, setChannelSelectionInitialized] =
+    useState(false);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
+  const [selectedSheetIds, setSelectedSheetIds] = useState<
+    Record<string, string>
+  >({});
 
-  const hasLoaderError = Boolean(loaderData?.status && loaderData.status >= 400);
+  const hasLoaderError = Boolean(
+    loaderData?.status && loaderData.status >= 400
+  );
   const payload = (loaderData?.payload || {}) as {
     channels?: PriceManagementChannel[];
     userEmail?: string | null;
@@ -650,13 +785,19 @@ export default function AdminGerenciamentoCardapioSellPriceManagementAllChannels
       toast({ title: "Ok", description: actionData.message });
     }
     if (actionData?.status && actionData.status >= 400) {
-      toast({ title: "Erro", description: actionData.message, variant: "destructive" });
+      toast({
+        title: "Erro",
+        description: actionData.message,
+        variant: "destructive",
+      });
     }
   }, [actionData]);
 
   useEffect(() => {
     if (!targetItemId || !targetVariationId) return;
-    const row = document.getElementById(`price-row-${targetItemId}-${targetVariationId}`);
+    const row = document.getElementById(
+      `price-row-${targetItemId}-${targetVariationId}`
+    );
     if (!row) return;
     row.scrollIntoView({ behavior: "smooth", block: "center" });
   }, [targetItemId, targetVariationId]);
@@ -751,7 +892,8 @@ export default function AdminGerenciamentoCardapioSellPriceManagementAllChannels
             Preços por canal — visão geral
           </h2>
           <p className="text-xs text-slate-500">
-            Todos os canais lado a lado. Salve preços individualmente por célula.
+            Todos os canais lado a lado. Salve preços individualmente por
+            célula.
           </p>
         </div>
         <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
@@ -795,7 +937,8 @@ export default function AdminGerenciamentoCardapioSellPriceManagementAllChannels
               <DialogHeader>
                 <DialogTitle>Exportar preços em JSON</DialogTitle>
                 <DialogDescription>
-                  Selecione os canais que serão incluídos no arquivo. A exportação usa os itens filtrados na tabela.
+                  Selecione os canais que serão incluídos no arquivo. A
+                  exportação usa os itens filtrados na tabela.
                 </DialogDescription>
               </DialogHeader>
 
@@ -824,7 +967,8 @@ export default function AdminGerenciamentoCardapioSellPriceManagementAllChannels
                   })}
                 </div>
                 <div className="text-xs text-slate-500">
-                  {filteredRows.length} itens no filtro atual · {selectedChannelCount} canais selecionados
+                  {filteredRows.length} itens no filtro atual ·{" "}
+                  {selectedChannelCount} canais selecionados
                 </div>
               </div>
 
@@ -838,7 +982,9 @@ export default function AdminGerenciamentoCardapioSellPriceManagementAllChannels
                   type="button"
                   className="gap-2"
                   onClick={handleExportJson}
-                  disabled={selectedChannelCount === 0 || filteredRows.length === 0}
+                  disabled={
+                    selectedChannelCount === 0 || filteredRows.length === 0
+                  }
                 >
                   <Download className="h-4 w-4" />
                   Exportar arquivo
@@ -883,10 +1029,7 @@ export default function AdminGerenciamentoCardapioSellPriceManagementAllChannels
               {filteredRows.map((row) => (
                 <React.Fragment key={row.id}>
                   <tr className="border-b border-slate-200 bg-slate-100">
-                    <td
-                      colSpan={2 + channels.length}
-                      className="px-3 py-1.5"
-                    >
+                    <td colSpan={2 + channels.length} className="px-3 py-1.5">
                       <div className="flex items-center gap-2">
                         <Link
                           to={`/admin/items/${row.id}`}
@@ -910,76 +1053,127 @@ export default function AdminGerenciamentoCardapioSellPriceManagementAllChannels
                     </td>
                   </tr>
                   {row.variations.map((variation) => {
-                  const breakEven = Number(
-                    variation.channelData[0]?.computedBreakdown.minimumPrice?.priceAmount
-                      ?.breakEven || 0
-                  );
+                    const selectedSheetId =
+                      selectedSheetIds[variation.id] ||
+                      variation.activeSheetId ||
+                      variation.costSheets[0]?.id ||
+                      "";
+                    const selectedSheet =
+                      variation.costSheets.find(
+                        (sheet) => sheet.id === selectedSheetId
+                      ) || null;
+                    const simulatedChannelData = variation.channelData.map(
+                      (channelData) => ({
+                        ...channelData,
+                        computedBreakdown:
+                          selectedSheet?.breakdownByChannel[
+                            channelData.channelId
+                          ] || channelData.computedBreakdown,
+                      })
+                    );
+                    const breakEven = Number(
+                      simulatedChannelData[0]?.computedBreakdown.minimumPrice
+                        ?.priceAmount?.breakEven || 0
+                    );
 
-                  return (
-                    <tr
-                      key={variation.id}
-                      id={`price-row-${row.id}-${variation.id}`}
-                      className={[
-                        "border-b border-slate-100 hover:bg-slate-50/50 scroll-mt-24",
-                        targetItemId === row.id && targetVariationId === variation.id
-                          ? "bg-sky-50 ring-1 ring-inset ring-sky-200"
-                          : "",
-                      ].join(" ")}
-                    >
-
-                      <td className="px-3 py-2 align-top border-r border-slate-200 text-xs text-slate-700 whitespace-nowrap">
-                        {variation.isReference
-                          ? `${variation.variationName} · ref`
-                          : variation.variationName}
-                        {variation.activeSheetId ? (
-                          <div className="text-[10px] text-slate-400 truncate max-w-[120px]">
-                            <Link
-                              to={`/admin/item-cost-sheets/${variation.activeSheetId}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="hover:underline hover:text-slate-600"
-                            >
-                              {variation.activeSheetName}
-                            </Link>
-                            {variation.activeSheetUpdatedAt && (() => {
-                              const days = Math.floor((Date.now() - new Date(variation.activeSheetUpdatedAt).getTime()) / 86_400_000);
-                              const date = new Date(variation.activeSheetUpdatedAt).toLocaleDateString("pt-BR");
-                              return (
-                                <div className="text-[9px] text-slate-400">
-                                  {date} · {days === 0 ? "hoje" : `${days}d atrás`}
+                    return (
+                      <tr
+                        key={variation.id}
+                        id={`price-row-${row.id}-${variation.id}`}
+                        className={[
+                          "border-b border-slate-100 hover:bg-slate-50/50 scroll-mt-24",
+                          targetItemId === row.id &&
+                          targetVariationId === variation.id
+                            ? "bg-sky-50 ring-1 ring-inset ring-sky-200"
+                            : "",
+                        ].join(" ")}
+                      >
+                        <td className="px-3 py-2 align-top border-r border-slate-200 text-xs text-slate-700 whitespace-nowrap">
+                          {variation.isReference
+                            ? `${variation.variationName} · ref`
+                            : variation.variationName}
+                          {variation.costSheets.length > 0 ? (
+                            <div className="mt-1 w-44 space-y-1">
+                              <Select
+                                value={selectedSheetId}
+                                onValueChange={(sheetId) =>
+                                  setSelectedSheetIds((current) => ({
+                                    ...current,
+                                    [variation.id]: sheetId,
+                                  }))
+                                }
+                              >
+                                <SelectTrigger
+                                  className="h-7 bg-white px-2 text-[10px]"
+                                  aria-label={`Ficha técnica para ${row.name} ${variation.variationName}`}
+                                >
+                                  <SelectValue placeholder="Selecionar ficha" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {variation.costSheets.map((sheet) => (
+                                    <SelectItem
+                                      key={sheet.id}
+                                      value={sheet.id}
+                                      className="text-xs"
+                                    >
+                                      {sheet.name} · v{sheet.version}
+                                      {sheet.isActive
+                                        ? " · ativa"
+                                        : " · rascunho"}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              <Link
+                                to={`/admin/item-cost-sheets/${selectedSheetId}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="block truncate text-[10px] text-slate-400 hover:text-slate-600 hover:underline"
+                              >
+                                Abrir ficha · R${" "}
+                                {formatDecimalPlaces(
+                                  selectedSheet?.costAmount || 0
+                                )}
+                              </Link>
+                              {!selectedSheet?.isActive ? (
+                                <div className="text-[9px] font-medium text-violet-600">
+                                  Simulação — não altera a ficha ativa
                                 </div>
-                              );
-                            })()}
-                          </div>
-                        ) : (
-                          <div className="text-[10px] text-amber-500">Sem ficha</div>
-                        )}
-                      </td>
+                              ) : null}
+                            </div>
+                          ) : (
+                            <div className="text-[10px] text-amber-500">
+                              Sem ficha
+                            </div>
+                          )}
+                        </td>
 
-                      <td className="px-3 py-2 text-right border-r border-slate-200 text-xs font-mono text-slate-700 align-top whitespace-nowrap">
-                        R$ {formatDecimalPlaces(breakEven)}
-                      </td>
+                        <td className="px-3 py-2 text-right border-r border-slate-200 text-xs font-mono text-slate-700 align-top whitespace-nowrap">
+                          R$ {formatDecimalPlaces(breakEven)}
+                        </td>
 
-                      {variation.channelData.map((cd) => (
-                        <ChannelPriceCell
-                          key={cd.channelId}
-                          itemId={row.id}
-                          itemVariationId={variation.id}
-                          channelData={cd}
-                          activeSheetId={variation.activeSheetId}
-                          userEmail={payload.userEmail || null}
-                          dnaHelpUrl={payload.dnaHelpUrl || null}
-                          profitPriceHelpUrl={payload.profitPriceHelpUrl || null}
-                          isTargetChannel={
-                            targetItemId === row.id &&
-                            targetVariationId === variation.id &&
-                            targetChannelId === cd.channelId
-                          }
-                        />
-                      ))}
-                    </tr>
-                  );
-                })}
+                        {simulatedChannelData.map((cd) => (
+                          <ChannelPriceCell
+                            key={cd.channelId}
+                            itemId={row.id}
+                            itemVariationId={variation.id}
+                            channelData={cd}
+                            activeSheetId={selectedSheetId || null}
+                            userEmail={payload.userEmail || null}
+                            dnaHelpUrl={payload.dnaHelpUrl || null}
+                            profitPriceHelpUrl={
+                              payload.profitPriceHelpUrl || null
+                            }
+                            isTargetChannel={
+                              targetItemId === row.id &&
+                              targetVariationId === variation.id &&
+                              targetChannelId === cd.channelId
+                            }
+                          />
+                        ))}
+                      </tr>
+                    );
+                  })}
                 </React.Fragment>
               ))}
             </tbody>

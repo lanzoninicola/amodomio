@@ -1,12 +1,25 @@
-import { defer, type MetaFunction } from "@remix-run/node";
+import {
+  defer,
+  json,
+  type ActionFunctionArgs,
+  type MetaFunction,
+} from "@remix-run/node";
 import {
   Await,
   useAsyncError,
+  useFetcher,
   useLoaderData,
   useRevalidator,
 } from "@remix-run/react";
-import { Printer, RefreshCw } from "lucide-react";
-import { Suspense } from "react";
+import {
+  Check,
+  Download,
+  Printer,
+  RefreshCw,
+  Save,
+  Search,
+} from "lucide-react";
+import { Suspense, useState } from "react";
 import prismaClient from "~/lib/prisma/client.server";
 
 export const meta: MetaFunction = () => [
@@ -14,6 +27,30 @@ export const meta: MetaFunction = () => [
 ];
 
 const REPORT_WINDOW_DAYS = 90;
+const BRAINSTORMING_SETTINGS_CONTEXT = "menu-engineering";
+const BRAINSTORMING_NOTES_SETTING = "brainstormingNotes";
+
+async function ensureBrainstormingNotesSetting() {
+  const existing = await prismaClient.setting.findFirst({
+    where: {
+      context: BRAINSTORMING_SETTINGS_CONTEXT,
+      name: BRAINSTORMING_NOTES_SETTING,
+    },
+    orderBy: { createdAt: "desc" },
+  });
+
+  if (existing) return existing;
+
+  return prismaClient.setting.create({
+    data: {
+      context: BRAINSTORMING_SETTINGS_CONTEXT,
+      name: BRAINSTORMING_NOTES_SETTING,
+      type: "string",
+      value: "",
+      createdAt: new Date(),
+    },
+  });
+}
 
 function normalize(value: string) {
   return value
@@ -31,7 +68,7 @@ async function loadBrainstormingSheet() {
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - REPORT_WINDOW_DAYS);
 
-  const [cardapioChannel, imports] = await Promise.all([
+  const [cardapioChannel, imports, notesSetting] = await Promise.all([
     prismaClient.itemSellingChannel.findFirst({
       where: { key: "cardapio" },
       select: { id: true, name: true },
@@ -47,6 +84,7 @@ async function loadBrainstormingSheet() {
       },
       orderBy: { periodStart: "asc" },
     }),
+    ensureBrainstormingNotesSetting(),
   ]);
 
   if (!cardapioChannel) {
@@ -154,7 +192,7 @@ async function loadBrainstormingSheet() {
     });
   }
 
-  const leastUsedIngredients = Array.from(ingredientUsage.values())
+  const ingredientReferences = Array.from(ingredientUsage.values())
     .map((ingredient) => ({
       name: ingredient.name,
       usageCount: ingredient.flavorIds.size,
@@ -164,9 +202,12 @@ async function loadBrainstormingSheet() {
     }))
     .sort(
       (a, b) =>
-        a.usageCount - b.usageCount || a.name.localeCompare(b.name, "pt-BR")
-    )
-    .slice(0, 10);
+        a.name.localeCompare(b.name, "pt-BR") || a.usageCount - b.usageCount
+    );
+
+  const leastUsedIngredients = ingredientReferences.filter(
+    (ingredient) => ingredient.usageCount === 1
+  );
 
   const pairCounts = new Map<
     string,
@@ -204,6 +245,8 @@ async function loadBrainstormingSheet() {
         ? `${formatDate(periodStart)} a ${formatDate(periodEnd)}`
         : "Sem importações de vendas nos últimos 90 dias",
     flavorCount: flavors.length,
+    notes: notesSetting.value,
+    ingredientReferences,
     leastUsedIngredients,
     topFlavors,
     combinations,
@@ -212,6 +255,29 @@ async function loadBrainstormingSheet() {
 
 export function loader() {
   return defer({ payload: loadBrainstormingSheet() });
+}
+
+export async function action({ request }: ActionFunctionArgs) {
+  const formData = await request.formData();
+  if (formData.get("_action") !== "saveNotes") {
+    return json({ ok: false, error: "Ação inválida." }, { status: 400 });
+  }
+
+  const notes = String(formData.get("notes") || "");
+  if (notes.length > 50_000) {
+    return json(
+      { ok: false, error: "As notas excedem o limite de 50.000 caracteres." },
+      { status: 400 }
+    );
+  }
+
+  const setting = await ensureBrainstormingNotesSetting();
+  await prismaClient.setting.update({
+    where: { id: setting.id },
+    data: { type: "string", value: notes },
+  });
+
+  return json({ ok: true, error: null });
 }
 
 function SheetError() {
@@ -239,35 +305,28 @@ function SheetError() {
   );
 }
 
-function IdeaBox({ number }: { number: number }) {
-  return (
-    <section className="min-h-[43mm] rounded-lg border border-slate-300 p-3 print:break-inside-avoid">
-      <h2 className="text-xs font-bold uppercase tracking-[0.16em] text-slate-800">
-        Ideia {number}
-      </h2>
-      <div className="mt-2 space-y-2 text-[10px] text-slate-600">
-        <p>Nome: __________________________________________________</p>
-        <p>Base + queijo: __________________________________________</p>
-        <p>Ingrediente principal: ___________________________________</p>
-        <p>Contraste / acabamento: __________________________________</p>
-        <p className="tracking-wide">
-          □ crocante　□ cremoso　□ picante　□ doce　□ defumado　□ fresco
-        </p>
-        <p>Por que deve entrar? ______________________________________</p>
-      </div>
-    </section>
-  );
-}
-
 function BrainstormingSheet({
   report,
 }: {
   report: Awaited<ReturnType<typeof loadBrainstormingSheet>>;
 }) {
+  const notesFetcher = useFetcher<typeof action>();
+  const [notes, setNotes] = useState(report.notes);
+  const [ingredientSearch, setIngredientSearch] = useState("");
+  const isSaving = notesFetcher.state !== "idle";
+  const normalizedIngredientSearch = normalize(ingredientSearch);
+  const ingredientMatches = normalizedIngredientSearch
+    ? report.ingredientReferences
+        .filter((ingredient) =>
+          normalize(ingredient.name).includes(normalizedIngredientSearch)
+        )
+        .slice(0, 8)
+    : [];
+
   return (
     <article
       id="brainstorming-sheet"
-      className="mx-auto max-w-[210mm] bg-white p-5 text-slate-950 print:max-w-none print:p-0"
+      className="w-full bg-white p-5 text-slate-950 print:p-0"
     >
       <header className="flex items-end justify-between border-b-2 border-slate-900 pb-2">
         <div>
@@ -287,81 +346,162 @@ function BrainstormingSheet({
         </div>
       </header>
 
-      <div className="mt-3 grid grid-cols-2 gap-3">
-        <section className="rounded-lg border border-slate-300 p-3">
-          <h2 className="text-xs font-bold uppercase tracking-wide">
-            10 ingredientes pouco explorados
-          </h2>
-          <p className="mb-2 text-[9px] text-slate-500">
-            Menor número de sabores visíveis que usam o ingrediente.
-          </p>
-          <ol className="space-y-1 text-[10px]">
-            {report.leastUsedIngredients.map((ingredient, index) => (
-              <li
-                key={ingredient.name}
-                className="grid grid-cols-[16px_1fr_auto] gap-1 border-b border-dotted border-slate-200 pb-0.5"
-              >
-                <span className="text-slate-400">{index + 1}.</span>
-                <span className="font-medium">{ingredient.name}</span>
-                <span className="text-slate-500">
-                  {ingredient.usageCount} sabor(es)
-                </span>
-              </li>
-            ))}
-          </ol>
-        </section>
+      <div className="mt-4 grid gap-5 xl:grid-cols-[minmax(0,0.9fr)_minmax(420px,1.1fr)] print:grid-cols-[0.9fr_1.1fr]">
+        <div className="grid grid-cols-2 items-start gap-3">
+          <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm print:break-inside-avoid print:shadow-none">
+            <h2 className="text-xs font-bold uppercase tracking-wide">
+              Ingredientes menos explorados
+            </h2>
+            <p className="mb-3 text-[9px] text-slate-500">
+              Lista completa dos ingredientes presentes em apenas um sabor
+              visível.
+            </p>
+            <ol className="space-y-1.5 text-[10px]">
+              {report.leastUsedIngredients.map((ingredient, index) => (
+                <li
+                  key={ingredient.name}
+                  className="grid grid-cols-[16px_1fr_auto] gap-1 border-b border-dotted border-slate-200 pb-1"
+                >
+                  <span className="text-slate-400">{index + 1}.</span>
+                  <span className="font-medium">{ingredient.name}</span>
+                  <span className="text-slate-500">1 sabor</span>
+                </li>
+              ))}
+              {report.leastUsedIngredients.length === 0 ? (
+                <li className="py-3 text-slate-400">
+                  Nenhum ingrediente aparece em somente um sabor.
+                </li>
+              ) : null}
+            </ol>
+          </section>
 
-        <section className="rounded-lg border border-slate-300 p-3">
-          <h2 className="text-xs font-bold uppercase tracking-wide">
-            10 sabores mais pedidos
-          </h2>
-          <p className="mb-2 text-[9px] text-slate-500">
-            Quantidade vendida nas importações do período.
-          </p>
-          <ol className="space-y-1 text-[10px]">
-            {report.topFlavors.map((flavor, index) => (
-              <li
-                key={flavor.id}
-                className="border-b border-dotted border-slate-200 pb-0.5"
-              >
-                <div className="flex justify-between gap-2">
-                  <span>
-                    <span className="mr-1 text-slate-400">{index + 1}.</span>
-                    <strong>{flavor.name}</strong>
-                  </span>
-                  <span className="shrink-0 font-semibold tabular-nums">
-                    {flavor.quantity.toLocaleString("pt-BR")}
-                  </span>
-                </div>
-                <p className="truncate pl-4 text-[8px] text-slate-500">
-                  {flavor.ingredients.join(" · ") || "Receita sem ingredientes"}
-                </p>
-              </li>
-            ))}
-          </ol>
-        </section>
-      </div>
-
-      <section className="mt-3 rounded-lg border border-violet-200 bg-violet-50/50 p-3">
-        <h2 className="text-xs font-bold uppercase tracking-wide">
-          Combinações presentes nos campeões de venda
-        </h2>
-        <div className="mt-2 grid grid-cols-5 gap-2 text-center text-[9px] font-medium">
-          {report.combinations.map((pair) => (
-            <div
-              key={pair.names.join("-")}
-              className="rounded border border-violet-200 bg-white px-2 py-1.5"
-            >
-              {pair.names.join(" + ")}
-            </div>
-          ))}
+          <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm print:break-inside-avoid print:shadow-none">
+            <h2 className="text-xs font-bold uppercase tracking-wide">
+              10 sabores mais pedidos
+            </h2>
+            <p className="mb-3 text-[9px] text-slate-500">
+              Quantidade vendida nas importações do período.
+            </p>
+            <ol className="space-y-1.5 text-[10px]">
+              {report.topFlavors.map((flavor, index) => (
+                <li
+                  key={flavor.id}
+                  className="border-b border-dotted border-slate-200 pb-1"
+                >
+                  <div className="flex justify-between gap-2">
+                    <span>
+                      <span className="mr-1 text-slate-400">{index + 1}.</span>
+                      <strong>{flavor.name}</strong>
+                    </span>
+                    <span className="shrink-0 font-semibold tabular-nums">
+                      {flavor.quantity.toLocaleString("pt-BR")}
+                    </span>
+                  </div>
+                  <p className="truncate pl-4 text-[8px] text-slate-500">
+                    {flavor.ingredients.join(" · ") ||
+                      "Receita sem ingredientes"}
+                  </p>
+                </li>
+              ))}
+            </ol>
+          </section>
         </div>
-      </section>
 
-      <div className="mt-3 grid grid-cols-3 gap-3">
-        <IdeaBox number={1} />
-        <IdeaBox number={2} />
-        <IdeaBox number={3} />
+        <div className="flex min-w-0 flex-col gap-3">
+          <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm print:hidden">
+            <label
+              htmlFor="ingredient-flavor-search"
+              className="text-xs font-bold uppercase tracking-wide text-slate-800"
+            >
+              Consultar ingrediente
+            </label>
+            <div className="mt-2 flex items-center gap-2 rounded-lg bg-slate-100 px-3 py-2">
+              <Search className="h-4 w-4 shrink-0 text-slate-400" />
+              <input
+                id="ingredient-flavor-search"
+                type="search"
+                value={ingredientSearch}
+                onChange={(event) => setIngredientSearch(event.target.value)}
+                placeholder="Digite o nome do ingrediente…"
+                className="min-w-0 flex-1 border-0 bg-transparent p-0 text-sm text-slate-800 outline-none placeholder:text-slate-400 focus:ring-0"
+              />
+            </div>
+            {normalizedIngredientSearch ? (
+              <div className="mt-3 max-h-40 space-y-2 overflow-y-auto pr-1 text-xs">
+                {ingredientMatches.length > 0 ? (
+                  ingredientMatches.map((ingredient) => (
+                    <div key={ingredient.name}>
+                      <p className="font-semibold text-slate-800">
+                        {ingredient.name}
+                      </p>
+                      <p className="leading-5 text-slate-500">
+                        {ingredient.flavors.join(", ")}
+                      </p>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-slate-400">
+                    Nenhum ingrediente encontrado.
+                  </p>
+                )}
+              </div>
+            ) : null}
+          </section>
+
+          <notesFetcher.Form
+            method="post"
+            className="flex min-h-[150mm] flex-1 flex-col rounded-2xl bg-amber-50/45 px-5 py-4 print:min-h-0"
+          >
+            <input type="hidden" name="_action" value="saveNotes" />
+            <div className="flex items-center justify-between gap-3">
+              <label
+                htmlFor="brainstorming-notes"
+                className="text-lg font-semibold tracking-tight text-slate-800"
+              >
+                Notas
+              </label>
+              <button
+                type="submit"
+                disabled={isSaving}
+                className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold text-amber-700 transition hover:bg-amber-100 disabled:cursor-wait disabled:opacity-60 print:hidden"
+              >
+                {notesFetcher.data?.ok ? (
+                  <Check className="h-3.5 w-3.5" />
+                ) : (
+                  <Save className="h-3.5 w-3.5" />
+                )}
+                {isSaving
+                  ? "Salvando…"
+                  : notesFetcher.data?.ok
+                  ? "Salvo"
+                  : "Salvar"}
+              </button>
+            </div>
+            <p className="mt-0.5 text-[10px] text-slate-400">
+              Escreva livremente suas ideias de novos sabores.
+            </p>
+            <textarea
+              id="brainstorming-notes"
+              name="notes"
+              aria-label="Notas livres para brainstorming"
+              placeholder="Comece a escrever…"
+              value={notes}
+              onChange={(event) => setNotes(event.target.value)}
+              onKeyDown={(event) => {
+                if ((event.ctrlKey || event.metaKey) && event.key === "s") {
+                  event.preventDefault();
+                  if (!isSaving) event.currentTarget.form?.requestSubmit();
+                }
+              }}
+              className="mt-3 min-h-0 flex-1 resize-none border-0 bg-transparent p-0 text-[15px] leading-7 text-slate-800 outline-none placeholder:text-slate-300 focus:border-0 focus:outline-none focus:ring-0 print:text-[11px] print:leading-5"
+            />
+            {notesFetcher.data?.error ? (
+              <p className="mt-2 text-xs text-red-600">
+                {notesFetcher.data.error}
+              </p>
+            ) : null}
+          </notesFetcher.Form>
+        </div>
       </div>
     </article>
   );
@@ -382,7 +522,13 @@ export default function BrainstormingRoute() {
           #brainstorming-sheet > header { display: flex !important; }
         }
       `}</style>
-      <div className="mb-3 flex justify-end print:hidden">
+      <div className="mb-3 flex flex-wrap justify-end gap-2 print:hidden">
+        <a
+          href="/admin/vendas/ingredientes-sabores/brainstorming/export"
+          className="inline-flex items-center gap-2 rounded-md border border-violet-300 bg-white px-4 py-2 text-sm font-semibold text-violet-800 hover:bg-violet-50"
+        >
+          <Download className="h-4 w-4" /> Exportar dados para IA
+        </a>
         <button
           type="button"
           onClick={() => window.print()}

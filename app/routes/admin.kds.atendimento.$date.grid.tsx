@@ -5,7 +5,7 @@ import type {
   MetaFunction,
 } from "@remix-run/node";
 import { json, defer } from "@remix-run/node";
-import { Await, useFetcher, useLoaderData } from "@remix-run/react";
+import { Await, Link, useFetcher, useLoaderData } from "@remix-run/react";
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import prisma from "~/lib/prisma/client.server";
 import { Prisma } from "@prisma/client";
@@ -86,6 +86,8 @@ import {
   CalendarClock,
   Banknote,
   BarChart3,
+  EyeOff,
+  ExternalLink,
 } from "lucide-react";
 import { Separator } from "~/components/ui/separator";
 import { cn } from "~/lib/utils";
@@ -124,6 +126,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
+import { findAllCardapioItems } from "~/domain/cardapio/cardapio-items-source.server";
 
 /* ===========================
    Meta
@@ -715,6 +718,17 @@ export async function loader({ params }: LoaderFunctionArgs) {
   const listPromise = listByDate(dateInt);
   const doughStockPromise = getDoughStock(dateInt);
   const availableSizesPromise = getAvailableDoughSizes();
+  const hiddenFlavorsPromise = findAllCardapioItems().then((items) =>
+    items
+      .filter(
+        (item) =>
+          item.active === true &&
+          item.upcoming !== true &&
+          item.visible !== true
+      )
+      .map((item) => ({ id: item.id, name: item.name }))
+      .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"))
+  );
   const orderTimingDashboard = buildOrderTimingDashboard(dateStr, dateInt);
   const settingsRowPromise = prisma.setting.findFirst({
     where: { context: "kds_prediction", name: "config" },
@@ -1018,6 +1032,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
     doughUsage,
     orderTimingDashboard,
     availableSizes,
+    hiddenFlavors: hiddenFlavorsPromise,
     predictionSettings,
   });
 }
@@ -1030,6 +1045,41 @@ export async function action({ request, params }: ActionFunctionArgs) {
   const _action = String(form.get("_action") ?? "");
   const dateStr = String(form.get("date") ?? params.date ?? todayLocalYMD());
   const dateInt = ymdToDateInt(dateStr);
+
+  if (_action === "activateHiddenFlavor") {
+    const itemId = String(form.get("itemId") ?? "").trim();
+    if (!itemId) {
+      return json({ ok: false, error: "Sabor inválido." }, { status: 400 });
+    }
+
+    const channelLink = await prisma.itemSellingChannelItem.findFirst({
+      where: {
+        itemId,
+        ItemSellingChannel: { key: "cardapio" },
+      },
+      select: { id: true, visible: true, Item: { select: { name: true } } },
+    });
+
+    if (!channelLink) {
+      return json(
+        { ok: false, error: "Sabor sem vínculo com o Cardápio." },
+        { status: 404 }
+      );
+    }
+
+    if (!channelLink.visible) {
+      await prisma.itemSellingChannelItem.update({
+        where: { id: channelLink.id },
+        data: { visible: true },
+      });
+    }
+
+    return json({
+      ok: true,
+      activatedFlavorId: itemId,
+      message: `Venda de ${channelLink.Item.name} ativada no Cardápio.`,
+    });
+  }
 
   const header = await ensureHeader(dateInt, ymdToUtcNoon(dateStr));
   const headerFlags = await prisma.kdsDailyOrder.findUnique({
@@ -2575,6 +2625,7 @@ export default function GridKdsPage() {
     doughUsage,
     orderTimingDashboard,
     availableSizes,
+    hiddenFlavors,
     predictionSettings,
   } = useLoaderData<typeof loader>();
   const listFx = useFetcher<DayReportActionResult>();
@@ -2583,6 +2634,12 @@ export default function GridKdsPage() {
   const settingsFx = useFetcher<{
     ok: boolean;
     settings: PredictionSettings;
+  }>();
+  const hiddenFlavorFx = useFetcher<{
+    ok: boolean;
+    activatedFlavorId?: string;
+    message?: string;
+    error?: string;
   }>();
 
   const status = (header?.operationStatus ?? "PENDING") as
@@ -2829,6 +2886,111 @@ export default function GridKdsPage() {
 
   return (
     <div className="space-y-4">
+      <Suspense fallback={null}>
+        <Await resolve={hiddenFlavors}>
+          {(flavors: Array<{ id: string; name: string }>) =>
+            flavors.length > 0 ? (
+              <div className="flex flex-col gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-amber-950 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-start gap-3">
+                  <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-700" />
+                  <div>
+                    <p className="font-semibold">
+                      {flavors.length === 1
+                        ? "1 sabor de pizza está oculto no Cardápio"
+                        : `${flavors.length} sabores de pizza estão ocultos no Cardápio`}
+                    </p>
+                    <p className="text-sm text-amber-800">
+                      Confira o elenco e reative a venda dos sabores
+                      disponíveis.
+                    </p>
+                  </div>
+                </div>
+
+                <Dialog>
+                  <DialogTrigger asChild>
+                    <Button
+                      type="button"
+                      className="shrink-0 bg-amber-700 text-white hover:bg-amber-800"
+                    >
+                      <EyeOff className="mr-2 h-4 w-4" />
+                      Ver sabores ocultos
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="max-h-[85vh] max-w-xl overflow-hidden">
+                    <DialogHeader>
+                      <DialogTitle>Sabores ocultos no Cardápio</DialogTitle>
+                    </DialogHeader>
+                    <ScrollArea className="max-h-[55vh] pr-3">
+                      <div className="space-y-2">
+                        {flavors.map((flavor) => {
+                          const isSubmitting =
+                            hiddenFlavorFx.state !== "idle" &&
+                            hiddenFlavorFx.formData?.get("itemId") ===
+                              flavor.id;
+
+                          return (
+                            <hiddenFlavorFx.Form
+                              method="post"
+                              key={flavor.id}
+                              className="flex items-center justify-between gap-4 rounded-lg border bg-white px-3 py-3"
+                            >
+                              <input
+                                type="hidden"
+                                name="_action"
+                                value="activateHiddenFlavor"
+                              />
+                              <input
+                                type="hidden"
+                                name="itemId"
+                                value={flavor.id}
+                              />
+                              <span className="text-sm font-medium text-slate-900">
+                                {flavor.name}
+                              </span>
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs text-slate-500">
+                                  Ativar venda
+                                </span>
+                                {isSubmitting ? (
+                                  <Loader2 className="h-4 w-4 animate-spin text-amber-700" />
+                                ) : (
+                                  <Switch
+                                    aria-label={`Ativar venda de ${flavor.name}`}
+                                    checked={false}
+                                    onCheckedChange={(checked) => {
+                                      if (!checked) return;
+                                      hiddenFlavorFx.submit(
+                                        {
+                                          _action: "activateHiddenFlavor",
+                                          itemId: flavor.id,
+                                        },
+                                        { method: "post" }
+                                      );
+                                    }}
+                                  />
+                                )}
+                              </div>
+                            </hiddenFlavorFx.Form>
+                          );
+                        })}
+                      </div>
+                    </ScrollArea>
+                    <DialogFooter>
+                      <Button variant="outline" asChild>
+                        <Link to="/admin/atendimento/lista-sabores?ocultos=1">
+                          Abrir lista completa
+                          <ExternalLink className="ml-2 h-4 w-4" />
+                        </Link>
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+              </div>
+            ) : null
+          }
+        </Await>
+      </Suspense>
+
       {/* Toolbar topo + Painel-resumo SEM suspense (feedback imediato) */}
 
       <div className="grid gap-4 xl:grid-cols-8 items-stretch">

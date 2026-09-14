@@ -3,6 +3,9 @@ export type RecipeChatGptPromptRecipe = {
   name: string;
   type?: string | null;
   description?: string | null;
+  costingMode?: string | null;
+  yieldQuantity?: unknown;
+  yieldUnit?: string | null;
 };
 
 export type RecipeChatGptPromptItem = {
@@ -38,6 +41,8 @@ export type RecipeChatGptPromptLinkedVariation = {
   itemVariationId?: string | null;
   variationId?: string | null;
   variationName?: string | null;
+  variationKind?: string | null;
+  variationCode?: string | null;
   isReference?: boolean | null;
 };
 
@@ -49,11 +54,14 @@ export type RecipeChatGptPromptParams = {
   linkedVariations: RecipeChatGptPromptLinkedVariation[];
 };
 
-export function buildRecipeChatGptPrompt(params: RecipeChatGptPromptParams) {
-  const { recipe, items, baseIngredients, recipeLines, linkedVariations } =
-    params;
-
-  const allowedVariations =
+export function resolveRecipeBuilderContext(params: {
+  recipe: RecipeChatGptPromptRecipe;
+  linkedVariations: RecipeChatGptPromptLinkedVariation[];
+  recipeLines?: RecipeChatGptPromptLine[];
+}) {
+  const { recipe, linkedVariations, recipeLines = [] } = params;
+  const isYieldMode = String(recipe.costingMode || "") === "yield";
+  const availableVariations =
     linkedVariations.length > 0
       ? linkedVariations
           .filter((variation) => variation.itemVariationId)
@@ -61,6 +69,8 @@ export function buildRecipeChatGptPrompt(params: RecipeChatGptPromptParams) {
             itemVariationId: variation.itemVariationId,
             variationId: variation.variationId,
             variationName: variation.variationName || "Base",
+            variationKind: variation.variationKind || null,
+            variationCode: variation.variationCode || null,
             isReference: Boolean(variation.isReference),
           }))
       : Array.from(
@@ -73,11 +83,53 @@ export function buildRecipeChatGptPrompt(params: RecipeChatGptPromptParams) {
                   itemVariationId: String(line.ItemVariation?.id),
                   variationId: line.ItemVariation?.variationId || null,
                   variationName: line.ItemVariation?.Variation?.name || "Base",
+                  variationKind: null,
+                  variationCode: null,
                   isReference: false,
                 },
               ])
           ).values()
         );
+  const yieldVariation =
+    availableVariations.find(
+      (variation) =>
+        variation.variationKind === "base" && variation.variationCode === "base"
+    ) ||
+    availableVariations.find((variation) => variation.isReference) ||
+    availableVariations[0];
+  const allowedVariations = isYieldMode
+    ? yieldVariation
+      ? [{ ...yieldVariation, variationName: "Lote por rendimento" }]
+      : []
+    : availableVariations;
+
+  return {
+    isYieldMode,
+    mode: isYieldMode ? "yield" : "per_variation",
+    modeLabel: isYieldMode ? "Por rendimento" : "Por variação/tamanho",
+    yieldQuantity: isYieldMode ? Number(recipe.yieldQuantity || 0) : null,
+    yieldUnit: isYieldMode
+      ? String(recipe.yieldUnit || "")
+          .trim()
+          .toUpperCase()
+      : null,
+    allowedVariations,
+  };
+}
+
+export function buildRecipeChatGptPrompt(params: RecipeChatGptPromptParams) {
+  const { recipe, items, baseIngredients, recipeLines, linkedVariations } =
+    params;
+
+  const builderContext = resolveRecipeBuilderContext({
+    recipe,
+    linkedVariations,
+    recipeLines,
+  });
+  const { allowedVariations } = builderContext;
+  const allowedVariationIds = new Set(
+    allowedVariations.map((variation) => String(variation.itemVariationId))
+  );
 
   const currentComposition = baseIngredients.map((ingredient) => {
     const lines = recipeLines.filter(
@@ -86,7 +138,7 @@ export function buildRecipeChatGptPrompt(params: RecipeChatGptPromptParams) {
     const firstLine = lines[0];
     const variationQuantities = lines.reduce((acc, line) => {
       const itemVariationId = String(line.ItemVariation?.id || "");
-      if (itemVariationId) {
+      if (itemVariationId && allowedVariationIds.has(itemVariationId)) {
         acc[itemVariationId] = Number(line.quantity || 0);
       }
       return acc;
@@ -141,6 +193,16 @@ export function buildRecipeChatGptPrompt(params: RecipeChatGptPromptParams) {
     "Voce esta preenchendo a composicao tecnica de uma receita no sistema Amodomio.",
     "Responda somente com um bloco ```json``` valido, sem texto antes ou depois.",
     "Nao invente itemId nem itemVariationId. Use apenas os IDs permitidos abaixo.",
+    `MODALIDADE DA RECEITA: ${builderContext.modeLabel}.`,
+    builderContext.isYieldMode
+      ? `As quantidades representam o consumo total do lote que rende ${
+          builderContext.yieldQuantity
+        } ${
+          builderContext.yieldUnit || "UM"
+        }. Use somente a coluna tecnica \"Lote por rendimento\".`
+      : "As quantidades devem ser informadas separadamente para cada variacao/tamanho permitido.",
+    "defaultLossPct representa a perda eventual do ingrediente em percentual. Use 0 quando nao houver perda; quando houver limpeza, descarte, evaporacao ou outra quebra previsivel, informe o percentual estimado.",
+    "A quantidade informada deve ser a quantidade bruta usada no preparo. O rendimento cadastrado e o resultado liquido esperado do lote.",
     "REGRA ABSOLUTA: quando COMPOSICAO_ATUAL nao estiver vazia, cada itemId presente nela DEVE aparecer na lista ingredients com action upsert.",
     "PROIBIDO usar action delete para qualquer itemId presente em COMPOSICAO_ATUAL. A decisao de eliminar e feita pelo usuario no sistema.",
     "Para cada ingrediente de COMPOSICAO_ATUAL, sugira a quantidade adequada para cada variacao. Se nao entrar em uma variacao, use 0.",
@@ -159,6 +221,10 @@ export function buildRecipeChatGptPrompt(params: RecipeChatGptPromptParams) {
         recipeName: recipe.name,
         recipeType: recipe.type,
         recipeDescription: recipe.description || "",
+        costingMode: builderContext.mode,
+        costingModeLabel: builderContext.modeLabel,
+        yieldQuantity: builderContext.yieldQuantity,
+        yieldUnit: builderContext.yieldUnit,
       },
       null,
       2

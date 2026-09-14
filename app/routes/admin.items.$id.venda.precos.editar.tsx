@@ -4,6 +4,13 @@ import { useEffect, useMemo, useState } from "react";
 import { NativeItemSellingPriceCard } from "~/components/admin/native-item-selling-price-card";
 import { Button } from "~/components/ui/button";
 import { SearchableSelect } from "~/components/ui/searchable-select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "~/components/ui/select";
 import { toast } from "~/components/ui/use-toast";
 import { buildAdminItemsMeta } from "~/domain/item/admin-items-meta";
 import type { AdminItemVendaPrecosOutletContext } from "./admin.items.$id.venda.precos";
@@ -21,6 +28,7 @@ function ChannelPriceRow(props: {
   allItems: AdminItemVendaPrecosOutletContext["allItems"];
   dnaHelpUrl: string | null;
   profitPriceHelpUrl: string | null;
+  selectedSheetIds: Record<string, string>;
 }) {
   const fetcher = useFetcher<any>();
   const formId = `channel-prices-form-${props.channel.id}`;
@@ -129,10 +137,11 @@ function ChannelPriceRow(props: {
                   type="button"
                   variant={showCopyFrom ? "default" : "outline"}
                   size="sm"
-                  className={`w-full justify-start gap-2 text-[11px] uppercase tracking-wide ${showCopyFrom
+                  className={`w-full justify-start gap-2 text-[11px] uppercase tracking-wide ${
+                    showCopyFrom
                       ? "bg-violet-700 text-white hover:bg-violet-800"
                       : "border-violet-200 bg-violet-50 text-violet-700 hover:bg-violet-100 hover:text-violet-800"
-                    }`}
+                  }`}
                   disabled={fetcher.state !== "idle"}
                   onClick={() => {
                     setShowCopyFrom((prev) => !prev);
@@ -191,9 +200,17 @@ function ChannelPriceRow(props: {
       {props.editableVariations.map((itemVariation) => {
         const pricingRow = props.channel.id
           ? props.pricingRowByKey.get(
-            `${itemVariation.id}::${props.channel.id}`
-          )
+              `${itemVariation.id}::${props.channel.id}`
+            )
           : null;
+        const selectedSheetId =
+          props.selectedSheetIds[itemVariation.id] ||
+          pricingRow?.activeSheetId ||
+          "";
+        const selectedSheet =
+          pricingRow?.costSheets.find(
+            (sheet) => sheet.id === selectedSheetId
+          ) || null;
 
         return (
           <td
@@ -225,10 +242,13 @@ function ChannelPriceRow(props: {
                   channelLabel={props.channel.name}
                   currentRow={pricingRow.currentRow}
                   computedSellingPriceBreakdown={
+                    selectedSheet?.computedSellingPriceBreakdown ||
                     pricingRow.computedSellingPriceBreakdown
                   }
-                  activeSheetId={pricingRow.activeSheetId}
-                  activeSheetName={pricingRow.activeSheetName}
+                  activeSheetId={selectedSheet?.id || pricingRow.activeSheetId}
+                  activeSheetName={
+                    selectedSheet?.name || pricingRow.activeSheetName
+                  }
                   dnaHelpUrl={props.dnaHelpUrl}
                   profitPriceHelpUrl={props.profitPriceHelpUrl}
                   priceInputName={`priceAmount:${itemVariation.id}`}
@@ -255,6 +275,9 @@ export default function AdminItemVendaPrecosEditarRoute() {
     dnaHelpUrl,
     profitPriceHelpUrl,
   } = useOutletContext<AdminItemVendaPrecosOutletContext>();
+  const [selectedSheetIds, setSelectedSheetIds] = useState<
+    Record<string, string>
+  >({});
   const enabledChannels = channels.filter((channel) => channel.enabledForItem);
 
   const pricingRowByKey = new Map(
@@ -292,6 +315,64 @@ export default function AdminItemVendaPrecosEditarRoute() {
                     <div className="text-[11px] font-normal text-slate-400">
                       {itemVariation.Variation?.code || itemVariation.id}
                     </div>
+                    {(() => {
+                      const pricingRow = pricingRows.find(
+                        (row) => row.itemVariationId === itemVariation.id
+                      );
+                      const costSheets = pricingRow?.costSheets || [];
+                      const selectedSheetId =
+                        selectedSheetIds[itemVariation.id] ||
+                        pricingRow?.activeSheetId ||
+                        costSheets[0]?.id ||
+                        "";
+                      const selectedSheet = costSheets.find(
+                        (sheet) => sheet.id === selectedSheetId
+                      );
+
+                      return costSheets.length > 0 ? (
+                        <div className="mt-2 space-y-1">
+                          <Select
+                            value={selectedSheetId}
+                            onValueChange={(sheetId) =>
+                              setSelectedSheetIds((current) => ({
+                                ...current,
+                                [itemVariation.id]: sheetId,
+                              }))
+                            }
+                          >
+                            <SelectTrigger
+                              className="h-8 w-full bg-white text-xs font-normal"
+                              aria-label={`Ficha técnica para ${
+                                itemVariation.Variation?.name || "variação"
+                              }`}
+                            >
+                              <SelectValue placeholder="Selecionar ficha técnica" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {costSheets.map((sheet) => (
+                                <SelectItem
+                                  key={sheet.id}
+                                  value={sheet.id}
+                                  className="text-xs"
+                                >
+                                  {sheet.name} · v{sheet.version}
+                                  {sheet.isActive ? " · ativa" : " · rascunho"}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          {!selectedSheet?.isActive ? (
+                            <div className="text-[10px] font-medium text-violet-600">
+                              Simulação — não altera a ficha ativa
+                            </div>
+                          ) : null}
+                        </div>
+                      ) : (
+                        <div className="mt-2 text-[10px] font-normal text-amber-600">
+                          Sem ficha técnica
+                        </div>
+                      );
+                    })()}
                   </th>
                 ))}
               </tr>
@@ -307,6 +388,7 @@ export default function AdminItemVendaPrecosEditarRoute() {
                   allItems={allItems}
                   dnaHelpUrl={dnaHelpUrl}
                   profitPriceHelpUrl={profitPriceHelpUrl}
+                  selectedSheetIds={selectedSheetIds}
                 />
               ))}
             </tbody>

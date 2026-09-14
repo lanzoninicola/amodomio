@@ -42,11 +42,13 @@ export const meta: MetaFunction = () => [
 ];
 
 
-export const loader = async () => {
+export const loader = async ({ request }: LoaderFunctionArgs) => {
+  const showHidden = new URL(request.url).searchParams.get("ocultos") === "1";
   const cardapioItems = enrichCardapioItemsWithQuickPriceCosts(findAllCardapioItems())
 
   return defer({
     cardapioItems,
+    showHidden,
   })
 }
 
@@ -348,7 +350,7 @@ export async function action({ request }: LoaderFunctionArgs) {
 
 
 export default function AdminAtendimentoListaSabores() {
-  const { cardapioItems } = useLoaderData<typeof loader>()
+  const { cardapioItems, showHidden } = useLoaderData<typeof loader>()
 
 
   const actionData = useActionData<typeof action>();
@@ -397,7 +399,7 @@ export default function AdminAtendimentoListaSabores() {
               includeUpcoming ? true : item.upcoming !== true
             )
             const [filteredItems, setFilteredItems] = useState<CardapioFlavorItem[]>(
-              activeItemsForDisplay.filter((item) => item.visible === true)
+              activeItemsForDisplay.filter((item) => showHidden ? true : item.visible === true)
             )
             const [profitRanges, setProfitRanges] = useState({
               critical: false,
@@ -457,6 +459,7 @@ export default function AdminAtendimentoListaSabores() {
                   <div className="rounded-xl bg-white/60">
                     <CardapioItemSearch
                       items={items}
+                      initialIncludeHidden={showHidden}
                       includeUpcoming={includeUpcoming}
                       setIncludeUpcoming={setIncludeUpcoming}
                       setFilteredItems={setFilteredItems}
@@ -1295,19 +1298,21 @@ function CardapioItemDialog({ children, triggerComponent }: CardapioItemDialogPr
 
 function CardapioItemSearch({
   items,
+  initialIncludeHidden,
   includeUpcoming,
   setIncludeUpcoming,
   setFilteredItems,
   setIsSearching,
 }: {
   items: CardapioFlavorItem[],
+  initialIncludeHidden: boolean,
   includeUpcoming: boolean,
   setIncludeUpcoming: React.Dispatch<React.SetStateAction<boolean>>,
   setFilteredItems: React.Dispatch<React.SetStateAction<CardapioFlavorItem[]>>,
   setIsSearching: React.Dispatch<React.SetStateAction<boolean>>
 }) {
   const [search, setSearch] = useState("")
-  const [includeHidden, setIncludeHidden] = useState(false)
+  const [includeHidden, setIncludeHidden] = useState(initialIncludeHidden)
 
   const applySearch = (
     value: string,

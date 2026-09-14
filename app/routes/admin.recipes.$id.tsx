@@ -50,6 +50,7 @@ import { recipeEntity } from "~/domain/recipe/recipe.entity.server";
 import { ensureItemCostSheetForRecipe } from "~/domain/recipe/recipe-item-cost-sheet.server";
 import { countRecipeCostSheetUsage } from "~/domain/recipe/recipe-cost-sheet-usage.server";
 import { countParentRecipes } from "~/domain/recipe/recipe-links.server";
+import { resolveRecipeBuilderContext } from "~/domain/recipe/recipe-composition-chatgpt-assistant";
 import {
   DEFAULT_RECIPE_CHATGPT_PROJECT_URL,
   RECIPE_CHATGPT_PROJECT_URL_SETTING_NAME,
@@ -439,16 +440,34 @@ async function buildRecipeChatGptImportPreview(params: {
   payload: ReturnType<typeof parseRecipeChatGptImportPayload>;
 }) {
   const { db, recipeId, payload } = params;
-  const [linkedVariations, itemCatalog, currentLines] = await Promise.all([
-    listRecipeLinkedVariations(db, recipeId),
-    db.item.findMany({
-      where: {
-        id: { in: payload.ingredients.map((ingredient) => ingredient.itemId) },
-      },
-      select: { id: true, name: true, consumptionUm: true },
-    }),
-    listRecipeCompositionLines(db, recipeId),
-  ]);
+  const [recipe, linkedVariations, itemCatalog, currentLines] =
+    await Promise.all([
+      db.recipe.findUnique({
+        where: { id: recipeId },
+        select: {
+          id: true,
+          name: true,
+          costingMode: true,
+          yieldQuantity: true,
+          yieldUnit: true,
+        },
+      }),
+      listRecipeLinkedVariations(db, recipeId),
+      db.item.findMany({
+        where: {
+          id: {
+            in: payload.ingredients.map((ingredient) => ingredient.itemId),
+          },
+        },
+        select: { id: true, name: true, consumptionUm: true },
+      }),
+      listRecipeCompositionLines(db, recipeId),
+    ]);
+  if (!recipe) throw new Error("Receita não encontrada");
+  const builderContext = resolveRecipeBuilderContext({
+    recipe,
+    linkedVariations,
+  });
 
   const itemById = new Map<
     string,
@@ -462,11 +481,13 @@ async function buildRecipeChatGptImportPreview(params: {
     )
   );
   const linkedVariationIds = new Set(
-    linkedVariations.map((variation) => variation.itemVariationId)
+    builderContext.allowedVariations.map((variation) =>
+      String(variation.itemVariationId)
+    )
   );
   const variationNameById = new Map(
-    linkedVariations.map((variation) => [
-      variation.itemVariationId,
+    builderContext.allowedVariations.map((variation) => [
+      String(variation.itemVariationId),
       variation.variationName || "Base",
     ])
   );

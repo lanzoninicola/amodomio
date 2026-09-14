@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { Form, Link, useOutletContext } from "@remix-run/react";
+import { Form, Link, useNavigation, useOutletContext } from "@remix-run/react";
 import { ExternalLink, Sparkles } from "lucide-react";
+import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import {
   Table,
@@ -25,11 +26,18 @@ function formatRecipeCreatedAt(value: string | Date | null | undefined) {
   return date.toLocaleDateString("pt-BR");
 }
 
+function formatCostSheetStatus(sheet: any) {
+  if (sheet.isActive || sheet.status === "active") return "ativa";
+  if (sheet.status === "archived") return "arquivada";
+  return "rascunho";
+}
+
 export default function AdminItemLinkedRecipeTab() {
   const { item, recipeAssistantItems, recipeAssistantChatGptProjectUrl } =
     useOutletContext<AdminItemOutletContext>();
   const recipes = item.Recipe || [];
   const [showAssistant, setShowAssistant] = useState(false);
+  const navigation = useNavigation();
 
   return (
     <div className="space-y-4">
@@ -63,11 +71,20 @@ export default function AdminItemLinkedRecipeTab() {
         </div>
       </div>
 
-      <Table className="min-w-[720px]">
+      <Table className="min-w-[1220px]">
         <TableHeader className="bg-slate-50/90">
           <TableRow className="hover:bg-slate-50/90">
             <TableHead className="h-10 px-4 text-xs font-medium text-slate-500">
               Receita
+            </TableHead>
+            <TableHead className="h-10 px-4 text-xs font-medium text-slate-500">
+              Composição
+            </TableHead>
+            <TableHead className="h-10 px-4 text-xs font-medium text-slate-500">
+              Na ficha técnica do item
+            </TableHead>
+            <TableHead className="h-10 px-4 text-xs font-medium text-slate-500">
+              Criar ficha técnica
             </TableHead>
             <TableHead className="h-10 px-4 text-xs font-medium text-slate-500">
               Criada em
@@ -81,7 +98,7 @@ export default function AdminItemLinkedRecipeTab() {
           {recipes.length === 0 ? (
             <TableRow className="hover:bg-transparent">
               <TableCell
-                colSpan={3}
+                colSpan={6}
                 className="px-4 py-8 text-sm text-slate-500"
               >
                 Não existe receita vinculada ao item.
@@ -101,6 +118,82 @@ export default function AdminItemLinkedRecipeTab() {
                     {recipe.name}
                   </Link>
                   <div className="text-xs text-slate-500">ID: {recipe.id}</div>
+                </TableCell>
+                <TableCell className="max-w-md px-4 py-3">
+                  {recipe.RecipeIngredient?.length ? (
+                    <div className="space-y-1">
+                      <div className="text-xs text-slate-500">
+                        {recipe.RecipeIngredient.length} ingrediente(s)
+                      </div>
+                      <div className="text-sm leading-5 text-slate-700">
+                        {recipe.RecipeIngredient.map(
+                          (ingredient: any) => ingredient.IngredientItem?.name
+                        )
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </div>
+                    </div>
+                  ) : (
+                    <span className="text-sm text-slate-400">
+                      Sem ingredientes cadastrados
+                    </span>
+                  )}
+                </TableCell>
+                <TableCell className="max-w-xs px-4 py-3">
+                  {recipe._sameItemCostSheets?.length ? (
+                    <div className="space-y-1.5">
+                      <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-100">
+                        Sim
+                      </Badge>
+                      <div className="text-xs leading-5 text-slate-600">
+                        {recipe._sameItemCostSheets
+                          .map(
+                            (sheet: any) =>
+                              `${sheet.name} (${formatCostSheetStatus(sheet)})`
+                          )
+                          .join(" · ")}
+                      </div>
+                    </div>
+                  ) : (
+                    <Badge
+                      variant="outline"
+                      className="border-amber-200 bg-amber-50 text-amber-700"
+                    >
+                      Não
+                    </Badge>
+                  )}
+                </TableCell>
+                <TableCell className="px-4 py-3">
+                  {recipe._sameItemCostSheets?.length ? (
+                    <span className="text-sm text-slate-400">—</span>
+                  ) : (
+                    <Form method="post" action="../..">
+                      <input
+                        type="hidden"
+                        name="_action"
+                        value="item-recipe-cost-sheet-create"
+                      />
+                      <input type="hidden" name="recipeId" value={recipe.id} />
+                      <Button
+                        type="submit"
+                        size="sm"
+                        variant="outline"
+                        disabled={
+                          navigation.state !== "idle" &&
+                          navigation.formData?.get("_action") ===
+                            "item-recipe-cost-sheet-create" &&
+                          navigation.formData?.get("recipeId") === recipe.id
+                        }
+                      >
+                        {navigation.state !== "idle" &&
+                        navigation.formData?.get("_action") ===
+                          "item-recipe-cost-sheet-create" &&
+                        navigation.formData?.get("recipeId") === recipe.id
+                          ? "Criando..."
+                          : "Criar ficha"}
+                      </Button>
+                    </Form>
+                  )}
                 </TableCell>
                 <TableCell className="px-4 py-3 text-sm text-slate-700">
                   {formatRecipeCreatedAt(recipe.createdAt)}

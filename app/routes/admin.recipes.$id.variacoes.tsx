@@ -25,6 +25,7 @@ import {
   DialogTitle,
 } from "~/components/ui/dialog";
 import { toast } from "~/components/ui/use-toast";
+import { resolveRecipeBuilderContext } from "~/domain/recipe/recipe-composition-chatgpt-assistant";
 import { cn } from "~/lib/utils";
 import type { AdminRecipeOutletContext } from "./admin.recipes.$id";
 import {
@@ -282,6 +283,10 @@ export default function AdminRecipeVariacoesTab() {
         variation.variationKind === "base" && variation.variationCode === "base"
     )
     .map((variation) => variation.itemVariationId);
+  const yieldItemVariationId = isYieldMode
+    ? resolveRecipeBuilderContext({ recipe, linkedVariations })
+        .allowedVariations[0]?.itemVariationId
+    : null;
   const hasAnyLinkedVariation = linkedVariations.some((variation) =>
     Boolean(variation.variationId)
   );
@@ -363,6 +368,9 @@ export default function AdminRecipeVariacoesTab() {
       a.itemName.localeCompare(b.itemName, "pt-BR")
   );
   const getYieldLine = (row: { linesByVariation: Map<string, any> }) =>
+    (yieldItemVariationId
+      ? row.linesByVariation.get(String(yieldItemVariationId))
+      : null) ||
     row.linesByVariation.get("__base__") ||
     row.linesByVariation.values().next().value;
   const compositionRowsWithUnit = compositionRows.map((row) => {

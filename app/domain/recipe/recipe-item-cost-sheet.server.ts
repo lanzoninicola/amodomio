@@ -30,6 +30,15 @@ export async function ensureSingleItemCostSheetGroup(db: any, itemId: string) {
   return rootIds[0] || null;
 }
 
+export type ItemCostSheetSupplementalComponent = {
+  type: "recipe" | "item";
+  refId: string;
+  name: string;
+  unit: string;
+  quantity?: number;
+  notes?: string | null;
+};
+
 export async function ensureItemCostSheetForRecipe(params: {
   db: any;
   item: { id: string; name: string };
@@ -37,9 +46,17 @@ export async function ensureItemCostSheetForRecipe(params: {
   sheetName?: string | null;
   sheetDescription?: string | null;
   componentNotes?: string | null;
+  supplementalComponents?: ItemCostSheetSupplementalComponent[];
 }) {
-  const { db, item, recipe, sheetName, sheetDescription, componentNotes } =
-    params;
+  const {
+    db,
+    item,
+    recipe,
+    sheetName,
+    sheetDescription,
+    componentNotes,
+    supplementalComponents = [],
+  } = params;
 
   let rootSheetId: string | null = null;
 
@@ -144,6 +161,30 @@ export async function ensureItemCostSheetForRecipe(params: {
       },
     },
   });
+
+  for (const [index, component] of supplementalComponents.entries()) {
+    const quantity = Number(component.quantity ?? 1);
+    await db.itemCostSheetComponent.create({
+      data: {
+        itemCostSheetId: rootSheetId,
+        type: component.type,
+        refId: component.refId,
+        name: component.name,
+        notes: component.notes || null,
+        sortOrderIndex: index + 1,
+        ItemCostSheetVariationComponent: {
+          create: targetItemVariationIds.map((itemVariationId: string) => ({
+            itemVariationId,
+            unit: component.unit,
+            quantity,
+            unitCostAmount: 0,
+            wastePerc: 0,
+            totalCostAmount: calcItemCostSheetTotalCostAmount(0, quantity, 0),
+          })),
+        },
+      },
+    });
+  }
 
   await recalcItemCostSheetTotals(db, rootSheetId);
 
