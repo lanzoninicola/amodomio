@@ -243,6 +243,88 @@ function hashFingerprint(input: Record<string, unknown>) {
   return createHash("sha256").update(JSON.stringify(input)).digest("hex");
 }
 
+function sumNullableNumbers(left: unknown, right: unknown) {
+  const leftNumber = Number(left ?? NaN);
+  const rightNumber = Number(right ?? NaN);
+  const hasLeft = Number.isFinite(leftNumber);
+  const hasRight = Number.isFinite(rightNumber);
+
+  if (!hasLeft && !hasRight) return null;
+  return (hasLeft ? leftNumber : 0) + (hasRight ? rightNumber : 0);
+}
+
+function consolidateIdenticalBatchLines(lines: any[]) {
+  const consolidated: any[] = [];
+  const byFingerprint = new Map<string, any>();
+
+  for (const line of lines) {
+    const originalFingerprint = String(line.sourceFingerprint || "").trim();
+    const existing = byFingerprint.get(originalFingerprint);
+
+    if (!originalFingerprint || !existing) {
+      const firstLine = {
+        ...line,
+        metadata: {
+          ...(line.metadata || {}),
+          consolidation: {
+            occurrenceCount: 1,
+            rowNumbers: [line.rowNumber],
+            originalFingerprint: originalFingerprint || null,
+          },
+        },
+      };
+      consolidated.push(firstLine);
+      if (originalFingerprint)
+        byFingerprint.set(originalFingerprint, firstLine);
+      continue;
+    }
+
+    existing.qtyEntry = sumNullableNumbers(existing.qtyEntry, line.qtyEntry);
+    existing.qtyConsumption = sumNullableNumbers(
+      existing.qtyConsumption,
+      line.qtyConsumption
+    );
+    existing.costTotalAmount = sumNullableNumbers(
+      existing.costTotalAmount,
+      line.costTotalAmount
+    );
+
+    const occurrenceCount =
+      Number(existing.metadata?.consolidation?.occurrenceCount || 1) + 1;
+    const rowNumbers = [
+      ...(existing.metadata?.consolidation?.rowNumbers || [existing.rowNumber]),
+      line.rowNumber,
+    ];
+    existing.metadata = {
+      ...(existing.metadata || {}),
+      consolidation: { occurrenceCount, rowNumbers, originalFingerprint },
+    };
+    existing.rawData = {
+      primary: existing.rawData,
+      consolidatedDuplicate: line.rawData,
+      consolidation: { occurrenceCount, rowNumbers },
+    };
+    existing.sourceFingerprint = hashFingerprint({
+      originalFingerprint,
+      occurrenceCount,
+    });
+  }
+
+  return consolidated;
+}
+
+function fingerprintsForAppliedDuplicateCheck(lines: any[]) {
+  return lines.flatMap((line) => {
+    const fingerprints = [line.sourceFingerprint];
+    const originalFingerprint =
+      line.metadata?.consolidation?.originalFingerprint;
+    if (originalFingerprint && originalFingerprint !== line.sourceFingerprint) {
+      fingerprints.push(originalFingerprint);
+    }
+    return fingerprints.map((sourceFingerprint) => ({ sourceFingerprint }));
+  });
+}
+
 function buildSyntheticVisionInvoiceNumber(params: {
   movementAt?: Date | null;
   supplierName?: string | null;
@@ -1401,7 +1483,6 @@ export async function createStockMovementImportBatchFromFile(params: {
   const supplierNotesLookup =
     supplierNotes.length > 0 ? buildSupplierNotesLookup(supplierNotes) : null;
   const parsedLines: any[] = [];
-  const seenInBatch = new Map<string, string>();
 
   for (let i = headerIndex + 1; i < rows.length; i += 1) {
     const rawRow = (rows[i] || []) as any[];
@@ -1445,7 +1526,7 @@ export async function createStockMovementImportBatchFromFile(params: {
       costTotalAmount,
     });
 
-    let line = await classifyLine(
+    const line = await classifyLine(
       {
         rowNumber,
         movementAt,
@@ -1489,22 +1570,7 @@ export async function createStockMovementImportBatchFromFile(params: {
       costHintsByItemId
     );
 
-    const duplicateInBatchLineId = seenInBatch.get(sourceFingerprint);
-    if (duplicateInBatchLineId) {
-      line = {
-        ...line,
-        status: "skipped_duplicate",
-        errorCode: "duplicate_in_batch",
-        errorMessage: "Linha duplicada no mesmo arquivo",
-        duplicateOfLineId: duplicateInBatchLineId,
-      };
-    }
-
     const syntheticLineId = randomUUID();
-    if (!seenInBatch.has(sourceFingerprint)) {
-      seenInBatch.set(sourceFingerprint, syntheticLineId);
-    }
-
     parsedLines.push({
       id: syntheticLineId,
       ...line,
@@ -1512,11 +1578,17 @@ export async function createStockMovementImportBatchFromFile(params: {
     });
   }
 
+  const consolidatedLines = consolidateIdenticalBatchLines(parsedLines);
   const existingAppliedFingerprints = await markExistingAppliedDuplicates(
-    parsedLines
+    fingerprintsForAppliedDuplicateCheck(consolidatedLines)
   );
-  const finalLines = parsedLines.map((line) => {
-    if (existingAppliedFingerprints.has(line.sourceFingerprint)) {
+  const finalLines = consolidatedLines.map((line) => {
+    const originalFingerprint =
+      line.metadata?.consolidation?.originalFingerprint;
+    if (
+      existingAppliedFingerprints.has(line.sourceFingerprint) ||
+      existingAppliedFingerprints.has(originalFingerprint)
+    ) {
       return {
         ...line,
         status: "skipped_duplicate",
@@ -1761,7 +1833,6 @@ export async function createStockMovementImportBatchFromVisionPayload(params: {
     lookup.items.map((item: any) => item.id)
   );
   const parsedLines: any[] = [];
-  const seenInBatch = new Map<string, string>();
   const syntheticInvoiceNumber = params.invoiceNumber
     ? null
     : buildSyntheticVisionInvoiceNumber({
@@ -1813,7 +1884,7 @@ export async function createStockMovementImportBatchFromVisionPayload(params: {
         : null,
     });
 
-    let line = await classifyLine(
+    const line = await classifyLine(
       {
         rowNumber,
         movementAt,
@@ -1863,22 +1934,7 @@ export async function createStockMovementImportBatchFromVisionPayload(params: {
       costHintsByItemId
     );
 
-    const duplicateInBatchLineId = seenInBatch.get(sourceFingerprint);
-    if (duplicateInBatchLineId) {
-      line = {
-        ...line,
-        status: "skipped_duplicate",
-        errorCode: "duplicate_in_batch",
-        errorMessage: "Linha duplicada na mesma resposta",
-        duplicateOfLineId: duplicateInBatchLineId,
-      };
-    }
-
     const syntheticLineId = randomUUID();
-    if (!seenInBatch.has(sourceFingerprint)) {
-      seenInBatch.set(sourceFingerprint, syntheticLineId);
-    }
-
     parsedLines.push({
       id: syntheticLineId,
       ...line,
@@ -1886,11 +1942,17 @@ export async function createStockMovementImportBatchFromVisionPayload(params: {
     });
   }
 
+  const consolidatedLines = consolidateIdenticalBatchLines(parsedLines);
   const existingAppliedFingerprints = await markExistingAppliedDuplicates(
-    parsedLines
+    fingerprintsForAppliedDuplicateCheck(consolidatedLines)
   );
-  const finalLines = parsedLines.map((line) => {
-    if (existingAppliedFingerprints.has(line.sourceFingerprint)) {
+  const finalLines = consolidatedLines.map((line) => {
+    const originalFingerprint =
+      line.metadata?.consolidation?.originalFingerprint;
+    if (
+      existingAppliedFingerprints.has(line.sourceFingerprint) ||
+      existingAppliedFingerprints.has(originalFingerprint)
+    ) {
       return {
         ...line,
         status: "skipped_duplicate",

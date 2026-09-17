@@ -8,11 +8,15 @@ import type {
 } from "@prisma/client";
 import { createCookieSessionStorage } from "@remix-run/node";
 import prismaClient from "~/lib/prisma/client.server";
+import { AUTH_COOKIE_SECRET } from "./constants.server";
 import {
-  AUTH_COOKIE_SECRET,
-} from "./constants.server";
-import { createAccessAudit, getAuthenticatedUserProfile } from "./user-access.server";
-import type { AuthenticatedLoggedUser, AuthenticatedUserProfile } from "./types.server";
+  createAccessAudit,
+  getAuthenticatedUserProfile,
+} from "./user-access.server";
+import type {
+  AuthenticatedLoggedUser,
+  AuthenticatedUserProfile,
+} from "./types.server";
 
 const SESSION_COOKIE_KEY = "user_session_token";
 const LEGACY_SESSION_COOKIE_KEY = "admin_session_token";
@@ -21,13 +25,19 @@ const SESSION_IDLE_TIMEOUT_MS =
     process.env.USER_SESSION_IDLE_TIMEOUT_MINUTES ||
       process.env.ADMIN_SESSION_IDLE_TIMEOUT_MINUTES ||
       60 * 12
-  ) * 60 * 1000;
+  ) *
+  60 *
+  1000;
 const SESSION_ABSOLUTE_TIMEOUT_MS =
   Number(
     process.env.USER_SESSION_ABSOLUTE_TIMEOUT_DAYS ||
       process.env.ADMIN_SESSION_ABSOLUTE_TIMEOUT_DAYS ||
       30
-  ) * 24 * 60 * 60 * 1000;
+  ) *
+  24 *
+  60 *
+  60 *
+  1000;
 const SESSION_ACTIVITY_REFRESH_MS = 5 * 60 * 1000;
 
 const cookieSecret = AUTH_COOKIE_SECRET || "AM0D0MI02O24";
@@ -72,8 +82,13 @@ export async function createUserSession(params: {
     },
   });
 
-  const cookieSession = await sessionStorage.getSession(params.request.headers.get("Cookie"));
-  cookieSession.set(SESSION_COOKIE_KEY, serializeSessionToken(sessionRecord.id, secret));
+  const cookieSession = await sessionStorage.getSession(
+    params.request.headers.get("Cookie")
+  );
+  cookieSession.set(
+    SESSION_COOKIE_KEY,
+    serializeSessionToken(sessionRecord.id, secret)
+  );
 
   const setCookie = await sessionStorage.commitSession(cookieSession);
   const authenticatedUser = mapAuthenticatedSession(params.user, sessionRecord);
@@ -108,12 +123,146 @@ export async function createUserSession(params: {
   };
 }
 
-export async function getAuthenticatedSessionFromRequest(request: Request): Promise<{
+/**
+ * Creates a revocable session for native clients. Unlike the web session, the
+ * raw token is returned to the caller and must be stored in the device secure
+ * storage. The database only keeps the SHA-256 hash of its secret.
+ */
+export async function createBearerUserSession(params: {
+  request: Request;
+  user: AuthenticatedUserProfile;
+  authProvider: AuditProvider;
+  deviceLabel?: string | null;
+}) {
+  const secret = randomBytes(24).toString("hex");
+  const now = new Date();
+  const requestMeta = getRequestMeta(params.request);
+  const sessionRecord = await prismaClient.userSession.create({
+    data: {
+      userId: params.user.id,
+      authProvider: params.authProvider,
+      sessionSecretHash: hashSessionSecret(secret),
+      deviceLabel:
+        String(params.deviceLabel || "")
+          .trim()
+          .slice(0, 120) || buildDeviceLabel(requestMeta.userAgent),
+      ipAddress: requestMeta.ipAddress,
+      userAgent: requestMeta.userAgent,
+      lastActivityAt: now,
+      idleExpiresAt: new Date(now.getTime() + SESSION_IDLE_TIMEOUT_MS),
+      absoluteExpiresAt: new Date(now.getTime() + SESSION_ABSOLUTE_TIMEOUT_MS),
+    },
+  });
+
+  await createAccessAudit({
+    provider: params.authProvider,
+    eventType: "loginSuccess",
+    success: true,
+    userId: params.user.id,
+    username: params.user.username,
+    email: params.user.email || null,
+    request: params.request,
+    session: sessionRecord,
+    details: { authProvider: params.authProvider, client: "kds-mobile" },
+  });
+
+  return {
+    token: serializeSessionToken(sessionRecord.id, secret),
+    session: sessionRecord,
+    user: mapAuthenticatedSession(params.user, sessionRecord),
+  };
+}
+
+export async function getAuthenticatedBearerSession(request: Request): Promise<{
+  user: AuthenticatedLoggedUser | null;
+  session: SessionWithUser | null;
+}> {
+  const authorization = request.headers.get("authorization") || "";
+  const match = authorization.match(/^Bearer\s+(.+)$/i);
+  const parsed = match ? parseSessionToken(match[1].trim()) : null;
+  if (!parsed) return { user: null, session: null };
+
+  const session = await prismaClient.userSession.findUnique({
+    where: { id: parsed.sessionId },
+    include: { user: true },
+  });
+  if (
+    !session ||
+    session.sessionSecretHash !== hashSessionSecret(parsed.secret)
+  ) {
+    return { user: null, session: null };
+  }
+  if (!session.user.isActive || session.status !== "active") {
+    return { user: null, session };
+  }
+
+  const now = Date.now();
+  if (
+    now > session.idleExpiresAt.getTime() ||
+    now > session.absoluteExpiresAt.getTime()
+  ) {
+    await expireOrRevokeSession({
+      session,
+      eventType: "sessionExpired",
+      reason:
+        now > session.absoluteExpiresAt.getTime()
+          ? "absolute-timeout"
+          : "idle-timeout",
+      nextStatus: "expired",
+      request,
+    });
+    return { user: null, session: null };
+  }
+
+  const nextSession =
+    now - session.lastActivityAt.getTime() >= SESSION_ACTIVITY_REFRESH_MS
+      ? await prismaClient.userSession.update({
+          where: { id: session.id },
+          data: {
+            lastActivityAt: new Date(now),
+            idleExpiresAt: new Date(now + SESSION_IDLE_TIMEOUT_MS),
+            ipAddress: getRequestMeta(request).ipAddress,
+            userAgent: getRequestMeta(request).userAgent,
+          },
+          include: { user: true },
+        })
+      : session;
+
+  const profile = getAuthenticatedUserProfile(
+    nextSession.user,
+    nextSession.authProvider
+  );
+  return {
+    user: mapAuthenticatedSession(profile, nextSession),
+    session: nextSession,
+  };
+}
+
+export async function revokeBearerSession(request: Request) {
+  const current = await getAuthenticatedBearerSession(request);
+  if (current.session?.status === "active") {
+    await expireOrRevokeSession({
+      session: current.session,
+      eventType: "logout",
+      reason: "kds-mobile-logout",
+      actorUserId: current.session.userId,
+      request,
+      nextStatus: "revoked",
+    });
+  }
+  return Boolean(current.session);
+}
+
+export async function getAuthenticatedSessionFromRequest(
+  request: Request
+): Promise<{
   user: AuthenticatedLoggedUser | null;
   session: SessionWithUser | null;
   destroyCookie: boolean;
 }> {
-  const cookieSession = await sessionStorage.getSession(request.headers.get("Cookie"));
+  const cookieSession = await sessionStorage.getSession(
+    request.headers.get("Cookie")
+  );
   const token =
     (cookieSession.get(SESSION_COOKIE_KEY) as string | undefined) ||
     (cookieSession.get(LEGACY_SESSION_COOKIE_KEY) as string | undefined);
@@ -221,7 +370,10 @@ export async function getAuthenticatedSessionFromRequest(request: Request): Prom
         })
       : session;
 
-  const userProfile = getAuthenticatedUserProfile(nextSession.user, nextSession.authProvider);
+  const userProfile = getAuthenticatedUserProfile(
+    nextSession.user,
+    nextSession.authProvider
+  );
 
   console.info("[auth.session.read] authorized", {
     path: new URL(request.url).pathname,
@@ -239,7 +391,9 @@ export async function getAuthenticatedSessionFromRequest(request: Request): Prom
 }
 
 export async function destroySessionCookie(request: Request) {
-  const cookieSession = await sessionStorage.getSession(request.headers.get("Cookie"));
+  const cookieSession = await sessionStorage.getSession(
+    request.headers.get("Cookie")
+  );
   cookieSession.unset(SESSION_COOKIE_KEY);
   return sessionStorage.destroySession(cookieSession);
 }
@@ -328,7 +482,9 @@ export async function revokeAllUserSessionsForUser(params: {
     where: {
       userId: params.userId,
       status: "active",
-      ...(params.exceptSessionId ? { id: { not: params.exceptSessionId } } : {}),
+      ...(params.exceptSessionId
+        ? { id: { not: params.exceptSessionId } }
+        : {}),
     },
     include: { user: true },
   });
@@ -378,7 +534,9 @@ export async function listUserSessions() {
   });
 }
 
-export function getCurrentSessionId(user: Pick<AuthenticatedLoggedUser, "sessionId">) {
+export function getCurrentSessionId(
+  user: Pick<AuthenticatedLoggedUser, "sessionId">
+) {
   return user.sessionId;
 }
 

@@ -32,7 +32,7 @@ export function getAdminItemNameFromMatches(matches: MetaMatches | undefined): s
 export function buildAdminItemsMeta(title: string, options?: { itemScoped?: boolean }): MetaFunction {
   return ({ matches }) => {
     const itemName = options?.itemScoped === false ? null : getAdminItemNameFromMatches(matches);
-    const resolvedTitle = itemName ? `${itemName} • ${title}` : title === "Itens" ? title : `Itens • ${title}`;
+    const resolvedTitle = itemName ? `Item | ${itemName}` : title === "Itens" ? title : `Itens • ${title}`;
     return [{ title: resolvedTitle }];
   };
 }

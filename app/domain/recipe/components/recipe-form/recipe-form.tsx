@@ -246,11 +246,6 @@ export default function RecipeForm({
                 variant="outline"
                 size="sm"
                 className="text-xs uppercase font-semibold tracking-wider"
-                disabled={
-                  requireItemRemapConfirmation &&
-                  hasItemChanged &&
-                  !confirmItemRemap
-                }
               >
                 Vincular ficha técnica
               </Button>
@@ -258,11 +253,6 @@ export default function RecipeForm({
             <Button
               type="submit"
               size="sm"
-              disabled={
-                requireItemRemapConfirmation &&
-                hasItemChanged &&
-                !confirmItemRemap
-              }
             >
               <SaveIcon size={16} />
               <span className="pl-2 text-xs uppercase font-semibold tracking-wider">
@@ -402,8 +392,9 @@ export default function RecipeForm({
                   {requireItemRemapConfirmation && hasItemChanged ? (
                     <div className="mt-2 rounded-md border border-amber-300 bg-amber-50 p-2">
                       <p className="text-xs font-semibold text-amber-900">
-                        Trocar o item apaga os dados por variação (UM e
-                        quantidade) e exige remapeamento.
+                        Ao trocar o item, os vínculos e dados das variações
+                        existentes serão mantidos, a menos que você escolha
+                        apagá-los abaixo.
                       </p>
                       <label className="mt-1 inline-flex items-center gap-2 text-xs text-amber-900">
                         <input
@@ -414,7 +405,7 @@ export default function RecipeForm({
                           }
                           className="h-3.5 w-3.5 rounded border-amber-400"
                         />
-                        Confirmo a troca e o remapeamento de variações.
+                        Apagar os dados por variação (UM e quantidade) e remapear para o novo item.
                       </label>
                     </div>
                   ) : null}

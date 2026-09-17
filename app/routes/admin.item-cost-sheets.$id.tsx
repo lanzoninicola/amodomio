@@ -1,6 +1,7 @@
 import {
   ActionFunctionArgs,
   LoaderFunctionArgs,
+  type MetaFunction,
   redirect,
 } from "@remix-run/node";
 import {
@@ -737,6 +738,11 @@ async function getItemCostSheetDeletionGuard(
   };
 }
 
+export const meta: MetaFunction<typeof loader> = ({ data }) => {
+  const name = String(data?.payload?.item?.name || "").trim();
+  return [{ title: name ? `Ficha | ${name}` : "Ficha" }];
+};
+
 export async function loader({ request, params }: LoaderFunctionArgs) {
   try {
     const itemCostSheetId = String(params.id || "").trim();
@@ -1059,17 +1065,22 @@ export async function action({ request, params }: ActionFunctionArgs) {
       (sheet) => sheet.itemVariationId
     );
 
-    if (_action === "item-cost-sheet-meta-update") {
+    if (
+      _action === "item-cost-sheet-meta-update" ||
+      _action === "item-cost-sheet-activate"
+    ) {
+      const activateOnly = _action === "item-cost-sheet-activate";
       const itemCostSheetId = String(
         formData.get("itemCostSheetId") || ""
       ).trim();
       const name = String(formData.get("name") || "").trim();
       const description = String(formData.get("description") || "").trim();
       const notes = String(formData.get("notes") || "").trim();
-      const isActive = String(formData.get("isActive") || "").trim() === "on";
+      const isActive =
+        activateOnly || String(formData.get("isActive") || "").trim() === "on";
 
       if (!itemCostSheetId) return badRequest("Ficha de custo inválida");
-      if (!name) return badRequest("Informe o nome da ficha");
+      if (!activateOnly && !name) return badRequest("Informe o nome da ficha");
       if (itemCostSheetId !== currentSheet.id)
         return badRequest("Ficha de custo divergente");
 
@@ -1122,15 +1133,20 @@ export async function action({ request, params }: ActionFunctionArgs) {
           OR: [{ id: rootSheetId }, { baseItemCostSheetId: rootSheetId }],
         },
         data: {
-          name,
-          description: description || null,
-          notes: notes || null,
+          ...(activateOnly
+            ? {}
+            : {
+                name,
+                description: description || null,
+                notes: notes || null,
+              }),
           isActive,
           status: isActive ? "active" : "draft",
           activatedAt: isActive ? new Date() : null,
         },
       });
 
+      if (activateOnly) return ok("Ficha técnica ativada com sucesso.");
       return redirect(postRedirectTo);
     }
 

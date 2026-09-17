@@ -578,6 +578,13 @@ const ADMIN_NAVIGATION_LINKS: WebsiteNavigationConfig = {
           href: "",
           items: [
             {
+              title: "Substituir insumo",
+              href: "/admin/producao/substituir-insumo",
+              items: [],
+              disabled: false,
+              tags: ["insumo", "substituir", "receita", "composicao", "variacao"],
+            },
+            {
               title: "Publicados sem receita",
               href: "/admin/producao/publicados-sem-receita",
               items: [],

@@ -34,7 +34,10 @@ export class RecipeEntity {
     return await this.client.recipe.update({ where: { id }, data });
   }
 
-  async duplicate(id: string, options?: { asVersion?: boolean }) {
+  async duplicate(
+    id: string,
+    options?: { asVersion?: boolean; itemId?: string }
+  ) {
     const client = this.client as any;
 
     const recipe = await client.recipe.findUnique({
@@ -84,6 +87,59 @@ export class RecipeEntity {
 
     return await client.$transaction(async (tx: any) => {
       const asVersion = Boolean(options?.asVersion);
+      const itemId = asVersion
+        ? recipe.itemId
+        : options?.itemId ?? recipe.itemId;
+      const changingItem = itemId !== recipe.itemId;
+      const variationIds = new Map<string, string>();
+      if (options?.itemId !== undefined && !asVersion) {
+        const item = await tx.item.findFirst({
+          where: { id: itemId, active: true, archivedAt: null },
+          select: { id: true },
+        });
+        if (!item)
+          throw new Error("Selecione um item ativo para vincular a cópia");
+      }
+      if (changingItem) {
+        const sourceVariations = await tx.itemVariation.findMany({
+          where: {
+            OR: [
+              ...(recipe.itemId
+                ? [{ itemId: recipe.itemId, deletedAt: null }]
+                : []),
+              {
+                id: {
+                  in: (recipe.RecipeIngredient || []).flatMap(
+                    (ingredient: any) =>
+                      (ingredient.RecipeVariationIngredient || []).map(
+                        (line: any) => line.itemVariationId
+                      )
+                  ),
+                },
+              },
+            ],
+          },
+          select: { id: true, variationId: true, isReference: true },
+        });
+        for (const variation of sourceVariations) {
+          const target = await tx.itemVariation.upsert({
+            where: {
+              itemId_variationId: {
+                itemId,
+                variationId: variation.variationId,
+              },
+            },
+            create: {
+              itemId,
+              variationId: variation.variationId,
+              isReference: variation.isReference,
+            },
+            update: { deletedAt: null },
+            select: { id: true },
+          });
+          variationIds.set(variation.id, target.id);
+        }
+      }
       const latestVersion = asVersion
         ? await tx.recipe.aggregate({
             where: { groupId: recipe.groupId },
@@ -100,7 +156,7 @@ export class RecipeEntity {
           status: "draft",
           activatedAt: null,
           archivedAt: null,
-          itemId: recipe.itemId,
+          itemId,
           variationId: recipe.variationId,
           type: recipe.type,
           costingMode: recipe.costingMode || "per_variation",
@@ -179,7 +235,8 @@ export class RecipeEntity {
           await tx.recipeVariationIngredient.createMany({
             data: ingredient.RecipeVariationIngredient.map((line: any) => ({
               recipeIngredientId: duplicatedIngredient.id,
-              itemVariationId: line.itemVariationId,
+              itemVariationId:
+                variationIds.get(line.itemVariationId) || line.itemVariationId,
               unit: line.unit,
               quantity: Number(line.quantity || 0),
               lossPct: line.lossPct == null ? null : Number(line.lossPct || 0),
@@ -188,7 +245,7 @@ export class RecipeEntity {
         }
       }
 
-      if (!asVersion && recipe.itemId) {
+      if (!asVersion && !changingItem && recipe.itemId) {
         await tx.itemVariation.updateMany({
           where: {
             itemId: recipe.itemId,

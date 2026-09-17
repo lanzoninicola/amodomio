@@ -125,10 +125,7 @@ function buildBaseItemWhere(params: {
 
   if (params.q) {
     where.AND.push({
-      OR: [
-        { name: { contains: params.q, mode: "insensitive" } },
-        { description: { contains: params.q, mode: "insensitive" } },
-      ],
+      name: { contains: params.q, mode: "insensitive" },
     });
   }
 

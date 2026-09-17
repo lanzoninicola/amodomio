@@ -950,14 +950,27 @@ export async function action({ request, params }: ActionFunctionArgs) {
       if (!(Number.isFinite(factor) && factor > 0))
         return badRequest("Informe um fator maior que zero");
 
-      const availableUnits = await getAvailableItemUnits(id);
-      if (!availableUnits.includes(purchaseUm))
-        return badRequest("Unidade de compra inválida");
+      const measurementUnit = await db.measurementUnit.findUnique({
+        where: { code: purchaseUm },
+        select: { code: true, scope: true, active: true },
+      });
+      if (!measurementUnit?.active)
+        return badRequest("Unidade de compra inválida ou inativa");
 
-      await db.itemPurchaseConversion.upsert({
-        where: { itemId_purchaseUm: { itemId: id, purchaseUm } },
-        create: { id: randomUUID(), itemId: id, purchaseUm, factor },
-        update: { factor },
+      await db.$transaction(async (tx: any) => {
+        if (measurementUnit.scope === "restricted") {
+          await tx.itemUnit.upsert({
+            where: { itemId_unitCode: { itemId: id, unitCode: purchaseUm } },
+            create: { id: randomUUID(), itemId: id, unitCode: purchaseUm },
+            update: {},
+          });
+        }
+
+        await tx.itemPurchaseConversion.upsert({
+          where: { itemId_purchaseUm: { itemId: id, purchaseUm } },
+          create: { id: randomUUID(), itemId: id, purchaseUm, factor },
+          update: { factor },
+        });
       });
 
       return ok("Conversão adicionada com sucesso");

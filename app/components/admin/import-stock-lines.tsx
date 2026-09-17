@@ -1308,9 +1308,6 @@ function LineCard({
     conversionPreview?.convertedCostAmount ?? derivedCostAmount;
   const editDiscrepancy = hasCostAmountDiscrepancy(editDisplayCostAmount, hint);
   const displayDiscrepancy = isEditing ? editDiscrepancy : discrepancy;
-  const displayTargetUnit = isEditing
-    ? normalizeUnit(selectedItem?.consumptionUm || selectedItem?.purchaseUm)
-    : line.targetUnit;
   const canFullEdit =
     !!line.mappedItemId &&
     ![
@@ -1320,6 +1317,9 @@ function LineCard({
       "ignored",
     ].includes(line.status);
   const requiresCostApproval = line.status === "pending_cost_review";
+  const consolidatedOccurrenceCount = Number(
+    line.metadata?.consolidation?.occurrenceCount || 1
+  );
 
   const isReady = line.status === "ready";
   const isImported = line.status === "imported";
@@ -1537,6 +1537,14 @@ function LineCard({
                     }`
                   : "Quantidade entrada: -"}
               </div>
+              {consolidatedOccurrenceCount > 1 ? (
+                <Badge
+                  variant="outline"
+                  className="mt-1.5 border-blue-200 bg-blue-50 text-[10px] text-blue-700"
+                >
+                  {consolidatedOccurrenceCount} linhas somadas
+                </Badge>
+              ) : null}
             </div>
           </div>
 
@@ -1742,11 +1750,11 @@ function LineCard({
                       )}
                       onClick={() => canFullEdit && onStartEditing()}
                     >
-                      {displayTargetUnit || line.movementUnit || "-"}
+                      {line.movementUnit || line.unitEntry || "-"}
                     </div>
                   )}
                   {selectedItemUnitRows.length > 0 ? (
-                    <div className="mt-1 flex flex-wrap gap-x-2 gap-y-1">
+                    <div className="mt-1 grid grid-cols-2 gap-1">
                       {selectedItemUnitRows.map((row) => (
                         <button
                           key={row.unit}
@@ -1754,12 +1762,14 @@ function LineCard({
                           disabled={isSaving}
                           onClick={() => handleUnitShortcut(row.unit)}
                           className={cn(
-                            "text-[11px] font-medium text-slate-600 underline underline-offset-2 transition hover:text-slate-900",
+                            "flex h-6 min-w-0 items-center justify-center truncate rounded-md border border-slate-200 bg-white px-1 text-[10px] font-semibold text-slate-600 transition hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900",
+                            movementUnitDraft === row.unit &&
+                              "border-emerald-300 bg-emerald-50 text-emerald-700",
                             isSaving && "cursor-wait opacity-60"
                           )}
                           title={`Vincular UM ${row.unit} ao movimento`}
                         >
-                          Último: {row.unit}
+                          {row.unit}
                         </button>
                       ))}
                     </div>

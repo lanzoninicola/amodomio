@@ -8,5 +8,6 @@ export {
   getOrderForApiByCommandNumber,
   getOrderForApiById,
   setOrderStatus,
+  setOrderRequestedForOven,
 } from "./repository.server";
 export type { KdsOrderApiRow, KdsStatus } from "./repository.server";
