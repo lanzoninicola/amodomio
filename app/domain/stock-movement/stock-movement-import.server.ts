@@ -1,5 +1,10 @@
 import { createHash, randomUUID } from "node:crypto";
 import * as XLSX from "xlsx";
+import {
+  consolidateSupplierBatchLines,
+  fingerprintsForAppliedDuplicateCheck,
+  appliedFingerprintWhere,
+} from "./stock-import-consolidation";
 import prismaClient from "~/lib/prisma/client.server";
 import { itemVariationPrismaEntity } from "~/domain/item/item-variation.prisma.entity.server";
 import { itemCostVariationPrismaEntity } from "~/domain/item/item-cost-variation.prisma.entity.server";
@@ -241,88 +246,6 @@ function extractInvoiceNumber(value: unknown) {
 
 function hashFingerprint(input: Record<string, unknown>) {
   return createHash("sha256").update(JSON.stringify(input)).digest("hex");
-}
-
-function sumNullableNumbers(left: unknown, right: unknown) {
-  const leftNumber = Number(left ?? NaN);
-  const rightNumber = Number(right ?? NaN);
-  const hasLeft = Number.isFinite(leftNumber);
-  const hasRight = Number.isFinite(rightNumber);
-
-  if (!hasLeft && !hasRight) return null;
-  return (hasLeft ? leftNumber : 0) + (hasRight ? rightNumber : 0);
-}
-
-function consolidateIdenticalBatchLines(lines: any[]) {
-  const consolidated: any[] = [];
-  const byFingerprint = new Map<string, any>();
-
-  for (const line of lines) {
-    const originalFingerprint = String(line.sourceFingerprint || "").trim();
-    const existing = byFingerprint.get(originalFingerprint);
-
-    if (!originalFingerprint || !existing) {
-      const firstLine = {
-        ...line,
-        metadata: {
-          ...(line.metadata || {}),
-          consolidation: {
-            occurrenceCount: 1,
-            rowNumbers: [line.rowNumber],
-            originalFingerprint: originalFingerprint || null,
-          },
-        },
-      };
-      consolidated.push(firstLine);
-      if (originalFingerprint)
-        byFingerprint.set(originalFingerprint, firstLine);
-      continue;
-    }
-
-    existing.qtyEntry = sumNullableNumbers(existing.qtyEntry, line.qtyEntry);
-    existing.qtyConsumption = sumNullableNumbers(
-      existing.qtyConsumption,
-      line.qtyConsumption
-    );
-    existing.costTotalAmount = sumNullableNumbers(
-      existing.costTotalAmount,
-      line.costTotalAmount
-    );
-
-    const occurrenceCount =
-      Number(existing.metadata?.consolidation?.occurrenceCount || 1) + 1;
-    const rowNumbers = [
-      ...(existing.metadata?.consolidation?.rowNumbers || [existing.rowNumber]),
-      line.rowNumber,
-    ];
-    existing.metadata = {
-      ...(existing.metadata || {}),
-      consolidation: { occurrenceCount, rowNumbers, originalFingerprint },
-    };
-    existing.rawData = {
-      primary: existing.rawData,
-      consolidatedDuplicate: line.rawData,
-      consolidation: { occurrenceCount, rowNumbers },
-    };
-    existing.sourceFingerprint = hashFingerprint({
-      originalFingerprint,
-      occurrenceCount,
-    });
-  }
-
-  return consolidated;
-}
-
-function fingerprintsForAppliedDuplicateCheck(lines: any[]) {
-  return lines.flatMap((line) => {
-    const fingerprints = [line.sourceFingerprint];
-    const originalFingerprint =
-      line.metadata?.consolidation?.originalFingerprint;
-    if (originalFingerprint && originalFingerprint !== line.sourceFingerprint) {
-      fingerprints.push(originalFingerprint);
-    }
-    return fingerprints.map((sourceFingerprint) => ({ sourceFingerprint }));
-  });
 }
 
 function buildSyntheticVisionInvoiceNumber(params: {
@@ -1356,89 +1279,32 @@ function derivePreApplyBatchStatus(summary: BatchSummary) {
 }
 
 async function markExistingAppliedDuplicates(lines: any[]) {
-  const fingerprints = Array.from(
-    new Set(lines.map((line) => line.sourceFingerprint).filter(Boolean))
-  );
-  if (fingerprints.length === 0) return new Set<string>();
-
+  const fingerprints = [
+    ...new Set(
+      lines.map((line) => String(line.sourceFingerprint || "")).filter(Boolean)
+    ),
+  ];
+  if (!fingerprints.length) return new Set<string>();
   const db = prismaClient as any;
-  const [existingMovements, existingLines] = await Promise.all([
-    db.stockMovement.findMany({
-      where: {
-        deletedAt: null,
-        ImportLine: {
-          is: {
-            sourceFingerprint: { in: fingerprints },
-          },
-        },
-      },
-      select: {
-        ImportLine: {
-          select: {
-            sourceFingerprint: true,
-          },
-        },
-      },
-    }),
-    db.stockMovementImportBatchLine.findMany({
-      where: {
-        sourceFingerprint: { in: fingerprints },
-        StockMovements: {
-          some: {
-            deletedAt: null,
-          },
-        },
-      },
-      select: { sourceFingerprint: true },
-    }),
-  ]);
-
-  const detected = new Set<string>();
-  for (const row of existingMovements) {
-    const fingerprint = String(row?.ImportLine?.sourceFingerprint || "").trim();
-    if (fingerprint) detected.add(fingerprint);
-  }
-
-  for (const row of existingLines) {
-    const fingerprint = String(row?.sourceFingerprint || "").trim();
-    if (fingerprint) detected.add(fingerprint);
-  }
-
-  return detected;
+  const existingLines = await db.stockMovementImportBatchLine.findMany({
+    where: {
+      ...appliedFingerprintWhere(fingerprints),
+      StockMovements: { some: { deletedAt: null } },
+    },
+    select: { sourceFingerprint: true, metadata: true },
+  });
+  return new Set<string>(
+    fingerprintsForAppliedDuplicateCheck(existingLines).map(
+      (line) => line.sourceFingerprint
+    )
+  );
 }
 
-async function hasActiveAppliedFingerprint(sourceFingerprint: string) {
-  const fingerprint = String(sourceFingerprint || "").trim();
-  if (!fingerprint) return false;
-
-  const db = prismaClient as any;
-  const existingMovement = await db.stockMovement.findFirst({
-    where: {
-      deletedAt: null,
-      ImportLine: {
-        is: {
-          sourceFingerprint: fingerprint,
-        },
-      },
-    },
-    select: { id: true },
-  });
-
-  if (existingMovement?.id) return true;
-
-  const existingLine = await db.stockMovementImportBatchLine.findFirst({
-    where: {
-      sourceFingerprint: fingerprint,
-      StockMovements: {
-        some: {
-          deletedAt: null,
-        },
-      },
-    },
-    select: { id: true },
-  });
-
-  return Boolean(existingLine?.id);
+async function hasActiveAppliedFingerprint(line: any) {
+  const detected = await markExistingAppliedDuplicates(
+    fingerprintsForAppliedDuplicateCheck([line])
+  );
+  return detected.size > 0;
 }
 
 export async function createStockMovementImportBatchFromFile(params: {
@@ -1526,49 +1392,45 @@ export async function createStockMovementImportBatchFromFile(params: {
       costTotalAmount,
     });
 
-    const line = await classifyLine(
-      {
-        rowNumber,
-        movementAt,
-        ingredientName,
-        ingredientNameNormalized: normalizeName(ingredientName),
-        motivo,
-        identification,
-        invoiceNumber,
-        supplierId: matchedSupplier.supplierId,
-        supplierName: matchedSupplier.supplierName,
-        supplierNameNormalized: matchedSupplier.supplierNameNormalized,
-        supplierCnpj: matchedSupplier.supplierCnpj,
-        supplierMatchSource: matchedSupplier.supplierMatchSource,
-        ...supplierReconciliation,
-        qtyEntry: entry.quantity,
-        unitEntry: entry.unit,
-        qtyConsumption: consumption.quantity,
-        unitConsumption: consumption.unit,
-        movementUnit,
-        costAmount,
-        costTotalAmount,
-        observation,
-        sourceFingerprint,
-        rawData: {
-          row: rawRow,
-          cells: {
-            data: rawRow[0],
-            ingrediente: rawRow[1],
-            motivo: rawRow[2],
-            identificacao: rawRow[3],
-            qtdEntrada: rawRow[4],
-            qtdConsumo: rawRow[5],
-            custo: rawRow[6],
-            custoTotal: rawRow[7],
-            observacao: rawRow[8],
-          },
-          supplierNote: matchedSupplierNote?.raw || null,
+    const line = {
+      rowNumber,
+      movementAt,
+      ingredientName,
+      ingredientNameNormalized: normalizeName(ingredientName),
+      motivo,
+      identification,
+      invoiceNumber,
+      supplierId: matchedSupplier.supplierId,
+      supplierName: matchedSupplier.supplierName,
+      supplierNameNormalized: matchedSupplier.supplierNameNormalized,
+      supplierCnpj: matchedSupplier.supplierCnpj,
+      supplierMatchSource: matchedSupplier.supplierMatchSource,
+      ...supplierReconciliation,
+      qtyEntry: entry.quantity,
+      unitEntry: entry.unit,
+      qtyConsumption: consumption.quantity,
+      unitConsumption: consumption.unit,
+      movementUnit,
+      costAmount,
+      costTotalAmount,
+      observation,
+      sourceFingerprint,
+      rawData: {
+        row: rawRow,
+        cells: {
+          data: rawRow[0],
+          ingrediente: rawRow[1],
+          motivo: rawRow[2],
+          identificacao: rawRow[3],
+          qtdEntrada: rawRow[4],
+          qtdConsumo: rawRow[5],
+          custo: rawRow[6],
+          custoTotal: rawRow[7],
+          observacao: rawRow[8],
         },
+        supplierNote: matchedSupplierNote?.raw || null,
       },
-      lookup,
-      costHintsByItemId
-    );
+    };
 
     const syntheticLineId = randomUUID();
     parsedLines.push({
@@ -1578,16 +1440,20 @@ export async function createStockMovementImportBatchFromFile(params: {
     });
   }
 
-  const consolidatedLines = consolidateIdenticalBatchLines(parsedLines);
+  const consolidatedLines = await Promise.all(
+    consolidateSupplierBatchLines(parsedLines).map((line) =>
+      classifyLine(line, lookup, costHintsByItemId)
+    )
+  );
   const existingAppliedFingerprints = await markExistingAppliedDuplicates(
     fingerprintsForAppliedDuplicateCheck(consolidatedLines)
   );
   const finalLines = consolidatedLines.map((line) => {
-    const originalFingerprint =
-      line.metadata?.consolidation?.originalFingerprint;
     if (
-      existingAppliedFingerprints.has(line.sourceFingerprint) ||
-      existingAppliedFingerprints.has(originalFingerprint)
+      fingerprintsForAppliedDuplicateCheck([line]).some(
+        ({ sourceFingerprint }) =>
+          existingAppliedFingerprints.has(sourceFingerprint)
+      )
     ) {
       return {
         ...line,
@@ -1884,55 +1750,51 @@ export async function createStockMovementImportBatchFromVisionPayload(params: {
         : null,
     });
 
-    const line = await classifyLine(
-      {
-        rowNumber,
-        movementAt,
-        ingredientName,
-        ingredientNameNormalized: normalizeName(ingredientName),
-        motivo: str(rawLine.motivo) || "Entrada por documento",
-        identification:
-          str(rawLine.identification) ||
-          (invoiceNumber ? `DOC: ${invoiceNumber}` : null),
-        invoiceNumber,
-        supplierId: supplier.supplierId,
-        supplierName: supplier.supplierName,
-        supplierNameNormalized: supplier.supplierNameNormalized,
-        supplierCnpj: supplier.supplierCnpj,
-        supplierMatchSource: supplier.supplierMatchSource,
-        ...supplierReconciliation,
-        qtyEntry: Number.isFinite(qtyEntry) ? qtyEntry : null,
-        unitEntry: str(rawLine.unitEntry).toUpperCase() || null,
-        qtyConsumption: Number.isFinite(qtyConsumption) ? qtyConsumption : null,
-        unitConsumption: str(rawLine.unitConsumption).toUpperCase() || null,
-        movementUnit,
-        costAmount: Number.isFinite(costAmount) ? costAmount : null,
-        costTotalAmount: Number.isFinite(costTotalAmount)
-          ? costTotalAmount
-          : null,
-        observation: str(rawLine.observation) || null,
-        sourceFingerprint,
-        rawData: rawLine.rawData || {
-          source: "chatgpt-vision",
-          batchDefaults: {
-            movementAt: params.movementAt?.toISOString() || null,
-            invoiceNumber: params.invoiceNumber || null,
-            syntheticInvoiceNumber: syntheticInvoiceNumber || null,
-            supplierName: params.supplierName || null,
-            supplierCnpj: params.supplierCnpj || null,
-          },
-        },
-        metadata: {
-          source: "chatgpt-vision",
-          invoiceNumberProvidedByModel: Boolean(
-            rawLine.invoiceNumber || params.invoiceNumber
-          ),
+    const line = {
+      rowNumber,
+      movementAt,
+      ingredientName,
+      ingredientNameNormalized: normalizeName(ingredientName),
+      motivo: str(rawLine.motivo) || "Entrada por documento",
+      identification:
+        str(rawLine.identification) ||
+        (invoiceNumber ? `DOC: ${invoiceNumber}` : null),
+      invoiceNumber,
+      supplierId: supplier.supplierId,
+      supplierName: supplier.supplierName,
+      supplierNameNormalized: supplier.supplierNameNormalized,
+      supplierCnpj: supplier.supplierCnpj,
+      supplierMatchSource: supplier.supplierMatchSource,
+      ...supplierReconciliation,
+      qtyEntry: Number.isFinite(qtyEntry) ? qtyEntry : null,
+      unitEntry: str(rawLine.unitEntry).toUpperCase() || null,
+      qtyConsumption: Number.isFinite(qtyConsumption) ? qtyConsumption : null,
+      unitConsumption: str(rawLine.unitConsumption).toUpperCase() || null,
+      movementUnit,
+      costAmount: Number.isFinite(costAmount) ? costAmount : null,
+      costTotalAmount: Number.isFinite(costTotalAmount)
+        ? costTotalAmount
+        : null,
+      observation: str(rawLine.observation) || null,
+      sourceFingerprint,
+      rawData: rawLine.rawData || {
+        source: "chatgpt-vision",
+        batchDefaults: {
+          movementAt: params.movementAt?.toISOString() || null,
+          invoiceNumber: params.invoiceNumber || null,
           syntheticInvoiceNumber: syntheticInvoiceNumber || null,
+          supplierName: params.supplierName || null,
+          supplierCnpj: params.supplierCnpj || null,
         },
       },
-      lookup,
-      costHintsByItemId
-    );
+      metadata: {
+        source: "chatgpt-vision",
+        invoiceNumberProvidedByModel: Boolean(
+          rawLine.invoiceNumber || params.invoiceNumber
+        ),
+        syntheticInvoiceNumber: syntheticInvoiceNumber || null,
+      },
+    };
 
     const syntheticLineId = randomUUID();
     parsedLines.push({
@@ -1942,16 +1804,20 @@ export async function createStockMovementImportBatchFromVisionPayload(params: {
     });
   }
 
-  const consolidatedLines = consolidateIdenticalBatchLines(parsedLines);
+  const consolidatedLines = await Promise.all(
+    consolidateSupplierBatchLines(parsedLines).map((line) =>
+      classifyLine(line, lookup, costHintsByItemId)
+    )
+  );
   const existingAppliedFingerprints = await markExistingAppliedDuplicates(
     fingerprintsForAppliedDuplicateCheck(consolidatedLines)
   );
   const finalLines = consolidatedLines.map((line) => {
-    const originalFingerprint =
-      line.metadata?.consolidation?.originalFingerprint;
     if (
-      existingAppliedFingerprints.has(line.sourceFingerprint) ||
-      existingAppliedFingerprints.has(originalFingerprint)
+      fingerprintsForAppliedDuplicateCheck([line]).some(
+        ({ sourceFingerprint }) =>
+          existingAppliedFingerprints.has(sourceFingerprint)
+      )
     ) {
       return {
         ...line,
@@ -3399,7 +3265,7 @@ async function importSingleStockMovementImportBatchLine(params: {
   const db = prismaClient as any;
   const line = params.line;
 
-  if (await hasActiveAppliedFingerprint(line.sourceFingerprint)) {
+  if (await hasActiveAppliedFingerprint(line)) {
     await db.stockMovementImportBatchLine.update({
       where: { id: line.id },
       data: {
