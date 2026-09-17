@@ -318,6 +318,13 @@ export default function AdminAiContextProfilePage() {
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <KnowledgeSourceCard
+          title="Conversas CRM"
+          value="Candidatos revisáveis"
+          detail="Perguntas recorrentes extraídas das conversas; somente respostas aprovadas são publicadas."
+          href="/admin/ai/conhecimento/conversas"
+          action="Analisar conversas"
+        />
+        <KnowledgeSourceCard
           title="Cardápio publicado"
           value={`${overview.cardapioItemsCount} itens visíveis`}
           detail="Sabores, descrições, ingredientes, variações e preços do canal Cardápio."

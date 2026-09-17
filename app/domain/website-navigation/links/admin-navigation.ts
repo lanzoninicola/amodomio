@@ -578,6 +578,13 @@ const ADMIN_NAVIGATION_LINKS: WebsiteNavigationConfig = {
           href: "",
           items: [
             {
+              title: "Substituir insumo",
+              href: "/admin/producao/substituir-insumo",
+              items: [],
+              disabled: false,
+              tags: ["insumo", "substituir", "receita", "composicao", "variacao"],
+            },
+            {
               title: "Publicados sem receita",
               href: "/admin/producao/publicados-sem-receita",
               items: [],
@@ -796,6 +803,13 @@ const ADMIN_NAVIGATION_LINKS: WebsiteNavigationConfig = {
             "horarios",
             "entrega",
           ],
+        },
+        {
+          title: "Conhecimento das conversas",
+          href: "/admin/ai/conhecimento/conversas",
+          items: [],
+          disabled: false,
+          tags: ["ai", "ia", "conhecimento", "crm", "conversas", "revisao"],
         },
         {
           title: "Respostas determinísticas",

@@ -1,17 +1,11 @@
 import { Form, Link, useOutletContext } from "@remix-run/react";
-import { Trash2 } from "lucide-react";
+import { ArrowRight, Plus, Trash2, X } from "lucide-react";
 import { useState } from "react";
 import { DecimalInput } from "~/components/inputs/inputs";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Label } from "~/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "~/components/ui/select";
+import { SearchableSelect } from "~/components/ui/searchable-select";
 import {
   Table,
   TableBody,
@@ -31,7 +25,6 @@ export default function AdminItemPurchasesTab() {
     item,
     costMetrics,
     averageWindowDays,
-    unitOptions,
     measurementUnits,
     restrictedUnits,
     linkedUnitCodes,
@@ -46,7 +39,8 @@ export default function AdminItemPurchasesTab() {
     item.consumptionUm || latestCost?.unit || item.purchaseUm || "";
   const canConfigureConversion = !!item.consumptionUm;
 
-  const [conversionUm, setConversionUm] = useState("__EMPTY__");
+  const [conversionUm, setConversionUm] = useState("");
+  const [showConversionForm, setShowConversionForm] = useState(false);
 
   const conversions: Array<{ id: string; purchaseUm: string; factor: number }> =
     item.ItemPurchaseConversion ?? [];
@@ -57,8 +51,9 @@ export default function AdminItemPurchasesTab() {
   const pendingLinkedUnits = itemUnits.filter(
     (iu) => !usedConversionUnits.has(iu.unitCode)
   );
-  const availableConversionUnits = unitOptions.filter(
-    (u) => u !== item.consumptionUm && !usedConversionUnits.has(u)
+  const availableConversionUnits = measurementUnits.filter(
+    (unit) =>
+      unit.code !== item.consumptionUm && !usedConversionUnits.has(unit.code)
   );
 
   const returnTo = `/admin/items/${item.id}/purchases`;
@@ -96,19 +91,125 @@ export default function AdminItemPurchasesTab() {
             </p>
           </div>
           <Button
-            asChild
+            type="button"
             size="sm"
             className="h-8 bg-black hover:bg-black/80 text-white"
+            disabled={!canConfigureConversion}
+            onClick={() => setShowConversionForm(true)}
           >
-            <Link
-              to={`/admin/unidades-consumo/new?returnTo=${encodeURIComponent(
-                returnTo
-              )}&itemId=${encodeURIComponent(item.id)}`}
-            >
-              Nova UM
-            </Link>
+            <Plus className="mr-1.5 h-3.5 w-3.5" />
+            Novo UM
           </Button>
         </div>
+
+        {showConversionForm && canConfigureConversion && (
+          <Form
+            method="post"
+            action=".."
+            className="mt-3 rounded-lg border border-slate-200 bg-white p-4 shadow-sm"
+          >
+            <input
+              type="hidden"
+              name="_action"
+              value="item-purchase-conversion-add"
+            />
+            <input type="hidden" name="purchaseUm" value={conversionUm} />
+            <div className="mb-3 flex items-start justify-between gap-4">
+              <div>
+                <p className="text-sm font-medium text-slate-800">
+                  Nova conversão de compra
+                </p>
+                <p className="mt-0.5 text-xs text-slate-500">
+                  Selecione a embalagem comprada e informe quanto ela rende em{" "}
+                  {item.consumptionUm}.
+                </p>
+              </div>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="-mr-2 -mt-2 h-8 w-8 shrink-0 text-slate-400 hover:text-slate-700"
+                aria-label="Cancelar nova conversão"
+                onClick={() => {
+                  setShowConversionForm(false);
+                  setConversionUm("");
+                }}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+
+            <div className="grid items-end gap-3 lg:grid-cols-[minmax(260px,1.25fr)_minmax(300px,1fr)_auto]">
+              <div className="min-w-0">
+                <Label className="text-xs text-slate-600">
+                  Unidade de compra
+                </Label>
+                <SearchableSelect
+                  value={conversionUm}
+                  onValueChange={setConversionUm}
+                  options={availableConversionUnits.map((unit) => ({
+                    value: unit.code,
+                    label: `${unit.code} — ${unit.name}`,
+                    searchText: `${unit.code} ${unit.name}`,
+                  }))}
+                  placeholder="Buscar por código ou nome..."
+                  searchPlaceholder="Buscar por código ou nome..."
+                  emptyText="Nenhuma UM encontrada."
+                  triggerClassName="mt-1 h-10 w-full max-w-none bg-white text-sm"
+                  contentClassName="w-[380px]"
+                />
+              </div>
+
+              <div className="min-w-0">
+                <Label className="text-xs text-slate-600">
+                  Equivalência de compra
+                </Label>
+                <div className="mt-1 flex h-10 items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3">
+                  <span className="whitespace-nowrap text-sm font-medium text-slate-700">
+                    1 {conversionUm || "UM"}
+                  </span>
+                  <ArrowRight className="h-4 w-4 shrink-0 text-slate-400" />
+                  <DecimalInput
+                    name="factor"
+                    fractionDigits={4}
+                    placeholder="0,0000"
+                    className="h-8 min-w-0 flex-1 border-0 bg-transparent px-1 text-right font-mono tabular-nums shadow-none focus-visible:ring-0"
+                  />
+                  <span className="shrink-0 text-sm font-semibold text-slate-700">
+                    {item.consumptionUm}
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2 lg:flex-nowrap">
+                <Button
+                  type="submit"
+                  size="sm"
+                  className="h-10 bg-slate-900 px-4 hover:bg-slate-700"
+                  disabled={!conversionUm}
+                >
+                  Salvar
+                </Button>
+                <Button
+                  asChild
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="h-10 whitespace-nowrap"
+                >
+                  <Link
+                    to={`/admin/unidades-consumo/new?returnTo=${encodeURIComponent(
+                      returnTo
+                    )}&itemId=${encodeURIComponent(item.id)}`}
+                  >
+                    <Plus className="mr-1.5 h-3.5 w-3.5" />
+                    Cadastrar UM
+                  </Link>
+                </Button>
+              </div>
+            </div>
+          </Form>
+        )}
 
         {conversions.length === 0 && pendingLinkedUnits.length === 0 ? (
           <p className="mt-3 text-sm text-slate-400">
@@ -304,12 +405,14 @@ export default function AdminItemPurchasesTab() {
                     </TableCell>
                     <TableCell className="px-3 py-2 text-sm text-violet-800">
                       {canConfigureConversion
-                        ? `Defina quantos ${item.consumptionUm
-                        } existem em 1 ${getUnitDisplayName(iu.unitCode)} (${iu.unitCode
-                        }).`
+                        ? `Defina quantos ${
+                            item.consumptionUm
+                          } existem em 1 ${getUnitDisplayName(iu.unitCode)} (${
+                            iu.unitCode
+                          }).`
                         : `Defina a unidade de consumo para configurar 1 ${getUnitDisplayName(
-                          iu.unitCode
-                        )} (${iu.unitCode}).`}
+                            iu.unitCode
+                          )} (${iu.unitCode}).`}
                     </TableCell>
                     <TableCell className="px-3 py-2">
                       <Form method="post" action="..">
@@ -338,60 +441,6 @@ export default function AdminItemPurchasesTab() {
           </div>
         )}
 
-        {canConfigureConversion && (
-          <Form
-            method="post"
-            action=".."
-            className="mt-3 flex flex-wrap items-end gap-3 border-t border-slate-100 pt-3"
-          >
-            <input
-              type="hidden"
-              name="_action"
-              value="item-purchase-conversion-add"
-            />
-            <input
-              type="hidden"
-              name="purchaseUm"
-              value={conversionUm === "__EMPTY__" ? "" : conversionUm}
-            />
-            <div>
-              <Label className="text-xs">Unidade</Label>
-              <Select value={conversionUm} onValueChange={setConversionUm}>
-                <SelectTrigger className="mt-1 h-9 w-40">
-                  <SelectValue placeholder="Selecionar..." />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__EMPTY__">Selecionar...</SelectItem>
-                  {availableConversionUnits.map((u) => (
-                    <SelectItem key={u} value={u}>
-                      {u}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label className="text-xs">
-                Fator (1 {conversionUm !== "__EMPTY__" ? conversionUm : "UM"} =
-                ? {item.consumptionUm})
-              </Label>
-              <DecimalInput
-                name="factor"
-                fractionDigits={4}
-                placeholder="0,0000"
-                className="mt-1 h-9 w-36 font-mono tabular-nums"
-              />
-            </div>
-            <Button
-              type="submit"
-              size="sm"
-              className="h-9 bg-slate-900 hover:bg-slate-700"
-            >
-              Adicionar
-            </Button>
-          </Form>
-        )}
-
         {linkedUnitCodes.length > 0 && (
           <p className="mt-3 text-xs text-slate-400">
             Para vincular mais unidades restritas acesse{" "}
@@ -405,8 +454,6 @@ export default function AdminItemPurchasesTab() {
           </p>
         )}
       </div>
-
-
     </div>
   );
 }

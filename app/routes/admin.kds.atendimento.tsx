@@ -52,7 +52,7 @@ function endOfMonth(d: Date) {
 
 /* =============================
  * Loader — dados
- * - Se ?mes=1: mês corrente completo
+ * - Se ?mes=1: mês da data selecionada completo
  * - Caso contrário: janela curta (−5 / +3 dias)
  * ============================= */
 export async function loader({ request, params }: LoaderFunctionArgs) {
@@ -62,13 +62,16 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
   const today = new Date();
   const todayStr = formatLocalDate(today);
+  const selectedDate = /^\d{4}-\d{2}-\d{2}$/.test(dateStr)
+    ? new Date(`${dateStr}T12:00:00`)
+    : today;
 
   let start: Date;
   let end: Date;
 
   if (fullMonth) {
-    start = startOfMonth(today);
-    end = endOfMonth(today);
+    start = startOfMonth(selectedDate);
+    end = endOfMonth(selectedDate);
   } else {
     start = new Date(today);
     start.setDate(start.getDate() - 5);
@@ -173,6 +176,23 @@ export default function KdsAtendimento() {
     return `${y}-${m}-${d}`;
   }
   const clientTodayYMD = localTodayYMD();
+  const selectedDateForMonths = new Date(
+    `${selectedDateFromUrl ?? clientTodayYMD}T12:00:00`
+  );
+  const previousMonths = Array.from({ length: 3 }, (_, index) => {
+    const month = new Date(
+      selectedDateForMonths.getFullYear(),
+      selectedDateForMonths.getMonth() - index,
+      0
+    );
+
+    return {
+      ymd: formatLocalDate(month),
+      label: month
+        .toLocaleDateString("pt-BR", { month: "short", year: "numeric" })
+        .replace(".", ""),
+    };
+  });
   const clientTodayLabel =
     new Date(`${clientTodayYMD}T12:00:00`).toLocaleDateString("pt-BR", {
       day: "2-digit",
@@ -270,6 +290,44 @@ export default function KdsAtendimento() {
                                   </TooltipProvider>
                                 </SelectItem>
                               ))}
+
+                            <div className="mt-1 border-t px-2 py-2">
+                              <p className="mb-2 text-xs font-medium text-slate-500">
+                                Meses anteriores
+                              </p>
+                              <div className="flex flex-wrap gap-2">
+                                {previousMonths.map((month) => (
+                                  <Button
+                                    key={month.ymd}
+                                    type="button"
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-7 rounded-full border-slate-200 bg-white px-3 text-xs font-medium capitalize text-slate-700 shadow-none hover:bg-slate-50"
+                                    onClick={() =>
+                                      navigate(
+                                        `/admin/kds/atendimento/${month.ymd}/${currentVisualization}?mes=1`
+                                      )
+                                    }
+                                  >
+                                    {month.label}
+                                  </Button>
+                                ))}
+                              </div>
+                            </div>
+
+                            <div
+                              className="flex items-center justify-between gap-3 border-t px-2 py-2 text-xs text-slate-500"
+                              role="note"
+                            >
+                              <span>
+                                {fullMonthUI
+                                  ? "Voltar à janela de 8 dias"
+                                  : "Visualizar todas as datas do mês"}
+                              </span>
+                              <kbd className="rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-slate-700">
+                                M
+                              </kbd>
+                            </div>
                           </SelectContent>
                         </Select>
 
@@ -304,7 +362,6 @@ export default function KdsAtendimento() {
                         </Tooltip>
                       </TooltipProvider>
                     </div>
-
 
                   </div>
                 </div>

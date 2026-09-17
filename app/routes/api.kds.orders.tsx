@@ -12,9 +12,15 @@ import {
   recalcHeaderTotal,
   type KdsOrderApiRow,
   setOrderStatus,
+  setOrderRequestedForOven,
   type KdsStatus,
 } from "~/domain/kds/server";
-import { todayLocalYMD, ymdToDateInt, ymdToUtcNoon } from "~/domain/kds/utils/date";
+import { getAuthenticatedBearerSession } from "~/domain/auth/user-session.server";
+import {
+  todayLocalYMD,
+  ymdToDateInt,
+  ymdToUtcNoon,
+} from "~/domain/kds/utils/date";
 
 type SizeCounts = {
   F: number;
@@ -49,6 +55,8 @@ type KdsOrderStatusUpdatePayload = {
   date?: string;
   commandNumber?: number | string | null;
   status?: string;
+  action?: string;
+  requestedForOven?: boolean;
 };
 
 const RATE_LIMIT_BUCKET = "kds-orders";
@@ -105,22 +113,35 @@ function normalizeSizes(payload: KdsOrderPayload): SizeCounts {
 
 const stringifySize = (c: SizeCounts) => JSON.stringify(c);
 
-function normalizePaymentFlags(input: Pick<KdsOrderPayload, "isCreditCard" | "isCash" | "isOtherPaymentMethod">) {
+function normalizePaymentFlags(
+  input: Pick<
+    KdsOrderPayload,
+    "isCreditCard" | "isCash" | "isOtherPaymentMethod"
+  >
+) {
   const isCreditCard = toBool(input?.isCreditCard);
   const isCash = !isCreditCard && toBool(input?.isCash);
-  const isOtherPaymentMethod = !isCreditCard && !isCash && toBool(input?.isOtherPaymentMethod);
+  const isOtherPaymentMethod =
+    !isCreditCard && !isCash && toBool(input?.isOtherPaymentMethod);
   return { isCreditCard, isCash, isOtherPaymentMethod };
 }
 
-function checkApiAccess(request: Request) {
-  const rateLimit = restApi.rateLimitCheck(request, { bucket: RATE_LIMIT_BUCKET });
+async function checkApiAccess(request: Request) {
+  const rateLimit = restApi.rateLimitCheck(request, {
+    bucket: RATE_LIMIT_BUCKET,
+  });
   if (!rateLimit.success) {
-    const retrySeconds = rateLimit.retryIn ? Math.ceil(rateLimit.retryIn / 1000) : 60;
+    const retrySeconds = rateLimit.retryIn
+      ? Math.ceil(rateLimit.retryIn / 1000)
+      : 60;
     return json(
       { error: "too_many_requests" },
       { status: 429, headers: { "Retry-After": String(retrySeconds) } }
     );
   }
+
+  const bearer = await getAuthenticatedBearerSession(request);
+  if (bearer.user) return null;
 
   const auth = restApi.authorize(request.headers.get("x-api-key"));
   if (auth.status !== 200) {
@@ -133,12 +154,13 @@ function checkApiAccess(request: Request) {
 
 function parseDateOrResponse(raw: unknown) {
   const date =
-    typeof raw === "string" && raw.trim()
-      ? raw.trim()
-      : todayLocalYMD();
+    typeof raw === "string" && raw.trim() ? raw.trim() : todayLocalYMD();
   if (!DATE_RE.test(date)) {
     return {
-      error: json({ error: "invalid_date_format", message: "Use YYYY-MM-DD" }, { status: 400 }),
+      error: json(
+        { error: "invalid_date_format", message: "Use YYYY-MM-DD" },
+        { status: 400 }
+      ),
     };
   }
 
@@ -154,7 +176,9 @@ function parseCommandNumberOrResponse(raw: string | null) {
   if (raw == null || raw.trim() === "") return { commandNumber: null };
   const commandNumber = Number(raw);
   if (!Number.isFinite(commandNumber)) {
-    return { error: json({ error: "invalid_command_number" }, { status: 400 }) };
+    return {
+      error: json({ error: "invalid_command_number" }, { status: 400 }),
+    };
   }
   return { commandNumber };
 }
@@ -220,14 +244,16 @@ function serializeOrder(row: KdsOrderApiRow) {
 }
 
 async function handleListOrders(request: Request) {
-  const accessError = checkApiAccess(request);
+  const accessError = await checkApiAccess(request);
   if (accessError) return accessError;
 
   const url = new URL(request.url);
   const dateParsed = parseDateOrResponse(url.searchParams.get("date"));
   if ("error" in dateParsed) return dateParsed.error;
 
-  const cmdParsed = parseCommandNumberOrResponse(url.searchParams.get("commandNumber"));
+  const cmdParsed = parseCommandNumberOrResponse(
+    url.searchParams.get("commandNumber")
+  );
   if ("error" in cmdParsed) return cmdParsed.error;
 
   const { date, dateInt } = dateParsed;
@@ -278,7 +304,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 }
 
 async function handleCreateOrder(request: Request) {
-  const accessError = checkApiAccess(request);
+  const accessError = await checkApiAccess(request);
   if (accessError) return accessError;
 
   let body: KdsOrderPayload;
@@ -294,7 +320,11 @@ async function handleCreateOrder(request: Request) {
 
   const isVendaLivre = toBool(body?.isVendaLivre);
   const rawCmd = body?.commandNumber;
-  const cmd = isVendaLivre ? null : (rawCmd === null || rawCmd === undefined ? null : Number(rawCmd));
+  const cmd = isVendaLivre
+    ? null
+    : rawCmd === null || rawCmd === undefined
+    ? null
+    : Number(rawCmd);
 
   if (!isVendaLivre && (cmd === null || !Number.isFinite(cmd))) {
     return json({ error: "invalid_command_number" }, { status: 400 });
@@ -310,10 +340,16 @@ async function handleCreateOrder(request: Request) {
     return json({ error: "day_closed" }, { status: 403 });
   }
 
-  if (!headerStatus?.operationStatus || headerStatus.operationStatus === "pending") {
+  if (
+    !headerStatus?.operationStatus ||
+    headerStatus.operationStatus === "pending"
+  ) {
     await prisma.kdsDailyOrder.update({
       where: { id: header.id },
-      data: { operationStatus: "OPENED", openedAt: headerStatus?.openedAt ?? new Date() },
+      data: {
+        operationStatus: "OPENED",
+        openedAt: headerStatus?.openedAt ?? new Date(),
+      },
     });
   }
 
@@ -323,7 +359,10 @@ async function handleCreateOrder(request: Request) {
       select: { id: true },
     });
     if (dup) {
-      return json({ error: "duplicate_command_number", commandNumber: cmd }, { status: 400 });
+      return json(
+        { error: "duplicate_command_number", commandNumber: cmd },
+        { status: 400 }
+      );
     }
   }
 
@@ -338,7 +377,10 @@ async function handleCreateOrder(request: Request) {
     });
     if (!exists) {
       return json(
-        { error: "invalid_delivery_zone_id", deliveryZoneId: deliveryZoneIdRaw },
+        {
+          error: "invalid_delivery_zone_id",
+          deliveryZoneId: deliveryZoneIdRaw,
+        },
         { status: 400 }
       );
     }
@@ -347,13 +389,16 @@ async function handleCreateOrder(request: Request) {
   const { maxSort } = await getMaxes(dateInt);
 
   const sizeCounts = normalizeSizes(body ?? {});
-  const anySize = (sizeCounts.F + sizeCounts.M + sizeCounts.P + sizeCounts.I + sizeCounts.FT) > 0;
+  const anySize =
+    sizeCounts.F + sizeCounts.M + sizeCounts.P + sizeCounts.I + sizeCounts.FT >
+    0;
   const amountDecimal = toDecimal(body?.orderAmount);
   const amountGtZero = (amountDecimal as any)?.gt
     ? (amountDecimal as any).gt(new Prisma.Decimal(0))
     : Number(String(amountDecimal)) > 0;
 
-  const requestedStatus = typeof body?.status === "string" ? body.status.trim() : "";
+  const requestedStatus =
+    typeof body?.status === "string" ? body.status.trim() : "";
   const autoStatus = amountGtZero && anySize ? "novoPedido" : "pendente";
   const status = requestedStatus || autoStatus;
 
@@ -402,7 +447,7 @@ async function handleCreateOrder(request: Request) {
 }
 
 async function handleUpdateOrderStatus(request: Request) {
-  const accessError = checkApiAccess(request);
+  const accessError = await checkApiAccess(request);
   if (accessError) return accessError;
 
   let body: KdsOrderStatusUpdatePayload;
@@ -412,15 +457,31 @@ async function handleUpdateOrderStatus(request: Request) {
     return json({ error: "invalid_json" }, { status: 400 });
   }
 
-  const requestedStatus = typeof body?.status === "string" ? body.status.trim() : "";
-  if (!requestedStatus || !UPDATABLE_KDS_STATUSES.includes(requestedStatus as KdsStatus)) {
+  if (body.action === "setRequestedForOven") {
+    const id = typeof body.id === "string" ? body.id.trim() : "";
+    if (!id || typeof body.requestedForOven !== "boolean") {
+      return json({ error: "invalid_oven_request" }, { status: 400 });
+    }
+    const target = await getOrderForApiById(id);
+    if (!target) return json({ error: "order_not_found" }, { status: 404 });
+    const updated = await setOrderRequestedForOven(id, body.requestedForOven);
+    return json({ ok: true, mode: "oven_updated", ...updated });
+  }
+
+  const requestedStatus =
+    typeof body?.status === "string" ? body.status.trim() : "";
+  if (
+    !requestedStatus ||
+    !UPDATABLE_KDS_STATUSES.includes(requestedStatus as KdsStatus)
+  ) {
     return json(
       { error: "invalid_status", allowed: UPDATABLE_KDS_STATUSES },
       { status: 400 }
     );
   }
 
-  const id = typeof body?.id === "string" && body.id.trim() ? body.id.trim() : null;
+  const id =
+    typeof body?.id === "string" && body.id.trim() ? body.id.trim() : null;
 
   let target = id ? await getOrderForApiById(id) : null;
 
@@ -437,12 +498,18 @@ async function handleUpdateOrderStatus(request: Request) {
 
     if (cmdParsed.commandNumber == null) {
       return json(
-        { error: "missing_target", message: "Informe `id` ou (`date` + `commandNumber`)." },
+        {
+          error: "missing_target",
+          message: "Informe `id` ou (`date` + `commandNumber`).",
+        },
         { status: 400 }
       );
     }
 
-    target = await getOrderForApiByCommandNumber(dateParsed.dateInt, cmdParsed.commandNumber);
+    target = await getOrderForApiByCommandNumber(
+      dateParsed.dateInt,
+      cmdParsed.commandNumber
+    );
   }
 
   if (!target) {
@@ -482,9 +549,14 @@ export async function action({ request }: ActionFunctionArgs) {
     return await handleCreateOrder(request);
   } catch (e: any) {
     if (e?.code === "P2003") {
-      const field = typeof e?.meta?.field_name === "string" ? e.meta.field_name : undefined;
+      const field =
+        typeof e?.meta?.field_name === "string" ? e.meta.field_name : undefined;
       return json(
-        { error: "foreign_key_violation", field, message: "Chave estrangeira inválida." },
+        {
+          error: "foreign_key_violation",
+          field,
+          message: "Chave estrangeira inválida.",
+        },
         { status: 400 }
       );
     }

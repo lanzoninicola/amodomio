@@ -1,8 +1,11 @@
 import { defer, type LoaderFunctionArgs } from "@remix-run/node";
-import { Await, Link, useLoaderData } from "@remix-run/react";
-import { Eye } from "lucide-react";
-import { Suspense } from "react";
+import { Await, Link, useFetcher, useLoaderData } from "@remix-run/react";
+import { Eye, RefreshCw } from "lucide-react";
+import { Suspense, useEffect, useRef } from "react";
 import { Badge } from "~/components/ui/badge";
+import { Button } from "~/components/ui/button";
+import { toast } from "~/components/ui/use-toast";
+import type { action as recalculateAction } from "~/routes/api.item-cost-sheets.recalculate";
 import {
   Table,
   TableBody,
@@ -32,6 +35,58 @@ function formatDateTime(value: string | Date | null | undefined) {
   if (Number.isNaN(date.getTime())) return "-";
 
   return date.toLocaleString("pt-BR");
+}
+
+function RecalculateSheetButton({ sheetId }: { sheetId: string }) {
+  const fetcher = useFetcher<typeof recalculateAction>();
+  const submitted = useRef(false);
+  const isRecalculating = fetcher.state !== "idle";
+
+  useEffect(() => {
+    if (fetcher.state !== "idle" || !fetcher.data || !submitted.current) return;
+    submitted.current = false;
+    const { status, message, payload } = fetcher.data;
+    const bulk = payload?.bulk;
+    const failed = status !== 200 || !bulk || bulk.totals.errors > 0;
+    toast({
+      title: failed ? "Erro ao recalcular ficha" : "Ficha recalculada",
+      description: failed
+        ? bulk?.results
+            ?.find((result: { errors: number }) => result.errors > 0)
+            ?.log?.join(" ") ||
+          message ||
+          "Não foi possível recalcular a ficha."
+        : bulk.totals.updated > 0
+        ? "Os custos da ficha e de suas variações foram atualizados."
+        : "Nenhuma variação foi atualizada.",
+      variant: failed ? "destructive" : "default",
+    });
+  }, [fetcher.state, fetcher.data]);
+
+  return (
+    <fetcher.Form
+      method="post"
+      action="/api/item-cost-sheets/recalculate"
+      onSubmit={() => {
+        submitted.current = true;
+      }}
+    >
+      <input type="hidden" name="itemCostSheetId" value={sheetId} />
+      <Button
+        type="submit"
+        variant="outline"
+        size="sm"
+        className="h-8 gap-1.5"
+        disabled={isRecalculating}
+      >
+        <RefreshCw
+          size={15}
+          className={isRecalculating ? "animate-spin" : ""}
+        />
+        {isRecalculating ? "Recalculando..." : "Recalcular"}
+      </Button>
+    </fetcher.Form>
+  );
 }
 
 function RecipeCostSheetsTable({ rows }: { rows: RecipeCostSheetUsageRow[] }) {
@@ -147,13 +202,16 @@ function RecipeCostSheetsTable({ rows }: { rows: RecipeCostSheetUsageRow[] }) {
                     {formatDateTime(row.updatedAt)}
                   </TableCell>
                   <TableCell className="px-4 py-3 text-right">
-                    <Link
-                      to={`/admin/item-cost-sheets/${row.id}`}
-                      className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-700 transition hover:bg-slate-50"
-                      title="Abrir ficha"
-                    >
-                      <Eye size={15} />
-                    </Link>
+                    <div className="flex items-center justify-end gap-2">
+                      <RecalculateSheetButton sheetId={row.id} />
+                      <Link
+                        to={`/admin/item-cost-sheets/${row.id}`}
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-700 transition hover:bg-slate-50"
+                        title="Abrir ficha"
+                      >
+                        <Eye size={15} />
+                      </Link>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))

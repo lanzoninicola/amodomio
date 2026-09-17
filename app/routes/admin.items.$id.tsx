@@ -57,6 +57,12 @@ import {
   importItemRecipeFromChatGpt,
   parseItemRecipeChatGptImportPayload,
 } from "~/domain/recipe/item-recipe-chatgpt.server";
+import {
+  isPizzaFlavorCategory,
+  isPizzaFlavorRecipe,
+  loadPizzaFlavorCostSheetDefaults,
+} from "~/domain/pizza-flavor-wizard/pizza-flavor-cost-sheet.server";
+import { ensureItemCostSheetForRecipe } from "~/domain/recipe/recipe-item-cost-sheet.server";
 import prismaClient from "~/lib/prisma/client.server";
 import { badRequest, ok, serverError } from "~/utils/http-response.server";
 import { lastUrlSegment } from "~/utils/url";
@@ -336,7 +342,20 @@ export async function loader({ params }: LoaderFunctionArgs) {
       where: { id },
       include: {
         MenuItem: { select: { id: true, name: true }, take: 5 },
-        Recipe: { select: { id: true, name: true, createdAt: true }, take: 5 },
+        Recipe: {
+          select: {
+            id: true,
+            name: true,
+            createdAt: true,
+            RecipeIngredient: {
+              select: {
+                IngredientItem: { select: { id: true, name: true } },
+              },
+              orderBy: [{ sortOrderIndex: "asc" }, { createdAt: "asc" }],
+            },
+          },
+          take: 5,
+        },
         ItemSellingInfo: {
           select: {
             id: true,
@@ -411,6 +430,69 @@ export async function loader({ params }: LoaderFunctionArgs) {
     });
 
     if (!item) return badRequest("Item não encontrado");
+
+    const linkedRecipeIds = (item.Recipe || []).map((recipe: any) => recipe.id);
+    const sameItemRecipeSheetRows =
+      linkedRecipeIds.length > 0
+        ? await db.itemCostSheet.findMany({
+            where: {
+              itemId: id,
+              OR: [
+                {
+                  ItemCostSheetComponent: {
+                    some: { type: "recipe", refId: { in: linkedRecipeIds } },
+                  },
+                },
+                {
+                  ItemCostSheetLine: {
+                    some: { type: "recipe", refId: { in: linkedRecipeIds } },
+                  },
+                },
+              ],
+            },
+            select: {
+              id: true,
+              name: true,
+              baseItemCostSheetId: true,
+              status: true,
+              isActive: true,
+              ItemCostSheetComponent: {
+                where: { type: "recipe", refId: { in: linkedRecipeIds } },
+                select: { refId: true },
+              },
+              ItemCostSheetLine: {
+                where: { type: "recipe", refId: { in: linkedRecipeIds } },
+                select: { refId: true },
+              },
+            },
+          })
+        : [];
+    const sameItemCostSheetsByRecipeId = new Map<string, Map<string, any>>();
+
+    for (const sheet of sameItemRecipeSheetRows) {
+      const rootSheetId = String(sheet.baseItemCostSheetId || sheet.id);
+      const referencedRecipeIds = new Set(
+        [
+          ...(sheet.ItemCostSheetComponent || []),
+          ...(sheet.ItemCostSheetLine || []),
+        ]
+          .map((row: any) => String(row.refId || "").trim())
+          .filter(Boolean)
+      );
+
+      for (const recipeId of referencedRecipeIds) {
+        const sheetsByRootId =
+          sameItemCostSheetsByRecipeId.get(recipeId) || new Map<string, any>();
+        const current = sheetsByRootId.get(rootSheetId);
+        sheetsByRootId.set(rootSheetId, {
+          id: rootSheetId,
+          name: sheet.name,
+          status: sheet.status,
+          isActive: Boolean(current?.isActive || sheet.isActive),
+        });
+        sameItemCostSheetsByRecipeId.set(recipeId, sheetsByRootId);
+      }
+    }
 
     // Load all units plus the restricted subset used by purchases UI
     const measurementUnits =
@@ -508,6 +590,12 @@ export async function loader({ params }: LoaderFunctionArgs) {
     return ok({
       item: {
         ...item,
+        Recipe: (item.Recipe || []).map((recipe: any) => ({
+          ...recipe,
+          _sameItemCostSheets: Array.from(
+            sameItemCostSheetsByRecipeId.get(recipe.id)?.values() || []
+          ),
+        })),
         _baseItemVariation: primaryVariation,
         _itemCostVariationHistory: primaryHistory,
         _itemCostVariationCurrent: currentCost,
@@ -862,14 +950,27 @@ export async function action({ request, params }: ActionFunctionArgs) {
       if (!(Number.isFinite(factor) && factor > 0))
         return badRequest("Informe um fator maior que zero");
 
-      const availableUnits = await getAvailableItemUnits(id);
-      if (!availableUnits.includes(purchaseUm))
-        return badRequest("Unidade de compra inválida");
+      const measurementUnit = await db.measurementUnit.findUnique({
+        where: { code: purchaseUm },
+        select: { code: true, scope: true, active: true },
+      });
+      if (!measurementUnit?.active)
+        return badRequest("Unidade de compra inválida ou inativa");
 
-      await db.itemPurchaseConversion.upsert({
-        where: { itemId_purchaseUm: { itemId: id, purchaseUm } },
-        create: { id: randomUUID(), itemId: id, purchaseUm, factor },
-        update: { factor },
+      await db.$transaction(async (tx: any) => {
+        if (measurementUnit.scope === "restricted") {
+          await tx.itemUnit.upsert({
+            where: { itemId_unitCode: { itemId: id, unitCode: purchaseUm } },
+            create: { id: randomUUID(), itemId: id, unitCode: purchaseUm },
+            update: {},
+          });
+        }
+
+        await tx.itemPurchaseConversion.upsert({
+          where: { itemId_purchaseUm: { itemId: id, purchaseUm } },
+          create: { id: randomUUID(), itemId: id, purchaseUm, factor },
+          update: { factor },
+        });
       });
 
       return ok("Conversão adicionada com sucesso");
@@ -1149,6 +1250,74 @@ export async function action({ request, params }: ActionFunctionArgs) {
       });
 
       return redirect(`/admin/recipes/${newRecipe.id}`);
+    }
+
+    if (_action === "item-recipe-cost-sheet-create") {
+      const recipeId = String(formData.get("recipeId") || "").trim();
+      if (!recipeId) return badRequest("Receita inválida");
+
+      const [currentItem, recipe, existingComponent, existingLegacyLine] =
+        await Promise.all([
+          db.item.findUnique({
+            where: { id },
+            select: { id: true, name: true, categoryId: true },
+          }),
+          db.recipe.findFirst({
+            where: { id: recipeId, itemId: id },
+            select: { id: true, name: true, type: true },
+          }),
+          db.itemCostSheetComponent.findFirst({
+            where: {
+              type: "recipe",
+              refId: recipeId,
+              ItemCostSheet: { is: { itemId: id } },
+            },
+            select: { id: true },
+          }),
+          db.itemCostSheetLine.findFirst({
+            where: {
+              type: "recipe",
+              refId: recipeId,
+              ItemCostSheet: { is: { itemId: id } },
+            },
+            select: { id: true },
+          }),
+        ]);
+
+      if (!currentItem) return badRequest("Item não encontrado");
+      if (!recipe) return badRequest("Receita não vinculada a este item");
+      if (existingComponent || existingLegacyLine) {
+        return badRequest(
+          "Esta receita já está incluída em uma ficha técnica do item"
+        );
+      }
+
+      const itemCategory = currentItem.categoryId
+        ? await db.category.findUnique({
+            where: { id: currentItem.categoryId },
+            select: { name: true },
+          })
+        : null;
+      const isPizzaFlavor =
+        isPizzaFlavorRecipe(recipe) ||
+        isPizzaFlavorCategory(itemCategory || {});
+      const supplementalComponents = isPizzaFlavor
+        ? await loadPizzaFlavorCostSheetDefaults(db)
+        : [];
+      const { rootSheetId } = await ensureItemCostSheetForRecipe({
+        db,
+        item: currentItem,
+        recipe,
+        supplementalComponents,
+        componentNotes: "Receita adicionada pela aba de receitas do item",
+      });
+
+      return ok({
+        message: isPizzaFlavor
+          ? "Ficha técnica criada em rascunho com a receita, a massa base e a embalagem"
+          : "Ficha técnica criada em rascunho com a receita",
+        itemCostSheetId: rootSheetId,
+      });
     }
 
     return badRequest("Ação inválida");

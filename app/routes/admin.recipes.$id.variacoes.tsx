@@ -1,12 +1,5 @@
 import { Form, Link, useFetcher, useOutletContext } from "@remix-run/react";
-import {
-  ArrowRight,
-  CheckCircle2,
-  CircleAlert,
-  Copy,
-  Scale,
-  Trash2,
-} from "lucide-react";
+import { CheckCircle2, Copy, CircleAlert, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button } from "~/components/ui/button";
 import {
@@ -25,10 +18,10 @@ import {
   DialogTitle,
 } from "~/components/ui/dialog";
 import { toast } from "~/components/ui/use-toast";
+import { resolveRecipeBuilderContext } from "~/domain/recipe/recipe-composition-chatgpt-assistant";
 import { cn } from "~/lib/utils";
 import type { AdminRecipeOutletContext } from "./admin.recipes.$id";
 import {
-  buildRecipeSectionHref,
   IngredientUnitEditor,
   InlineVariationCellEditor,
 } from "./admin.recipes.$id";
@@ -282,6 +275,10 @@ export default function AdminRecipeVariacoesTab() {
         variation.variationKind === "base" && variation.variationCode === "base"
     )
     .map((variation) => variation.itemVariationId);
+  const yieldItemVariationId = isYieldMode
+    ? resolveRecipeBuilderContext({ recipe, linkedVariations })
+        .allowedVariations[0]?.itemVariationId
+    : null;
   const hasAnyLinkedVariation = linkedVariations.some((variation) =>
     Boolean(variation.variationId)
   );
@@ -363,6 +360,9 @@ export default function AdminRecipeVariacoesTab() {
       a.itemName.localeCompare(b.itemName, "pt-BR")
   );
   const getYieldLine = (row: { linesByVariation: Map<string, any> }) =>
+    (yieldItemVariationId
+      ? row.linesByVariation.get(String(yieldItemVariationId))
+      : null) ||
     row.linesByVariation.get("__base__") ||
     row.linesByVariation.values().next().value;
   const compositionRowsWithUnit = compositionRows.map((row) => {
@@ -455,117 +455,89 @@ export default function AdminRecipeVariacoesTab() {
     <div className="space-y-4">
       <section className={cn("w-full", compactMatrixWidthClass)}>
         {isYieldMode ? (
-          <div className="mb-4 rounded-md border border-slate-200 bg-slate-50 px-4 py-3">
-            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-              <div className="flex min-w-0 items-start gap-3">
-                <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-white text-slate-700 ring-1 ring-slate-200">
-                  <Scale size={16} />
-                </div>
-                <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <p className="text-sm font-semibold text-slate-900">
-                      Receita por rendimento
-                    </p>
-                    {/* <span className="rounded-full bg-white px-2 py-0.5 text-xs font-medium text-slate-600 ring-1 ring-slate-200">
-                      Rendimento final: {formatQuantity(recipeYieldQuantity)}{" "}
-                      {recipeYieldUnit || "UM"}
-                    </span> */}
-                  </div>
-                  <p className="mt-1 text-sm text-slate-600">
-                    Preencha abaixo a quantidade total de cada ingrediente usada
-                    para um rendimento de{" "}
-                    <span className="font-semibold">
-                      {formatQuantity(recipeYieldQuantity)}{" "}
-                      {recipeYieldUnit || "UM"}
-                    </span>
-                    .
-                  </p>
-                </div>
-              </div>
-              <div className="flex shrink-0 items-center gap-2">
-                {hasVariationPendingCells ? (
-                  <span className="inline-flex items-center gap-1.5 rounded-md bg-amber-50 px-2.5 py-1.5 text-xs font-medium text-amber-800 ring-1 ring-amber-200">
-                    <CircleAlert size={14} />
-                    {completedCellCount}/{requiredCellCount} preenchidos
-                  </span>
-                ) : (
-                  <>
-                    <span className="inline-flex items-center gap-1.5 rounded-md bg-emerald-50 px-2.5 py-1.5 text-xs font-medium text-emerald-700 ring-1 ring-emerald-200">
-                      <CheckCircle2 size={14} />
-                      Pronto para ficha
-                    </span>
-                    <Button asChild size="sm" className="gap-2">
-                      <Link to={buildRecipeSectionHref(recipe.id, "fichas")}>
-                        Fichas técnicas
-                        <ArrowRight size={14} />
-                      </Link>
-                    </Button>
-                  </>
-                )}
-              </div>
-            </div>
+          <div
+            role="status"
+            className={cn(
+              "mb-4 flex items-center gap-3 rounded-md border px-4 py-3 text-sm",
+              hasVariationPendingCells
+                ? "border-amber-200 bg-amber-50 text-amber-800"
+                : "border-emerald-200 bg-emerald-50 text-emerald-800"
+            )}
+          >
+            {hasVariationPendingCells ? (
+              <CircleAlert size={18} className="shrink-0" />
+            ) : (
+              <CheckCircle2 size={18} className="shrink-0" />
+            )}
+            <p>
+              {hasVariationPendingCells
+                ? "Preencha as quantidades dos ingredientes para produzir "
+                : "Quantidades dos ingredientes preenchidas para produzir "}
+              <span className="font-semibold">
+                {formatQuantity(recipeYieldQuantity)} {recipeYieldUnit || "UM"}
+              </span>
+              .
+            </p>
           </div>
         ) : null}
-        <div className="flex flex-wrap items-start justify-between gap-4 border-b border-slate-100 py-4">
-          <div className="space-y-2">
-            <div className="flex items-center gap-2">
-              <span
-                className={`h-1.5 w-1.5 rounded-full ${
-                  hasVariationPendingCells ? "bg-amber-400" : "bg-emerald-400"
-                }`}
-              />
-              <span className="text-sm text-slate-500">
-                {isYieldMode
-                  ? hasVariationPendingCells
-                    ? "Informe as quantidades usadas no lote"
-                    : "Ingredientes completos para o rendimento"
-                  : hasVariationPendingCells
-                  ? "Células sem UM ou quantidade"
-                  : "Todas as variações completas"}
-              </span>
-            </div>
-            {!isYieldMode ? (
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-                  Colunas
+        {!isYieldMode ? (
+          <div className="flex flex-wrap items-start justify-between gap-4 border-b border-slate-100 py-4">
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <span
+                  className={`h-1.5 w-1.5 rounded-full ${
+                    hasVariationPendingCells ? "bg-amber-400" : "bg-emerald-400"
+                  }`}
+                />
+                <span className="text-sm text-slate-500">
+                  {hasVariationPendingCells
+                    ? "Células sem UM ou quantidade"
+                    : "Todas as variações completas"}
                 </span>
-                {columnToggleVariations.length === 0 ? (
-                  <span className="text-sm text-slate-400">
-                    Nenhuma variação disponível.
-                  </span>
-                ) : (
-                  columnToggleVariations.map((variation) => {
-                    const visible = !hiddenVariationIds.includes(
-                      variation.itemVariationId
-                    );
-                    return (
-                      <button
-                        key={`toggle-${variation.itemVariationId}`}
-                        type="button"
-                        onClick={() =>
-                          toggleVariationColumn(variation.itemVariationId)
-                        }
-                        className={cn(
-                          "rounded-full border px-2.5 py-1 text-xs transition-colors",
-                          visible
-                            ? "border-slate-200 bg-slate-100 text-slate-900"
-                            : "border-transparent bg-white text-slate-400 hover:border-slate-200 hover:text-slate-600"
-                        )}
-                      >
-                        {variation.variationName || "Variação"}
-                        {variation.isReference ? (
-                          <span className="ml-1 text-slate-400">★</span>
-                        ) : null}
-                      </button>
-                    );
-                  })
-                )}
               </div>
-            ) : null}
-          </div>
+              {!isYieldMode ? (
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                    Colunas
+                  </span>
+                  {columnToggleVariations.length === 0 ? (
+                    <span className="text-sm text-slate-400">
+                      Nenhuma variação disponível.
+                    </span>
+                  ) : (
+                    columnToggleVariations.map((variation) => {
+                      const visible = !hiddenVariationIds.includes(
+                        variation.itemVariationId
+                      );
+                      return (
+                        <button
+                          key={`toggle-${variation.itemVariationId}`}
+                          type="button"
+                          onClick={() =>
+                            toggleVariationColumn(variation.itemVariationId)
+                          }
+                          className={cn(
+                            "rounded-full border px-2.5 py-1 text-xs transition-colors",
+                            visible
+                              ? "border-slate-200 bg-slate-100 text-slate-900"
+                              : "border-transparent bg-white text-slate-400 hover:border-slate-200 hover:text-slate-600"
+                          )}
+                        >
+                          {variation.variationName || "Variação"}
+                          {variation.isReference ? (
+                            <span className="ml-1 text-slate-400">★</span>
+                          ) : null}
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
+              ) : null}
+            </div>
 
-          <div />
-        </div>
+            <div />
+          </div>
+        ) : null}
 
         <div className="overflow-x-auto">
           <table

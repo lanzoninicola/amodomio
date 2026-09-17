@@ -43,7 +43,9 @@ export const kdsOrderApiSelect = {
   },
 } satisfies Prisma.KdsDailyOrderDetailSelect;
 
-export type KdsOrderApiRow = Prisma.KdsDailyOrderDetailGetPayload<{ select: typeof kdsOrderApiSelect }>;
+export type KdsOrderApiRow = Prisma.KdsDailyOrderDetailGetPayload<{
+  select: typeof kdsOrderApiSelect;
+}>;
 export async function ensureHeader(dateInt: number, currentDate: Date) {
   const activeGoal = await prisma.financialDailyGoal.findFirst({
     where: { isActive: true },
@@ -97,7 +99,10 @@ export async function listOrdersForApiByDate(dateInt: number) {
   });
 }
 
-export async function getOrderForApiByCommandNumber(dateInt: number, commandNumber: number) {
+export async function getOrderForApiByCommandNumber(
+  dateInt: number,
+  commandNumber: number
+) {
   return prisma.kdsDailyOrderDetail.findFirst({
     where: { dateInt, commandNumber, deletedAt: null },
     select: kdsOrderApiSelect,
@@ -273,5 +278,16 @@ export async function setOrderStatus(id: string, next: KdsStatus) {
   await prisma.kdsDailyOrderDetail.update({
     where: { id },
     data,
+  });
+}
+
+export async function setOrderRequestedForOven(
+  id: string,
+  requestedForOven: boolean
+) {
+  return prisma.kdsDailyOrderDetail.update({
+    where: { id },
+    data: { requestedForOven },
+    select: { id: true, requestedForOven: true },
   });
 }

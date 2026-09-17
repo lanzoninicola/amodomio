@@ -83,4 +83,64 @@ describe("ensureItemCostSheetForRecipe", () => {
       }),
     });
   });
+
+  it("adds supplemental components to the new draft sheet", async () => {
+    const db = {
+      itemCostSheet: {
+        findMany: vi
+          .fn()
+          .mockResolvedValueOnce([])
+          .mockResolvedValueOnce([
+            { id: "new-root-sheet", itemVariationId: "variation-medium" },
+            { id: "new-derived-sheet", itemVariationId: "variation-large" },
+          ]),
+        create: vi.fn().mockResolvedValue({}),
+      },
+      itemCostSheetComponent: {
+        create: vi.fn().mockResolvedValue({}),
+      },
+    };
+
+    await ensureItemCostSheetForRecipe({
+      db,
+      item: { id: "item-1", name: "Delicatissima" },
+      recipe: { id: "pizza-recipe", name: "Delicatissima" },
+      supplementalComponents: [
+        {
+          type: "recipe",
+          refId: "base-recipe",
+          name: "Receita Base de pizza romana",
+          unit: "receita",
+        },
+        {
+          type: "item",
+          refId: "pizza-box",
+          name: "Caixa de pizza",
+          unit: "UN",
+        },
+      ],
+    });
+
+    expect(db.itemCostSheetComponent.create).toHaveBeenCalledTimes(3);
+    expect(db.itemCostSheetComponent.create).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        data: expect.objectContaining({
+          type: "recipe",
+          refId: "base-recipe",
+          sortOrderIndex: 1,
+        }),
+      })
+    );
+    expect(db.itemCostSheetComponent.create).toHaveBeenNthCalledWith(
+      3,
+      expect.objectContaining({
+        data: expect.objectContaining({
+          type: "item",
+          refId: "pizza-box",
+          sortOrderIndex: 2,
+        }),
+      })
+    );
+  });
 });

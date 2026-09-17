@@ -226,7 +226,7 @@ export const LINE_STATUS_GUIDE = [
   {
     status: "skipped_duplicate",
     meaning:
-      "Linha detectada como duplicada no lote atual ou já importada antes.",
+      "Linha detectada como pertencente a um documento já importado antes.",
     impact: "Não será importada para evitar duplicidade.",
   },
   {

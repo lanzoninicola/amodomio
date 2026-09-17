@@ -1,0 +1,29 @@
+{
+  "expo": {
+    "name": "Amodomio KDS",
+    "slug": "kds-mobile",
+    "version": "1.0.0",
+    "orientation": "landscape",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.amodomio.kds"
+    },
+    "android": {
+      "package": "com.amodomio.kds",
+      "adaptiveIcon": {
+        "backgroundColor": "#E6F4FE",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "permissions": ["VIBRATE", "RECEIVE_BOOT_COMPLETED"]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": ["expo-secure-store"]
+  }
+}

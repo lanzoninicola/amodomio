@@ -1,3 +1,4 @@
+import { CopyCompositionButton } from "~/domain/recipe/components/copy-composition-button";
 import { Form, Link, useFetcher, useOutletContext } from "@remix-run/react";
 import { closestCenter, DndContext, type DragEndEvent } from "@dnd-kit/core";
 import { arrayMove, SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
@@ -375,7 +376,7 @@ export default function AdminRecipeComposicaoTab() {
 
             <div>
                 <div className="pb-4">
-                    <h2 className="text-base font-semibold text-slate-900">Composição base</h2>
+                    <div className="flex flex-wrap items-center justify-between gap-2"><h2 className="text-base font-semibold text-slate-900">Composição base</h2><CopyCompositionButton recipeId={recipe.id} /></div>
                     <p className="mt-0.5 text-sm text-slate-500">Organize os ingredientes principais da receita antes de detalhar as variações.</p>
                     {reorderFetcher.state !== "idle" ? (
                         <p className="mt-1 text-xs text-slate-400">Salvando nova ordem...</p>

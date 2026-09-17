@@ -3,6 +3,7 @@ import {
   redirect,
   type ActionFunctionArgs,
   type LoaderFunctionArgs,
+  type MetaFunction,
 } from "@remix-run/node";
 import {
   Form,
@@ -21,7 +22,9 @@ import {
   Copy,
   ExternalLink,
   FileSpreadsheet,
+  Loader2,
   RefreshCw,
+  Trash2,
   X,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
@@ -32,7 +35,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "~/components/ui/select";
+import { SearchableSelect } from "~/components/ui/searchable-select";
 import { Button } from "~/components/ui/button";
+import { Input } from "~/components/ui/input";
+import { Checkbox } from "~/components/ui/checkbox";
 import { Switch } from "~/components/ui/switch";
 import {
   Dialog,
@@ -42,14 +48,25 @@ import {
   DialogHeader,
   DialogTitle,
 } from "~/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "~/components/ui/alert-dialog";
 import { toast } from "~/components/ui/use-toast";
 import { DecimalInput } from "~/components/inputs/inputs";
 import { notifyRecipeCostSheetRecalculationRequired } from "~/domain/recipe/recipe-cost-sheet-recalculation-notification.server";
 import { getAvailableItemUnits } from "~/domain/item/item-units.server";
 import { recipeEntity } from "~/domain/recipe/recipe.entity.server";
 import { ensureItemCostSheetForRecipe } from "~/domain/recipe/recipe-item-cost-sheet.server";
-import { countRecipeCostSheetUsage } from "~/domain/recipe/recipe-cost-sheet-usage.server";
+import { listRecipeCostSheetRootIds } from "~/domain/recipe/recipe-cost-sheet-usage.server";
 import { countParentRecipes } from "~/domain/recipe/recipe-links.server";
+import { resolveRecipeBuilderContext } from "~/domain/recipe/recipe-composition-chatgpt-assistant";
 import {
   DEFAULT_RECIPE_CHATGPT_PROJECT_URL,
   RECIPE_CHATGPT_PROJECT_URL_SETTING_NAME,
@@ -439,16 +456,34 @@ async function buildRecipeChatGptImportPreview(params: {
   payload: ReturnType<typeof parseRecipeChatGptImportPayload>;
 }) {
   const { db, recipeId, payload } = params;
-  const [linkedVariations, itemCatalog, currentLines] = await Promise.all([
-    listRecipeLinkedVariations(db, recipeId),
-    db.item.findMany({
-      where: {
-        id: { in: payload.ingredients.map((ingredient) => ingredient.itemId) },
-      },
-      select: { id: true, name: true, consumptionUm: true },
-    }),
-    listRecipeCompositionLines(db, recipeId),
-  ]);
+  const [recipe, linkedVariations, itemCatalog, currentLines] =
+    await Promise.all([
+      db.recipe.findUnique({
+        where: { id: recipeId },
+        select: {
+          id: true,
+          name: true,
+          costingMode: true,
+          yieldQuantity: true,
+          yieldUnit: true,
+        },
+      }),
+      listRecipeLinkedVariations(db, recipeId),
+      db.item.findMany({
+        where: {
+          id: {
+            in: payload.ingredients.map((ingredient) => ingredient.itemId),
+          },
+        },
+        select: { id: true, name: true, consumptionUm: true },
+      }),
+      listRecipeCompositionLines(db, recipeId),
+    ]);
+  if (!recipe) throw new Error("Receita não encontrada");
+  const builderContext = resolveRecipeBuilderContext({
+    recipe,
+    linkedVariations,
+  });
 
   const itemById = new Map<
     string,
@@ -462,11 +497,13 @@ async function buildRecipeChatGptImportPreview(params: {
     )
   );
   const linkedVariationIds = new Set(
-    linkedVariations.map((variation) => variation.itemVariationId)
+    builderContext.allowedVariations.map((variation) =>
+      String(variation.itemVariationId)
+    )
   );
   const variationNameById = new Map(
-    linkedVariations.map((variation) => [
-      variation.itemVariationId,
+    builderContext.allowedVariations.map((variation) => [
+      String(variation.itemVariationId),
       variation.variationName || "Base",
     ])
   );
@@ -749,6 +786,11 @@ export function normalizeInitialLetter(value: string) {
     .toUpperCase();
 }
 
+export const meta: MetaFunction<typeof loader> = ({ data }) => {
+  const name = String(data?.payload?.recipe?.name || "").trim();
+  return [{ title: name ? `Receita | ${name}` : "Receita" }];
+};
+
 export async function loader({ params }: LoaderFunctionArgs) {
   const recipeId = params?.id;
 
@@ -780,7 +822,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
       linkedVariations,
       unitOptions,
       chatGptProjectUrlSetting,
-      recipeCostSheetCount,
+      recipeCostSheetRootIds,
       recipeLinksCount,
       recipeVersions,
     ] = await Promise.all([
@@ -795,13 +837,15 @@ export async function loader({ params }: LoaderFunctionArgs) {
         orderBy: [{ createdAt: "desc" }],
         select: { value: true },
       }),
-      countRecipeCostSheetUsage(db, recipeId),
+      listRecipeCostSheetRootIds(db, recipeId),
       countParentRecipes(db, String((recipe as any)?.itemId || "") || null),
       db.recipe.findMany({
         where: { groupId: String((recipe as any).groupId || recipe.id) },
         select: {
           id: true,
           version: true,
+          name: true,
+          Item: { select: { name: true } },
           status: true,
           activatedAt: true,
           archivedAt: true,
@@ -817,7 +861,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
       recipeLines,
       linkedVariations,
       unitOptions,
-      recipeCostSheetCount,
+      recipeCostSheetRootIds,
       recipeLinksCount,
       recipeVersions,
       chatGptProjectUrl:
@@ -836,12 +880,28 @@ export async function action({ request }: ActionFunctionArgs) {
   const { _action, ...values } = Object.fromEntries(formData);
   const currentSection = resolveRecipeSection(values.tab);
 
+  if (_action === "recipe-duplicate-items") {
+    const items = await prismaClient.item.findMany({
+      where: { active: true, archivedAt: null },
+      select: { id: true, name: true },
+      orderBy: { name: "asc" },
+    });
+    return ok({ items });
+  }
+
   if (_action === "recipe-duplicate") {
     const recipeId = String(values.recipeId || "").trim();
     if (!recipeId) return badRequest("Receita inválida");
 
     try {
-      const duplicatedRecipe = await recipeEntity.duplicate(recipeId);
+      const keepLinkedItem = values.keepLinkedItem !== "false";
+      const itemId = String(values.itemId || "").trim();
+      if (!keepLinkedItem && !itemId)
+        return badRequest("Selecione o item para vincular a cópia");
+      const duplicatedRecipe = await recipeEntity.duplicate(
+        recipeId,
+        keepLinkedItem ? undefined : { itemId }
+      );
       return redirect(buildRecipeSectionHref(duplicatedRecipe.id, "cadastro"));
     } catch (error) {
       return badRequest(
@@ -889,6 +949,18 @@ export async function action({ request }: ActionFunctionArgs) {
       return badRequest(
         (error as Error)?.message || "Erro ao arquivar versão da receita"
       );
+    }
+  }
+
+  if (_action === "recipe-delete") {
+    const recipeId = String(values.recipeId || "").trim();
+    if (!recipeId) return badRequest("Receita inválida");
+
+    try {
+      await recipeEntity.delete(recipeId);
+      return redirect("/admin/recipes");
+    } catch (error) {
+      return badRequest((error as Error)?.message || "Erro ao eliminar receita");
     }
   }
 
@@ -1709,12 +1781,6 @@ export async function action({ request }: ActionFunctionArgs) {
         .trim()
         .toLowerCase() === "yes";
 
-    if (isItemChangeRequested && !confirmItemRemap) {
-      return badRequest(
-        "Troca de item requer confirmação: os dados por variação serão apagados e será necessário remapeamento."
-      );
-    }
-
     let costingInput: ReturnType<typeof parseRecipeCostingInput>;
     try {
       costingInput = parseRecipeCostingInput(values);
@@ -1874,7 +1940,7 @@ export async function action({ request }: ActionFunctionArgs) {
           });
         }
 
-        if (itemId && previousItemId !== itemId) {
+        if (itemId && previousItemId !== itemId && confirmItemRemap) {
           const [targetVariations, recipeIngredients] = await Promise.all([
             db.itemVariation.findMany({
               where: { itemId, deletedAt: null },
@@ -2404,14 +2470,26 @@ export type AdminRecipeOutletContext = {
   }>;
 };
 
+type RecipeVersionSummary = {
+  id: string;
+  name: string;
+  version: number;
+  status: "draft" | "active" | "archived";
+  Item: { name: string } | null;
+};
+
 function RecipeStatusSwitches({
   recipeId,
+  recipeName,
   status,
   version,
+  recipeVersions,
 }: {
   recipeId: string;
+  recipeName: string;
   status: string;
   version: number;
+  recipeVersions: RecipeVersionSummary[];
 }) {
   const fetcher = useFetcher();
   const isSubmitting = fetcher.state !== "idle";
@@ -2429,11 +2507,29 @@ function RecipeStatusSwitches({
   }, [fetcher.state, fetcher.data]);
 
   function updateStatus(nextStatus: "draft" | "active" | "archived") {
+    const currentVersion = recipeVersions.find((row) => row.id === recipeId);
+    const versionsToArchive = recipeVersions.filter(
+      (row) => row.id !== recipeId && row.status === "active"
+    );
+    const describeVersion = (row: RecipeVersionSummary) =>
+      `Receita "${row.name}" — versão ${row.version}\n${
+        row.Item ? `Item vinculado: "${row.Item.name}"` : "Sem item vinculado"
+      }`;
+    const activationMessage = [
+      `Ativar a versão ${version} da receita "${recipeName}"?`,
+      currentVersion?.Item
+        ? `Item vinculado: "${currentVersion.Item.name}"`
+        : "Sem item vinculado",
+      versionsToArchive.length > 0
+        ? `Versões ativas que serão arquivadas:\n${versionsToArchive
+            .map(describeVersion)
+            .join("\n\n")}`
+        : "Nenhuma outra versão ativa desta receita será arquivada.",
+    ].join("\n\n");
     if (
       nextStatus === "active" &&
-      !window.confirm(
-        `Ativar a versão ${version}? Outra versão ativa desta receita será arquivada.`
-      )
+      versionsToArchive.length > 0 &&
+      !window.confirm(activationMessage)
     ) {
       return;
     }
@@ -2522,6 +2618,21 @@ export default function AdminRecipeDetailLayout() {
   const loaderData: HttpResponse | null = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const location = useLocation();
+  const [duplicateOpen, setDuplicateOpen] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [duplicateDialogContainer, setDuplicateDialogContainer] =
+    useState<HTMLDivElement | null>(null);
+  const [keepLinkedItem, setKeepLinkedItem] = useState(true);
+  const [duplicateItemId, setDuplicateItemId] = useState("");
+  const duplicateFetcher = useFetcher<HttpResponse>();
+  const duplicateItemsFetcher = useFetcher<HttpResponse>();
+  const duplicateItems = (duplicateItemsFetcher.data?.payload?.items ||
+    []) as Array<{ id: string; name: string }>;
+
+  const isDuplicating = duplicateFetcher.state !== "idle";
+  useEffect(() => {
+    setDuplicateOpen(false);
+  }, [location.pathname]);
   const [searchParams, setSearchParams] = useSearchParams();
 
   const recipe = loaderData?.payload?.recipe as Recipe;
@@ -2536,15 +2647,18 @@ export default function AdminRecipeDetailLayout() {
   );
   const linkedVariations = (loaderData?.payload?.linkedVariations ||
     []) as AdminRecipeOutletContext["linkedVariations"];
-  const recipeCostSheetCount = Number(
-    loaderData?.payload?.recipeCostSheetCount || 0
-  );
+  const recipeCostSheetRootIds = Array.isArray(
+    loaderData?.payload?.recipeCostSheetRootIds
+  )
+    ? loaderData.payload.recipeCostSheetRootIds
+    : [];
+  const recipeCostSheetCount = recipeCostSheetRootIds.length;
+  const costSheetRecalculationFetcher = useFetcher<HttpResponse<any>>();
+  const isRecalculatingCostSheets =
+    costSheetRecalculationFetcher.state !== "idle";
   const recipeLinksCount = Number(loaderData?.payload?.recipeLinksCount || 0);
-  const recipeVersions = (loaderData?.payload?.recipeVersions || []) as Array<{
-    id: string;
-    version: number;
-    status: "draft" | "active" | "archived";
-  }>;
+  const recipeVersions = (loaderData?.payload?.recipeVersions ||
+    []) as RecipeVersionSummary[];
   const recipeStatus = String((recipe as any)?.status || "draft");
   const isYieldRecipe = String((recipe as any)?.costingMode || "") === "yield";
   const recipeYieldQuantityText = isYieldRecipe
@@ -2637,6 +2751,27 @@ export default function AdminRecipeDetailLayout() {
       });
     }
   }, [actionData]);
+
+  useEffect(() => {
+    if (!costSheetRecalculationFetcher.data) return;
+
+    if (costSheetRecalculationFetcher.data.status >= 400) {
+      toast({
+        title: "Erro",
+        description:
+          costSheetRecalculationFetcher.data.message ||
+          "Não foi possível recalcular as fichas técnicas.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    toast({
+      title: "Fichas técnicas recalculadas",
+      description: `${recipeCostSheetCount} ficha(s) processada(s).`,
+    });
+    dismissCostSheetRecalculationNotice();
+  }, [costSheetRecalculationFetcher.data]);
 
   if (!recipe) {
     const message =
@@ -2747,11 +2882,31 @@ export default function AdminRecipeDetailLayout() {
             </p>
           </div>
           <div className="flex shrink-0 items-center gap-2">
-            <Button asChild size="sm" variant="outline">
-              <Link to={buildRecipeSectionHref(recipe.id, "fichas")}>
-                Ver fichas técnicas
-              </Link>
-            </Button>
+            <costSheetRecalculationFetcher.Form
+              method="post"
+              action="/api/item-cost-sheets/recalculate"
+            >
+              <input
+                type="hidden"
+                name="rootSheetIds"
+                value={recipeCostSheetRootIds.join(",")}
+              />
+              <Button
+                type="submit"
+                size="sm"
+                variant="outline"
+                className="gap-2"
+                disabled={isRecalculatingCostSheets}
+              >
+                <RefreshCw
+                  size={14}
+                  className={isRecalculatingCostSheets ? "animate-spin" : ""}
+                />
+                {isRecalculatingCostSheets
+                  ? "Recalculando..."
+                  : "Recalcular fichas técnicas"}
+              </Button>
+            </costSheetRecalculationFetcher.Form>
             <Button
               type="button"
               variant="ghost"
@@ -2828,8 +2983,10 @@ export default function AdminRecipeDetailLayout() {
         <div className="flex flex-wrap items-center gap-6 text-sm">
           <RecipeStatusSwitches
             recipeId={recipe.id}
+            recipeName={recipe.name}
             status={recipeStatus}
             version={Number((recipe as any)?.version || 1)}
+            recipeVersions={recipeVersions}
           />
           {recipeStatus === "active" ? (
             <Form method="post">
@@ -2863,21 +3020,197 @@ export default function AdminRecipeDetailLayout() {
               Criar ficha técnica
             </Button>
           </Form>
-          <Form method="post">
-            <input type="hidden" name="recipeId" value={recipe.id} />
-            <input type="hidden" name="tab" value={activeTab} />
-            <Button
-              type="submit"
-              name="_action"
-              value="recipe-duplicate"
-              variant="outline"
-              size="sm"
-              className="flex gap-x-2"
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="flex gap-x-2"
+            onClick={() => {
+              setKeepLinkedItem(true);
+              setDuplicateItemId("");
+              setDuplicateOpen(true);
+              duplicateItemsFetcher.submit(
+                { _action: "recipe-duplicate-items" },
+                { method: "post" }
+              );
+            }}
+          >
+            <Copy size={14} />
+            Duplicar receita
+          </Button>
+          <Dialog
+            open={duplicateOpen}
+            onOpenChange={(open) => {
+              if (!isDuplicating) setDuplicateOpen(open);
+            }}
+          >
+            <DialogContent
+              ref={setDuplicateDialogContainer}
+              className="sm:max-w-md"
             >
-              <Copy size={14} />
-              Duplicar receita
-            </Button>
-          </Form>
+              <DialogHeader>
+                <DialogTitle>Duplicar receita</DialogTitle>
+                <DialogDescription>
+                  A cópia de {recipe.name} será criada como rascunho.
+                </DialogDescription>
+              </DialogHeader>
+              <duplicateFetcher.Form method="post" className="space-y-4">
+                <input type="hidden" name="_action" value="recipe-duplicate" />
+                <input type="hidden" name="recipeId" value={recipe.id} />
+                <input
+                  type="hidden"
+                  name="keepLinkedItem"
+                  value={String(keepLinkedItem)}
+                />
+                <input type="hidden" name="itemId" value={duplicateItemId} />
+                <label className="flex items-center gap-2 text-sm">
+                  <Checkbox
+                    checked={keepLinkedItem}
+                    disabled={isDuplicating}
+                    onCheckedChange={(checked) =>
+                      setKeepLinkedItem(checked === true)
+                    }
+                  />
+                  Manter o mesmo item vinculado
+                </label>
+                {keepLinkedItem ? (
+                  <p className="text-sm text-muted-foreground">
+                    {linkedItem?.name ||
+                      (recipe.itemId
+                        ? "Item atual da receita"
+                        : "Receita sem item vinculado")}
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    <label
+                      htmlFor="duplicate-item-search"
+                      className="text-sm font-medium"
+                    >
+                      Item para vincular a cópia
+                    </label>
+                    <SearchableSelect
+                      portalContainer={duplicateDialogContainer}
+                      id="duplicate-item-search"
+                      value={duplicateItemId}
+                      onValueChange={setDuplicateItemId}
+                      options={duplicateItems.map((item) => ({
+                        value: item.id,
+                        label: item.name,
+                      }))}
+                      disabled={
+                        isDuplicating || duplicateItemsFetcher.state !== "idle"
+                      }
+                      placeholder={
+                        duplicateItemsFetcher.state !== "idle"
+                          ? "Carregando itens..."
+                          : "Selecionar item"
+                      }
+                      searchPlaceholder="Buscar item..."
+                      emptyText="Nenhum item encontrado."
+                      triggerClassName="h-10 w-full max-w-none text-sm disabled:cursor-not-allowed disabled:opacity-50"
+                      contentClassName="w-[520px]"
+                    />
+                  </div>
+                )}
+                {!isDuplicating && duplicateFetcher.data?.message && (
+                  <p role="alert" className="text-sm text-red-600">
+                    {String(duplicateFetcher.data.message)}
+                  </p>
+                )}
+                {isDuplicating && (
+                  <div
+                    role="status"
+                    aria-live="polite"
+                    className="flex items-center gap-3 rounded-md bg-muted p-3 text-sm"
+                  >
+                    <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
+                    <div>
+                      <p className="font-medium">
+                        {duplicateFetcher.state === "submitting"
+                          ? "Criando nova receita..."
+                          : "Abrindo nova receita..."}
+                      </p>
+                      <p className="text-muted-foreground">
+                        Aguarde. Você será levado ao cadastro da nova receita.
+                      </p>
+                    </div>
+                  </div>
+                )}
+                <DialogFooter>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={isDuplicating}
+                    onClick={() => setDuplicateOpen(false)}
+                  >
+                    Cancelar
+                  </Button>
+                  <Button
+                    type="submit"
+                    disabled={
+                      isDuplicating || (!keepLinkedItem && !duplicateItemId)
+                    }
+                  >
+                    {isDuplicating && (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    )}
+                    {isDuplicating
+                      ? duplicateFetcher.state === "submitting"
+                        ? "Criando receita..."
+                        : "Abrindo receita..."
+                      : "Duplicar receita"}
+                  </Button>
+                </DialogFooter>
+              </duplicateFetcher.Form>
+            </DialogContent>
+          </Dialog>
+          <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+            <AlertDialogTrigger asChild>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="flex gap-x-2 text-red-600 hover:text-red-700"
+              >
+                <Trash2 size={14} />
+                Eliminar receita
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Eliminar receita?</AlertDialogTitle>
+                <AlertDialogDescription asChild>
+                  <div className="space-y-2">
+                    <p>
+                      Esta ação remove <strong>{recipe.name}</strong>{" "}
+                      permanentemente, junto com sua composição e etapas de
+                      produção.
+                    </p>
+                    {recipeCostSheetCount > 0 ? (
+                      <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-amber-900">
+                        {recipeCostSheetCount} ficha
+                        {recipeCostSheetCount === 1 ? "" : "s"} técnica
+                        {recipeCostSheetCount === 1 ? "" : "s"} usa
+                        {recipeCostSheetCount === 1 ? "" : "m"} esta receita.
+                        Elas não serão apagadas, mas deixarão de referenciar a
+                        receita eliminada.
+                      </p>
+                    ) : null}
+                  </div>
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                <Form method="post" onSubmit={() => setShowDeleteDialog(false)}>
+                  <input type="hidden" name="recipeId" value={recipe.id} />
+                  <input type="hidden" name="_action" value="recipe-delete" />
+                  <Button type="submit" variant="destructive">
+                    Confirmar eliminação
+                  </Button>
+                </Form>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
           <div className="space-y-1">
             <div className="text-xs font-medium text-slate-400">
               Ingredientes

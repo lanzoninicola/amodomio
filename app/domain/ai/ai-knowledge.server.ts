@@ -1,6 +1,7 @@
 import prisma from "~/lib/prisma/client.server";
 import { getStoreOpeningStatus } from "~/domain/store-opening/store-opening-status.server";
 import { findPublishedCardapioFeatured } from "~/domain/content-post/cardapio-featured.server";
+import { getPublishedConversationKnowledge } from "./conversation-knowledge.server";
 
 export const AI_KNOWLEDGE_LANGUAGE = "pt-BR";
 
@@ -14,6 +15,7 @@ export async function getAiKnowledgeSnapshot() {
     deterministicResponses,
     orderLinkSetting,
     featured,
+    conversationKnowledge,
   ] = await Promise.all([
     prisma.aiContextProfileVersion.findFirst({
       where: { language: AI_KNOWLEDGE_LANGUAGE, isActive: true },
@@ -146,6 +148,7 @@ export async function getAiKnowledgeSnapshot() {
       select: { value: true, updatedAt: true },
     }),
     findPublishedCardapioFeatured(),
+    getPublishedConversationKnowledge(),
   ]);
 
   return {
@@ -163,6 +166,7 @@ export async function getAiKnowledgeSnapshot() {
         order: orderLinkSetting?.value?.trim() || null,
       },
       featured,
+      conversationKnowledge,
       cardapio: {
         channel: cardapio ? { key: cardapio.key, name: cardapio.name } : null,
         items: cardapio?.ItemSellingChannelItem ?? [],

@@ -1,7 +1,8 @@
 import type { LoaderFunctionArgs } from "@remix-run/node";
 import { Link, useLoaderData, useOutletContext } from "@remix-run/react";
-import { Pencil } from "lucide-react";
+import { Pencil, Plus } from "lucide-react";
 import { Badge } from "~/components/ui/badge";
+import { Button } from "~/components/ui/button";
 import {
   Table,
   TableBody,
@@ -141,12 +142,22 @@ export default function AdminItemStockMovementsTab() {
               Ver todas as movimentações do estoque deste produto
             </Link>
           </div>
-          <Link
-            to={`/admin/stock-movements?itemId=${encodeURIComponent(item.id)}`}
-            className="inline-flex h-9 items-center justify-center rounded-md border border-slate-200 px-4 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
-          >
-            Ver listagem completa
-          </Link>
+          <div className="flex flex-wrap gap-2">
+            <Button asChild size="sm">
+              <Link
+                to={`/admin/stock-movements/new?itemId=${encodeURIComponent(item.id)}`}
+              >
+                <Plus className="mr-2 h-4 w-4" aria-hidden="true" />
+                Novo movimento
+              </Link>
+            </Button>
+            <Link
+              to={`/admin/stock-movements?itemId=${encodeURIComponent(item.id)}`}
+              className="inline-flex h-9 items-center justify-center rounded-md border border-slate-200 px-4 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+            >
+              Ver listagem completa
+            </Link>
+          </div>
         </div>
       </section>
 

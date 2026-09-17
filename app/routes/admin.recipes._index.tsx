@@ -8,12 +8,24 @@ import {
   Await,
   Form,
   useActionData,
+  useFetcher,
   Link,
   useLoaderData,
   useSubmit,
 } from "@remix-run/react";
 import { Suspense, useEffect, useRef, useState } from "react";
 import { EditItemButton } from "~/components/primitives/table-list";
+import { Button } from "~/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "~/components/ui/alert-dialog";
 import { Input } from "~/components/ui/input";
 import {
   SearchableSelect,
@@ -42,11 +54,13 @@ import {
   ChevronLeft,
   ChevronsLeft,
   ChevronsRight,
+  Trash2,
 } from "lucide-react";
 
-import { ok } from "~/utils/http-response.server";
+import { badRequest, ok } from "~/utils/http-response.server";
 import tryit from "~/utils/try-it";
 import prismaClient from "~/lib/prisma/client.server";
+import { recipeEntity } from "~/domain/recipe/recipe.entity.server";
 import {
   Pagination,
   PaginationContent,
@@ -292,7 +306,21 @@ export async function loader({ request }: LoaderFunctionArgs) {
 }
 
 export async function action({ request }: ActionFunctionArgs) {
-  await request.formData();
+  const formData = await request.formData();
+  const values = Object.fromEntries(formData);
+  const _action = String(values._action || "");
+
+  if (_action === "recipe-delete") {
+    const recipeId = String(values.recipeId || "").trim();
+    if (!recipeId) return badRequest("Receita inválida");
+
+    try {
+      await recipeEntity.delete(recipeId);
+      return ok({ message: "Receita eliminada" });
+    } catch (error) {
+      return badRequest((error as Error)?.message || "Erro ao eliminar receita");
+    }
+  }
 
   return null;
 }
@@ -795,6 +823,18 @@ interface RecipeItemProps {
 
 function RecipeRow({ item }: RecipeItemProps) {
   const linkedChannels = item.Item?.ItemSellingChannelItem || [];
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const deleteFetcher = useFetcher<{ status: number; message: string }>();
+  const isDeleting = deleteFetcher.state !== "idle";
+
+  useEffect(() => {
+    if (!deleteFetcher.data || deleteFetcher.state !== "idle") return;
+    if (deleteFetcher.data.status && deleteFetcher.data.status >= 400) {
+      toast({ title: "Erro", description: deleteFetcher.data.message });
+      return;
+    }
+    setShowDeleteDialog(false);
+  }, [deleteFetcher.data, deleteFetcher.state]);
 
   return (
     <TableRow className="border-slate-100 hover:bg-slate-50/50">
@@ -884,6 +924,50 @@ function RecipeRow({ item }: RecipeItemProps) {
       <TableCell className="px-4 py-3">
         <div className="flex items-center justify-end gap-1">
           <EditItemButton to={`/admin/recipes/${item.id}`} />
+          <AlertDialog
+            open={showDeleteDialog}
+            onOpenChange={setShowDeleteDialog}
+          >
+            <AlertDialogTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="text-red-500 hover:bg-red-50"
+              >
+                <Trash2 size={16} />
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Eliminar receita?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Esta ação remove <strong>{item.name}</strong>{" "}
+                  permanentemente, junto com sua composição e etapas de
+                  produção. Se houver fichas técnicas vinculadas, elas não
+                  serão apagadas, mas deixarão de referenciar esta receita.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel disabled={isDeleting}>
+                  Cancelar
+                </AlertDialogCancel>
+                <Button
+                  type="button"
+                  variant="destructive"
+                  disabled={isDeleting}
+                  onClick={() =>
+                    deleteFetcher.submit(
+                      { _action: "recipe-delete", recipeId: item.id },
+                      { method: "post" }
+                    )
+                  }
+                >
+                  Confirmar eliminação
+                </Button>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </div>
       </TableCell>
     </TableRow>

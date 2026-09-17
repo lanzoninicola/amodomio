@@ -2,98 +2,145 @@ import { describe, expect, it, vi } from "vitest";
 import { RecipeEntity } from "./recipe.entity.server";
 
 describe("RecipeEntity lifecycle", () => {
-  it("duplicates every recipe-owned record with new ids without moving item variation links", async () => {
-    const sourceRecipe = {
-      id: "recipe-v1",
-      groupId: "recipe-group",
-      version: 1,
-      name: "Delicatissima",
-      itemId: "item-1",
-      variationId: null,
-      type: "pizzaTopping",
-      costingMode: "per_variation",
-      yieldQuantity: null,
-      yieldUnit: null,
-      description: "",
-      productionProcedure: null,
-      productionNotes: null,
-      hasVariations: true,
-      isGlutenFree: false,
-      isVegetarian: false,
-      RecipePreheating: null,
-      RecipeBaking: null,
-      PendingIngredient: [],
-      RecipeIngredient: [
-        {
-          id: "old-recipe-ingredient",
-          ingredientItemId: "ingredient-item-1",
-          defaultLossPct: 2,
-          sortOrderIndex: 0,
-          notes: null,
-          RecipeVariationIngredient: [
-            {
-              itemVariationId: "item-variation-1",
-              unit: "g",
-              quantity: 100,
-              lossPct: 1,
-            },
-          ],
-        },
-      ],
-    };
-    const duplicatedRecipe = {
-      id: "recipe-copy",
-      status: "draft",
-      version: 1,
-    };
-    const duplicatedIngredient = { id: "new-recipe-ingredient" };
-    const tx = {
-      recipe: {
-        findFirst: vi.fn().mockResolvedValue(null),
-        create: vi.fn().mockResolvedValue(duplicatedRecipe),
-      },
-      recipeIngredient: {
-        create: vi.fn().mockResolvedValue(duplicatedIngredient),
-      },
-      recipeVariationIngredient: {
-        createMany: vi.fn().mockResolvedValue({ count: 1 }),
-      },
-      itemVariation: {
-        updateMany: vi.fn().mockResolvedValue({ count: 0 }),
-      },
-    };
-    const client = {
-      recipe: { findUnique: vi.fn().mockResolvedValue(sourceRecipe) },
-      $transaction: vi.fn(async (callback) => callback(tx)),
-    };
-    const entity = new RecipeEntity({ client } as any);
-
-    await expect(entity.duplicate("recipe-v1")).resolves.toEqual(
-      duplicatedRecipe
-    );
-    expect(tx.recipeIngredient.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({
-        recipeId: "recipe-copy",
-        ingredientItemId: "ingredient-item-1",
-      }),
-    });
-    expect(tx.recipeVariationIngredient.createMany).toHaveBeenCalledWith({
-      data: [
-        expect.objectContaining({
-          recipeIngredientId: "new-recipe-ingredient",
-          itemVariationId: "item-variation-1",
-        }),
-      ],
-    });
-    expect(tx.itemVariation.updateMany).toHaveBeenCalledWith({
-      where: {
+  it.each([undefined, "item-2"])(
+    "duplicates recipe-owned records without moving existing links (target: %s)",
+    async (targetItemId) => {
+      const sourceRecipe = {
+        id: "recipe-v1",
+        groupId: "recipe-group",
+        version: 1,
+        name: "Delicatissima",
         itemId: "item-1",
-        recipeId: "recipe-copy",
-        deletedAt: null,
-      },
-      data: { recipeId: "recipe-v1" },
-    });
-  });
+        variationId: null,
+        type: "pizzaTopping",
+        costingMode: "per_variation",
+        yieldQuantity: null,
+        yieldUnit: null,
+        description: "",
+        productionProcedure: null,
+        productionNotes: null,
+        hasVariations: true,
+        isGlutenFree: false,
+        isVegetarian: false,
+        RecipePreheating: null,
+        RecipeBaking: null,
+        PendingIngredient: [],
+        RecipeIngredient: [
+          {
+            id: "old-recipe-ingredient",
+            ingredientItemId: "ingredient-item-1",
+            defaultLossPct: 2,
+            sortOrderIndex: 0,
+            notes: null,
+            RecipeVariationIngredient: [
+              {
+                itemVariationId: "item-variation-1",
+                unit: "g",
+                quantity: 100,
+                lossPct: 1,
+              },
+            ],
+          },
+        ],
+      };
+      const duplicatedRecipe = {
+        id: "recipe-copy",
+        status: "draft",
+        version: 1,
+      };
+      const duplicatedIngredient = { id: "new-recipe-ingredient" };
+      const tx = {
+        item: { findFirst: vi.fn().mockResolvedValue({ id: "item-2" }) },
+        recipe: {
+          findFirst: vi.fn().mockResolvedValue(null),
+          create: vi.fn().mockResolvedValue(duplicatedRecipe),
+        },
+        recipeIngredient: {
+          create: vi.fn().mockResolvedValue(duplicatedIngredient),
+        },
+        recipeVariationIngredient: {
+          createMany: vi.fn().mockResolvedValue({ count: 1 }),
+        },
+        itemVariation: {
+          findMany: vi
+            .fn()
+            .mockResolvedValue([
+              {
+                id: "item-variation-1",
+                variationId: "variation-1",
+                isReference: true,
+              },
+            ]),
+          upsert: vi.fn().mockResolvedValue({ id: "target-variation-1" }),
+          updateMany: vi.fn().mockResolvedValue({ count: 0 }),
+        },
+      };
+      const client = {
+        recipe: { findUnique: vi.fn().mockResolvedValue(sourceRecipe) },
+        $transaction: vi.fn(async (callback) => callback(tx)),
+      };
+      const entity = new RecipeEntity({ client } as any);
+
+      await expect(
+        entity.duplicate(
+          "recipe-v1",
+          targetItemId ? { itemId: targetItemId } : undefined
+        )
+      ).resolves.toEqual(duplicatedRecipe);
+      expect(tx.recipe.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          itemId: targetItemId || "item-1",
+          status: "draft",
+        }),
+      });
+      expect(tx.recipeIngredient.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          recipeId: "recipe-copy",
+          ingredientItemId: "ingredient-item-1",
+        }),
+      });
+      expect(tx.recipeVariationIngredient.createMany).toHaveBeenCalledWith({
+        data: [
+          expect.objectContaining({
+            recipeIngredientId: "new-recipe-ingredient",
+            itemVariationId: targetItemId
+              ? "target-variation-1"
+              : "item-variation-1",
+            quantity: 100,
+            lossPct: 1,
+          }),
+        ],
+      });
+      if (targetItemId) {
+        expect(tx.itemVariation.updateMany).not.toHaveBeenCalled();
+        expect(tx.itemVariation.upsert).toHaveBeenCalledWith(
+          expect.objectContaining({
+            create: {
+              itemId: "item-2",
+              variationId: "variation-1",
+              isReference: true,
+            },
+            update: { deletedAt: null },
+          })
+        );
+        tx.item.findFirst.mockResolvedValueOnce(null as any);
+        tx.recipe.create.mockClear();
+        await expect(
+          entity.duplicate("recipe-v1", { itemId: "invalid" })
+        ).rejects.toThrow("Selecione um item ativo");
+        expect(tx.recipe.create).not.toHaveBeenCalled();
+        return;
+      }
+      expect(tx.itemVariation.updateMany).toHaveBeenCalledWith({
+        where: {
+          itemId: "item-1",
+          recipeId: "recipe-copy",
+          deletedAt: null,
+        },
+        data: { recipeId: "recipe-v1" },
+      });
+    }
+  );
 
   it("creates the next version as a draft in the same recipe group", async () => {
     const sourceRecipe = {

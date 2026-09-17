@@ -30,7 +30,7 @@ export async function upsertAdminActionNotification(
 ) {
   if (input.targets.length === 0) return null;
 
-  return db.$transaction(async (tx: any) => {
+  const upsertNotification = async (tx: any) => {
     const notification = await tx.adminActionNotification.upsert({
       where: { key: input.key },
       create: {
@@ -66,7 +66,13 @@ export async function upsertAdminActionNotification(
     });
 
     return notification;
-  });
+  };
+
+  if (typeof db?.$transaction === "function") {
+    return db.$transaction(upsertNotification);
+  }
+
+  return upsertNotification(db);
 }
 
 export async function resolveAdminActionNotificationTarget(

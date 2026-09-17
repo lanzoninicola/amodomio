@@ -1,10 +1,14 @@
+import { useOutletContext } from "@remix-run/react";
 import { useState } from "react";
 import ExternalRecipeChatGptAssistantPanel from "~/domain/recipe/components/external-recipe-chatgpt-assistant-panel";
 import RecipeChatGptAssistantPanel from "~/domain/recipe/components/recipe-chatgpt-assistant-panel";
 import { Button } from "~/components/ui/button";
 import { cn } from "~/lib/utils";
+import type { AdminRecipeOutletContext } from "~/routes/admin.recipes.$id";
 
 export default function RecipeCompositionBuilderRoute() {
+  const { recipe } = useOutletContext<AdminRecipeOutletContext>();
+  const isYieldMode = String((recipe as any)?.costingMode || "") === "yield";
   const [assistant, setAssistant] = useState<"composition" | "external">(
     "composition"
   );
@@ -52,6 +56,23 @@ export default function RecipeCompositionBuilderRoute() {
 
   return (
     <div className="pb-8">
+      <div className="mb-4 rounded-md border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+        <span className="font-semibold text-slate-900">
+          Modalidade detectada:{" "}
+        </span>
+        {isYieldMode ? "por rendimento" : "por variação/tamanho"}.
+        {isYieldMode ? (
+          <span>
+            {" "}
+            O builder considera o lote de{" "}
+            {Number((recipe as any)?.yieldQuantity || 0).toLocaleString(
+              "pt-BR"
+            )}{" "}
+            {String((recipe as any)?.yieldUnit || "UM").toUpperCase()} e a
+            eventual perda de cada ingrediente.
+          </span>
+        ) : null}
+      </div>
       {assistant === "composition" ? (
         <RecipeChatGptAssistantPanel
           assistantChoiceContent={assistantChoiceContent}
