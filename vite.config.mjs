@@ -38,7 +38,7 @@ export default defineConfig(({ command }) => ({
   },
   server: {
     https: false,
-    host: "localhost", // importante manter "localhost"
+    host: "0.0.0.0", // permite acesso do aplicativo pela rede local
     port: 3000,
     watch: {
       ignored: devWatchIgnored,

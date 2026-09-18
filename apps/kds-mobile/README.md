@@ -1,6 +1,7 @@
-# Amodomio KDS Mobile
+# Amodomio Mobile
 
-Aplicativo React Native + Expo para o Kanban de atendimento do KDS.
+Aplicativo React Native + Expo do Amodomio. O KDS é a primeira
+funcionalidade disponível dentro do aplicativo.
 
 ## Requisitos
 
@@ -26,4 +27,12 @@ armazenamento local.
 - `GET /api/kds/orders?date=YYYY-MM-DD`: pedidos.
 - `PATCH /api/kds/orders`: status e sinalização para o forno.
 
-O quadro é atualizado a cada quatro segundos enquanto o app está em primeiro plano.
+Após o login, o aplicativo abre a tela inicial genérica em modo retrato. Ao
+entrar no KDS, permite orientação horizontal ou vertical e atualiza o quadro a cada quatro segundos.
+Toque na data para abrir o calendário, navegar entre meses e selecionar um dia;
+o botão Hoje retorna à data atual.
+
+Em celulares, o KDS usa cartões compactos (duas colunas na vertical e quatro
+na horizontal), filtros NP/AF/AS e ações rápidas AF/AS com os componentes
+nativos do app. Toque novamente no filtro ativo para ver todos os pedidos
+ativos; toque na comanda para acessar as demais etapas. Tablets mantêm o Kanban.

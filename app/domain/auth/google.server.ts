@@ -28,7 +28,7 @@ const cookieOptions = {
   secure: process.env.NODE_ENV !== "development",
 };
 
-const sessionStorage = createCookieSessionStorage({
+export const sessionStorage = createCookieSessionStorage({
   cookie: cookieOptions,
 });
 

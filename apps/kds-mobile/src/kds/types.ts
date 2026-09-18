@@ -1,25 +1,38 @@
 export const KDS_STATUSES = [
-  { id: "novoPedido", label: "Novo pedido", color: "#475569", tint: "#f1f5f9" },
-  { id: "emProducao", label: "Em produção", color: "#2563eb", tint: "#eff6ff" },
+  { id: "novoPedido", label: "Novo pedido", color: "#0284c7", tint: "#f0f9ff" },
+  { id: "emProducao", label: "Em produção", color: "#7c3aed", tint: "#f5f3ff" },
   {
     id: "aguardandoForno",
     label: "Aguardando forno",
-    color: "#7c3aed",
-    tint: "#f5f3ff",
+    color: "#b45309",
+    tint: "#fffbeb",
   },
-  { id: "assando", label: "Assando", color: "#ea580c", tint: "#fff7ed" },
-  { id: "finalizado", label: "Finalizado", color: "#a16207", tint: "#fefce8" },
+  { id: "assando", label: "Assando", color: "#0f766e", tint: "#f0fdfa" },
+  { id: "finalizado", label: "Finalizado", color: "#15803d", tint: "#f0fdf4" },
 ] as const;
 
 export type KdsStatus = (typeof KDS_STATUSES)[number]["id"];
+
+export function getKdsStatusStyle(status: string | null | undefined) {
+  return (
+    KDS_STATUSES.find((entry) => entry.id === status) ?? {
+      id: status ?? "unknown",
+      label: status === "pendente" ? "Pendente" : "Status não reconhecido",
+      color: "#64748b",
+      tint: "#f1f5f9",
+    }
+  );
+}
 
 export type KdsOrder = {
   id: string;
   dateInt: number;
   createdAt: string;
+  novoPedidoAt?: string | null;
+  finalizadoAt?: string | null;
   updatedAt: string;
   commandNumber: number | null;
-  status: KdsStatus;
+  status: string;
   channel: string;
   takeAway: boolean;
   requestedForOven: boolean;

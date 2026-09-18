@@ -18,6 +18,9 @@ import {
 import { SidebarNavigationSection } from "~/domain/website-navigation/types/navigation-types";
 import { toast } from "~/components/ui/use-toast";
 
+import { UserNav } from "~/domain/auth/components/user-nav";
+import type { LoggedUser } from "~/domain/auth/types.server";
+
 type TopNavItem = {
     id: string;
     href: string;
@@ -28,6 +31,7 @@ type TopNavItem = {
 };
 
 interface AdminHeaderProps {
+    loggedUser?: LoggedUser
     urlSegment?: string
     slug?: string
     topNavItems?: TopNavItem[]
@@ -157,6 +161,7 @@ function AdminActionNotificationsMenu({
 }
 
 export function AdminHeader({
+    loggedUser,
     urlSegment,
     slug,
     topNavItems = [],
@@ -304,7 +309,7 @@ export function AdminHeader({
                     <div className="flex min-w-0 flex-1 items-center md:justify-end md:space-x-2">
                         <div className="hidden md:block md:w-auto md:flex-none">
                         </div>
-                        <nav className="grid w-full grid-cols-5 items-center md:flex md:w-auto md:justify-center md:gap-3 lg:gap-4">
+                        <nav className={cn("grid w-full items-center md:flex md:w-auto md:justify-center md:gap-3 lg:gap-4", loggedUser ? "grid-cols-6" : "grid-cols-5")}>
                             <button
                                 type="button"
                                 className="flex min-w-0 flex-col items-center gap-0.5 rounded-md px-1 py-2 hover:bg-slate-50 md:hidden"
@@ -381,7 +386,7 @@ export function AdminHeader({
                                 </div>
                             </Link>
 
-                            {/* <ModeToggle /> */}
+                            {loggedUser && <div className="flex justify-center"><UserNav {...loggedUser} /></div>}
                         </nav>
                     </div>
                 </div>
