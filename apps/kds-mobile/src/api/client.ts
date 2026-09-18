@@ -16,15 +16,24 @@ async function request<T>(
   init: RequestInit = {},
   token?: string | null
 ): Promise<T> {
-  const response = await fetch(`${normalizeBaseUrl(baseUrl)}${path}`, {
-    ...init,
-    headers: {
-      Accept: "application/json",
-      "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...init.headers,
-    },
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${normalizeBaseUrl(baseUrl)}${path}`, {
+      ...init,
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...init.headers,
+      },
+    });
+  } catch {
+    throw new Error(
+      `Não foi possível conectar a ${normalizeBaseUrl(
+        baseUrl
+      )}. Confira o endereço do servidor e se o celular está na mesma rede Wi-Fi do computador.`
+    );
+  }
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
     throw new ApiError(

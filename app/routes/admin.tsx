@@ -566,6 +566,7 @@ export default function AdminOutlet() {
                     </>
                 ) : null}
                 <AdminHeader
+                    loggedUser={loggedUser}
                     slug={slug}
                     urlSegment={urlSegment}
                     topNavItems={topNavItems}
