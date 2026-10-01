@@ -1,3 +1,8 @@
+import { DesktopBoard } from "./src/kds/DesktopBoard";
+import { OvenRequestAlert } from "./src/kds/OvenRequestAlert";
+import { Alert } from "./src/platform/alert";
+import { desktop } from "./src/platform/desktop";
+import { DesktopToolbar } from "./src/ui/DesktopToolbar";
 import { StatusBar } from "expo-status-bar";
 import * as Device from "expo-device";
 import * as ScreenOrientation from "expo-screen-orientation";
@@ -12,7 +17,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   useWindowDimensions,
   ActivityIndicator,
-  Alert,
+  Platform,
   AppState,
   Modal,
   Pressable,
@@ -117,8 +122,10 @@ function LoginScreen({
       const result = await login(apiUrl, {
         identifier,
         password,
-        deviceLabel: `KDS Mobile · ${
-          Device.deviceName || Device.modelName || "Expo"
+        deviceLabel: `Amodomio · ${
+          desktop
+            ? "Amodomio Desktop"
+            : Device.deviceName || Device.modelName || "Expo"
         }`,
       });
       const cleanUrl = apiUrl.trim().replace(/\/+$/, "");
@@ -410,7 +417,8 @@ function KanbanScreen({
   useEffect(() => {
     const timer = setInterval(() => {
       setNow(Date.now());
-      if (AppState.currentState === "active" && online) void load();
+      if ((desktop || AppState.currentState === "active") && online)
+        void load();
     }, POLLING_MS);
     return () => clearInterval(timer);
   }, [load, online]);
@@ -441,6 +449,7 @@ function KanbanScreen({
     }
   };
   const toggleOven = async (order: KdsOrder) => {
+    if (mutatingId) return;
     if (!online)
       return Alert.alert("Sem conexão", "Reconecte para alterar o pedido.");
     const previous = orders;
@@ -477,7 +486,7 @@ function KanbanScreen({
   return (
     <Screen style={styles.appSafe}>
       <StatusBar style="light" />
-      {!isPhone ? (
+      {!desktop && !isPhone ? (
         <AppHeader
           eyebrow="AMODOMIO"
           title="KDS"
@@ -488,7 +497,7 @@ function KanbanScreen({
           }
         />
       ) : null}
-      {isPhone ? (
+      {desktop || isPhone ? (
         <>
           <View style={styles.phoneToolbar}>
             <Button
@@ -502,7 +511,7 @@ function KanbanScreen({
               loading={refreshing}
               onPress={() => load(true)}
             >
-              ↻
+              {desktop ? "Atualizar" : "↻"}
             </Button>
             <Button variant="ghost" onPress={onBack}>
               Início
@@ -556,6 +565,13 @@ function KanbanScreen({
           <ActivityIndicator size="large" color={theme.colors.primary} />
           <Text style={styles.loadingText}>Carregando pedidos…</Text>
         </View>
+      ) : desktop ? (
+        <DesktopBoard
+          orders={orders}
+          busy={Boolean(mutatingId)}
+          onToggleOven={toggleOven}
+          onChooseStatus={setSelected}
+        />
       ) : isPhone ? (
         <PhoneBoard
           orders={orders}
@@ -690,6 +706,7 @@ function AppContent() {
   const [booting, setBooting] = useState(true);
 
   useEffect(() => {
+    if (Platform.OS === "web") return;
     const orientation =
       activeFeature === "kds"
         ? ScreenOrientation.OrientationLock.DEFAULT
@@ -701,8 +718,8 @@ function AppContent() {
 
   useEffect(() => {
     void prepareNotifications();
-    Promise.all([sessionStorage.getToken(), sessionStorage.getApiUrl()]).then(
-      async ([token, apiUrl]) => {
+    Promise.all([sessionStorage.getToken(), sessionStorage.getApiUrl()])
+      .then(async ([token, apiUrl]) => {
         if (token && apiUrl) {
           try {
             const result = await getMe(apiUrl, token);
@@ -712,54 +729,69 @@ function AppContent() {
           }
         }
         setBooting(false);
-      }
-    );
+      })
+      .catch(() => setBooting(false));
   }, []);
-  if (booting || (!fontsLoaded && !fontError))
+  const renderScreen = () => {
+    if (booting || (!fontsLoaded && !fontError))
+      return (
+        <Screen style={styles.splash}>
+          <StatusBar style="light" />
+          <Text style={styles.splashBrand}>AMODOMIO</Text>
+          <ActivityIndicator color="#fff" />
+        </Screen>
+      );
+    if (!session)
+      return (
+        <LoginScreen
+          onAuthenticated={(nextSession) => {
+            setActiveFeature(null);
+            setSession(nextSession);
+          }}
+        />
+      );
+    if (activeFeature === "kds") {
+      return (
+        <KanbanScreen
+          token={session.token}
+          apiUrl={session.apiUrl}
+          onBack={() => setActiveFeature(null)}
+          onUnauthorized={() => {
+            setActiveFeature(null);
+            setSession(null);
+          }}
+        />
+      );
+    }
     return (
-      <Screen style={styles.splash}>
-        <StatusBar style="light" />
-        <Text style={styles.splashBrand}>AMODOMIO</Text>
-        <ActivityIndicator color="#fff" />
-      </Screen>
-    );
-  if (!session)
-    return (
-      <LoginScreen
-        onAuthenticated={(nextSession) => {
-          setActiveFeature(null);
-          setSession(nextSession);
-        }}
-      />
-    );
-  if (activeFeature === "kds") {
-    return (
-      <KanbanScreen
-        token={session.token}
-        apiUrl={session.apiUrl}
-        onBack={() => setActiveFeature(null)}
-        onUnauthorized={() => {
+      <HomeScreen
+        {...session}
+        onOpenKds={() => setActiveFeature("kds")}
+        onSignedOut={() => {
           setActiveFeature(null);
           setSession(null);
         }}
       />
     );
-  }
+  };
   return (
-    <HomeScreen
-      {...session}
-      onOpenKds={() => setActiveFeature("kds")}
-      onSignedOut={() => {
-        setActiveFeature(null);
-        setSession(null);
-      }}
-    />
+    <>
+      {renderScreen()}
+      {session ? (
+        <OvenRequestAlert
+          key={`${session.user.id}:${session.apiUrl}`}
+          token={session.token}
+          apiUrl={session.apiUrl}
+        />
+      ) : null}
+    </>
   );
 }
 
 export default function App() {
   return (
     <SafeAreaProvider>
+      <DesktopToolbar />
       <AppContent />
     </SafeAreaProvider>
   );

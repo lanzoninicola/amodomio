@@ -1788,6 +1788,8 @@ enum UserRole {
   user
   admin
   superAdmin @map("super-admin")
+  kdsOperator @map("kds-operator")
+  kdsAdmin    @map("kds-admin")
 }
 
 enum UserProvisionSource {

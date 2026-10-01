@@ -20,17 +20,25 @@
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "permissions": [
-        "VIBRATE",
-        "RECEIVE_BOOT_COMPLETED"
-      ]
+      "permissions": ["VIBRATE", "RECEIVE_BOOT_COMPLETED"]
     },
     "web": {
       "favicon": "./assets/favicon.png"
     },
-    "plugins": [
-      "expo-secure-store",
-      "expo-font"
-    ]
+    "plugins": ["expo-secure-store", "expo-font"],
+    "runtimeVersion": {
+      "policy": "fingerprint"
+    },
+    "updates": {
+      "checkAutomatically": "ON_LOAD",
+      "fallbackToCacheTimeout": 0,
+      "url": "https://u.expo.dev/eafb189c-c6a5-47c2-9393-e893b878df3a"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "eafb189c-c6a5-47c2-9393-e893b878df3a"
+      }
+    },
+    "owner": "amodomio"
   }
 }

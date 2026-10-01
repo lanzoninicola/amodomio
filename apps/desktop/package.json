@@ -1,0 +1,59 @@
+{
+  "name": "amodomio-desktop",
+  "productName": "Amodomio",
+  "version": "1.0.1",
+  "description": "Aplicativo Amodomio para desktop",
+  "author": "Amodomio",
+  "private": true,
+  "main": "main.cjs",
+  "scripts": {
+    "export:web": "node scripts/export-web.cjs",
+    "start": "npm run export:web && electron .",
+    "pack": "npm run export:web && electron-builder --dir",
+    "dist:win": "npm run export:web && electron-builder --win nsis --x64 --publish never",
+    "test": "node --test *.test.cjs",
+    "dist:linux": "npm run export:web && electron-builder --linux deb --x64 --publish never"
+  },
+  "build": {
+    "appId": "com.amodomio.desktop",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "main.cjs",
+      "preload.cjs",
+      "policy.cjs",
+      "web/**/*"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "../kds-mobile/assets/icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "shortcutName": "Amodomio"
+    },
+    "linux": {
+      "target": "deb",
+      "category": "Office",
+      "icon": "../kds-mobile/assets/icon.png",
+      "maintainer": "Amodomio",
+      "executableName": "amodomio",
+      "desktop": {
+        "entry": {
+          "Name": "Amodomio",
+          "Comment": "Aplicativo Amodomio",
+          "StartupWMClass": "amodomio-desktop"
+        }
+      }
+    }
+  },
+  "devDependencies": {
+    "electron": "44.4.5",
+    "electron-builder": "26.15.3"
+  },
+  "homepage": "https://github.com/lanzoninicola/amodomio"
+}

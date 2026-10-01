@@ -1,3 +1,4 @@
+import { desktop } from "../platform/desktop";
 import type { KdsOrder, KdsStatus, KdsUser } from "../kds/types";
 
 export class ApiError extends Error {
@@ -18,20 +19,30 @@ async function request<T>(
 ): Promise<T> {
   let response: Response;
   try {
-    response = await fetch(`${normalizeBaseUrl(baseUrl)}${path}`, {
-      ...init,
-      headers: {
-        Accept: "application/json",
-        "Content-Type": "application/json",
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        ...init.headers,
-      },
-    });
+    if (desktop) {
+      const result = await desktop.request({
+        baseUrl: normalizeBaseUrl(baseUrl),
+        path,
+        method: init.method || "GET",
+        body: typeof init.body === "string" ? init.body : undefined,
+        token,
+      });
+      response = new Response(result.body, { status: result.status });
+    } else
+      response = await fetch(`${normalizeBaseUrl(baseUrl)}${path}`, {
+        ...init,
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          ...init.headers,
+        },
+      });
   } catch {
     throw new Error(
       `Não foi possível conectar a ${normalizeBaseUrl(
         baseUrl
-      )}. Confira o endereço do servidor e se o celular está na mesma rede Wi-Fi do computador.`
+      )}. Confira o endereço do servidor e se este dispositivo tem acesso à rede do servidor.`
     );
   }
   const data = await response.json().catch(() => ({}));

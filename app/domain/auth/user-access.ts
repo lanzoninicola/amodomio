@@ -4,6 +4,8 @@ const ROLE_INHERITANCE: Record<UserRole, UserRole[]> = {
   user: ["user"],
   admin: ["admin", "user"],
   superAdmin: ["superAdmin", "admin", "user"],
+  kdsOperator: ["kdsOperator", "user"],
+  kdsAdmin: ["kdsAdmin", "kdsOperator", "user"],
 };
 
 export function normalizeUserRoles(roles?: UserRole[] | null) {
@@ -19,4 +21,3 @@ export function getEffectiveRoles(user: { roles: UserRole[] }) {
     )
   );
 }
-
