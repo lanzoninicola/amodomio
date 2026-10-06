@@ -1,4 +1,5 @@
 import { Link, Outlet, useLocation } from "@remix-run/react";
+import { RecipeTemplateChecklistProvider } from "~/domain/recipe/components/recipe-template-checklist";
 import {
   BookOpen,
   CalendarDays,
@@ -327,7 +328,9 @@ export default function AdminMobileLayout() {
           </main>
         ) : (
           <main>
-            <Outlet />
+            <RecipeTemplateChecklistProvider>
+              <Outlet />
+            </RecipeTemplateChecklistProvider>
           </main>
         )}
       </div>

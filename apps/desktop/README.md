@@ -65,10 +65,10 @@ não substitui essa validação com Windows e servidor reais.
 ## Instalador Ubuntu (amd64)
 
 Execute `npm run dist:linux` na pasta desktop com o Node de `.nvmrc` ativo.
-O pacote `release/amodomio-desktop_1.0.0_amd64.deb` pode ser instalado com:
+O pacote `release/amodomio-desktop_1.0.2_amd64.deb` pode ser instalado com:
 
 ```bash
-sudo apt install ./amodomio-desktop_1.0.0_amd64.deb
+sudo apt install ./amodomio-desktop_1.0.2_amd64.deb
 ```
 
 Abra **Amodomio** no menu de aplicativos, ou execute `amodomio` no terminal.
@@ -76,3 +76,15 @@ Para o backend rodando no mesmo Ubuntu, informe `http://localhost:3000` no login
 O servidor deve estar ativo. O pacote não inclui backend nem banco de dados.
 Para desinstalar: `sudo apt remove amodomio-desktop`.
 O sistema pode pedir acesso ao chaveiro para proteger a sessão.
+
+## Widget e preferências do KDS (1.0.2)
+
+Dentro do KDS, o ícone de widget alterna para uma janela de 360 × 300 e restaura o
+formato anterior ao sair. Os pedidos continuam acessíveis por rolagem. Compacto e
+Sempre no topo usam ícones com tooltip no mouse e no foco do teclado.
+A engrenagem abre uma janela independente de configurações. Salvar aplica os status
+imediatamente ao KDS e preserva a escolha local. Essa janela não recebe a ponte de
+sessão/API do Electron. Validar no Ubuntu: alternar widget/compacto, voltar ao início,
+abrir configurações duas vezes (uma única janela), salvar e reiniciar o app.
+
+Os accordions começam fechados; os padrões visíveis continuam Aguardando forno e Assando.

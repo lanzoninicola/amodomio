@@ -1,3 +1,4 @@
+import { useDesktopWindow } from "./src/platform/useDesktopWindow";
 import { DesktopBoard } from "./src/kds/DesktopBoard";
 import { OvenRequestAlert } from "./src/kds/OvenRequestAlert";
 import { Alert } from "./src/platform/alert";
@@ -49,6 +50,7 @@ import { sessionStorage } from "./src/storage/session";
 import { AppHeader } from "./src/ui/AppHeader";
 import { PhoneBoard } from "./src/kds/PhoneBoard";
 import { DateCalendar } from "./src/ui/DateCalendar";
+import { ordersForDate } from "./src/kds/orders";
 import { Badge } from "./src/ui/Badge";
 import { Button } from "./src/ui/Button";
 import { Card } from "./src/ui/Card";
@@ -349,6 +351,7 @@ function KanbanScreen({
   onUnauthorized: () => void;
 }) {
   const { width, height } = useWindowDimensions();
+  const { widget } = useDesktopWindow();
   const isPhone =
     Device.deviceType === Device.DeviceType.PHONE ||
     (Device.deviceType !== Device.DeviceType.TABLET &&
@@ -357,7 +360,11 @@ function KanbanScreen({
   const [calendarOpen, setCalendarOpen] = useState(false);
   const currentDate = useRef(date);
   currentDate.current = date;
-  const [orders, setOrders] = useState<KdsOrder[]>([]);
+  const [loadedOrders, setOrders] = useState<KdsOrder[]>([]);
+  const orders = useMemo(
+    () => ordersForDate(loadedOrders, date),
+    [loadedOrders, date]
+  );
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [mutatingId, setMutatingId] = useState<string | null>(null);
@@ -371,7 +378,7 @@ function KanbanScreen({
     async (manual = false) => {
       if (manual) setRefreshing(true);
       try {
-        const next = await listOrders(apiUrl, token, date);
+        const next = ordersForDate(await listOrders(apiUrl, token, date), date);
         if (currentDate.current !== date) return;
         if (knownIds.current) {
           const newcomers = next.filter(
@@ -499,13 +506,19 @@ function KanbanScreen({
       ) : null}
       {desktop || isPhone ? (
         <>
-          <View style={styles.phoneToolbar}>
+          <View
+            style={[styles.phoneToolbar, desktop && { padding: 4, gap: 4 }]}
+          >
             <Button
               variant="outline"
               style={{ flex: 1 }}
               disabled={Boolean(mutatingId)}
               onPress={() => setCalendarOpen(true)}
-            >{`${formatDate(date)}  ⌄`}</Button>
+            >{`${
+              widget
+                ? date.split("-").reverse().slice(0, 2).join("/")
+                : formatDate(date)
+            }  ⌄`}</Button>
             <Button
               variant="ghost"
               loading={refreshing}
@@ -625,7 +638,7 @@ function KanbanScreen({
           ))}
         </ScrollView>
       )}
-      <View style={styles.footer}>
+      <View style={[styles.footer, widget && { display: "none" }]}>
         <Text style={styles.footerText}>
           {lastSync
             ? `Atualizado às ${lastSync.toLocaleTimeString("pt-BR")}`

@@ -1,5 +1,12 @@
-export type DesktopWindowState = { compact: boolean; alwaysOnTop: boolean };
+export type DesktopWindowState = {
+  compact: boolean;
+  alwaysOnTop: boolean;
+  widget: boolean;
+};
 export type DesktopBridge = {
+  onWindowState(callback: (state: DesktopWindowState) => void): () => void;
+  setWidget(value: boolean): Promise<DesktopWindowState>;
+  openKdsSettings(): Promise<void>;
   getToken(): Promise<string | null>;
   setToken(token: string): Promise<void>;
   clearToken(): Promise<void>;

@@ -4,6 +4,7 @@ import { ChevronRight, Search } from "lucide-react";
 import { useMemo, useState } from "react";
 import prismaClient from "~/lib/prisma/client.server";
 import { ok } from "~/utils/http-response.server";
+import { cn } from "~/lib/utils";
 
 export const meta: MetaFunction = () => [{ title: "Admin Mobile | Receitas" }];
 
@@ -29,21 +30,34 @@ function normalize(value: string) {
     .toLocaleLowerCase("pt-BR");
 }
 
+const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
+
+function getInitialLetter(name: string) {
+  return normalize(name.trim()).charAt(0).toUpperCase();
+}
+
 export default function AdminMobileRecipesIndex() {
   const data = useLoaderData<typeof loader>();
   const recipes = data.payload.recipes;
   const [query, setQuery] = useState("");
+  const [selectedLetter, setSelectedLetter] = useState<string | null>(null);
+  const availableLetters = useMemo(
+    () => new Set(recipes.map((recipe) => getInitialLetter(recipe.name))),
+    [recipes]
+  );
   const filteredRecipes = useMemo(() => {
     const term = normalize(query.trim());
-    if (!term) return recipes;
-    return recipes.filter((recipe) =>
-      normalize(
-        [recipe.name, recipe.Item?.name, recipe.description]
-          .filter(Boolean)
-          .join(" ")
-      ).includes(term)
+    return recipes.filter(
+      (recipe) =>
+        (!selectedLetter || getInitialLetter(recipe.name) === selectedLetter) &&
+        (!term ||
+          normalize(
+            [recipe.name, recipe.Item?.name, recipe.description]
+              .filter(Boolean)
+              .join(" ")
+          ).includes(term))
     );
-  }, [query, recipes]);
+  }, [query, recipes, selectedLetter]);
 
   return (
     <div className="space-y-4 pb-6">
@@ -65,6 +79,46 @@ export default function AdminMobileRecipesIndex() {
             autoComplete="off"
             className="min-h-14 w-full rounded-xl border border-slate-300 bg-white py-3 pl-12 pr-4 text-base text-slate-900 shadow-sm outline-none placeholder:text-slate-400 focus:border-violet-500 focus:ring-2 focus:ring-violet-100"
           />
+        </div>
+        <div
+          className="mt-3 flex flex-wrap items-center justify-center gap-2 rounded-md border bg-white px-3 py-2"
+          role="group"
+          aria-label="Filtrar receitas pela letra inicial"
+        >
+          <button
+            type="button"
+            onClick={() => setSelectedLetter(null)}
+            aria-pressed={selectedLetter === null}
+            className={cn(
+              "rounded px-2 py-1 text-xs font-semibold",
+              selectedLetter === null
+                ? "bg-slate-900 text-white"
+                : "hover:bg-slate-100"
+            )}
+          >
+            Todos
+          </button>
+          {alphabet.map((letter) => (
+            <button
+              key={letter}
+              type="button"
+              disabled={!availableLetters.has(letter)}
+              aria-pressed={selectedLetter === letter}
+              onClick={() =>
+                setSelectedLetter((current) =>
+                  current === letter ? null : letter
+                )
+              }
+              className={cn(
+                "rounded px-1.5 py-1 text-xs font-semibold disabled:text-muted-foreground/50",
+                selectedLetter === letter
+                  ? "bg-slate-900 text-white"
+                  : "enabled:hover:bg-slate-100"
+              )}
+            >
+              {letter}
+            </button>
+          ))}
         </div>
       </section>
 
@@ -96,7 +150,13 @@ export default function AdminMobileRecipesIndex() {
 
         {filteredRecipes.length === 0 ? (
           <div className="rounded-xl border border-dashed border-slate-300 bg-white px-4 py-8 text-center text-sm text-slate-600">
-            Nenhuma receita encontrada para “{query}”.
+            {query.trim()
+              ? `Nenhuma receita encontrada para “${query}”${
+                  selectedLetter ? ` com a letra ${selectedLetter}` : ""
+                }.`
+              : selectedLetter
+              ? `Nenhuma receita encontrada com a letra ${selectedLetter}.`
+              : "Nenhuma receita encontrada."}
           </div>
         ) : null}
       </section>

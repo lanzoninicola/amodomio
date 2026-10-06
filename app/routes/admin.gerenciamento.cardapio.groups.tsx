@@ -4,12 +4,13 @@ import { json, redirect } from "@remix-run/node";
 import {
   Form,
   useActionData,
+  useFetcher,
   useLoaderData,
   useNavigation,
   useSearchParams,
   useSubmit,
 } from "@remix-run/react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
 import { cn } from "~/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -48,6 +49,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
+  GripVertical,
   MoreHorizontal,
   Plus,
   Pencil,
@@ -58,6 +60,25 @@ import {
 } from "lucide-react";
 import prismaClient from "~/lib/prisma/client.server";
 
+import {
+  closestCenter,
+  DndContext,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import { invalidateCardapioIndexCache } from "~/domain/cardapio/cardapio-cache.server";
+
 // ----------------------------------------------------
 // LOADER
 // ----------------------------------------------------
@@ -67,7 +88,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   const groups = await prismaClient.itemGroup.findMany({
     where: showDeleted ? {} : { deletedAt: null },
-    orderBy: { sortOrderIndex: "asc" },
+    orderBy: [{ sortOrderIndex: "asc" }, { id: "asc" }],
     include: { ProductLine: true },
   });
 
@@ -96,6 +117,66 @@ export async function action({ request }: ActionFunctionArgs) {
     if (!v) return false;
     return v === "true" || v === "on" || v === "1";
   };
+
+  if (intent === "reorder") {
+    let ids: unknown;
+    try {
+      ids = JSON.parse(String(formData.get("ids") ?? ""));
+    } catch {
+      return json({ ok: false, error: "Ordem inválida." }, { status: 400 });
+    }
+    if (
+      !Array.isArray(ids) ||
+      !ids.length ||
+      ids.some((id) => typeof id !== "string") ||
+      new Set(ids).size !== ids.length
+    ) {
+      return json({ ok: false, error: "Ordem inválida." }, { status: 400 });
+    }
+    const orderedIds = ids as string[];
+    try {
+      const saved = await prismaClient.$transaction(async (tx) => {
+        const current = await tx.itemGroup.findMany({
+          where: { deletedAt: null },
+          select: { id: true },
+        });
+        const currentIds = new Set(current.map((group) => group.id));
+        if (
+          current.length !== orderedIds.length ||
+          orderedIds.some((id) => !currentIds.has(id))
+        )
+          return false;
+        await Promise.all(
+          orderedIds.map((id, index) =>
+            tx.itemGroup.update({
+              where: { id },
+              data: { sortOrderIndex: (index + 1) * 1000 },
+            })
+          )
+        );
+        return true;
+      });
+      if (!saved)
+        return json(
+          {
+            ok: false,
+            error:
+              "A lista de grupos mudou. Atualize a página e tente novamente.",
+          },
+          { status: 409 }
+        );
+      await invalidateCardapioIndexCache();
+      return json({ ok: true });
+    } catch {
+      return json(
+        {
+          ok: false,
+          error: "Não foi possível salvar a ordem. Tente novamente.",
+        },
+        { status: 500 }
+      );
+    }
+  }
 
   // CREATE
   if (intent === "create") {
@@ -405,9 +486,91 @@ function GroupFormDialog({
 // ----------------------------------------------------
 // PAGE COMPONENT
 // ----------------------------------------------------
+function SortableGroupRow({
+  id,
+  name,
+  disabled,
+  className,
+  children,
+}: {
+  id: string;
+  name: string;
+  disabled: boolean;
+  className: string;
+  children: ReactNode;
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    setActivatorNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id, disabled });
+  return (
+    <TableRow
+      ref={setNodeRef}
+      style={{ transform: CSS.Transform.toString(transform), transition }}
+      className={cn(className, isDragging && "relative z-10 bg-muted")}
+    >
+      <TableCell>
+        <Button
+          ref={setActivatorNodeRef}
+          type="button"
+          variant="ghost"
+          size="icon"
+          disabled={disabled}
+          className="touch-none cursor-grab active:cursor-grabbing"
+          aria-label={`Mover grupo ${name}`}
+          {...attributes}
+          {...listeners}
+        >
+          <GripVertical className="h-4 w-4" />
+        </Button>
+      </TableCell>
+      {children}
+    </TableRow>
+  );
+}
+
 export default function AdminGerenciamentoCardapioGroupsPage() {
   const { groups, productLines, showDeleted } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
+  const reorder = useFetcher<{ ok: boolean; error?: string }>();
+  const navigation = useNavigation();
+  const [orderedGroups, setOrderedGroups] = useState(groups);
+  const busy = reorder.state !== "idle" || navigation.state !== "idle";
+  const sortingDisabled = busy || showDeleted;
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
+  useEffect(() => {
+    setOrderedGroups(groups);
+  }, [groups]);
+  useEffect(() => {
+    if (reorder.state === "idle" && reorder.data?.ok === false)
+      setOrderedGroups(groups);
+  }, [reorder.state, reorder.data, groups]);
+  const handleDragEnd = ({ active, over }: DragEndEvent) => {
+    if (sortingDisabled || !over || active.id === over.id) return;
+    const from = orderedGroups.findIndex((group) => group.id === active.id);
+    const to = orderedGroups.findIndex((group) => group.id === over.id);
+    if (from < 0 || to < 0) return;
+    const next = arrayMove(orderedGroups, from, to).map((group, index) => ({
+      ...group,
+      sortOrderIndex: (index + 1) * 1000,
+    }));
+    setOrderedGroups(next);
+    reorder.submit(
+      {
+        _intent: "reorder",
+        ids: JSON.stringify(next.map((group) => group.id)),
+      },
+      { method: "post" }
+    );
+  };
   const [searchParams, setSearchParams] = useSearchParams();
   const [openDialog, setOpenDialog] = useState(false);
   const [mode, setMode] = useState<"create" | "edit">("create");
@@ -417,7 +580,7 @@ export default function AdminGerenciamentoCardapioGroupsPage() {
 
   // abrir dialog de edição se action deu erro
   useEffect(() => {
-    if (actionData && actionData.form) {
+    if (actionData && "form" in actionData && actionData.form) {
       // se veio erro, reabre
       setOpenDialog(true);
       setMode(actionData.form.id ? "edit" : "create");
@@ -482,7 +645,8 @@ export default function AdminGerenciamentoCardapioGroupsPage() {
             Grupos do Cardápio
           </h1>
           <p className="text-sm text-muted-foreground">
-            Controle de seções e ordem (1000, 2000, 3000...).
+            Arraste pela alça para ordenar os grupos. A ordem é salva
+            automaticamente.
           </p>
         </div>
 
@@ -491,6 +655,7 @@ export default function AdminGerenciamentoCardapioGroupsPage() {
             variant={showDeleted ? "secondary" : "ghost"}
             type="button"
             onClick={toggleShowDeleted}
+            disabled={busy}
             className="gap-1"
           >
             {showDeleted ? (
@@ -500,111 +665,149 @@ export default function AdminGerenciamentoCardapioGroupsPage() {
             )}
             {showDeleted ? "Ver ativos" : "Ver excluídos"}
           </Button>
-          <Button onClick={handleNew} className="gap-2">
+          <Button disabled={busy} onClick={handleNew} className="gap-2">
             <Plus className="w-4 h-4" />
             Novo grupo
           </Button>
         </div>
       </div>
 
-      <div className="rounded-md border bg-card">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead className="w-[220px]">Nome</TableHead>
-              <TableHead>Linha de produto</TableHead>
-              <TableHead>Key</TableHead>
-              <TableHead>Descrição</TableHead>
-              <TableHead className="w-[90px] text-right">Ordem</TableHead>
-              <TableHead className="w-[130px]">Status</TableHead>
-              <TableHead className="w-[50px] text-right">Ações</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {groups.length === 0 ? (
-              <TableRow>
-                <TableCell
-                  colSpan={7}
-                  className="text-center py-6 text-muted-foreground"
-                >
-                  Nenhum grupo encontrado
-                </TableCell>
-              </TableRow>
-            ) : (
-              groups.map((g) => (
-                <TableRow
-                  key={g.id}
-                  className={cn(g.deletedAt ? "opacity-60 bg-muted/40" : "")}
-                >
-                  <TableCell className="font-medium">{g.name}</TableCell>
-                  <TableCell>{g.ProductLine.name}</TableCell>
-                  <TableCell className="text-xs font-mono">{g.key}</TableCell>
-                  <TableCell className="max-w-[250px] truncate text-sm">
-                    {g.description}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    {g.sortOrderIndex}
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex gap-1 items-center">
-                      {g.visible ? (
-                        <Badge variant="outline">Visível</Badge>
-                      ) : (
-                        <Badge
-                          variant="destructive"
-                          className="bg-destructive/10 text-destructive border-destructive/50"
-                        >
-                          Oculto
-                        </Badge>
-                      )}
-                      {g.featured ? (
-                        <Badge variant="secondary">Destaque</Badge>
-                      ) : null}
-                      {g.deletedAt ? (
-                        <Badge variant="destructive">Excluído</Badge>
-                      ) : null}
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon">
-                          <MoreHorizontal className="w-4 h-4" />
-                          <span className="sr-only">Ações</span>
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => handleEdit(g)}>
-                          <Pencil className="w-4 h-4 mr-2" />
-                          Editar
-                        </DropdownMenuItem>
-                        {g.deletedAt ? (
-                          <DropdownMenuItem onClick={() => handleRestore(g.id)}>
-                            <RefreshCw className="w-4 h-4 mr-2" />
-                            Restaurar
-                          </DropdownMenuItem>
-                        ) : (
-                          <>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem
-                              onClick={() => handleDelete(g.id)}
-                              className="text-destructive focus:text-destructive"
-                            >
-                              <Trash2 className="w-4 h-4 mr-2" />
-                              Excluir
-                            </DropdownMenuItem>
-                          </>
-                        )}
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </TableCell>
+      <p
+        role="status"
+        className={cn(
+          "text-sm",
+          reorder.data?.ok === false && "text-destructive"
+        )}
+      >
+        {reorder.state !== "idle"
+          ? "Salvando ordem..."
+          : reorder.data?.error ??
+            (reorder.data?.ok
+              ? "Ordem salva."
+              : showDeleted
+              ? "Para ordenar, selecione Ver ativos."
+              : "")}
+      </p>
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCenter}
+        onDragEnd={handleDragEnd}
+      >
+        <SortableContext
+          items={orderedGroups.map((group) => group.id)}
+          strategy={verticalListSortingStrategy}
+        >
+          <div className="rounded-md border bg-card">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-12">
+                    <span className="sr-only">Mover</span>
+                  </TableHead>
+                  <TableHead className="w-[220px]">Nome</TableHead>
+                  <TableHead>Linha de produto</TableHead>
+                  <TableHead>Key</TableHead>
+                  <TableHead>Descrição</TableHead>
+                  <TableHead className="w-[90px] text-right">Ordem</TableHead>
+                  <TableHead className="w-[130px]">Status</TableHead>
+                  <TableHead className="w-[50px] text-right">Ações</TableHead>
                 </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </div>
-
+              </TableHeader>
+              <TableBody>
+                {groups.length === 0 ? (
+                  <TableRow>
+                    <TableCell
+                      colSpan={8}
+                      className="text-center py-6 text-muted-foreground"
+                    >
+                      Nenhum grupo encontrado
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  orderedGroups.map((g) => (
+                    <SortableGroupRow
+                      key={g.id}
+                      id={g.id}
+                      name={g.name}
+                      disabled={sortingDisabled}
+                      className={cn(
+                        g.deletedAt ? "opacity-60 bg-muted/40" : ""
+                      )}
+                    >
+                      <TableCell className="font-medium">{g.name}</TableCell>
+                      <TableCell>{g.ProductLine.name}</TableCell>
+                      <TableCell className="text-xs font-mono">
+                        {g.key}
+                      </TableCell>
+                      <TableCell className="max-w-[250px] truncate text-sm">
+                        {g.description}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {g.sortOrderIndex}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex gap-1 items-center">
+                          {g.visible ? (
+                            <Badge variant="outline">Visível</Badge>
+                          ) : (
+                            <Badge
+                              variant="destructive"
+                              className="bg-destructive/10 text-destructive border-destructive/50"
+                            >
+                              Oculto
+                            </Badge>
+                          )}
+                          {g.featured ? (
+                            <Badge variant="secondary">Destaque</Badge>
+                          ) : null}
+                          {g.deletedAt ? (
+                            <Badge variant="destructive">Excluído</Badge>
+                          ) : null}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button disabled={busy} variant="ghost" size="icon">
+                              <MoreHorizontal className="w-4 h-4" />
+                              <span className="sr-only">Ações</span>
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => handleEdit(g)}>
+                              <Pencil className="w-4 h-4 mr-2" />
+                              Editar
+                            </DropdownMenuItem>
+                            {g.deletedAt ? (
+                              <DropdownMenuItem
+                                onClick={() => handleRestore(g.id)}
+                              >
+                                <RefreshCw className="w-4 h-4 mr-2" />
+                                Restaurar
+                              </DropdownMenuItem>
+                            ) : (
+                              <>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                  onClick={() => handleDelete(g.id)}
+                                  className="text-destructive focus:text-destructive"
+                                >
+                                  <Trash2 className="w-4 h-4 mr-2" />
+                                  Excluir
+                                </DropdownMenuItem>
+                              </>
+                            )}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+                    </SortableGroupRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </SortableContext>
+      </DndContext>
       <GroupFormDialog
         open={openDialog}
         onOpenChange={setOpenDialog}
@@ -621,7 +824,9 @@ export default function AdminGerenciamentoCardapioGroupsPage() {
             productLineId: productLines[0]?.id,
           }
         }
-        actionErrors={actionData?.errors}
+        actionErrors={
+          actionData && "errors" in actionData ? actionData.errors : undefined
+        }
       />
     </div>
   );

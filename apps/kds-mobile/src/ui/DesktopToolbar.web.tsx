@@ -1,32 +1,23 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { View, Text } from "react-native";
 import { desktop } from "../platform/desktop";
 import type { DesktopWindowState } from "../platform/desktop";
-import { Button } from "./Button";
+import { IconButton } from "./IconButton";
+import { useDesktopWindow } from "../platform/useDesktopWindow";
 import { theme } from "./theme";
 export function DesktopToolbar() {
-  const [state, setState] = useState<DesktopWindowState>({
-    compact: false,
-    alwaysOnTop: false,
-  });
+  const state = useDesktopWindow();
   const [error, setError] = useState("");
-  useEffect(() => {
-    desktop
-      ?.getWindowState()
-      .then(setState)
-      .catch(() => setError("Não foi possível consultar a janela."));
-  }, []);
   if (!desktop) return null;
   const update = (operation: Promise<DesktopWindowState>) => {
     setError("");
-    operation
-      .then(setState)
-      .catch(() => setError("Não foi possível ajustar a janela."));
+    operation.catch(() => setError("Não foi possível ajustar a janela."));
   };
   return (
     <View
       style={{
-        padding: 8,
+        padding: 4,
+        zIndex: 100,
         gap: 8,
         borderBottomWidth: 1,
         borderBottomColor: theme.colors.border,
@@ -50,18 +41,20 @@ export function DesktopToolbar() {
         >
           AMODOMIO
         </Text>
-        <Button
-          variant={state.compact ? "secondary" : "outline"}
+        <IconButton
+          icon="compact"
+          label={state.compact ? "Expandir janela" : "Modo compacto"}
+          active={state.compact}
           onPress={() => update(desktop!.setCompact(!state.compact))}
-        >
-          {state.compact ? "Expandir" : "Compacto"}
-        </Button>
-        <Button
-          variant={state.alwaysOnTop ? "secondary" : "outline"}
+        />
+        <IconButton
+          icon="pin"
+          label={
+            state.alwaysOnTop ? "Desativar sempre no topo" : "Sempre no topo"
+          }
+          active={state.alwaysOnTop}
           onPress={() => update(desktop!.setAlwaysOnTop(!state.alwaysOnTop))}
-        >
-          {state.alwaysOnTop ? "No topo: ligado" : "Sempre no topo"}
-        </Button>
+        />
       </View>
       {error ? <Text accessibilityRole="alert">{error}</Text> : null}
     </View>

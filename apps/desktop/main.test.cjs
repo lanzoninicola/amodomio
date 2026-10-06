@@ -18,10 +18,20 @@ test("desktop mantém janela independente, restringe IPC e serve assets com CSP"
           this.popup = fn;
         },
         on() {},
+        send() {},
         session: { setPermissionRequestHandler() {} },
       };
     }
     setMenu() {}
+    isDestroyed() {
+      return false;
+    }
+    show() {}
+    focus() {}
+    setMinimumSize(w, h) {
+      this.minimum = [w, h];
+    }
+    on() {}
     async loadURL(url) {
       this.url = url;
     }
@@ -110,6 +120,14 @@ test("desktop mantém janela independente, restringe IPC e serve assets com CSP"
   assert.equal(instance.bounds.width, 480);
   handlers.get("window:compact")(event, false);
   assert.equal(instance.bounds.width, 1100);
+  handlers.get("window:widget")(event, true);
+  assert.equal(instance.bounds.width, 360);
+  assert.equal(instance.bounds.height, 300);
+  assert.equal(handlers.get("window:state")(event).widget, true);
+  handlers.get("window:widget")(event, false);
+  assert.equal(instance.bounds.width, 1100);
+  assert.equal(instance.minimum[1], 560);
+
   await handlers.get("session:set")(event, "temporary-token");
   assert.equal(await handlers.get("session:get")(event), "temporary-token");
   assert.equal(
@@ -126,4 +144,21 @@ test("desktop mantém janela independente, restringe IPC e serve assets com CSP"
     /script-src 'self'/
   );
   assert.equal(await asset.text(), "asset");
+  const mainWindow = instance;
+  await handlers.get("kds:settings")(event);
+  assert.equal(instance.options.parent, mainWindow);
+  assert.equal(instance.options.webPreferences.preload, undefined);
+  assert.equal(instance.options.webPreferences.nodeIntegration, false);
+  assert.equal(instance.url, "amodomio://app/settings/index.html");
+  assert.throws(
+    () =>
+      handlers.get("session:get")({
+        sender: instance.webContents,
+        senderFrame: instance.webContents.mainFrame,
+      }),
+    /Origem/
+  );
+  const settings = instance;
+  await handlers.get("kds:settings")(event);
+  assert.equal(instance, settings);
 });

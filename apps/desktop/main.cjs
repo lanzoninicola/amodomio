@@ -21,9 +21,12 @@ protocol.registerSchemesAsPrivileged([
 ]);
 let window;
 let compact = false;
+let widget = false;
+let widgetBounds;
+let settingsWindow;
 let normalBounds;
 const entry = "amodomio://app/index.html";
-const state = () => ({ compact, alwaysOnTop: window.isAlwaysOnTop() });
+const state = () => ({ compact, widget, alwaysOnTop: window.isAlwaysOnTop() });
 function handle(channel, handler) {
   ipcMain.handle(channel, (event, ...args) => {
     if (
@@ -32,7 +35,10 @@ function handle(channel, handler) {
       event.senderFrame.url !== entry
     )
       throw new Error("Origem não autorizada.");
-    return handler(...args);
+    const result = handler(...args);
+    if (channel.startsWith("window:"))
+      window.webContents.send("window:changed", state());
+    return result;
   });
 }
 function secureStorageAvailable() {
@@ -123,8 +129,65 @@ else {
         window.setAlwaysOnTop(value);
         return state();
       });
+      function leaveWidget() {
+        if (!widget) return;
+        widget = false;
+        window.setMinimumSize(400, 560);
+        if (widgetBounds) window.setBounds(widgetBounds);
+      }
+      handle("window:widget", (value) => {
+        if (typeof value !== "boolean") throw new Error("Valor inválido");
+        if (value && !widget) {
+          widgetBounds = window.getBounds();
+          window.unmaximize();
+          window.setMinimumSize(360, 300);
+          const area = screen.getDisplayMatching(widgetBounds).workArea;
+          window.setBounds({
+            x: area.x + Math.max(0, area.width - 360),
+            y: area.y,
+            width: 360,
+            height: 300,
+          });
+          widget = true;
+        } else if (!value) leaveWidget();
+        return state();
+      });
+      handle("kds:settings", async () => {
+        if (settingsWindow && !settingsWindow.isDestroyed()) {
+          settingsWindow.show();
+          settingsWindow.focus();
+          return;
+        }
+        settingsWindow = new BrowserWindow({
+          parent: window,
+          title: "Configurações do KDS",
+          width: 420,
+          height: 510,
+          minWidth: 360,
+          minHeight: 440,
+          autoHideMenuBar: true,
+          webPreferences: {
+            contextIsolation: true,
+            nodeIntegration: false,
+            sandbox: true,
+          },
+        });
+        settingsWindow.setMenu(null);
+        const settingsUrl = "amodomio://app/settings/index.html";
+        settingsWindow.webContents.setWindowOpenHandler(() => ({
+          action: "deny",
+        }));
+        settingsWindow.webContents.on("will-navigate", (event, url) => {
+          if (url !== settingsUrl) event.preventDefault();
+        });
+        settingsWindow.on("closed", () => {
+          settingsWindow = null;
+        });
+        await settingsWindow.loadURL(settingsUrl);
+      });
       handle("window:compact", (value) => {
         if (typeof value !== "boolean") throw new Error("Valor inválido");
+        leaveWidget();
         if (value !== compact) {
           if (value) {
             normalBounds = window.getBounds();

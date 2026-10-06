@@ -19,4 +19,10 @@ const result = spawnSync(
     env: { ...process.env, EXPO_NO_DOTENV: "1", EXPO_PUBLIC_API_URL: "" },
   }
 );
+if (result.status === 0)
+  require("node:fs").cpSync(
+    path.resolve(__dirname, "../settings"),
+    path.resolve(__dirname, "../web/settings"),
+    { recursive: true }
+  );
 process.exit(result.status ?? 1);
