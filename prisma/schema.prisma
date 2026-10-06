@@ -57,12 +57,26 @@ model Recipe {
   PendingIngredient   RecipePendingIngredient[]
   RecipePreheating    RecipePreheating?
   RecipeBaking        RecipeBaking?
+  Templates           RecipeTemplate[]
 
   @@unique([groupId, version], map: "recipes_group_id_version_unique")
   @@index([itemId], map: "recipes_item_id_idx")
   @@index([variationId], map: "recipes_variation_id_idx")
   @@index([groupId, status], map: "recipes_group_id_status_idx")
   @@map("recipes")
+}
+
+model RecipeTemplate {
+  id          String   @id @default(uuid())
+  recipeId    String   @map("recipe_id")
+  name        String   @db.VarChar(120)
+  description String?  @db.Text
+  snapshot    Json
+  createdAt   DateTime @default(now()) @map("created_at")
+  Recipe      Recipe   @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+
+  @@index([recipeId, createdAt], map: "recipe_templates_recipe_id_created_at_idx")
+  @@map("recipe_templates")
 }
 
 model RecipePreheating {
@@ -465,6 +479,7 @@ model RecipeIngredient {
   defaultLossPct   Float    @default(0) @map("default_loss_pct")
   sortOrderIndex   Int      @default(0) @map("sort_order_index")
   notes            String?  @db.Text
+  mobileDisplayUnit String? @map("mobile_display_unit")
   createdAt        DateTime @default(now()) @map("created_at")
   updatedAt        DateTime @default(now()) @updatedAt @map("updated_at")
 
@@ -1788,6 +1803,8 @@ enum UserRole {
   user
   admin
   superAdmin @map("super-admin")
+  kdsOperator @map("kds-operator")
+  kdsAdmin    @map("kds-admin")
 }
 
 enum UserProvisionSource {

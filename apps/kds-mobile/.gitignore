@@ -39,3 +39,12 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# Pin native build dependencies even though the root ignores lockfiles.
+!package-lock.json
+
+# Local credentials and environment must not be uploaded.
+.env
+.env.*
+!.env.example
+credentials.json

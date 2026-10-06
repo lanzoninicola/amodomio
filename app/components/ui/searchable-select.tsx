@@ -64,8 +64,14 @@ export function SearchableSelect({
   const listRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (listRef.current) listRef.current.scrollTop = 0;
-  }, [search]);
+    if (!open) return;
+    // cmdk ranks and selects matches after the search changes. Reset after that
+    // layout pass so its automatic scrolling cannot hide the first results.
+    const frame = requestAnimationFrame(() => {
+      if (listRef.current) listRef.current.scrollTop = 0;
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [search, open]);
 
   const selected = useMemo(
     () => options.find((option) => option.value === value),
@@ -105,7 +111,7 @@ export function SearchableSelect({
           contentClassName
         )}
       >
-        <Command>
+        <Command className="max-h-[var(--radix-popover-content-available-height)] [overflow:clip] [&_[data-slot=command-input-wrapper]]:shrink-0">
           <CommandInput
             placeholder={searchPlaceholder}
             value={search}
@@ -114,7 +120,10 @@ export function SearchableSelect({
           />
           <CommandList
             ref={listRef}
-            className={cn("max-h-[240px]", listClassName)}
+            className={cn(
+              "min-h-0 max-h-[240px] overscroll-contain",
+              listClassName
+            )}
           >
             <CommandEmpty>{emptyText}</CommandEmpty>
             {options.map((option) => (

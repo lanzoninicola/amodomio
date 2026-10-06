@@ -1,0 +1,30 @@
+name: Instalador Amodomio Windows
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  installer:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: apps/kds-mobile/.nvmrc
+          cache: npm
+          cache-dependency-path: |
+            apps/kds-mobile/package-lock.json
+            apps/desktop/package-lock.json
+      - run: npm ci
+        working-directory: apps/kds-mobile
+      - run: npm ci
+        working-directory: apps/desktop
+      - run: npm test
+        working-directory: apps/desktop
+      - run: npm run dist:win
+        working-directory: apps/desktop
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Amodomio-Windows-teste
+          path: apps/desktop/release/*.exe
+          if-no-files-found: error

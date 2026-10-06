@@ -1,17 +1,32 @@
-import type { LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
-import { Link, useLoaderData } from "@remix-run/react";
+import { json, redirect } from "@remix-run/node";
+import type {
+  ActionFunctionArgs,
+  LoaderFunctionArgs,
+  MetaFunction,
+} from "@remix-run/node";
+import { Link, useLoaderData, useNavigate } from "@remix-run/react";
 import {
   BookOpen,
   Calculator,
   ChevronLeft,
   Clock3,
+  FilePlus2,
+  Files,
   Info,
   Thermometer,
+  X,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { useState } from "react";
-import prismaClient from "~/lib/prisma/client.server";
-import { ok } from "~/utils/http-response.server";
+import { useRef, useState } from "react";
+import { authenticator } from "~/domain/auth/google.server";
+import { getMobileRecipe } from "~/domain/recipe/mobile-recipe.server";
+import { saveRecipeDisplayUnit } from "~/domain/recipe/recipe-templates.server";
+import {
+  readRecipeTemplateConfiguration,
+  getRecipeTemplateSearch,
+} from "~/domain/recipe/recipe-template-navigation";
+import { Button } from "~/components/ui/button";
+import { RecipeDisplayUnitDialog } from "~/domain/recipe/components/recipe-display-unit-dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import {
   Dialog,
@@ -35,156 +50,30 @@ export const meta: MetaFunction<typeof loader> = ({ data }) => [
   },
 ];
 
-export async function loader({ params }: LoaderFunctionArgs) {
-  const recipeId = String(params.recipeId || "").trim();
-  if (!recipeId) throw new Response("Receita inválida", { status: 400 });
-
-  const db = prismaClient as any;
-  const [recipe, measurementUnits, measurementConversions] = await Promise.all([
-    db.recipe.findUnique({
-      where: { id: recipeId },
-      select: {
-        id: true,
-        name: true,
-        description: true,
-        costingMode: true,
-        yieldQuantity: true,
-        yieldUnit: true,
-        productionProcedure: true,
-        productionNotes: true,
-        RecipePreheating: {
-          select: {
-            upperTemperatureCelsius: true,
-            lowerTemperatureCelsius: true,
-            durationMinutes: true,
-            notes: true,
-          },
-        },
-        RecipeBaking: {
-          select: {
-            upperTemperatureCelsius: true,
-            lowerTemperatureCelsius: true,
-            durationMinutes: true,
-            notes: true,
-          },
-        },
-        ItemVariations: {
-          where: { deletedAt: null },
-          select: { id: true, isReference: true, createdAt: true },
-          orderBy: [{ createdAt: "asc" }],
-        },
-        RecipeIngredient: {
-          orderBy: [{ sortOrderIndex: "asc" }, { createdAt: "asc" }],
-          select: {
-            id: true,
-            notes: true,
-            IngredientItem: {
-              select: {
-                name: true,
-                consumptionUm: true,
-                ItemUnit: { select: { unitCode: true } },
-                Recipe: {
-                  select: { id: true, name: true },
-                  orderBy: { updatedAt: "desc" },
-                  take: 1,
-                },
-              },
-            },
-            RecipeVariationIngredient: {
-              select: {
-                itemVariationId: true,
-                quantity: true,
-                unit: true,
-              },
-            },
-          },
-        },
-      },
-    }),
-    db.measurementUnit.findMany({
-      where: { active: true },
-      select: { code: true, scope: true },
-    }),
-    db.measurementUnitConversion.findMany({
-      where: { active: true },
-      select: {
-        factor: true,
-        FromUnit: { select: { code: true } },
-        ToUnit: { select: { code: true } },
-      },
-    }),
-  ]);
-
-  if (!recipe) throw new Response("Receita não encontrada", { status: 404 });
-
-  const referenceVariation =
-    recipe.ItemVariations.find((variation) => variation.isReference) ||
-    recipe.ItemVariations[0];
-  const ingredients = recipe.RecipeIngredient.map((ingredient) => {
-    const lines = ingredient.RecipeVariationIngredient;
-    const line =
-      lines.find((entry) => entry.itemVariationId === referenceVariation?.id) ||
-      lines[0];
-    const sourceUnit = String(line?.unit || "UN").toUpperCase();
-    const linkedUnits = new Set(
-      ingredient.IngredientItem.ItemUnit.map((entry) =>
-        String(entry.unitCode || "").toUpperCase()
-      )
+export async function loader({ request, params }: LoaderFunctionArgs) {
+  if (!(await authenticator.isAuthenticated(request)))
+    return redirect("/login");
+  const recipe = await getMobileRecipe(String(params.recipeId || ""));
+  let configuration;
+  try {
+    configuration = readRecipeTemplateConfiguration(
+      new URL(request.url).searchParams
     );
-    const allowedUnits = new Set<string>([
-      sourceUnit,
-      String(ingredient.IngredientItem.consumptionUm || "").toUpperCase(),
-      ...measurementUnits
-        .filter(
-          (unit) =>
-            unit.scope === "global" ||
-            linkedUnits.has(String(unit.code || "").toUpperCase())
-        )
-        .map((unit) => String(unit.code || "").toUpperCase()),
-    ]);
-    const displayUnits = [{ unit: sourceUnit, factor: 1 }];
+  } catch {
+    configuration = { scaleFactor: 1, selectedUnits: {} };
+  }
+  return json({ payload: { recipe, configuration } });
+}
 
-    for (const conversion of measurementConversions) {
-      const fromUnit = String(conversion.FromUnit?.code || "").toUpperCase();
-      const toUnit = String(conversion.ToUnit?.code || "").toUpperCase();
-      const factor = Number(conversion.factor);
-      if (!(factor > 0)) continue;
-
-      if (fromUnit === sourceUnit && allowedUnits.has(toUnit)) {
-        displayUnits.push({ unit: toUnit, factor });
-      } else if (toUnit === sourceUnit && allowedUnits.has(fromUnit)) {
-        displayUnits.push({ unit: fromUnit, factor: 1 / factor });
-      }
-    }
-
-    return {
-      id: ingredient.id,
-      name: ingredient.IngredientItem.name,
-      quantity: line?.quantity ?? 0,
-      unit: sourceUnit,
-      notes: ingredient.notes,
-      subRecipe: ingredient.IngredientItem.Recipe[0] || null,
-      displayUnits: Array.from(
-        new Map(displayUnits.map((entry) => [entry.unit, entry])).values()
-      ),
-    };
-  });
-
-  return ok({
-    recipe: {
-      id: recipe.id,
-      name: recipe.name,
-      description: recipe.description,
-      costingMode: recipe.costingMode,
-      yieldQuantity: recipe.yieldQuantity,
-      yieldUnit: recipe.yieldUnit,
-      productionProcedure: recipe.productionProcedure,
-      productionNotes: recipe.productionNotes,
-      preheating: recipe.RecipePreheating,
-      baking: recipe.RecipeBaking,
-      ingredients,
-    },
-  });
+export async function action({ request, params }: ActionFunctionArgs) {
+  if (!(await authenticator.isAuthenticated(request)))
+    return redirect("/login");
+  const recipeId = String(params.recipeId || "");
+  if (!recipeId) return json({ error: "Receita inválida." }, { status: 400 });
+  const form = await request.formData();
+  if (form.get("intent") !== "save-display-unit")
+    return json({ error: "Ação inválida." }, { status: 400 });
+  return saveRecipeDisplayUnit(recipeId, form);
 }
 
 function formatQuantity(value: number) {
@@ -205,6 +94,8 @@ function IngredientReadRow({
   ingredient,
   scaleFactor,
   onScaleFromIngredient,
+  displayUnit,
+  onDisplayUnitChange,
 }: {
   ingredient: {
     id: string;
@@ -217,12 +108,14 @@ function IngredientReadRow({
   };
   scaleFactor: number;
   onScaleFromIngredient?: (scaleFactor: number) => void;
+  displayUnit: string;
+  onDisplayUnitChange: (unit: string) => void;
 }) {
   const sourceUnit = String(ingredient.unit || "UN").toUpperCase();
-  const [displayUnit, setDisplayUnit] = useState(sourceUnit);
   const [notesOpen, setNotesOpen] = useState(false);
   const [recalculateOpen, setRecalculateOpen] = useState(false);
   const [availableQuantityInput, setAvailableQuantityInput] = useState("");
+  const availableQuantityRef = useRef<HTMLInputElement>(null);
   const [availableUnit, setAvailableUnit] = useState(sourceUnit);
   const [isAdded, setIsAdded] = useState(false);
   const selectedDisplayUnit = ingredient.displayUnits.find(
@@ -278,7 +171,7 @@ function IngredientReadRow({
     });
     if (!nextScale || !onScaleFromIngredient) return;
     onScaleFromIngredient(nextScale);
-    setDisplayUnit(availableUnit);
+    onDisplayUnitChange(availableUnit);
     setRecalculateOpen(false);
   }
 
@@ -350,9 +243,9 @@ function IngredientReadRow({
               <button
                 key={unit}
                 type="button"
-                onClick={() => setDisplayUnit(unit)}
+                onClick={() => onDisplayUnitChange(unit)}
                 aria-pressed={displayUnit === unit}
-                className={`min-h-11 min-w-14 rounded-md px-4 text-sm font-bold transition-colors ${
+                className={`h-[48px] min-h-[48px] min-w-14 rounded-md px-4 text-sm font-bold transition-colors ${
                   displayUnit === unit
                     ? "bg-white text-violet-700 shadow-sm"
                     : "text-slate-600"
@@ -363,7 +256,7 @@ function IngredientReadRow({
             ))}
           </div>
         ) : (
-          <span className="inline-flex min-h-11 min-w-14 items-center justify-center rounded-md bg-slate-100 px-4 text-sm font-bold text-slate-700">
+          <span className="inline-flex h-[48px] min-h-[48px] min-w-14 items-center justify-center rounded-md bg-slate-100 px-4 text-sm font-bold text-slate-700">
             {sourceUnit}
           </span>
         )}
@@ -405,7 +298,7 @@ function IngredientReadRow({
                       type="button"
                       onClick={() => changeAvailableUnit(unit)}
                       aria-pressed={availableUnit === unit}
-                      className={`min-h-11 rounded-lg border px-4 text-sm font-semibold ${
+                      className={`h-[48px] min-h-[48px] rounded-lg border px-4 text-sm font-semibold ${
                         availableUnit === unit
                           ? "border-violet-600 bg-violet-50 text-violet-700"
                           : "border-slate-200 bg-white text-slate-600"
@@ -417,12 +310,17 @@ function IngredientReadRow({
                 </div>
               </div>
             ) : null}
-            <label className="block min-w-0">
-              <span className="text-sm font-medium text-slate-700">
+            <div className="min-w-0">
+              <label
+                htmlFor={`available-quantity-${ingredient.id}`}
+                className="text-sm font-medium text-slate-700"
+              >
                 Quanto você tem em {availableUnit}?
-              </span>
+              </label>
               <div className="mt-2 flex w-full min-w-0 items-center overflow-hidden rounded-lg border border-slate-300 bg-white focus-within:ring-2 focus-within:ring-violet-200">
                 <input
+                  id={`available-quantity-${ingredient.id}`}
+                  ref={availableQuantityRef}
                   type="text"
                   inputMode="decimal"
                   autoFocus
@@ -435,7 +333,21 @@ function IngredientReadRow({
                   }}
                   className="h-12 w-0 min-w-0 flex-1 rounded-l-lg bg-transparent px-4 text-lg font-semibold text-slate-950 outline-none"
                 />
-                <span className="px-4 text-sm font-bold text-slate-600">
+                {availableQuantityInput !== "" ? (
+                  <button
+                    type="button"
+                    aria-label="Limpar quantidade disponível"
+                    title="Limpar quantidade"
+                    onClick={() => {
+                      setAvailableQuantityInput("");
+                      availableQuantityRef.current?.focus();
+                    }}
+                    className="inline-flex h-12 w-11 shrink-0 items-center justify-center text-slate-500 hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-violet-500"
+                  >
+                    <X className="h-4 w-4" aria-hidden="true" />
+                  </button>
+                ) : null}
+                <span className="shrink-0 px-3 text-sm font-bold text-slate-600">
                   {availableUnit}
                 </span>
               </div>
@@ -449,12 +361,12 @@ function IngredientReadRow({
                 )}{" "}
                 {availableUnit}
               </span>
-            </label>
+            </div>
             <DialogFooter className="block w-full sm:space-x-0">
               <button
                 type="button"
                 onClick={applyAvailableQuantity}
-                className="inline-flex min-h-14 w-full max-w-full items-center justify-center rounded-lg bg-violet-700 px-4 text-base font-semibold text-white"
+                className="inline-flex h-[56px] min-h-[56px] w-full max-w-full items-center justify-center rounded-lg bg-violet-700 px-4 text-base font-semibold text-white hover:bg-violet-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-2"
               >
                 Recalcular receita
               </button>
@@ -560,6 +472,11 @@ function EmptyContent({ children }: { children: React.ReactNode }) {
 
 export default function AdminMobileRecipeDetail() {
   const data = useLoaderData<typeof loader>();
+  return <RecipeDetail key={data.payload.recipe.id} />;
+}
+
+function RecipeDetail() {
+  const data = useLoaderData<typeof loader>();
   const recipe = data.payload.recipe;
   const baseYield =
     recipe.costingMode === "yield" && Number(recipe.yieldQuantity) > 0
@@ -567,18 +484,44 @@ export default function AdminMobileRecipeDetail() {
       : null;
   const yieldUnit = String(recipe.yieldUnit || "").toUpperCase();
   const [desiredYieldInput, setDesiredYieldInput] = useState(
-    baseYield == null ? "" : String(baseYield).replace(".", ",")
+    baseYield == null
+      ? ""
+      : String(baseYield * data.payload.configuration.scaleFactor).replace(
+          ".",
+          ","
+        )
   );
+  const [ingredientScaleFactor, setIngredientScaleFactor] = useState(
+    data.payload.configuration.scaleFactor
+  );
+  const [selectedUnits, setSelectedUnits] = useState<Record<string, string>>(
+    data.payload.configuration.selectedUnits
+  );
+  const navigate = useNavigate();
+  const [unitPrompt, setUnitPrompt] = useState<{
+    ingredientId: string;
+    name: string;
+    unit: string;
+  } | null>(null);
+
   const desiredYield = Number(desiredYieldInput.replace(",", "."));
   const yieldScaleFactor = baseYield
     ? calculateRecipeScaleFromYield({
         baseYield,
         desiredYield,
       })
-    : 1;
+    : ingredientScaleFactor;
+  const canCreateTemplate =
+    recipe.ingredients.length > 0 &&
+    Number.isFinite(yieldScaleFactor) &&
+    yieldScaleFactor > 0 &&
+    (!baseYield || (Number.isFinite(desiredYield) && desiredYield > 0));
 
   function applyIngredientScale(scaleFactor: number) {
-    if (!baseYield) return;
+    if (!baseYield) {
+      setIngredientScaleFactor(scaleFactor);
+      return;
+    }
     const nextYield = scaleRecipeQuantity(baseYield, scaleFactor);
     setDesiredYieldInput(
       String(Number(nextYield.toFixed(3))).replace(".", ",")
@@ -594,14 +537,56 @@ export default function AdminMobileRecipeDetail() {
         <ChevronLeft className="h-4 w-4" /> Todas as receitas
       </Link>
       <div className="mb-4">
-        <h2 className="text-2xl font-semibold leading-tight text-slate-950">
-          {recipe.name}
-        </h2>
-        {recipe.description ? (
-          <p className="mt-2 text-sm leading-6 text-slate-600">
-            {recipe.description}
-          </p>
-        ) : null}
+        <div className="flex items-start justify-between gap-2">
+          <h2 className="min-w-0 flex-1 break-words text-2xl font-semibold leading-tight text-slate-950">
+            {recipe.name}
+          </h2>
+          <div className="flex shrink-0 items-center gap-1">
+            <Button
+              type="button"
+              variant="ghost"
+              className="h-auto min-h-11 flex-col gap-1 px-2 py-1.5"
+              aria-label="Criar template"
+              disabled={!canCreateTemplate}
+              onClick={() =>
+                navigate(
+                  `/admin/mobile/receitas/${
+                    recipe.id
+                  }/templates/novo${getRecipeTemplateSearch({
+                    scaleFactor: yieldScaleFactor,
+                    selectedUnits,
+                  })}`
+                )
+              }
+            >
+              <FilePlus2 className="h-5 w-5" aria-hidden="true" />
+              <span className="text-[10px] font-medium leading-none">
+                Criar template
+              </span>
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              className="h-auto min-h-11 flex-col gap-1 px-2 py-1.5"
+              aria-label="Ver templates"
+              onClick={() =>
+                navigate(
+                  `/admin/mobile/receitas/${
+                    recipe.id
+                  }/templates${getRecipeTemplateSearch({
+                    scaleFactor: yieldScaleFactor,
+                    selectedUnits,
+                  })}`
+                )
+              }
+            >
+              <Files className="h-5 w-5" aria-hidden="true" />
+              <span className="text-[10px] font-medium leading-none">
+                Templates
+              </span>
+            </Button>
+          </div>
+        </div>
         {baseYield ? (
           <div className="mt-4 flex items-center justify-between gap-3">
             <div>
@@ -632,6 +617,15 @@ export default function AdminMobileRecipeDetail() {
         ) : null}
       </div>
 
+      {unitPrompt ? (
+        <RecipeDisplayUnitDialog
+          prompt={unitPrompt}
+          recipeName={recipe.name}
+          action={`/admin/mobile/receitas/${recipe.id}`}
+          onClose={() => setUnitPrompt(null)}
+        />
+      ) : null}
+
       <Tabs defaultValue="ingredients" className="w-full">
         <div className="-mx-4 overflow-x-auto px-4 pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           <TabsList className="h-11 min-w-max justify-start rounded-xl bg-slate-200 p-1">
@@ -660,9 +654,30 @@ export default function AdminMobileRecipeDetail() {
                 key={ingredient.id}
                 ingredient={ingredient}
                 scaleFactor={yieldScaleFactor}
-                onScaleFromIngredient={
-                  baseYield ? applyIngredientScale : undefined
+                onScaleFromIngredient={applyIngredientScale}
+                displayUnit={
+                  selectedUnits[ingredient.id] ||
+                  ingredient.preferredUnit ||
+                  ingredient.unit
                 }
+                onDisplayUnitChange={(unit) => {
+                  if (
+                    unit ===
+                    (selectedUnits[ingredient.id] ||
+                      ingredient.preferredUnit ||
+                      ingredient.unit)
+                  )
+                    return;
+                  setSelectedUnits((current) => ({
+                    ...current,
+                    [ingredient.id]: unit,
+                  }));
+                  setUnitPrompt({
+                    ingredientId: ingredient.id,
+                    name: ingredient.name,
+                    unit,
+                  });
+                }}
               />
             ))
           ) : (

@@ -67,6 +67,16 @@ const ROLE_OPTIONS: Array<{
     label: "Super Admin",
     description: "Controle total e herança dos demais papéis.",
   },
+  {
+    value: "kdsOperator",
+    label: "kds-operator",
+    description: "Operações do dia a dia e alteração de status dos pedidos no KDS.",
+  },
+  {
+    value: "kdsAdmin",
+    label: "kds-admin",
+    description: "Inclui kds-operator. Papel destinado à exclusão de pedidos e à sinalização de entrada no forno.",
+  },
 ];
 
 type ManagedUserRecord = {
@@ -115,6 +125,8 @@ function boolString(value: FormDataEntryValue | null) {
 
 function toLabel(role: UserRole) {
   if (role === "superAdmin") return "super-admin";
+  if (role === "kdsOperator") return "kds-operator";
+  if (role === "kdsAdmin") return "kds-admin";
   return role;
 }
 
