@@ -39,6 +39,13 @@ ativos; toque na comanda para acessar as demais etapas. Tablets mantêm o Kanban
 
 ## Distribuição interna e atualizações (EAS)
 
+Para gerar o APK localmente no Linux, execute `npm run build:android:local`
+na raiz do repositório ou nesta pasta. O comando entra na pasta mobile, ativa
+o Node definido em `.nvmrc` pelo nvm e usa o perfil `preview` com `--local`.
+Requer as ferramentas Android instaladas e autenticação no EAS.
+Para escolher o arquivo de saída, use
+`npm run build:android:local -- --output /caminho/amodomio.apk`.
+
 Os perfis `preview` e `production` em `eas.json` geram APK para Android e
 Ad Hoc para iPhones cadastrados. Nenhum deles envia o aplicativo às lojas.
 Os canais de atualização são separados, mas ambos usam as variáveis do ambiente
@@ -48,7 +55,7 @@ pedidos reais.
 Antes dos comandos abaixo, entre na pasta do app e ative seu Node:
 
 ```bash
-cd apps/kds-mobile
+cd apps/mobile
 source ~/.nvm/nvm.sh
 nvm install
 nvm use
@@ -110,6 +117,6 @@ Mudanças nativas/dependências/configurações que alterem o fingerprint exigem
 novo build instalado. EAS Update não transforma um build antigo sem suporte a
 updates em um build compatível.
 
-Deploy da Vercel atualiza o site/backend. Alterações em `apps/kds-mobile` precisam
+Deploy da Vercel atualiza o site/backend. Alterações em `apps/mobile` precisam
 de EAS Update ou novo build conforme o tipo da mudança. Nenhum comando de
 publicação é executado automaticamente pelo deploy da Vercel.

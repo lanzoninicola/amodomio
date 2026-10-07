@@ -11,6 +11,7 @@
     "start": "npm run export:web && electron .",
     "pack": "npm run export:web && electron-builder --dir",
     "dist:win": "npm run export:web && electron-builder --win nsis --x64 --publish never",
+    "build:windows": "bash scripts/build-windows.sh",
     "test": "node --test *.test.cjs",
     "dist:linux": "npm run export:web && electron-builder --linux deb --x64 --publish never"
   },
@@ -27,7 +28,7 @@
     ],
     "win": {
       "target": "nsis",
-      "icon": "../kds-mobile/assets/icon.png"
+      "icon": "../mobile/assets/icon.png"
     },
     "nsis": {
       "oneClick": false,
@@ -39,7 +40,7 @@
     "linux": {
       "target": "deb",
       "category": "Office",
-      "icon": "../kds-mobile/assets/icon.png",
+      "icon": "../mobile/assets/icon.png",
       "maintainer": "Amodomio",
       "executableName": "amodomio",
       "desktop": {

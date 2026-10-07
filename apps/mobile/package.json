@@ -37,6 +37,7 @@
     "eas:setup": "eas init && eas update:configure",
     "build:preview": "eas build --profile preview --platform all",
     "build:android": "eas build --profile production --platform android",
+    "build:android:local": "bash scripts/build-android-local.sh",
     "build:ios": "eas build --profile production --platform ios",
     "update:preview": "eas update --channel preview --environment production",
     "update:production": "eas update --channel production --environment production",

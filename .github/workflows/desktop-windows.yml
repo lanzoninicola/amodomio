@@ -10,13 +10,13 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version-file: apps/kds-mobile/.nvmrc
+          node-version-file: apps/mobile/.nvmrc
           cache: npm
           cache-dependency-path: |
-            apps/kds-mobile/package-lock.json
+            apps/mobile/package-lock.json
             apps/desktop/package-lock.json
       - run: npm ci
-        working-directory: apps/kds-mobile
+        working-directory: apps/mobile
       - run: npm ci
         working-directory: apps/desktop
       - run: npm test
