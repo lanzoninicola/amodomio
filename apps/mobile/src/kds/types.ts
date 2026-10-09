@@ -1,14 +1,36 @@
+import { theme } from "../ui/theme";
+
 export const KDS_STATUSES = [
-  { id: "novoPedido", label: "Novo pedido", color: "#0284c7", tint: "#f0f9ff" },
-  { id: "emProducao", label: "Em produção", color: "#7c3aed", tint: "#f5f3ff" },
+  {
+    id: "novoPedido",
+    label: "Novo pedido",
+    color: theme.colors.brandBlue,
+    tint: theme.colors.brandBlueMuted,
+  },
+  {
+    id: "emProducao",
+    label: "Em produção",
+    color: theme.colors.brandViolet,
+    tint: theme.colors.brandVioletMuted,
+  },
   {
     id: "aguardandoForno",
     label: "Aguardando forno",
-    color: "#b45309",
-    tint: "#fffbeb",
+    color: theme.colors.brandOrangeInk,
+    tint: theme.colors.brandOrangeMuted,
   },
-  { id: "assando", label: "Assando", color: "#0f766e", tint: "#f0fdfa" },
-  { id: "finalizado", label: "Finalizado", color: "#15803d", tint: "#f0fdf4" },
+  {
+    id: "assando",
+    label: "Assando",
+    color: theme.colors.brandRedInk,
+    tint: theme.colors.dangerMuted,
+  },
+  {
+    id: "finalizado",
+    label: "Finalizado",
+    color: theme.colors.success,
+    tint: theme.colors.successMuted,
+  },
 ] as const;
 
 export type KdsStatus = (typeof KDS_STATUSES)[number]["id"];
@@ -18,8 +40,8 @@ export function getKdsStatusStyle(status: string | null | undefined) {
     KDS_STATUSES.find((entry) => entry.id === status) ?? {
       id: status ?? "unknown",
       label: status === "pendente" ? "Pendente" : "Status não reconhecido",
-      color: "#64748b",
-      tint: "#f1f5f9",
+      color: theme.colors.mutedForeground,
+      tint: theme.colors.muted,
     }
   );
 }

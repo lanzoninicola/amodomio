@@ -101,12 +101,16 @@ export async function updateStatus(
   baseUrl: string,
   token: string,
   id: string,
-  status: KdsStatus
+  status: KdsStatus,
+  fulfillOvenRequest = false
 ) {
   const result = await request<{ order: KdsOrder }>(
     baseUrl,
     "/api/kds/orders",
-    { method: "PATCH", body: JSON.stringify({ id, status }) },
+    {
+      method: "PATCH",
+      body: JSON.stringify({ id, status, fulfillOvenRequest }),
+    },
     token
   );
   return result.order;

@@ -1,9 +1,9 @@
+import { Text } from "./Text";
 import type { ReactNode } from "react";
 import {
   ActivityIndicator,
   Pressable,
   StyleSheet,
-  Text,
   type ViewStyle,
 } from "react-native";
 import { theme } from "./theme";
@@ -51,6 +51,11 @@ export function Button({
   const palette = palettes[variant];
   return (
     <Pressable
+      accessibilityRole="button"
+      accessibilityState={{
+        disabled: Boolean(disabled || loading),
+        busy: Boolean(loading),
+      }}
       disabled={disabled || loading}
       onPress={onPress}
       style={({ pressed }) => [
@@ -77,10 +82,10 @@ export function Button({
 
 const styles = StyleSheet.create({
   base: {
-    minHeight: 40,
+    minHeight: 44,
     paddingHorizontal: 16,
     paddingVertical: 10,
-    borderRadius: theme.radius.md,
+    borderRadius: theme.radius.full,
     alignItems: "center",
     justifyContent: "center",
     flexDirection: "row",

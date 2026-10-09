@@ -1,5 +1,7 @@
+import { BrandLogo } from "./BrandLogo";
+import { Text } from "./Text";
 import type { ReactNode } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { StyleSheet, View } from "react-native";
 import { theme } from "./theme";
 export function AppHeader({
   eyebrow = "AMODOMIO",
@@ -13,7 +15,11 @@ export function AppHeader({
   return (
     <View style={styles.header}>
       <View>
-        <Text style={styles.eyebrow}>{eyebrow}</Text>
+        {eyebrow === "AMODOMIO" ? (
+          <BrandLogo light width={150} />
+        ) : (
+          <Text style={styles.eyebrow}>{eyebrow}</Text>
+        )}
         <Text style={styles.title}>{title}</Text>
       </View>
       {action}
@@ -25,13 +31,13 @@ const styles = StyleSheet.create({
     minHeight: 82,
     paddingHorizontal: 18,
     paddingVertical: 14,
-    backgroundColor: theme.colors.foreground,
+    backgroundColor: theme.colors.primary,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
   },
   eyebrow: {
-    color: "#cbd5e1",
+    color: theme.colors.brandBlueMuted,
     fontFamily: theme.typography.bold,
     fontSize: 10,
     letterSpacing: 1.6,

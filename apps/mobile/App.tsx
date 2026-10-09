@@ -1,8 +1,14 @@
+import { OvenRequestsBar } from "./src/kds/OvenRequestsBar";
+import { VoiceCommandButton } from "./src/kds/VoiceCommandButton";
+import { OrderTiming } from "./src/kds/OrderTiming";
+import { BrandLogo } from "./src/ui/BrandLogo";
+import { Text, KdsTypographyContext } from "./src/ui/Text";
 import { useDesktopWindow } from "./src/platform/useDesktopWindow";
 import { DesktopBoard } from "./src/kds/DesktopBoard";
 import { OvenRequestAlert } from "./src/kds/OvenRequestAlert";
 import { Alert } from "./src/platform/alert";
 import { desktop } from "./src/platform/desktop";
+import { IconButton } from "./src/ui/IconButton";
 import { DesktopToolbar } from "./src/ui/DesktopToolbar";
 import { StatusBar } from "expo-status-bar";
 import * as Device from "expo-device";
@@ -25,7 +31,6 @@ import {
   RefreshControl,
   ScrollView,
   StyleSheet,
-  Text,
   View,
 } from "react-native";
 import { useNetInfo } from "@react-native-community/netinfo";
@@ -49,7 +54,7 @@ import {
 import { notifyNewOrders, prepareNotifications } from "./src/kds/notifications";
 import { sessionStorage } from "./src/storage/session";
 import { AppHeader } from "./src/ui/AppHeader";
-import { PhoneBoard } from "./src/kds/PhoneBoard";
+import { PhoneBoard, StatusFilters } from "./src/kds/PhoneBoard";
 import {
   DEFAULT_SERVER_PRESETS,
   PUBLIC_SERVER_URL,
@@ -192,7 +197,7 @@ function LoginScreen({
         contentContainerStyle={{ paddingBottom: 24 }}
       >
         <View style={styles.loginHero}>
-          <Text style={styles.brandEyebrow}>AMODOMIO</Text>
+          <BrandLogo light width={200} />
           <Text style={styles.loginTitle}>Bem-vindo</Text>
           <Text style={styles.loginSubtitle}>
             Entre para acessar as funcionalidades do Amodomio.
@@ -313,8 +318,7 @@ function OrderCard({
               order.requestedForOven && styles.ovenTextActive,
             ]}
           >
-            🔥{" "}
-            {order.requestedForOven ? "Pedido para assar" : "Pedir para assar"}
+            🔥 {order.requestedForOven ? "Cancelar aviso" : "Avisar forno"}
           </Text>
         </Pressable>
       ) : null}
@@ -419,6 +423,8 @@ function KanbanScreen({
     isPhone ? "reduced" : "kanban"
   );
   const reduced = boardMode === "reduced";
+  const [statusFilter, setStatusFilter] = useState<string | null>(null);
+  const compactHeader = !desktop && reduced && width > height && width >= 800;
   const [date, setDate] = useState(localDate());
   const [calendarOpen, setCalendarOpen] = useState(false);
   const currentDate = useRef(date);
@@ -492,28 +498,55 @@ function KanbanScreen({
     }, POLLING_MS);
     return () => clearInterval(timer);
   }, [load, online]);
-  const move = async (order: KdsOrder, status: KdsStatus) => {
+  const move = async (
+    order: KdsOrder,
+    status: KdsStatus,
+    fulfillOvenRequest = false
+  ) => {
     setSelected(null);
-    if (order.status === status || mutatingId) return;
-    if (!online)
-      return Alert.alert("Sem conexão", "Reconecte para alterar o pedido.");
+    if (mutatingId) return false;
+    if (
+      order.status === status &&
+      !(fulfillOvenRequest && order.requestedForOven)
+    )
+      return true;
+    if (!online) {
+      Alert.alert("Sem conexão", "Reconecte para alterar o pedido.");
+      return false;
+    }
     const previous = orders;
     setMutatingId(order.id);
     setOrders((current) =>
-      current.map((item) => (item.id === order.id ? { ...item, status } : item))
+      current.map((item) =>
+        item.id === order.id
+          ? {
+              ...item,
+              status,
+              ...(fulfillOvenRequest ? { requestedForOven: false } : {}),
+            }
+          : item
+      )
     );
     try {
-      const updated = await updateStatus(apiUrl, token, order.id, status);
+      const updated = await updateStatus(
+        apiUrl,
+        token,
+        order.id,
+        status,
+        fulfillOvenRequest
+      );
       setOrders((current) =>
         current.map((item) => (item.id === order.id ? updated : item))
       );
       void load();
+      return true;
     } catch (reason) {
       setOrders(previous);
       Alert.alert(
         "Pedido não atualizado",
         reason instanceof Error ? reason.message : "Tente novamente."
       );
+      return false;
     } finally {
       setMutatingId(null);
     }
@@ -556,107 +589,126 @@ function KanbanScreen({
   return (
     <Screen style={styles.appSafe}>
       <StatusBar style="light" />
-      {!desktop && !reduced ? (
-        <AppHeader
-          eyebrow="AMODOMIO"
-          title="KDS"
-          action={
-            <Button variant="secondary" onPress={onBack}>
-              ‹ Início
-            </Button>
-          }
-        />
-      ) : null}
-      {!desktop ? (
-        <View style={styles.phoneToolbar}>
-          <Button
-            variant={reduced ? "outline" : "primary"}
-            style={{ flex: 1, minHeight: 44 }}
-            onPress={() => setBoardMode("kanban")}
-          >
-            Kanban
-          </Button>
-          <Button
-            variant={reduced ? "primary" : "outline"}
-            style={{ flex: 1, minHeight: 44 }}
-            onPress={() => setBoardMode("reduced")}
-          >
-            Reduzida
-          </Button>
-        </View>
-      ) : null}
-      {desktop || reduced ? (
-        <>
-          <View
-            style={[styles.phoneToolbar, desktop && { padding: 4, gap: 4 }]}
-          >
-            <Button
-              variant="outline"
-              style={{ flex: 1 }}
-              disabled={Boolean(mutatingId)}
-              onPress={() => setCalendarOpen(true)}
-            >{`${
-              widget
-                ? date.split("-").reverse().slice(0, 2).join("/")
-                : formatDate(date)
-            }  ⌄`}</Button>
-            <Button
-              variant="ghost"
-              loading={refreshing}
-              onPress={() => load(true)}
-            >
-              {desktop ? "Atualizar" : "↻"}
-            </Button>
-            <Button variant="ghost" onPress={onBack}>
-              Início
-            </Button>
-          </View>
-        </>
-      ) : (
-        <View style={styles.toolbar}>
-          <Pressable
-            style={styles.dateArrow}
+      <View
+        style={[
+          styles.phoneToolbar,
+          { gap: desktop ? 4 : 3, paddingHorizontal: desktop ? 4 : 6 },
+        ]}
+      >
+        {!desktop && width >= 600 ? (
+          <IconButton
+            icon="previous"
+            label="Dia anterior"
             disabled={Boolean(mutatingId)}
             onPress={() => setDate((value) => shiftDate(value, -1))}
+          />
+        ) : null}
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Selecionar data: ${formatDate(date)}`}
+          disabled={Boolean(mutatingId)}
+          onPress={() => setCalendarOpen(true)}
+          style={{
+            flex: compactHeader ? undefined : 1,
+            width: compactHeader ? 132 : undefined,
+            minWidth: 0,
+            minHeight: 48,
+            justifyContent: "center",
+            alignItems: "center",
+            borderRadius: theme.radius.md,
+            backgroundColor: theme.colors.secondary,
+            paddingHorizontal: 4,
+          }}
+        >
+          <Text
+            numberOfLines={1}
+            style={{
+              fontSize: 14,
+              fontFamily: theme.typography.semibold,
+              color: theme.colors.primary,
+            }}
           >
-            <Text style={styles.dateArrowText}>‹</Text>
-          </Pressable>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Selecionar dia no calendário"
-            disabled={Boolean(mutatingId)}
-            onPress={() => setCalendarOpen(true)}
-          >
-            <Text style={styles.dateLabel}>{formatDate(date)}</Text>
-            <Text style={styles.todayLabel}>
-              {date === localDate() ? "Hoje · Calendário" : "Abrir calendário"}
-            </Text>
-          </Pressable>
-          <Pressable
-            style={styles.dateArrow}
+            {widget || (!desktop && width < 600)
+              ? date.split("-").reverse().slice(0, 2).join("/")
+              : formatDate(date)}{" "}
+            ⌄
+          </Text>
+        </Pressable>
+        {!desktop && width >= 600 ? (
+          <IconButton
+            icon="next"
+            label="Próximo dia"
             disabled={Boolean(mutatingId)}
             onPress={() => setDate((value) => shiftDate(value, 1))}
-          >
-            <Text style={styles.dateArrowText}>›</Text>
-          </Pressable>
-          <View
-            style={[styles.connection, online ? styles.online : styles.offline]}
-          >
-            <View
-              style={[
-                styles.dot,
-                { backgroundColor: online ? "#16a34a" : "#dc2626" },
-              ]}
+          />
+        ) : null}
+        {!desktop ? (
+          <>
+            <IconButton
+              icon="kanban"
+              label="Visão Kanban"
+              caption="Kanban"
+              active={!reduced}
+              onPress={() => setBoardMode("kanban")}
             />
-            <Text style={styles.connectionText}>
-              {online ? "Online" : "Offline"}
-            </Text>
-          </View>
-        </View>
-      )}
+            <IconButton
+              icon="reduced"
+              label="Visão reduzida"
+              caption="Reduzida"
+              active={reduced}
+              onPress={() => setBoardMode("reduced")}
+            />
+          </>
+        ) : null}
+        <IconButton
+          icon="refresh"
+          label="Atualizar pedidos"
+          disabled={refreshing}
+          onPress={() => load(true)}
+        />
+        <VoiceCommandButton
+          key={`${date}:${apiUrl}`}
+          orders={orders}
+          disabled={!online || loading || Boolean(mutatingId)}
+          onCommand={(order, command) =>
+            move(order, command.status, command.status === "assando")
+          }
+        />
+        <IconButton
+          icon="home"
+          label="Voltar ao início"
+          caption="Início"
+          onPress={onBack}
+        />
+        {compactHeader ? (
+          <>
+            <View
+              style={{
+                width: 1,
+                height: 32,
+                backgroundColor: theme.colors.border,
+                marginHorizontal: 10,
+              }}
+            />
+            <StatusFilters
+              orders={orders}
+              filter={statusFilter}
+              onFilterChange={setStatusFilter}
+              compact
+            />
+          </>
+        ) : null}
+      </View>
+      {!desktop ? (
+        <OvenRequestsBar
+          orders={orders}
+          busy={Boolean(mutatingId)}
+          onBake={(order) => move(order, "assando")}
+        />
+      ) : null}
       {loading && !orders.length ? (
         <View style={styles.center}>
-          <ActivityIndicator size="large" color={theme.colors.primary} />
+          <ActivityIndicator size="large" color="#ffffff" />
           <Text style={styles.loadingText}>Carregando pedidos…</Text>
         </View>
       ) : desktop ? (
@@ -668,6 +720,9 @@ function KanbanScreen({
         />
       ) : reduced ? (
         <PhoneBoard
+          filter={statusFilter}
+          onFilterChange={setStatusFilter}
+          hideFilters={compactHeader}
           orders={orders}
           now={now}
           busy={Boolean(mutatingId)}
@@ -754,29 +809,45 @@ function KanbanScreen({
           style={styles.modalBackdrop}
           onPress={() => setSelected(null)}
         >
-          <View style={styles.modalCard} onStartShouldSetResponder={() => true}>
-            <Text style={styles.modalTitle}>
-              Mover pedido #{selected?.commandNumber ?? "VL"}
-            </Text>
-            <Text style={styles.modalSubtitle}>Selecione a nova etapa</Text>
-            {KDS_STATUSES.map((status) => (
-              <Pressable
-                key={status.id}
-                style={[
-                  styles.statusOption,
-                  selected?.status === status.id && styles.statusOptionCurrent,
-                ]}
-                onPress={() => selected && move(selected, status.id)}
-              >
-                <View
-                  style={[styles.statusMark, { backgroundColor: status.color }]}
+          <View
+            style={[styles.modalCard, { maxHeight: "90%" }]}
+            onStartShouldSetResponder={() => true}
+          >
+            <ScrollView>
+              <Text style={styles.modalTitle}>
+                Mover pedido #{selected?.commandNumber ?? "VL"}
+              </Text>
+              {selected ? (
+                <OrderTiming
+                  order={selected}
+                  now={now}
+                  useEntryTime={reduced}
                 />
-                <Text style={styles.statusOptionText}>{status.label}</Text>
-                {selected?.status === status.id ? (
-                  <Text style={styles.currentText}>Atual</Text>
-                ) : null}
-              </Pressable>
-            ))}
+              ) : null}
+              <Text style={styles.modalSubtitle}>Selecione a nova etapa</Text>
+              {KDS_STATUSES.map((status) => (
+                <Pressable
+                  key={status.id}
+                  style={[
+                    styles.statusOption,
+                    selected?.status === status.id &&
+                      styles.statusOptionCurrent,
+                  ]}
+                  onPress={() => selected && move(selected, status.id)}
+                >
+                  <View
+                    style={[
+                      styles.statusMark,
+                      { backgroundColor: status.color },
+                    ]}
+                  />
+                  <Text style={styles.statusOptionText}>{status.label}</Text>
+                  {selected?.status === status.id ? (
+                    <Text style={styles.currentText}>Atual</Text>
+                  ) : null}
+                </Pressable>
+              ))}
+            </ScrollView>
           </View>
         </Pressable>
       </Modal>
@@ -786,6 +857,9 @@ function KanbanScreen({
 
 function AppContent() {
   const [fontsLoaded, fontError] = useFonts({
+    IBMPlexMono_Regular: require("./assets/fonts/IBMPlexMono-Regular.ttf"),
+    IBMPlexMono_SemiBold: require("./assets/fonts/IBMPlexMono-SemiBold.ttf"),
+    IBMPlexMono_Bold: require("./assets/fonts/IBMPlexMono-Bold.ttf"),
     Inter_400Regular,
     Inter_500Medium,
     Inter_600SemiBold,
@@ -827,7 +901,7 @@ function AppContent() {
       return (
         <Screen style={styles.splash}>
           <StatusBar style="light" />
-          <Text style={styles.splashBrand}>AMODOMIO</Text>
+          <BrandLogo light width={240} />
           <ActivityIndicator color="#fff" />
         </Screen>
       );
@@ -842,15 +916,17 @@ function AppContent() {
       );
     if (activeFeature === "kds") {
       return (
-        <KanbanScreen
-          token={session.token}
-          apiUrl={session.apiUrl}
-          onBack={() => setActiveFeature(null)}
-          onUnauthorized={() => {
-            setActiveFeature(null);
-            setSession(null);
-          }}
-        />
+        <KdsTypographyContext.Provider value={true}>
+          <KanbanScreen
+            token={session.token}
+            apiUrl={session.apiUrl}
+            onBack={() => setActiveFeature(null)}
+            onUnauthorized={() => {
+              setActiveFeature(null);
+              setSession(null);
+            }}
+          />
+        </KdsTypographyContext.Provider>
       );
     }
     return (
@@ -868,11 +944,13 @@ function AppContent() {
     <>
       {renderScreen()}
       {session ? (
-        <OvenRequestAlert
-          key={`${session.user.id}:${session.apiUrl}`}
-          token={session.token}
-          apiUrl={session.apiUrl}
-        />
+        <KdsTypographyContext.Provider value={true}>
+          <OvenRequestAlert
+            key={`${session.user.id}:${session.apiUrl}`}
+            token={session.token}
+            apiUrl={session.apiUrl}
+          />
+        </KdsTypographyContext.Provider>
       ) : null}
     </>
   );
@@ -890,7 +968,7 @@ export default function App() {
 const styles = StyleSheet.create({
   splash: {
     flex: 1,
-    backgroundColor: theme.colors.foreground,
+    backgroundColor: theme.colors.primary,
     alignItems: "center",
     justifyContent: "center",
     gap: 24,
@@ -903,7 +981,7 @@ const styles = StyleSheet.create({
   },
   loginSafe: { flex: 1, backgroundColor: theme.colors.muted },
   loginHero: {
-    backgroundColor: theme.colors.foreground,
+    backgroundColor: theme.colors.primary,
     paddingHorizontal: 28,
     paddingTop: 72,
     paddingBottom: 72,
@@ -958,8 +1036,8 @@ const styles = StyleSheet.create({
   loginButton: { marginTop: 4 },
   primaryButton: {
     height: 52,
-    borderRadius: 13,
-    backgroundColor: "#dc2626",
+    borderRadius: theme.radius.lg,
+    backgroundColor: theme.colors.primary,
     alignItems: "center",
     justifyContent: "center",
     marginTop: 20,
@@ -973,7 +1051,7 @@ const styles = StyleSheet.create({
   homeSafe: { flex: 1, backgroundColor: theme.colors.muted },
   homeHeader: {
     minHeight: 112,
-    backgroundColor: theme.colors.foreground,
+    backgroundColor: theme.colors.primary,
     paddingHorizontal: 22,
     paddingVertical: 22,
     flexDirection: "row",
@@ -1049,11 +1127,11 @@ const styles = StyleSheet.create({
     fontSize: 32,
     fontFamily: theme.typography.regular,
   },
-  appSafe: { flex: 1, backgroundColor: theme.colors.border },
+  appSafe: { flex: 1, backgroundColor: "#000000" },
   header: {
     height: 82,
     paddingHorizontal: 18,
-    backgroundColor: theme.colors.foreground,
+    backgroundColor: theme.colors.primary,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
@@ -1091,7 +1169,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 6,
     padding: 8,
-    backgroundColor: theme.colors.background,
+    backgroundColor: "#000000",
   },
   toolbar: {
     minHeight: 68,
@@ -1145,15 +1223,15 @@ const styles = StyleSheet.create({
     fontFamily: theme.typography.semibold,
   },
   center: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12 },
-  loadingText: { color: theme.colors.mutedForeground },
+  loadingText: { color: "#a3a3a3" },
   board: { padding: 12, gap: 12, alignItems: "stretch" },
   column: {
-    backgroundColor: theme.colors.muted,
+    backgroundColor: "#101010",
     width: 288,
     borderRadius: 16,
     padding: 10,
     borderWidth: 1,
-    borderColor: theme.colors.border,
+    borderColor: "#333333",
   },
   columnHeader: {
     height: 42,
@@ -1164,7 +1242,7 @@ const styles = StyleSheet.create({
   },
   statusMark: { width: 9, height: 9, borderRadius: 5 },
   columnTitle: {
-    color: theme.colors.foreground,
+    color: "#ffffff",
     fontFamily: theme.typography.bold,
     fontSize: 15,
     flex: 1,
@@ -1183,13 +1261,13 @@ const styles = StyleSheet.create({
     fontFamily: theme.typography.bold,
   },
   cardList: { gap: 9, paddingBottom: 20, minHeight: 100 },
-  emptyColumn: { color: theme.colors.ring, textAlign: "center", marginTop: 28 },
+  emptyColumn: { color: "#a3a3a3", textAlign: "center", marginTop: 28 },
   orderCard: {
-    backgroundColor: "#fff",
-    borderRadius: 13,
+    backgroundColor: "#282828",
+    borderRadius: theme.radius.lg,
     padding: 13,
     borderWidth: 1,
-    borderColor: theme.colors.border,
+    borderColor: "#444444",
     elevation: 2,
   },
   busyCard: { opacity: 0.5 },
@@ -1199,45 +1277,45 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   command: {
-    color: theme.colors.primary,
+    color: "#ffffff",
     fontSize: 21,
     fontFamily: theme.typography.bold,
   },
   elapsed: {
-    color: theme.colors.foreground,
+    color: "#ffffff",
     fontSize: 17,
     fontFamily: theme.typography.bold,
     fontVariant: ["tabular-nums"],
   },
   orderMeta: {
-    color: theme.colors.mutedForeground,
+    color: "#b3b3b3",
     fontSize: 12,
     marginTop: 6,
   },
   sizes: {
-    color: theme.colors.foreground,
+    color: "#ffffff",
     fontSize: 13,
     fontFamily: theme.typography.bold,
     marginTop: 7,
   },
-  customer: { color: theme.colors.mutedForeground, fontSize: 12, marginTop: 5 },
+  customer: { color: "#b3b3b3", fontSize: 12, marginTop: 5 },
   cardHint: {
-    color: theme.colors.ring,
+    color: "#b3b3b3",
     fontSize: 10,
     textAlign: "right",
     marginTop: 9,
   },
   ovenButton: {
     borderWidth: 1,
-    borderColor: "#fca5a5",
-    backgroundColor: "#fff1f2",
+    borderColor: theme.colors.brandOrange,
+    backgroundColor: theme.colors.brandOrangeMuted,
     borderRadius: 9,
     padding: 8,
     marginTop: 10,
   },
-  ovenButtonActive: { backgroundColor: "#dc2626" },
+  ovenButtonActive: { backgroundColor: theme.colors.primary },
   ovenText: {
-    color: "#b91c1c",
+    color: theme.colors.brandOrangeInk,
     fontSize: 12,
     fontFamily: theme.typography.bold,
     textAlign: "center",
@@ -1246,14 +1324,14 @@ const styles = StyleSheet.create({
   footer: {
     height: 34,
     paddingHorizontal: 14,
-    backgroundColor: "#fff",
+    backgroundColor: "#000000",
     borderTopWidth: 1,
-    borderTopColor: theme.colors.border,
+    borderTopColor: "#333333",
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
   },
-  footerText: { color: theme.colors.mutedForeground, fontSize: 10 },
+  footerText: { color: "#a3a3a3", fontSize: 10 },
   modalBackdrop: {
     flex: 1,
     backgroundColor: "rgba(15,23,42,0.62)",

@@ -140,13 +140,13 @@ else {
         if (value && !widget) {
           widgetBounds = window.getBounds();
           window.unmaximize();
-          window.setMinimumSize(360, 300);
+          window.setMinimumSize(360, 200);
           const area = screen.getDisplayMatching(widgetBounds).workArea;
           window.setBounds({
             x: area.x + Math.max(0, area.width - 360),
             y: area.y,
             width: 360,
-            height: 300,
+            height: Math.round(area.height * 0.75),
           });
           widget = true;
         } else if (!value) leaveWidget();

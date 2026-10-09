@@ -1,8 +1,8 @@
+import { Text } from "./Text";
 import { forwardRef, useState } from "react";
 import {
   StyleSheet,
   Pressable,
-  Text,
   TextInput,
   View,
   type TextInputProps,
@@ -61,7 +61,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   input: {
-    minHeight: 40,
+    minHeight: 48,
     borderWidth: 1,
     borderColor: theme.colors.input,
     borderRadius: theme.radius.md,

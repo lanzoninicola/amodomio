@@ -28,7 +28,14 @@
     "plugins": [
       "expo-secure-store",
       "expo-font",
-      "./plugins/with-development-http.cjs"
+      "./plugins/with-development-http.cjs",
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "Permita que o Amodomio use o microfone para os comandos de voz do KDS.",
+          "speechRecognitionPermission": "Permita que o Amodomio reconheça sua fala para atualizar os pedidos do KDS."
+        }
+      ]
     ],
     "runtimeVersion": {
       "policy": "fingerprint"

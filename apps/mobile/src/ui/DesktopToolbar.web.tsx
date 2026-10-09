@@ -1,5 +1,7 @@
+import { BrandLogo } from "./BrandLogo";
+import { Text } from "./Text";
 import { useState } from "react";
-import { View, Text } from "react-native";
+import { View } from "react-native";
 import { desktop } from "../platform/desktop";
 import type { DesktopWindowState } from "../platform/desktop";
 import { IconButton } from "./IconButton";
@@ -16,7 +18,7 @@ export function DesktopToolbar() {
   return (
     <View
       style={{
-        padding: 4,
+        padding: 8,
         zIndex: 100,
         gap: 8,
         borderBottomWidth: 1,
@@ -32,15 +34,9 @@ export function DesktopToolbar() {
           gap: 8,
         }}
       >
-        <Text
-          style={{
-            flexGrow: 1,
-            fontWeight: "700",
-            color: theme.colors.foreground,
-          }}
-        >
-          AMODOMIO
-        </Text>
+        <View style={{ flexGrow: 1 }}>
+          <BrandLogo width={156} />
+        </View>
         <IconButton
           icon="compact"
           label={state.compact ? "Expandir janela" : "Modo compacto"}

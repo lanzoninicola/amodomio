@@ -8,8 +8,13 @@ if [ ! -s "$HOME/.nvm/nvm.sh" ]; then
   exit 1
 fi
 
-source "$HOME/.nvm/nvm.sh"
-nvm use
+# npm run exports a prefix that can conflict with nvm's Node activation.
+unset npm_config_prefix NPM_CONFIG_PREFIX
+source "$HOME/.nvm/nvm.sh" --no-use
+if ! nvm use; then
+  echo "Não foi possível ativar o Node indicado em apps/mobile/.nvmrc. Execute nvm install nessa pasta." >&2
+  exit 1
+fi
 
 android_sdk_path="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
 if [ -z "$android_sdk_path" ]; then

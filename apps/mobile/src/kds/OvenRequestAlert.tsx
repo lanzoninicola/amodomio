@@ -1,5 +1,14 @@
+import { SafeAreaView } from "react-native-safe-area-context";
+import { theme } from "../ui/theme";
+import { Text } from "../ui/Text";
 import { useEffect, useRef, useState } from "react";
-import { AppState, Modal, Text, View } from "react-native";
+import {
+  AppState,
+  Modal,
+  ScrollView,
+  View,
+  useWindowDimensions,
+} from "react-native";
 import { listOrders } from "../api/client";
 import { Button } from "../ui/Button";
 import type { KdsOrder } from "./types";
@@ -11,6 +20,11 @@ export function OvenRequestAlert({
   token: string;
   apiUrl: string;
 }) {
+  const { width, height } = useWindowDimensions();
+  const numberSize = Math.min(
+    160,
+    Math.max(80, Math.min(width, height) * 0.25)
+  );
   const acknowledged = useRef(new Set<string>());
   const [pending, setPending] = useState<KdsOrder[]>([]);
   useEffect(() => {
@@ -52,56 +66,118 @@ export function OvenRequestAlert({
   return (
     <Modal
       visible={Boolean(current)}
-      transparent
+      presentationStyle="fullScreen"
       animationType="fade"
       supportedOrientations={["portrait", "landscape-left", "landscape-right"]}
       onRequestClose={dismiss}
     >
-      <View
-        style={{
-          flex: 1,
-          backgroundColor: "rgba(0,0,0,0.65)",
-          padding: 24,
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
-        <View
-          accessibilityViewIsModal
-          style={{
-            width: "100%",
-            maxWidth: 440,
+      <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.primary }}>
+        <ScrollView
+          contentContainerStyle={{
+            flexGrow: 1,
             padding: 24,
-            gap: 18,
-            backgroundColor: "#fff",
-            borderRadius: 16,
+            alignItems: "center",
+            justifyContent: "center",
           }}
         >
-          <Text
-            accessibilityRole="alert"
+          <View
+            accessibilityViewIsModal
             style={{
-              fontSize: 24,
-              fontWeight: "700",
-              color: "#92400e",
-              textAlign: "center",
+              width: "100%",
+              maxWidth: 900,
+              alignItems: "center",
+              gap: 16,
             }}
           >
-            Colocar no forno
-          </Text>
-          <Text
-            style={{ fontSize: 38, fontWeight: "700", textAlign: "center" }}
-          >
-            Pedido #{current?.commandNumber ?? "VL"}
-          </Text>
-          {current?.customerName ? (
-            <Text style={{ textAlign: "center" }}>{current.customerName}</Text>
-          ) : null}
-          {pending.length > 1 ? (
-            <Text>Mais {pending.length - 1} pedido(s) aguardando aviso.</Text>
-          ) : null}
-          <Button onPress={dismiss}>Entendi</Button>
-        </View>
-      </View>
+            <View
+              style={{
+                backgroundColor: theme.colors.brandOrangeMuted,
+                borderRadius: theme.radius.full,
+                paddingHorizontal: 20,
+                paddingVertical: 10,
+              }}
+            >
+              <Text
+                accessibilityRole="alert"
+                style={{
+                  fontSize: 30,
+                  fontFamily: theme.typography.bold,
+                  color: theme.colors.brandOrangeInk,
+                  textAlign: "center",
+                }}
+              >
+                Colocar no forno
+              </Text>
+            </View>
+            <Text
+              style={{
+                fontSize: 18,
+                fontFamily: theme.typography.semibold,
+                color: theme.colors.primaryForeground,
+              }}
+            >
+              PEDIDO
+            </Text>
+            <Text
+              accessibilityLabel={`Pedido número ${
+                current?.commandNumber ?? "VL"
+              }`}
+              style={{
+                fontSize: numberSize,
+                fontFamily: theme.typography.bold,
+                color: theme.colors.primaryForeground,
+                textAlign: "center",
+                fontVariant: ["tabular-nums"],
+                width: "100%",
+              }}
+            >
+              #{current?.commandNumber ?? "VL"}
+            </Text>
+            {current?.customerName ? (
+              <Text
+                style={{
+                  fontSize: 22,
+                  color: theme.colors.primaryForeground,
+                  textAlign: "center",
+                }}
+              >
+                {current.customerName}
+              </Text>
+            ) : null}
+            {pending.length > 1 ? (
+              <Text
+                style={{
+                  fontSize: 16,
+                  color: theme.colors.primaryForeground,
+                  textAlign: "center",
+                }}
+              >
+                Mais {pending.length - 1} pedido(s) aguardando aviso.
+              </Text>
+            ) : null}
+            <Button
+              variant="secondary"
+              style={{
+                minHeight: 60,
+                width: "100%",
+                maxWidth: 360,
+                marginTop: 12,
+              }}
+              onPress={dismiss}
+            >
+              <Text
+                style={{
+                  fontSize: 20,
+                  fontFamily: theme.typography.bold,
+                  color: theme.colors.primary,
+                }}
+              >
+                Entendi
+              </Text>
+            </Button>
+          </View>
+        </ScrollView>
+      </SafeAreaView>
     </Modal>
   );
 }

@@ -57,6 +57,7 @@ type KdsOrderStatusUpdatePayload = {
   status?: string;
   action?: string;
   requestedForOven?: boolean;
+  fulfillOvenRequest?: boolean;
 };
 
 const RATE_LIMIT_BUCKET = "kds-orders";
@@ -483,6 +484,14 @@ async function handleUpdateOrderStatus(request: Request) {
   const id =
     typeof body?.id === "string" && body.id.trim() ? body.id.trim() : null;
 
+  if (
+    body.fulfillOvenRequest !== undefined &&
+    (typeof body.fulfillOvenRequest !== "boolean" ||
+      (body.fulfillOvenRequest && requestedStatus !== "assando"))
+  ) {
+    return json({ error: "invalid_oven_request" }, { status: 400 });
+  }
+
   let target = id ? await getOrderForApiById(id) : null;
 
   if (!target) {
@@ -516,7 +525,9 @@ async function handleUpdateOrderStatus(request: Request) {
     return json({ error: "order_not_found" }, { status: 404 });
   }
 
-  await setOrderStatus(target.id, requestedStatus as KdsStatus);
+  await setOrderStatus(target.id, requestedStatus as KdsStatus, {
+    fulfillOvenRequest: body.fulfillOvenRequest === true,
+  });
 
   const updated = await getOrderForApiById(target.id);
   if (!updated) {

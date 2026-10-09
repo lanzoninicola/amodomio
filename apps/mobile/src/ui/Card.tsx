@@ -1,5 +1,6 @@
+import { Text } from "./Text";
 import type { ReactNode } from "react";
-import { StyleSheet, Text, View, type ViewStyle } from "react-native";
+import { StyleSheet, View, type ViewStyle } from "react-native";
 import { theme } from "./theme";
 
 export function Card({

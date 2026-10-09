@@ -1,5 +1,13 @@
+import { useTextFont } from "./Text";
+import { theme } from "./theme";
 import { useState } from "react";
 const paths: Record<string, string> = {
+  refresh:
+    "M20 7v5h-5 M4 17v-5h5 M6 7a7 7 0 0 1 12-1l2 6 M4 12l2 6a7 7 0 0 0 12-1",
+  home: "m3 10 9-7 9 7 M5 9v12h14V9 M9 21v-8h6v8",
+  oven: "M4 3h16v18H4z M7 9h10v8H7z M7 6h.01 M12 6h.01 M17 6h.01",
+  cancel: "m6 6 12 12 M18 6 6 18",
+  status: "M4 7h16 m-4-4 4 4-4 4 M20 17H4 m4-4-4 4 4 4",
   compact: "M4 4h16v16H4z M9 9h11 M9 9v11",
   pin: "m9 3 6 0-1 6 4 4v2H6v-2l4-4-1-6 M12 15v6",
   widget: "M4 4h16v16H4z M12 12h8v8h-8z",
@@ -8,20 +16,27 @@ const paths: Record<string, string> = {
 };
 export function IconButton({
   label,
+  disabled,
+  caption,
   icon,
   active,
   onPress,
 }: {
   label: string;
+  disabled?: boolean;
+  caption?: string;
   icon: string;
   active?: boolean;
   onPress: () => void;
 }) {
+  const fontFamily = useTextFont(theme.typography.semibold);
   const [hover, setHover] = useState(false);
   return (
     <span style={{ position: "relative", display: "inline-flex" }}>
       <button
         type="button"
+        disabled={disabled}
+        title={label}
         aria-label={label}
         aria-pressed={active}
         onClick={onPress}
@@ -30,14 +45,35 @@ export function IconButton({
         onFocus={() => setHover(true)}
         onBlur={() => setHover(false)}
         style={{
-          width: 32,
-          height: 32,
+          width: caption ? "auto" : 34,
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 5,
+          fontSize: 12,
+          fontWeight: 600,
+          whiteSpace: "nowrap",
+          boxSizing: "border-box",
+          flexShrink: 0,
+          fontFamily,
+          opacity: disabled ? 0.5 : 1,
+          height: 36,
           padding: 6,
-          border: "1px solid #d4d4d4",
-          borderRadius: 6,
-          background: active ? "#e5e5e5" : "white",
-          color: "#262626",
-          cursor: "pointer",
+          border: `1px solid ${
+            active
+              ? theme.colors.primary
+              : hover
+              ? theme.colors.ring
+              : theme.colors.border
+          }`,
+          borderRadius: theme.radius.full,
+          background: active
+            ? theme.colors.primary
+            : hover
+            ? theme.colors.secondary
+            : theme.colors.card,
+          color: active ? theme.colors.primaryForeground : theme.colors.primary,
+          cursor: disabled ? "default" : "pointer",
         }}
       >
         <svg
@@ -50,31 +86,12 @@ export function IconButton({
           strokeWidth="1.6"
           strokeLinecap="round"
           strokeLinejoin="round"
+          style={{ flexShrink: 0 }}
         >
           <path d={paths[icon] || paths.settings} />
         </svg>
+        {caption || null}
       </button>
-      {hover ? (
-        <span
-          role="tooltip"
-          style={{
-            position: "absolute",
-            top: "100%",
-            right: 0,
-            marginTop: 4,
-            zIndex: 10000,
-            background: "#262626",
-            color: "white",
-            fontSize: 12,
-            padding: "5px 8px",
-            borderRadius: 4,
-            whiteSpace: "nowrap",
-            pointerEvents: "none",
-          }}
-        >
-          {label}
-        </span>
-      ) : null}
     </span>
   );
 }
