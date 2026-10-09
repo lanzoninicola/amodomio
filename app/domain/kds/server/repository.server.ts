@@ -224,7 +224,11 @@ export type KdsStatus =
  * Obs.: usamos "definir se null" para manter o primeiro instante da fase.
  * Ao voltar fases, limpamos os *At das fases posteriores para manter a linha do tempo consistente.
  */
-export async function setOrderStatus(id: string, next: KdsStatus) {
+export async function setOrderStatus(
+  id: string,
+  next: KdsStatus,
+  options: { fulfillOvenRequest?: boolean } = {}
+) {
   const now = new Date();
 
   // Pega status atual para evitar writes desnecessários (opcional)
@@ -267,6 +271,7 @@ export async function setOrderStatus(id: string, next: KdsStatus) {
     case "assando": {
       data.assandoAt = current.assandoAt ?? now;
       data.finalizadoAt = null;
+      if (options.fulfillOvenRequest) data.requestedForOven = false;
       break;
     }
     case "finalizado": {

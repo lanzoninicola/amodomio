@@ -1,6 +1,6 @@
 const { spawnSync } = require("node:child_process");
 const path = require("node:path");
-const mobile = path.resolve(__dirname, "../../kds-mobile");
+const mobile = path.resolve(__dirname, "../../mobile");
 const cli = require.resolve("expo/bin/cli", { paths: [mobile] });
 const result = spawnSync(
   process.execPath,

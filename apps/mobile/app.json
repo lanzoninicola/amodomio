@@ -1,0 +1,55 @@
+{
+  "expo": {
+    "name": "Amodomio",
+    "slug": "amodomio",
+    "version": "1.0.0",
+    "orientation": "default",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": true,
+      "requireFullScreen": true,
+      "bundleIdentifier": "com.amodomio.app"
+    },
+    "android": {
+      "package": "com.amodomio.app",
+      "adaptiveIcon": {
+        "backgroundColor": "#000000",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "permissions": ["VIBRATE", "RECEIVE_BOOT_COMPLETED"]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-secure-store",
+      "expo-font",
+      "./plugins/with-development-http.cjs",
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "Permita que o Amodomio use o microfone para os comandos de voz do KDS.",
+          "speechRecognitionPermission": "Permita que o Amodomio reconheça sua fala para atualizar os pedidos do KDS."
+        }
+      ]
+    ],
+    "runtimeVersion": {
+      "policy": "fingerprint"
+    },
+    "updates": {
+      "checkAutomatically": "ON_LOAD",
+      "fallbackToCacheTimeout": 0,
+      "url": "https://u.expo.dev/eafb189c-c6a5-47c2-9393-e893b878df3a"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "eafb189c-c6a5-47c2-9393-e893b878df3a"
+      }
+    },
+    "owner": "amodomio"
+  }
+}

@@ -14,6 +14,7 @@ function apiRequest(input) {
   const url = new URL(input.path, base.origin);
   const method = input.method || "GET";
   const allowed = {
+    "/api/mobile/servers": ["GET"],
     "/api/kds/mobile-auth": ["GET", "POST", "DELETE"],
     "/api/kds/orders": ["GET", "PATCH"],
   };

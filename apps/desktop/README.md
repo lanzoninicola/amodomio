@@ -6,7 +6,7 @@ nova com o sistema de delivery, banco local ou fila de alterações offline.
 
 ## Código compartilhado
 
-O Electron empacota a exportação web de `../kds-mobile`. Login, início, componentes,
+O Electron empacota a exportação web de `../mobile`. Login, início, componentes,
 API e regras do KDS têm uma única implementação. Os arquivos `.web.ts(x)` separam
 sessão, notificações e controles de janela; Android/iOS mantêm os adaptadores nativos.
 Novos módulos devem entrar no início compartilhado. Recursos de desktop pertencem à
@@ -15,7 +15,13 @@ A API existente mantém seus endpoints KDS, sem migrar dados nem permissões.
 
 ## Executar (Linux/macOS com nvm)
 
-Em `apps/kds-mobile`:
+Para gerar o instalador Windows a partir do Linux com nvm, execute
+`npm run build:windows` na raiz do repositório ou em `apps/desktop`.
+O comando ativa o Node de `apps/mobile/.nvmrc`, exporta a interface web e
+empacota o instalador NSIS x64 em `apps/desktop/release/`.
+As dependências de mobile e desktop devem estar instaladas.
+
+Em `apps/mobile`:
 
 ```bash
 source ~/.nvm/nvm.sh >/dev/null 2>&1; nvm use >/dev/null 2>&1; npm ci
