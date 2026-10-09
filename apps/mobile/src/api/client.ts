@@ -1,4 +1,8 @@
 import { desktop } from "../platform/desktop";
+import {
+  parseServerPresets,
+  PUBLIC_SERVER_URL,
+} from "../config/server-presets";
 import type { KdsOrder, KdsStatus, KdsUser } from "../kds/types";
 
 export class ApiError extends Error {
@@ -53,6 +57,15 @@ async function request<T>(
     );
   }
   return data as T;
+}
+
+export async function getServerPresets(signal?: AbortSignal) {
+  const result = await request<{ servers: unknown }>(
+    PUBLIC_SERVER_URL,
+    "/api/mobile/servers",
+    { signal, headers: { "Content-Type": "text/plain" } }
+  );
+  return parseServerPresets(result.servers);
 }
 
 export function login(

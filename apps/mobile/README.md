@@ -21,21 +21,40 @@ armazenamento local.
 
 ## API usada
 
+O login oferece os atalhos A modo mio — Público (`https://www.amodomio.com.br`)
+e Desenvolvimento (`http://localhost:3000`). O endereço também pode ser digitado.
+Os mesmos atalhos estão no aplicativo Windows/Electron, que compartilha o login.
+No Windows, localhost acessa o servidor de desenvolvimento no próprio computador.
+No tablet, localhost é o próprio dispositivo; para acessar o computador pela
+rede local, informe o IP dele.
+
+A lista é configurada no editor genérico de `/admin/administracao/settings`,
+contexto `mobile`, nome `login.servers`, tipo `json`. O registro é criado com os
+dois atalhos padrão ao abrir essa página, sem sobrescrever configurações existentes.
+O valor é uma lista de objetos com `name` e `url`. O app consulta a lista pública
+em `https://www.amodomio.com.br/api/mobile/servers` ao abrir o login, sem enviar
+credenciais, e mantém os atalhos padrão se a consulta falhar. Alterar a lista no
+servidor público dispensa um novo APK; a seleção do servidor só é salva após login.
+
+- `GET /api/mobile/servers`: nomes e endereços públicos dos atalhos de login.
 - `POST /api/kds/mobile-auth`: login.
 - `GET /api/kds/mobile-auth`: validação da sessão.
 - `DELETE /api/kds/mobile-auth`: logout e revogação.
 - `GET /api/kds/orders?date=YYYY-MM-DD`: pedidos.
 - `PATCH /api/kds/orders`: status e sinalização para o forno.
 
-Após o login, o aplicativo abre a tela inicial genérica em modo retrato. Ao
-entrar no KDS, permite orientação horizontal ou vertical e atualiza o quadro a cada quatro segundos.
+Login, tela inicial e KDS acompanham a orientação do dispositivo, respeitando
+a configuração de rotação automática do sistema. O KDS atualiza o quadro a cada quatro segundos.
 Toque na data para abrir o calendário, navegar entre meses e selecionar um dia;
 o botão Hoje retorna à data atual.
 
 Em celulares, o KDS usa cartões compactos (duas colunas na vertical e quatro
 na horizontal), filtros NP/AF/AS e ações rápidas AF/AS com os componentes
 nativos do app. Toque novamente no filtro ativo para ver todos os pedidos
-ativos; toque na comanda para acessar as demais etapas. Tablets mantêm o Kanban.
+ativos; toque na comanda para acessar as demais etapas. Os botões Kanban e
+Reduzida permitem escolher a visualização em celulares e tablets. Celulares
+iniciam na visualização reduzida e tablets no Kanban. A escolha vale enquanto
+o KDS estiver aberto e não altera pedidos ou preferências salvas.
 
 ## Distribuição interna e atualizações (EAS)
 

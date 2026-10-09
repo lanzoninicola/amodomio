@@ -33,6 +33,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import {
   ApiError,
   getMe,
+  getServerPresets,
   listOrders,
   login,
   logout,
@@ -49,6 +50,11 @@ import { notifyNewOrders, prepareNotifications } from "./src/kds/notifications";
 import { sessionStorage } from "./src/storage/session";
 import { AppHeader } from "./src/ui/AppHeader";
 import { PhoneBoard } from "./src/kds/PhoneBoard";
+import {
+  DEFAULT_SERVER_PRESETS,
+  PUBLIC_SERVER_URL,
+  type ServerPreset,
+} from "./src/config/server-presets";
 import { DateCalendar } from "./src/ui/DateCalendar";
 import { ordersForDate } from "./src/kds/orders";
 import { Badge } from "./src/ui/Badge";
@@ -58,7 +64,7 @@ import { Input } from "./src/ui/Input";
 import { Screen } from "./src/ui/Screen";
 import { theme } from "./src/ui/theme";
 
-const DEFAULT_API_URL = process.env.EXPO_PUBLIC_API_URL || "";
+const DEFAULT_API_URL = process.env.EXPO_PUBLIC_API_URL || PUBLIC_SERVER_URL;
 const POLLING_MS = 4_000;
 
 function localDate() {
@@ -108,12 +114,42 @@ function LoginScreen({
   }) => void;
 }) {
   const [apiUrl, setApiUrl] = useState(DEFAULT_API_URL);
+  const [serverPresets, setServerPresets] = useState<ServerPreset[]>(
+    DEFAULT_SERVER_PRESETS
+  );
+  const serverEdited = useRef(false);
+  const chooseServer = (url: string) => {
+    serverEdited.current = true;
+    setApiUrl(url);
+    setError("");
+  };
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   useEffect(() => {
-    sessionStorage.getApiUrl().then((stored) => stored && setApiUrl(stored));
+    let active = true;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
+    sessionStorage
+      .getApiUrl()
+      .then((stored) => {
+        if (active && stored && !serverEdited.current) setApiUrl(stored);
+      })
+      .catch(() => {});
+    getServerPresets(controller.signal)
+      .then((servers) => {
+        if (active) setServerPresets(servers);
+      })
+      .catch(() => {
+        // Keep bundled shortcuts when the bootstrap server is unavailable.
+      })
+      .finally(() => clearTimeout(timeout));
+    return () => {
+      active = false;
+      clearTimeout(timeout);
+      controller.abort();
+    };
   }, []);
   const submit = async () => {
     if (!apiUrl.trim() || !identifier.trim() || !password)
@@ -151,45 +187,68 @@ function LoginScreen({
   return (
     <Screen style={styles.loginSafe}>
       <StatusBar style="light" />
-      <View style={styles.loginHero}>
-        <Text style={styles.brandEyebrow}>AMODOMIO</Text>
-        <Text style={styles.loginTitle}>Bem-vindo</Text>
-        <Text style={styles.loginSubtitle}>
-          Entre para acessar as funcionalidades do Amodomio.
-        </Text>
-      </View>
-      <Card style={styles.loginCard}>
-        <Input
-          label="Servidor Amodomio"
-          value={apiUrl}
-          onChangeText={setApiUrl}
-          autoCapitalize="none"
-          keyboardType="url"
-          placeholder="https://seu-dominio.com"
-        />
-        <Input
-          label="Usuário ou e-mail"
-          value={identifier}
-          onChangeText={setIdentifier}
-          autoCapitalize="none"
-          autoCorrect={false}
-          placeholder="operador"
-        />
-        <Input
-          label="Senha"
-          value={password}
-          onChangeText={setPassword}
-          secureTextEntry
-          autoCapitalize="none"
-          autoCorrect={false}
-          placeholder="Sua senha"
-          onSubmitEditing={submit}
-        />
-        {error ? <Text style={styles.error}>{error}</Text> : null}
-        <Button onPress={submit} loading={busy} style={styles.loginButton}>
-          Entrar
-        </Button>
-      </Card>
+      <ScrollView
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={{ paddingBottom: 24 }}
+      >
+        <View style={styles.loginHero}>
+          <Text style={styles.brandEyebrow}>AMODOMIO</Text>
+          <Text style={styles.loginTitle}>Bem-vindo</Text>
+          <Text style={styles.loginSubtitle}>
+            Entre para acessar as funcionalidades do Amodomio.
+          </Text>
+        </View>
+        <Card style={styles.loginCard}>
+          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+            {serverPresets.map((server) => (
+              <Button
+                key={server.url}
+                disabled={busy}
+                variant={
+                  apiUrl.trim().replace(/\/+$/, "") === server.url
+                    ? "primary"
+                    : "outline"
+                }
+                style={{ minHeight: 44 }}
+                onPress={() => chooseServer(server.url)}
+              >
+                {server.name}
+              </Button>
+            ))}
+          </View>
+          <Input
+            label="Servidor Amodomio"
+            value={apiUrl}
+            onChangeText={chooseServer}
+            editable={!busy}
+            autoCapitalize="none"
+            keyboardType="url"
+            placeholder="https://seu-dominio.com"
+          />
+          <Input
+            label="Usuário ou e-mail"
+            value={identifier}
+            onChangeText={setIdentifier}
+            autoCapitalize="none"
+            autoCorrect={false}
+            placeholder="operador"
+          />
+          <Input
+            label="Senha"
+            value={password}
+            onChangeText={setPassword}
+            secureTextEntry
+            autoCapitalize="none"
+            autoCorrect={false}
+            placeholder="Sua senha"
+            onSubmitEditing={submit}
+          />
+          {error ? <Text style={styles.error}>{error}</Text> : null}
+          <Button onPress={submit} loading={busy} style={styles.loginButton}>
+            Entrar
+          </Button>
+        </Card>
+      </ScrollView>
     </Screen>
   );
 }
@@ -356,6 +415,10 @@ function KanbanScreen({
     Device.deviceType === Device.DeviceType.PHONE ||
     (Device.deviceType !== Device.DeviceType.TABLET &&
       Math.min(width, height) < 600);
+  const [boardMode, setBoardMode] = useState<"kanban" | "reduced">(() =>
+    isPhone ? "reduced" : "kanban"
+  );
+  const reduced = boardMode === "reduced";
   const [date, setDate] = useState(localDate());
   const [calendarOpen, setCalendarOpen] = useState(false);
   const currentDate = useRef(date);
@@ -493,7 +556,7 @@ function KanbanScreen({
   return (
     <Screen style={styles.appSafe}>
       <StatusBar style="light" />
-      {!desktop && !isPhone ? (
+      {!desktop && !reduced ? (
         <AppHeader
           eyebrow="AMODOMIO"
           title="KDS"
@@ -504,7 +567,25 @@ function KanbanScreen({
           }
         />
       ) : null}
-      {desktop || isPhone ? (
+      {!desktop ? (
+        <View style={styles.phoneToolbar}>
+          <Button
+            variant={reduced ? "outline" : "primary"}
+            style={{ flex: 1, minHeight: 44 }}
+            onPress={() => setBoardMode("kanban")}
+          >
+            Kanban
+          </Button>
+          <Button
+            variant={reduced ? "primary" : "outline"}
+            style={{ flex: 1, minHeight: 44 }}
+            onPress={() => setBoardMode("reduced")}
+          >
+            Reduzida
+          </Button>
+        </View>
+      ) : null}
+      {desktop || reduced ? (
         <>
           <View
             style={[styles.phoneToolbar, desktop && { padding: 4, gap: 4 }]}
@@ -585,7 +666,7 @@ function KanbanScreen({
           onToggleOven={toggleOven}
           onChooseStatus={setSelected}
         />
-      ) : isPhone ? (
+      ) : reduced ? (
         <PhoneBoard
           orders={orders}
           now={now}
@@ -720,14 +801,10 @@ function AppContent() {
 
   useEffect(() => {
     if (Platform.OS === "web") return;
-    const orientation =
-      activeFeature === "kds"
-        ? ScreenOrientation.OrientationLock.DEFAULT
-        : ScreenOrientation.OrientationLock.PORTRAIT_UP;
-    ScreenOrientation.lockAsync(orientation).catch(() => {
+    ScreenOrientation.unlockAsync().catch(() => {
       // Browsers and devices with rotation lock may decline the request.
     });
-  }, [activeFeature]);
+  }, []);
 
   useEffect(() => {
     void prepareNotifications();

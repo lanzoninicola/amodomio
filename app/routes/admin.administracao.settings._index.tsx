@@ -77,6 +77,12 @@ import {
 import { ensureAdminNavigationMenuLayoutSetting } from "~/domain/website-navigation/admin-navigation-settings.server";
 import { ensureBioSettings } from "~/domain/bio/bio-settings.server";
 import {
+  ensureServerPresetsSetting,
+  MOBILE_SETTINGS_CONTEXT,
+  SERVER_PRESETS_SETTING_NAME,
+} from "~/domain/mobile/server-presets.server";
+import { parseServerPresets } from "../../apps/mobile/src/config/server-presets";
+import {
   CARDAPIO_FILTER_VIEW_SETTING_NAME,
   DEFAULT_CARDAPIO_FILTER_VIEW_MODE,
   CARDAPIO_BANNER_ENABLED_SETTING_NAME,
@@ -98,6 +104,32 @@ const REELS_ENABLED_SETTING_NAME = "reels.enabled";
 
 function shouldInvalidateCardapioCache(context: string) {
   return context.trim().toLowerCase() === "cardapio";
+}
+
+function validateServerPresetsSetting(
+  context: string,
+  name: string,
+  type: string,
+  value: string,
+  fieldError: Record<string, string>
+) {
+  if (
+    context !== MOBILE_SETTINGS_CONTEXT ||
+    name !== SERVER_PRESETS_SETTING_NAME
+  )
+    return;
+  if (type !== "json")
+    fieldError.type = "Use o tipo json para a lista de servidores.";
+  try {
+    parseServerPresets(JSON.parse(value));
+  } catch (error) {
+    fieldError.value =
+      error instanceof SyntaxError
+        ? 'Informe JSON válido, como [{"name":"Público","url":"https://www.amodomio.com.br"}].'
+        : error instanceof Error
+        ? error.message
+        : "Lista de servidores inválida.";
+  }
 }
 
 export const meta: MetaFunction = () => [{ title: "Configurações globais" }];
@@ -449,6 +481,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   await ensureAdminNavigationMenuLayoutSetting();
   await ensureBioSettings();
+  await ensureServerPresetsSetting();
 
   const settings = await prismaClient.setting.findMany({
     where,
@@ -488,6 +521,7 @@ export async function action({ request }: ActionFunctionArgs) {
         if (!context) fieldError.context = "Obrigatorio";
         if (!name) fieldError.name = "Obrigatorio";
         if (!type) fieldError.type = "Obrigatorio";
+        validateServerPresetsSetting(context, name, type, value, fieldError);
 
         if (Object.keys(fieldError).length) {
           return json({ fieldError }, { status: 400 });
@@ -536,6 +570,7 @@ export async function action({ request }: ActionFunctionArgs) {
         if (!context) fieldError.context = "Obrigatorio";
         if (!name) fieldError.name = "Obrigatorio";
         if (!type) fieldError.type = "Obrigatorio";
+        validateServerPresetsSetting(context, name, type, value, fieldError);
 
         if (Object.keys(fieldError).length) {
           return json({ fieldError }, { status: 400 });
@@ -807,6 +842,15 @@ function CreateDialog({
               name="value"
               placeholder='ex.: true, 120, {"foo": "bar"}'
             />
+            {((defaultError as any)?.fieldError?.value ||
+              (fetcher.data as any)?.fieldError?.value) && (
+              <p className="text-sm text-red-600">
+                {
+                  ((defaultError as any)?.fieldError?.value ||
+                    (fetcher.data as any)?.fieldError?.value) as string
+                }
+              </p>
+            )}
           </div>
 
           <DialogFooter className="gap-2">
@@ -971,6 +1015,11 @@ function EditDialog({
               name="value"
               defaultValue={setting.value ?? ""}
             />
+            {(fetcher.data as any)?.fieldError?.value && (
+              <p className="text-sm text-red-600">
+                {(fetcher.data as any)?.fieldError?.value as string}
+              </p>
+            )}
           </div>
 
           <DialogFooter className="gap-2">

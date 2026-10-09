@@ -7,12 +7,24 @@ test("permite autenticação e pedidos no servidor LAN ou HTTPS", () => {
     "https://app.example.com/",
   ]) {
     for (const [path, methods] of Object.entries({
+      "/api/mobile/servers": ["GET"],
       "/api/kds/mobile-auth": ["GET", "POST", "DELETE"],
       "/api/kds/orders?date=2026-09-29": ["GET", "PATCH"],
     })) {
       for (const method of methods)
         assert.equal(apiRequest({ baseUrl, path, method }).method, method);
     }
+  }
+});
+test("permite somente leitura dos atalhos públicos", () => {
+  for (const method of ["POST", "PATCH", "DELETE"]) {
+    assert.throws(() =>
+      apiRequest({
+        baseUrl: "https://www.amodomio.com.br",
+        path: "/api/mobile/servers",
+        method,
+      })
+    );
   }
 });
 test("impede usar a ponte para acessar outros protocolos, servidores e rotas", () => {
