@@ -37,7 +37,11 @@ export function Text({ style, ...props }: TextProps) {
   return (
     <NativeText
       {...props}
-      style={[style, { fontFamily, fontWeight: "normal" }]}
+      style={[
+        { color: theme.colors.foreground },
+        style,
+        { fontFamily, fontWeight: "normal" },
+      ]}
     />
   );
 }

@@ -4,9 +4,11 @@ export type DesktopWindowState = {
   widget: boolean;
 };
 export type DesktopBridge = {
+  onOpenKds(callback: () => void): () => void;
+  notifyAwaitingOven(numbers: Array<number | null>): Promise<void>;
   onWindowState(callback: (state: DesktopWindowState) => void): () => void;
   setWidget(value: boolean): Promise<DesktopWindowState>;
-  openKdsSettings(): Promise<void>;
+  openFeatureSettings(feature: "kds"): Promise<void>;
   getToken(): Promise<string | null>;
   setToken(token: string): Promise<void>;
   clearToken(): Promise<void>;

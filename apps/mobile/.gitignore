@@ -40,6 +40,9 @@ yarn-error.*
 /ios
 /android
 
+# Android build artifacts
+*.apk
+
 # Pin native build dependencies even though the root ignores lockfiles.
 !package-lock.json
 

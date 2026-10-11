@@ -7,7 +7,7 @@ import type { DesktopWindowState } from "../platform/desktop";
 import { IconButton } from "./IconButton";
 import { useDesktopWindow } from "../platform/useDesktopWindow";
 import { theme } from "./theme";
-export function DesktopToolbar() {
+export function DesktopToolbar({ onHome }: { onHome?: () => void }) {
   const state = useDesktopWindow();
   const [error, setError] = useState("");
   if (!desktop) return null;
@@ -35,7 +35,7 @@ export function DesktopToolbar() {
         }}
       >
         <View style={{ flexGrow: 1 }}>
-          <BrandLogo width={156} />
+          <BrandLogo light width={156} />
         </View>
         <IconButton
           icon="compact"
@@ -43,6 +43,9 @@ export function DesktopToolbar() {
           active={state.compact}
           onPress={() => update(desktop!.setCompact(!state.compact))}
         />
+        {onHome ? (
+          <IconButton icon="home" label="Voltar ao início" onPress={onHome} />
+        ) : null}
         <IconButton
           icon="pin"
           label={

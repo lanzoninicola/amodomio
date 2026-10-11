@@ -4,6 +4,9 @@
   "type": "module",
   "scripts": {
     "dev": "remix vite:dev",
+    "preview:android": "bash scripts/preview-app.sh android",
+    "preview:android:native": "bash scripts/preview-app.sh android-native",
+    "preview:windows": "bash scripts/preview-app.sh desktop",
     "build:android:local": "bash apps/mobile/scripts/build-android-local.sh",
     "build:windows": "bash apps/desktop/scripts/build-windows.sh",
     "build": "bash -c 'export NVM_DIR=\"$HOME/.nvm\" && [ -s \"$NVM_DIR/nvm.sh\" ] && . \"$NVM_DIR/nvm.sh\" && nvm use && prisma generate && remix vite:build'",

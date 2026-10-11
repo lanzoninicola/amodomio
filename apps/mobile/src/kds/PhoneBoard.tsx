@@ -1,4 +1,3 @@
-import { Alert } from "../platform/alert";
 import { elapsedSince } from "./order-time";
 import { Text } from "../ui/Text";
 import {
@@ -17,47 +16,89 @@ import {
   type KdsStatus,
 } from "./types";
 
-function OrderTimeAlert({
-  enteredAt,
-  now,
+function OvenStatusIcon({
+  waiting,
+  color,
 }: {
-  enteredAt: string;
-  now: number;
+  waiting: boolean;
+  color: string;
 }) {
-  const minutes = (now - new Date(enteredAt).getTime()) / 60_000;
-  if (!Number.isFinite(minutes) || minutes < 40) return null;
-  const urgent = minutes >= 60;
-  const message = urgent
-    ? "Pedido com 60 minutos ou mais"
-    : "Pedido com 40 minutos ou mais";
   return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel="Ver alerta de tempo do pedido"
-      accessibilityHint={message}
-      onPress={() => Alert.alert("Alerta do pedido", message)}
-      style={[
-        styles.timeAlert,
-        {
-          backgroundColor: urgent
-            ? theme.colors.dangerMuted
-            : theme.colors.brandYellowMuted,
-        },
-      ]}
+    <View
+      accessible={false}
+      pointerEvents="none"
+      style={{
+        width: 28,
+        height: 28,
+        alignItems: "center",
+        justifyContent: "center",
+      }}
     >
-      <Text
-        style={[
-          styles.timeAlertIcon,
-          {
-            color: urgent
-              ? theme.colors.brandRedInk
-              : theme.colors.brandOrangeInk,
-          },
-        ]}
-      >
-        !
-      </Text>
-    </Pressable>
+      {waiting ? (
+        <View
+          style={{
+            width: 24,
+            height: 24,
+            borderWidth: 2,
+            borderColor: color,
+            borderRadius: 12,
+          }}
+        >
+          <View
+            style={{
+              position: "absolute",
+              left: 9,
+              top: 3,
+              width: 2,
+              height: 8,
+              backgroundColor: color,
+            }}
+          />
+          <View
+            style={{
+              position: "absolute",
+              left: 9,
+              top: 9,
+              width: 7,
+              height: 2,
+              backgroundColor: color,
+            }}
+          />
+        </View>
+      ) : (
+        <View
+          style={{
+            width: 24,
+            height: 26,
+            alignItems: "center",
+            justifyContent: "flex-end",
+          }}
+        >
+          <View
+            style={{
+              width: 20,
+              height: 20,
+              borderRadius: 12,
+              borderTopLeftRadius: 1,
+              backgroundColor: color,
+              transform: [{ rotate: "45deg" }],
+            }}
+          />
+          <View
+            style={{
+              position: "absolute",
+              bottom: 2,
+              width: 8,
+              height: 8,
+              borderRadius: 5,
+              borderTopLeftRadius: 0,
+              backgroundColor: color === "#ffffff" ? "#282828" : "#ffffff",
+              transform: [{ rotate: "45deg" }],
+            }}
+          />
+        </View>
+      )}
+    </View>
   );
 }
 
@@ -188,11 +229,6 @@ export function PhoneBoard({
               ? new Date(order.finalizadoAt).getTime()
               : NaN
             : now;
-          const statusIndex = filters.findIndex(
-            (entry) => entry.id === order.status
-          );
-          const previous = filters[statusIndex - 1];
-          const next = filters[statusIndex + 1];
           return (
             <Card
               style={{
@@ -205,13 +241,28 @@ export function PhoneBoard({
               }}
             >
               <View style={styles.header}>
-                <Text
-                  style={styles.number}
-                  numberOfLines={1}
-                  adjustsFontSizeToFit
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`Ver detalhes do pedido ${
+                    order.commandNumber ?? "VL"
+                  }`}
+                  disabled={busy}
+                  onPress={() => onChooseStatus(order)}
+                  style={({ pressed }) => ({
+                    minHeight: 44,
+                    justifyContent: "center",
+                    flexShrink: 1,
+                    opacity: busy || pressed ? 0.5 : 1,
+                  })}
                 >
-                  #{order.commandNumber ?? "VL"}
-                </Text>
+                  <Text
+                    style={styles.number}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                  >
+                    #{order.commandNumber ?? "VL"}
+                  </Text>
+                </Pressable>
                 <Text style={styles.statusLabel}>{statusStyle.label}</Text>
               </View>
               <View style={styles.orderTime}>
@@ -225,54 +276,62 @@ export function PhoneBoard({
                     hour12: false,
                   })}
                 </Text>
-                {!finished && (
-                  <OrderTimeAlert
-                    enteredAt={order.novoPedidoAt ?? order.createdAt}
-                    now={now}
-                  />
-                )}
               </View>
 
-              <View style={styles.controls}>
-                <View style={styles.statusControl}>
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel={
-                      previous
-                        ? `Voltar para ${previous.label}`
-                        : "Sem status anterior"
-                    }
-                    disabled={busy || !previous}
-                    onPress={() => previous && onMove(order, previous.id)}
-                    style={[
-                      styles.arrow,
-                      (busy || !previous) && styles.disabled,
-                    ]}
-                  >
-                    <Text style={styles.arrowText}>‹</Text>
-                  </Pressable>
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel="Escolher status"
-                    disabled={busy}
-                    onPress={() => onChooseStatus(order)}
-                    style={styles.currentStatus}
-                  >
-                    <Text style={styles.actionText}>{statusStyle.label}</Text>
-                  </Pressable>
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel={
-                      next ? `Avançar para ${next.label}` : "Sem próximo status"
-                    }
-                    disabled={busy || !next}
-                    onPress={() => next && onMove(order, next.id)}
-                    style={[styles.arrow, (busy || !next) && styles.disabled]}
-                  >
-                    <Text style={styles.arrowText}>›</Text>
-                  </Pressable>
+              {!finished && (
+                <View style={styles.controls}>
+                  {(["aguardandoForno", "assando"] as const).map((status) => {
+                    const target = getKdsStatusStyle(status);
+                    const current = order.status === status;
+                    const buttonColor =
+                      status === "aguardandoForno"
+                        ? current
+                          ? theme.colors.brandOrange
+                          : "transparent"
+                        : current
+                        ? theme.colors.brandYellow
+                        : "transparent";
+                    return (
+                      <Pressable
+                        key={status}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Mover pedido ${
+                          order.commandNumber ?? "VL"
+                        } para ${target.label}`}
+                        accessibilityState={{
+                          selected: current,
+                          disabled: busy || current,
+                        }}
+                        disabled={busy || current}
+                        onPress={() => onMove(order, status)}
+                        style={({ pressed }) => [
+                          styles.statusButton,
+                          {
+                            backgroundColor: buttonColor,
+                            borderColor: current
+                              ? buttonColor
+                              : "rgba(255, 255, 255, 0.25)",
+                          },
+                          (pressed || busy) && styles.disabled,
+                        ]}
+                      >
+                        <OvenStatusIcon
+                          waiting={status === "aguardandoForno"}
+                          color={current ? "#282828" : "#ffffff"}
+                        />
+                        <Text
+                          style={[
+                            styles.actionText,
+                            !current && { color: "#ffffff" },
+                          ]}
+                        >
+                          {target.label}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
                 </View>
-              </View>
+              )}
               <View style={styles.finishRow}>
                 <View style={styles.elapsedBlock}>
                   <Text style={styles.timeLabel}>Tempo corrido</Text>
@@ -285,7 +344,7 @@ export function PhoneBoard({
                       .replace("mm", "m")}
                   </Text>
                 </View>
-                {finished ? (
+                {finished && (
                   <Text style={styles.finishedTime}>
                     {order.finalizadoAt
                       ? `Finalizado às ${new Date(
@@ -297,21 +356,6 @@ export function PhoneBoard({
                         })}`
                       : "Horário de finalização indisponível"}
                   </Text>
-                ) : (
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel={`Finalizar pedido ${
-                      order.commandNumber ?? "VL"
-                    }`}
-                    disabled={busy}
-                    onPress={() => onMove(order, "finalizado")}
-                    style={({ pressed }) => [
-                      styles.finishButton,
-                      (pressed || busy) && styles.disabled,
-                    ]}
-                  >
-                    <Text style={styles.finishText}>✓</Text>
-                  </Pressable>
                 )}
               </View>
             </Card>
@@ -338,7 +382,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 3,
     minHeight: 44,
     borderWidth: 1,
-    borderRadius: theme.radius.full,
+    borderRadius: theme.radius.md,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -352,8 +396,8 @@ const styles = StyleSheet.create({
     marginLeft: "auto",
     gap: 4,
   },
-  compactFilter: { flex: 1, minWidth: 68, paddingHorizontal: 6 },
-  compactFilterText: { fontSize: 10, fontFamily: "IBMPlexMono_Regular" },
+  compactFilter: { flex: 1, minWidth: 68, minHeight: 48, paddingHorizontal: 6 },
+  compactFilterText: { fontSize: 12, fontFamily: "IBMPlexMono_SemiBold" },
   header: {
     flexDirection: "row",
     alignItems: "center",
@@ -378,43 +422,39 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    gap: 16,
+    gap: 8,
     marginTop: 14,
     paddingTop: 10,
     borderTopWidth: 1,
     borderColor: "#333",
   },
-  statusControl: {
-    flexDirection: "row",
-    alignItems: "center",
+  statusButton: {
     flex: 1,
+    minWidth: 0,
+    minHeight: 64,
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 12,
     borderWidth: 1,
     borderColor: "#fff",
     backgroundColor: "#fff",
-    borderRadius: 4,
-  },
-  arrow: {
-    minWidth: 32,
-    minHeight: 44,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  arrowText: { color: "#080808", fontSize: 26, fontFamily: mono },
-  currentStatus: {
-    flex: 1,
-    minHeight: 44,
+    borderRadius: 8,
     alignItems: "center",
     justifyContent: "center",
   },
   finishRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 16,
+    gap: 8,
     marginTop: 12,
   },
-  elapsedBlock: { flex: 1, alignItems: "flex-start", gap: 4 },
+  elapsedBlock: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8,
+  },
   elapsedTime: {
-    fontSize: 18,
+    fontSize: 28,
+    textAlign: "right",
     fontFamily: "IBMPlexMono_Bold",
     color: "#fff",
     fontVariant: ["tabular-nums"],
@@ -423,18 +463,8 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: "#aec355",
     fontFamily: mono,
-    flex: 1,
   },
-  finishButton: {
-    width: 44,
-    minHeight: 44,
-    borderWidth: 1,
-    borderColor: "#e1ebd8",
-    backgroundColor: "#e1ebd8",
-    borderRadius: 4,
-    alignItems: "center",
-    justifyContent: "center",
-  },
+
   filterText: {
     fontFamily: theme.typography.bold,
     fontSize: 12,
@@ -452,7 +482,7 @@ const styles = StyleSheet.create({
   summary: { alignItems: "center", paddingVertical: 6, minHeight: 64 },
   number: {
     fontFamily: "IBMPlexMono_Bold",
-    fontSize: 30,
+    fontSize: 40,
     color: "#fff",
   },
   time: {
@@ -461,27 +491,8 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontVariant: ["tabular-nums"],
   },
-  timeAlert: {
-    marginLeft: "auto",
-    width: 44,
-    height: 44,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 4,
-  },
-  timeAlertIcon: {
-    fontSize: 18,
-    fontFamily: "IBMPlexMono_Bold",
-    lineHeight: 22,
-  },
-  finishText: {
-    fontSize: 22,
-    fontFamily: "IBMPlexMono_SemiBold",
-    color: "#080808",
-    textAlign: "center",
-  },
   actionText: {
-    fontSize: 16,
+    fontSize: 11,
     fontFamily: "IBMPlexMono_SemiBold",
     color: "#080808",
     textAlign: "center",

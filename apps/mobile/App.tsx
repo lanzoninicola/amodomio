@@ -1,6 +1,7 @@
 import { OvenRequestsBar } from "./src/kds/OvenRequestsBar";
 import { VoiceCommandButton } from "./src/kds/VoiceCommandButton";
 import { OrderTiming } from "./src/kds/OrderTiming";
+import { ToolbarLayout } from "./src/kds/ToolbarLayout";
 import { BrandLogo } from "./src/ui/BrandLogo";
 import { Text, KdsTypographyContext } from "./src/ui/Text";
 import { useDesktopWindow } from "./src/platform/useDesktopWindow";
@@ -51,7 +52,12 @@ import {
   type KdsStatus,
   type KdsUser,
 } from "./src/kds/types";
-import { notifyNewOrders, prepareNotifications } from "./src/kds/notifications";
+import {
+  notifyNewOrders,
+  notifyAwaitingOven,
+  prepareNotifications,
+} from "./src/kds/notifications";
+import { newlyAwaitingOven } from "./src/kds/awaiting-oven";
 import { sessionStorage } from "./src/storage/session";
 import { AppHeader } from "./src/ui/AppHeader";
 import { PhoneBoard, StatusFilters } from "./src/kds/PhoneBoard";
@@ -62,6 +68,7 @@ import {
 } from "./src/config/server-presets";
 import { DateCalendar } from "./src/ui/DateCalendar";
 import { ordersForDate } from "./src/kds/orders";
+import { averageCompletionMinutes } from "./src/kds/order-time";
 import { Badge } from "./src/ui/Badge";
 import { Button } from "./src/ui/Button";
 import { Card } from "./src/ui/Card";
@@ -415,12 +422,14 @@ function KanbanScreen({
 }) {
   const { width, height } = useWindowDimensions();
   const { widget } = useDesktopWindow();
-  const isPhone =
-    Device.deviceType === Device.DeviceType.PHONE ||
-    (Device.deviceType !== Device.DeviceType.TABLET &&
-      Math.min(width, height) < 600);
+  useEffect(
+    () => () => {
+      void desktop?.setWidget(false).catch(() => {});
+    },
+    []
+  );
   const [boardMode, setBoardMode] = useState<"kanban" | "reduced">(() =>
-    isPhone ? "reduced" : "kanban"
+    desktop ? "kanban" : "reduced"
   );
   const reduced = boardMode === "reduced";
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
@@ -434,6 +443,30 @@ function KanbanScreen({
     () => ordersForDate(loadedOrders, date),
     [loadedOrders, date]
   );
+  const completion = useMemo(() => averageCompletionMinutes(orders), [orders]);
+  const completionSummary = (
+    <View
+      style={[
+        styles.completionSummary,
+        compactHeader && styles.completionSummaryInline,
+      ]}
+      accessibilityLabel={`Tempo médio de finalização: ${
+        completion.minutes === null
+          ? "sem dados"
+          : `${Math.round(completion.minutes)} minutos`
+      }. ${
+        completion.count
+      } pedidos finalizados com tempo válido na data selecionada.`}
+    >
+      <Text style={styles.completionLabel}>Tempo médio</Text>
+      <Text style={styles.completionValue}>
+        {completion.minutes === null
+          ? "—"
+          : `${Math.round(completion.minutes)} min`}
+      </Text>
+      <Text style={styles.completionLabel}>{completion.count} finalizados</Text>
+    </View>
+  );
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [mutatingId, setMutatingId] = useState<string | null>(null);
@@ -441,6 +474,7 @@ function KanbanScreen({
   const [now, setNow] = useState(Date.now());
   const [lastSync, setLastSync] = useState<Date | null>(null);
   const knownIds = useRef<Set<string> | null>(null);
+  const knownStatuses = useRef<Map<string, string> | null>(null);
   const netInfo = useNetInfo();
   const online = netInfo.isConnected !== false;
   const load = useCallback(
@@ -456,6 +490,12 @@ function KanbanScreen({
           if (newcomers.length)
             void notifyNewOrders(newcomers.map((order) => order.commandNumber));
         }
+        const awaiting = newlyAwaitingOven(next, knownStatuses.current);
+        if (desktop && awaiting.length)
+          void notifyAwaitingOven(awaiting.map((order) => order.commandNumber));
+        knownStatuses.current = new Map(
+          next.map((order) => [order.id, order.status])
+        );
         knownIds.current = new Set(next.map((order) => order.id));
         setOrders(next);
         setLastSync(new Date());
@@ -484,6 +524,7 @@ function KanbanScreen({
     setOrders([]);
     setLastSync(null);
     knownIds.current = null;
+    knownStatuses.current = null;
     sessionStorage.getCachedOrders(date).then((cached) => {
       if (currentDate.current === date && knownIds.current === null)
         setOrders(cached);
@@ -535,6 +576,16 @@ function KanbanScreen({
         status,
         fulfillOvenRequest
       );
+      if (currentDate.current === date) {
+        if (
+          desktop &&
+          updated.status === "aguardandoForno" &&
+          order.status !== "aguardandoForno" &&
+          knownStatuses.current?.get(updated.id) !== "aguardandoForno"
+        )
+          void notifyAwaitingOven([updated.commandNumber]);
+        knownStatuses.current?.set(updated.id, updated.status);
+      }
       setOrders((current) =>
         current.map((item) => (item.id === order.id ? updated : item))
       );
@@ -589,135 +640,164 @@ function KanbanScreen({
   return (
     <Screen style={styles.appSafe}>
       <StatusBar style="light" />
-      <View
-        style={[
-          styles.phoneToolbar,
-          { gap: desktop ? 4 : 3, paddingHorizontal: desktop ? 4 : 6 },
-        ]}
-      >
-        {!desktop && width >= 600 ? (
-          <IconButton
-            icon="previous"
-            label="Dia anterior"
-            disabled={Boolean(mutatingId)}
-            onPress={() => setDate((value) => shiftDate(value, -1))}
-          />
-        ) : null}
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={`Selecionar data: ${formatDate(date)}`}
-          disabled={Boolean(mutatingId)}
-          onPress={() => setCalendarOpen(true)}
-          style={{
-            flex: compactHeader ? undefined : 1,
-            width: compactHeader ? 132 : undefined,
-            minWidth: 0,
-            minHeight: 48,
-            justifyContent: "center",
-            alignItems: "center",
-            borderRadius: theme.radius.md,
-            backgroundColor: theme.colors.secondary,
-            paddingHorizontal: 4,
-          }}
+      <ToolbarLayout compact={compactHeader}>
+        <View
+          style={[
+            styles.toolbarControls,
+            compactHeader && styles.toolbarControlsCompact,
+          ]}
         >
-          <Text
-            numberOfLines={1}
+          {!desktop && width >= 600 ? (
+            <IconButton
+              icon="previous"
+              label="Dia anterior"
+              disabled={Boolean(mutatingId)}
+              onPress={() => setDate((value) => shiftDate(value, -1))}
+            />
+          ) : null}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Selecionar data: ${formatDate(date)}`}
+            disabled={Boolean(mutatingId)}
+            onPress={() => setCalendarOpen(true)}
             style={{
-              fontSize: 14,
-              fontFamily: theme.typography.semibold,
-              color: theme.colors.primary,
+              flex: compactHeader ? undefined : 1,
+              width: compactHeader ? 116 : undefined,
+              minWidth: 0,
+              minHeight: 48,
+              justifyContent: "center",
+              alignItems: "center",
+              borderRadius: theme.radius.md,
+              backgroundColor: theme.colors.secondary,
+              paddingHorizontal: 10,
             }}
           >
-            {widget || (!desktop && width < 600)
-              ? date.split("-").reverse().slice(0, 2).join("/")
-              : formatDate(date)}{" "}
-            ⌄
-          </Text>
-        </Pressable>
-        {!desktop && width >= 600 ? (
+            <Text
+              numberOfLines={1}
+              style={{
+                fontSize: 14,
+                fontFamily: theme.typography.semibold,
+                color: desktop ? theme.colors.foreground : theme.colors.primary,
+              }}
+            >
+              {date
+                .split("-")
+                .reverse()
+                .map((part, index) => (index === 2 ? part.slice(-2) : part))
+                .join("/")}{" "}
+              ⌄
+            </Text>
+          </Pressable>
+          {!desktop && width >= 600 ? (
+            <IconButton
+              icon="next"
+              label="Próximo dia"
+              disabled={Boolean(mutatingId)}
+              onPress={() => setDate((value) => shiftDate(value, 1))}
+            />
+          ) : null}
+          {!desktop ? (
+            <>
+              <IconButton
+                icon="kanban"
+                label="Visão Kanban"
+                active={!reduced}
+                onPress={() => setBoardMode("kanban")}
+              />
+              <IconButton
+                icon="reduced"
+                label="Visão reduzida"
+                active={reduced}
+                onPress={() => setBoardMode("reduced")}
+              />
+            </>
+          ) : null}
           <IconButton
-            icon="next"
-            label="Próximo dia"
-            disabled={Boolean(mutatingId)}
-            onPress={() => setDate((value) => shiftDate(value, 1))}
+            icon="refresh"
+            label="Atualizar pedidos"
+            disabled={refreshing}
+            onPress={() => load(true)}
           />
-        ) : null}
-        {!desktop ? (
-          <>
-            <IconButton
-              icon="kanban"
-              label="Visão Kanban"
-              caption="Kanban"
-              active={!reduced}
-              onPress={() => setBoardMode("kanban")}
-            />
-            <IconButton
-              icon="reduced"
-              label="Visão reduzida"
-              caption="Reduzida"
-              active={reduced}
-              onPress={() => setBoardMode("reduced")}
-            />
-          </>
-        ) : null}
-        <IconButton
-          icon="refresh"
-          label="Atualizar pedidos"
-          disabled={refreshing}
-          onPress={() => load(true)}
-        />
-        <VoiceCommandButton
-          key={`${date}:${apiUrl}`}
-          orders={orders}
-          disabled={!online || loading || Boolean(mutatingId)}
-          onCommand={(order, command) =>
-            move(order, command.status, command.status === "assando")
-          }
-        />
-        <IconButton
-          icon="home"
-          label="Voltar ao início"
-          caption="Início"
-          onPress={onBack}
-        />
+          <VoiceCommandButton
+            key={`${date}:${apiUrl}`}
+            orders={orders}
+            disabled={!online || loading || Boolean(mutatingId)}
+            onCommand={(order, command) =>
+              move(order, command.status, command.status === "assando")
+            }
+          />
+          {desktop ? (
+            <>
+              <IconButton
+                icon="widget"
+                label={widget ? "Sair do modo widget" : "Modo widget"}
+                active={widget}
+                onPress={() => {
+                  void desktop
+                    .setWidget(!widget)
+                    .catch(() =>
+                      Alert.alert("Não foi possível ajustar a janela.")
+                    );
+                }}
+              />
+              <IconButton
+                icon="settings"
+                label="Configurações do KDS"
+                onPress={() => {
+                  void desktop
+                    .openFeatureSettings("kds")
+                    .catch(() =>
+                      Alert.alert("Não foi possível abrir as configurações.")
+                    );
+                }}
+              />
+            </>
+          ) : (
+            <IconButton icon="home" label="Voltar ao início" onPress={onBack} />
+          )}
+        </View>
         {compactHeader ? (
           <>
-            <View
-              style={{
-                width: 1,
-                height: 32,
-                backgroundColor: theme.colors.border,
-                marginHorizontal: 10,
-              }}
-            />
-            <StatusFilters
-              orders={orders}
-              filter={statusFilter}
-              onFilterChange={setStatusFilter}
-              compact
-            />
+            {completionSummary}
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={styles.toolbarFilters}
+              contentContainerStyle={styles.toolbarFiltersContent}
+            >
+              <StatusFilters
+                orders={orders}
+                filter={statusFilter}
+                onFilterChange={setStatusFilter}
+                compact
+              />
+            </ScrollView>
           </>
         ) : null}
-      </View>
+      </ToolbarLayout>
+      {!desktop && !compactHeader ? completionSummary : null}
       {!desktop ? (
         <OvenRequestsBar
           orders={orders}
           busy={Boolean(mutatingId)}
           onBake={(order) => move(order, "assando")}
+          onFinish={(order) => move(order, "finalizado")}
         />
       ) : null}
-      {loading && !orders.length ? (
+      {desktop ? (
+        <DesktopBoard
+          orders={orders}
+          now={now}
+          loading={loading}
+          busy={loading || Boolean(mutatingId)}
+          onToggleOven={toggleOven}
+          onChooseStatus={setSelected}
+        />
+      ) : loading && !orders.length ? (
         <View style={styles.center}>
           <ActivityIndicator size="large" color="#ffffff" />
           <Text style={styles.loadingText}>Carregando pedidos…</Text>
         </View>
-      ) : desktop ? (
-        <DesktopBoard
-          orders={orders}
-          busy={Boolean(mutatingId)}
-          onToggleOven={toggleOven}
-          onChooseStatus={setSelected}
-        />
       ) : reduced ? (
         <PhoneBoard
           filter={statusFilter}
@@ -813,18 +893,90 @@ function KanbanScreen({
             style={[styles.modalCard, { maxHeight: "90%" }]}
             onStartShouldSetResponder={() => true}
           >
-            <ScrollView>
-              <Text style={styles.modalTitle}>
-                Mover pedido #{selected?.commandNumber ?? "VL"}
-              </Text>
+            <View style={styles.detailHeader}>
+              <View style={{ flex: 1, gap: 8 }}>
+                <Text style={styles.modalTitle}>
+                  Pedido #{selected?.commandNumber ?? "VL"}
+                </Text>
+                <View style={styles.detailStatus}>
+                  <View
+                    style={[
+                      styles.statusMark,
+                      {
+                        backgroundColor:
+                          KDS_STATUSES.find(
+                            (status) => status.id === selected?.status
+                          )?.color ?? theme.colors.mutedForeground,
+                      },
+                    ]}
+                  />
+                  <Text style={styles.detailStatusText}>
+                    {KDS_STATUSES.find(
+                      (status) => status.id === selected?.status
+                    )?.label ?? selected?.status}
+                  </Text>
+                </View>
+              </View>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Fechar detalhes do pedido"
+                onPress={() => setSelected(null)}
+                style={({ pressed }) => [
+                  styles.detailClose,
+                  pressed && styles.pressed,
+                ]}
+              >
+                <Text style={styles.detailCloseText}>×</Text>
+              </Pressable>
+            </View>
+            <ScrollView contentContainerStyle={styles.detailContent}>
               {selected ? (
-                <OrderTiming
-                  order={selected}
-                  now={now}
-                  useEntryTime={reduced}
-                />
+                <View>
+                  <View style={styles.detailGroup}>
+                    {[
+                      [
+                        "Horário de entrada",
+                        new Date(
+                          selected.novoPedidoAt ?? selected.createdAt
+                        ).toLocaleTimeString("pt-BR", {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                          hour12: false,
+                        }),
+                      ],
+                      [
+                        "Modalidade",
+                        selected.takeAway ? "Retirada" : "Entrega",
+                      ],
+                      ["Canal", selected.channel || "Não informado"],
+                      [
+                        "Forno solicitado",
+                        selected.requestedForOven ? "Sim" : "Não",
+                      ],
+                      [
+                        "Tamanhos",
+                        selected.sizes
+                          ? Object.entries(selected.sizes)
+                              .filter(([, count]) => count > 0)
+                              .map(([size, count]) => `${count} ${size}`)
+                              .join(" · ") || "Não informado"
+                          : "Não informado",
+                      ],
+                    ].map(([label, value]) => (
+                      <View key={label} style={styles.detailCell}>
+                        <Text style={styles.detailLabel}>{label}</Text>
+                        <Text style={styles.detailValue}>{value}</Text>
+                      </View>
+                    ))}
+                  </View>
+                  <OrderTiming
+                    order={selected}
+                    now={now}
+                    useEntryTime={reduced}
+                    showStartTime={false}
+                  />
+                </View>
               ) : null}
-              <Text style={styles.modalSubtitle}>Selecione a nova etapa</Text>
               {KDS_STATUSES.map((status) => (
                 <Pressable
                   key={status.id}
@@ -871,6 +1023,7 @@ function AppContent() {
     apiUrl: string;
   } | null>(null);
   const [activeFeature, setActiveFeature] = useState<"kds" | null>(null);
+  useEffect(() => desktop?.onOpenKds(() => setActiveFeature("kds")), []);
   const [booting, setBooting] = useState(true);
 
   useEffect(() => {
@@ -942,6 +1095,11 @@ function AppContent() {
   };
   return (
     <>
+      <DesktopToolbar
+        onHome={
+          activeFeature === "kds" ? () => setActiveFeature(null) : undefined
+        }
+      />
       {renderScreen()}
       {session ? (
         <KdsTypographyContext.Provider value={true}>
@@ -959,7 +1117,6 @@ function AppContent() {
 export default function App() {
   return (
     <SafeAreaProvider>
-      <DesktopToolbar />
       <AppContent />
     </SafeAreaProvider>
   );
@@ -1024,7 +1181,7 @@ const styles = StyleSheet.create({
     borderColor: theme.colors.border,
     borderRadius: 12,
     paddingHorizontal: 14,
-    color: theme.colors.primary,
+    color: desktop ? theme.colors.foreground : theme.colors.primary,
     fontSize: 16,
     backgroundColor: theme.colors.muted,
   },
@@ -1068,7 +1225,7 @@ const styles = StyleSheet.create({
     width: 46,
     height: 46,
     borderRadius: 23,
-    backgroundColor: "#fff",
+    backgroundColor: desktop ? theme.colors.card : "#fff",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -1149,7 +1306,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   backButton: {
-    backgroundColor: "#fff",
+    backgroundColor: desktop ? theme.colors.card : "#fff",
     borderRadius: 12,
     paddingHorizontal: 14,
     paddingVertical: 10,
@@ -1164,18 +1321,44 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontFamily: theme.typography.bold,
   },
-  phoneToolbar: {
+  toolbarControls: {
+    flexGrow: 1,
+    flexShrink: 1,
+    flexBasis: 0,
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
-    padding: 8,
+    gap: 8,
+    minWidth: 0,
+  },
+  toolbarControlsCompact: { flexGrow: 0, flexShrink: 0, flexBasis: "auto" },
+  completionSummary: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
     backgroundColor: "#000000",
   },
+  completionSummaryInline: {
+    width: 150,
+    flexShrink: 0,
+    borderLeftWidth: 1,
+    borderRightWidth: 1,
+    borderColor: "#444444",
+  },
+  completionLabel: { color: "#a3a3a3", fontSize: 10 },
+  completionValue: {
+    color: "#ffffff",
+    fontSize: 20,
+    fontFamily: theme.typography.bold,
+    fontVariant: ["tabular-nums"],
+  },
+  toolbarFilters: { flex: 1, minWidth: 0 },
+  toolbarFiltersContent: { flexGrow: 1, justifyContent: "flex-end" },
   toolbar: {
     minHeight: 68,
     flexWrap: "wrap",
     paddingVertical: 8,
-    backgroundColor: "#fff",
+    backgroundColor: desktop ? theme.colors.card : "#fff",
     paddingHorizontal: 12,
     flexDirection: "row",
     alignItems: "center",
@@ -1196,7 +1379,7 @@ const styles = StyleSheet.create({
   dateLabel: {
     minWidth: 125,
     textAlign: "center",
-    color: theme.colors.primary,
+    color: desktop ? theme.colors.foreground : theme.colors.primary,
     fontSize: 16,
     fontFamily: theme.typography.bold,
     textTransform: "capitalize",
@@ -1251,7 +1434,7 @@ const styles = StyleSheet.create({
     minWidth: 28,
     height: 24,
     borderRadius: 12,
-    backgroundColor: "#fff",
+    backgroundColor: desktop ? theme.colors.card : "#fff",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -1341,13 +1524,69 @@ const styles = StyleSheet.create({
   },
   modalCard: {
     width: "100%",
-    maxWidth: 390,
-    backgroundColor: "#fff",
+    maxWidth: 480,
+    backgroundColor: desktop ? theme.colors.card : "#fff",
     borderRadius: 20,
-    padding: 20,
+    overflow: "hidden",
   },
+  detailHeader: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 12,
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.colors.border,
+  },
+  detailStatus: { flexDirection: "row", alignItems: "center", gap: 8 },
+  detailStatusText: {
+    fontSize: 13,
+    color: theme.colors.mutedForeground,
+    flexShrink: 1,
+  },
+  detailClose: {
+    minWidth: 44,
+    minHeight: 44,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 12,
+    backgroundColor: theme.colors.muted,
+  },
+  detailCloseText: { fontSize: 26, color: theme.colors.foreground },
+  detailContent: { padding: 20, paddingTop: 16 },
+  detailSectionTitle: {
+    fontSize: 14,
+    fontFamily: theme.typography.semibold,
+    color: theme.colors.foreground,
+    marginBottom: 10,
+  },
+  detailGroup: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    borderRadius: 12,
+    padding: 12,
+    rowGap: 16,
+  },
+  detailCell: {
+    width: "33.333%",
+    paddingRight: 8,
+    gap: 6,
+  },
+  detailLabel: {
+    fontSize: 12,
+    color: theme.colors.mutedForeground,
+    flexShrink: 1,
+  },
+  detailValue: {
+    fontSize: 14,
+    fontFamily: theme.typography.semibold,
+    color: theme.colors.foreground,
+    textAlign: "left",
+  },
+
   modalTitle: {
-    color: theme.colors.primary,
+    color: desktop ? theme.colors.foreground : theme.colors.primary,
     fontSize: 21,
     fontFamily: theme.typography.bold,
   },

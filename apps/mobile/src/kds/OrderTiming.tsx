@@ -18,10 +18,12 @@ export function OrderTiming({
   order,
   now,
   useEntryTime,
+  showStartTime = true,
 }: {
   order: KdsOrder;
   now: number;
   useEntryTime: boolean;
+  showStartTime?: boolean;
 }) {
   const start = useEntryTime
     ? order.novoPedidoAt ?? order.createdAt
@@ -33,16 +35,17 @@ export function OrderTiming({
       : NaN
     : now;
   const rows = [
-    [
-      useEntryTime && order.novoPedidoAt
-        ? "Entrada em Novo pedido"
-        : "Criação do pedido",
-      clock(start),
-    ],
-    [
-      finished ? "Tempo total" : "Tempo decorrido",
-      elapsedSince(start, end),
-    ],
+    ...(showStartTime
+      ? [
+          [
+            useEntryTime && order.novoPedidoAt
+              ? "Entrada em Novo pedido"
+              : "Criação do pedido",
+            clock(start),
+          ],
+        ]
+      : []),
+    [finished ? "Tempo total" : "Tempo decorrido", elapsedSince(start, end)],
     ...(order.status === "finalizado"
       ? [["Finalizado às", clock(order.finalizadoAt)]]
       : []),
@@ -89,11 +92,6 @@ export function OrderTiming({
           </Text>
         </View>
       ))}
-      <Text style={{ fontSize: 11, color: theme.colors.mutedForeground }}>
-        {finished
-          ? "Duração entre a entrada e a finalização."
-          : "Contado desde o horário acima; não é o tempo na etapa atual."}
-      </Text>
     </View>
   );
 }
