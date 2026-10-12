@@ -61,7 +61,12 @@ test("desktop mantém janela independente, restringe IPC e serve assets com CSP"
     setMinimumSize(w, h) {
       this.minimum = [w, h];
     }
-    on() {}
+    on(event, callback) {
+      (this.events ??= {})[event] = callback;
+    }
+    flashFrame(value) {
+      this.flashing = value;
+    }
     async loadURL(url) {
       this.url = url;
     }
@@ -182,6 +187,9 @@ test("desktop mantém janela independente, restringe IPC e serve assets com CSP"
   handlers.get("orders:awaiting-oven")(event, ["invalid"]);
   assert.equal(notifications.length, 0);
   handlers.get("orders:awaiting-oven")(event, [39]);
+  assert.equal(instance.flashing, true);
+  instance.events.focus();
+  assert.equal(instance.flashing, false);
   const notification = notifications.at(-1);
   assert.equal(notification.options.title, "Pedido #39 aguardando forno");
   assert.equal(notification.options.silent, true);
@@ -199,6 +207,9 @@ test("desktop mantém janela independente, restringe IPC e serve assets com CSP"
     "2 pedidos aguardando forno"
   );
   assert.match(notifications.at(-1).options.body, /#39, #40/);
+  Notification.isSupported = () => false;
+  handlers.get("orders:awaiting-oven")(event, [41]);
+  assert.equal(instance.flashing, true);
   const mainWindow = instance;
   await handlers.get("feature:settings")(event, "kds");
   assert.equal(instance.options.parent, mainWindow);

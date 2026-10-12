@@ -157,6 +157,8 @@ Toda mensagem de texto enviada por `sendTextMessage()` é registrada automaticam
 
 1. Normaliza o telefone
 2. Busca o `CrmCustomer` pelo `phone_e164`
-3. Cria `CrmCustomerEvent` com `event_type=WHATSAPP_SENT`
+3. Para mensagens acompanhadas pela Z-API, cria `WHATSAPP_PENDING` e atualiza o mesmo evento para `WHATSAPP_SENT` somente após confirmação; falhas usam `WHATSAPP_FAILED`. A conversa exibe o estado de envio, entrega e leitura. Registros históricos sem acompanhamento mantêm o comportamento anterior.
+
+Veja o contrato REST, os webhooks e os passos de configuração em [../z-api/README.md](../z-api/README.md).
 
 Mensagens recebidas (`WHATSAPP_RECEIVED`) são registradas por outra parte do sistema e aparecem na aba Conversa.

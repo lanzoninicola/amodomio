@@ -11,6 +11,7 @@ import { addWebhookLog } from "~/domain/z-api/webhook-log.server";
 import { maybeSendTrafficAutoReply } from "~/domain/z-api/meta-auto-responder.server";
 import prisma from "~/lib/prisma/client.server";
 import { logCrmWhatsappSentEventByPhone } from "~/domain/crm/crm-whatsapp-events.server";
+import { isTrackedOutboundEcho } from "~/domain/z-api/message-tracking.server";
 import { normalize_phone_e164_br } from "~/domain/crm/normalize-phone.server";
 import { getOffHoursAutoresponderConfig, getStoreOpeningStatus } from "~/domain/store-opening/store-opening-status.server";
 import { enqueueWhatsappAgentMessage } from "~/domain/whatsapp-agent/whatsapp-agent-queue.server";
@@ -186,6 +187,14 @@ async function syncCrmCustomerFromWebhook(
   }
 
   if (customer) {
+    // Tracked sends already own a CRM event. A fromMe echo must not create a
+    // second WHATSAPP_SENT or bypass the authenticated confirmation webhooks.
+    if (
+      normalized.fromMe === true &&
+      await isTrackedOutboundEcho(normalized.phone, normalized.messageId, normalized.messageText)
+    ) {
+      return { customerId: customer.id, created: !existing, skippedProfileSync: shouldSkipProfileSync };
+    }
     const isOutboundEcho = await isOutboundEchoMessage(customer.id, normalized.messageText);
     const isSentByAttendant = normalized.fromMe === true || isOutboundEcho;
     const eventPayload = {

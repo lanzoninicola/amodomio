@@ -76,7 +76,7 @@ else {
         const headers = new Headers(response.headers);
         headers.set(
           "Content-Security-Policy",
-          "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-src 'none'"
+          "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: blob:; connect-src 'self'; media-src 'self' blob:; object-src 'none'; base-uri 'none'; frame-src 'none'"
         );
         return new Response(response.body, {
           status: response.status,
@@ -214,6 +214,7 @@ else {
           !numbers.every((n) => n === null || Number.isFinite(n))
         )
           return;
+        window.flashFrame(true);
         if (!Notification.isSupported()) return;
         const label = numbers
           .filter((n) => n !== null)
@@ -285,6 +286,7 @@ else {
           autoplayPolicy: "no-user-gesture-required",
         },
       });
+      window.on("focus", () => window.flashFrame(false));
       window.setMenu(null);
       window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
       window.webContents.on("will-navigate", (event, url) => {
