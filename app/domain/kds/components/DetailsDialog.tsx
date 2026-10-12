@@ -1,3 +1,4 @@
+import { normalizeKdsChannel } from "../constants";
 import { readStoredOrderItems } from "../order-items";
 import {
   Dialog,
@@ -52,6 +53,7 @@ export function DetailsDialog({
   onCustomerNameChange?: (value: string) => void;
   onCustomerPhoneChange?: (value: string) => void;
 }) {
+  const items = readStoredOrderItems(orderItems);
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
@@ -139,20 +141,27 @@ export function DetailsDialog({
           {channel && (
             <div>
               <div className="text-gray-500">Canal</div>
-              <div>{channel}</div>
+              <div>{normalizeKdsChannel(channel)}</div>
             </div>
           )}
-          {readStoredOrderItems(orderItems).length > 0 && (
+          {items.length > 0 ? (
             <div className="space-y-3">
-              <div className="text-gray-500">Pizzas e itens importados</div>
-              {readStoredOrderItems(orderItems).map((item, index) => (
+              <div className="font-medium">Itens do pedido</div>
+              {items.map((item, index) => (
                 <div key={index} className="rounded border p-3 space-y-1">
                   <div className="font-medium">
                     {item.quantity}× {item.name}
                     {item.size ? ` · ${item.size}` : ""}
                   </div>
                   {item.flavors.length > 0 && (
-                    <div>Sabores: {item.flavors.join(" · ")}</div>
+                    <div>
+                      <span className="text-gray-500">Sabores escolhidos</span>
+                      <ul className="list-disc pl-5">
+                        {item.flavors.map((flavor, flavorIndex) => (
+                          <li key={flavorIndex}>{flavor}</li>
+                        ))}
+                      </ul>
+                    </div>
                   )}
                   {item.notes.length > 0 && (
                     <div className="text-gray-500">
@@ -162,6 +171,10 @@ export function DetailsDialog({
                 </div>
               ))}
             </div>
+          ) : (
+            <p className="text-sm text-gray-500">
+              Este pedido não tem itens e sabores registrados.
+            </p>
           )}
         </div>
         <DialogFooter className="gap-2">

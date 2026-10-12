@@ -1,3 +1,5 @@
+import { OrderWhatsappButton } from "./OrderWhatsappButton";
+import { OrderDeliveryIcon } from "./OrderDeliveryIcon";
 import { Text } from "../ui/Text";
 import { OvenRequestIndicator } from "./OvenRequestIndicator";
 import { averageCompletionMinutes, elapsedSince } from "./order-time";
@@ -18,6 +20,8 @@ export function DesktopBoard({
   loading = false,
   onToggleOven,
   onChooseStatus,
+  onContact,
+  sentMessages,
 }: {
   orders: KdsOrder[];
   now: number;
@@ -25,6 +29,8 @@ export function DesktopBoard({
   loading?: boolean;
   onToggleOven: (order: KdsOrder) => void;
   onChooseStatus: (order: KdsOrder) => void;
+  onContact: (order: KdsOrder) => void;
+  sentMessages: Record<string, { status: string; sentAt: string }>;
 }) {
   const [visible, setVisible] = useState<KdsStatus[]>(defaults);
   const [closed, setClosed] = useState<KdsStatus[]>(
@@ -244,8 +250,8 @@ export function DesktopBoard({
                           style={{
                             flexDirection: "row",
                             justifyContent: "space-between",
-                            flexWrap: "wrap",
-                            gap: 4,
+                            alignItems: "center",
+                            gap: 8,
                           }}
                         >
                           <Pressable
@@ -281,44 +287,61 @@ export function DesktopBoard({
                           {order.requestedForOven ? (
                             <OvenRequestIndicator />
                           ) : null}
-                        </View>
-                        <View style={{ gap: 2 }}>
-                          <Text style={{ fontSize: 10, color: "#b3b3b3" }}>
-                            {order.status === "finalizado"
-                              ? "Tempo total"
-                              : "Tempo decorrido"}
-                          </Text>
-                          <Text
-                            numberOfLines={1}
-                            adjustsFontSizeToFit
+                          <View
                             style={{
-                              fontSize: 16,
-                              color: "#ffffff",
-                              fontWeight: "600",
-                              fontVariant: ["tabular-nums"],
+                              gap: 2,
+                              alignItems: "flex-end",
+                              marginLeft: "auto",
+                              flexShrink: 0,
                             }}
                           >
-                            {elapsedSince(
-                              order.novoPedidoAt ?? order.createdAt,
-                              order.status === "finalizado"
-                                ? order.finalizadoAt
-                                  ? new Date(order.finalizadoAt).getTime()
-                                  : NaN
-                                : now
-                            )}
-                          </Text>
+                            <Text style={{ fontSize: 10, color: "#b3b3b3" }}>
+                              {order.status === "finalizado"
+                                ? "Tempo total"
+                                : "Tempo decorrido"}
+                            </Text>
+                            <Text
+                              numberOfLines={1}
+                              adjustsFontSizeToFit
+                              style={{
+                                fontSize: 16,
+                                color: "#ffffff",
+                                fontWeight: "600",
+                                fontVariant: ["tabular-nums"],
+                              }}
+                            >
+                              {elapsedSince(
+                                order.novoPedidoAt ?? order.createdAt,
+                                order.status === "finalizado"
+                                  ? order.finalizadoAt
+                                    ? new Date(order.finalizadoAt).getTime()
+                                    : NaN
+                                  : now
+                              )}
+                            </Text>
+                          </View>
                         </View>
-                        {order.customerName ? (
-                          <Text
-                            numberOfLines={1}
-                            style={{
-                              fontSize: 12,
-                              color: "#b3b3b3",
-                            }}
-                          >
-                            {order.customerName}
-                          </Text>
-                        ) : null}
+                        <View
+                          style={{
+                            flexDirection: "row",
+                            alignItems: "center",
+                            gap: 8,
+                          }}
+                        >
+                          <OrderDeliveryIcon takeAway={order.takeAway} />
+                          {order.customerName ? (
+                            <Text
+                              numberOfLines={1}
+                              style={{
+                                flex: 1,
+                                fontSize: 12,
+                                color: "#b3b3b3",
+                              }}
+                            >
+                              {order.customerName}
+                            </Text>
+                          ) : null}
+                        </View>
 
                         <View
                           style={{
@@ -327,7 +350,7 @@ export function DesktopBoard({
                             justifyContent: "flex-start",
                             flexWrap: "wrap",
                             gap: 6,
-                            marginTop: 2,
+                            marginTop: "auto",
                             paddingTop: 4,
                           }}
                         >
@@ -349,6 +372,30 @@ export function DesktopBoard({
                               onPress={() => onToggleOven(order)}
                             />
                           ) : null}
+                          <View
+                            style={{
+                              marginLeft: "auto",
+                              alignItems: "flex-end",
+                              gap: 2,
+                            }}
+                          >
+                            {sentMessages[order.id] ? (
+                              <Text style={{ fontSize: 10, color: "#25d366" }}>
+                                ✓ Enviada · {sentMessages[order.id].status} ·{" "}
+                                {new Date(
+                                  sentMessages[order.id].sentAt
+                                ).toLocaleTimeString("pt-BR", {
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                })}
+                              </Text>
+                            ) : null}
+                            <OrderWhatsappButton
+                              order={order}
+                              onContact={onContact}
+                              busy={busy}
+                            />
+                          </View>
                         </View>
                       </View>
                     ))}

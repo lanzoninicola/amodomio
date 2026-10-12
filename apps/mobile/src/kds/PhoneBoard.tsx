@@ -266,6 +266,7 @@ export function PhoneBoard({
                     #{order.commandNumber ?? "VL"}
                   </Text>
                 </Pressable>
+                <OrderContact order={order} onContact={onContact} busy={busy} />
                 <Pressable
                   accessibilityRole="button"
                   accessibilityLabel={`Alterar status do pedido ${
@@ -282,7 +283,6 @@ export function PhoneBoard({
                   <Text style={styles.statusLabel}>{statusStyle.label}</Text>
                 </Pressable>
               </View>
-              <OrderContact order={order} onContact={onContact} busy={busy} />
               <View style={styles.orderTime}>
                 <Text style={styles.timeLabel}>Horário pedido</Text>
                 <Text style={styles.time}>

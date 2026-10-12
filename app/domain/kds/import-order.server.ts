@@ -8,6 +8,7 @@ import {
   parseOrderItems,
 } from "./order-items";
 import { ymdToDateInt } from "./utils/date";
+import { normalizeKdsChannel } from "./constants";
 
 const failure = (error: string, message: string, status = 400, extra = {}) =>
   json({ ok: false, error, message, ...extra }, { status });
@@ -49,7 +50,9 @@ function emptyStoredSizes(size: string | null | undefined) {
   }
 }
 // A reserved row is reusable only while it has no order/customer/production data.
-export function emptyReservation(row: Prisma.KdsDailyOrderDetailGetPayload<{}>) {
+export function emptyReservation(
+  row: Prisma.KdsDailyOrderDetailGetPayload<{}>
+) {
   return (
     row.status === "pendente" &&
     !row.deletedAt &&
@@ -216,9 +219,14 @@ export async function createImportedOrder(body: Record<string, unknown>) {
         where: { dateInt },
       });
       const matches = rows.filter((row) => row.commandNumber === commandNumber);
+      const updating =
+        body.updateExisting === true &&
+        matches.length === 1 &&
+        !emptyReservation(matches[0]) &&
+        !matches[0].deletedAt;
       if (
         matches.length > 1 ||
-        (matches.length === 1 && !emptyReservation(matches[0]))
+        (matches.length === 1 && !emptyReservation(matches[0]) && !updating)
       )
         return failure(
           "duplicate_command_number",
@@ -232,6 +240,7 @@ export async function createImportedOrder(body: Record<string, unknown>) {
         // Match Atendimento: all existing sizes reserve dough, irrespective of status.
         const used = rows.reduce(
           (sum, row) => {
+            if (updating && row.id === matches[0].id) return sum;
             const sizes = storedCounts(row.size);
             for (const key of KDS_PIZZA_SIZES) sum[key] += sizes[key];
             return sum;
@@ -278,19 +287,35 @@ export async function createImportedOrder(body: Record<string, unknown>) {
         hasMoto: !takeAway,
         takeAway,
         deliveryZoneId: zoneId,
-        channel: typeof body.channel === "string" ? body.channel.trim() : "",
+        channel: normalizeKdsChannel(
+          typeof body.channel === "string" ? body.channel : ""
+        ),
         customerName,
         customerPhone,
         orderItems: items,
         size: JSON.stringify(counts),
-        status,
+        status: updating ? matches[0].status : status,
         isCreditCard: body.isCreditCard === true,
         isCash: body.isCreditCard !== true && body.isCash === true,
         isOtherPaymentMethod:
           body.isCreditCard !== true &&
           body.isCash !== true &&
           body.isOtherPaymentMethod === true,
-        novoPedidoAt: status === "novoPedido" ? new Date() : null,
+        ...(updating &&
+        body.isCreditCard === undefined &&
+        body.isCash === undefined &&
+        body.isOtherPaymentMethod === undefined
+          ? {
+              isCreditCard: matches[0].isCreditCard,
+              isCash: matches[0].isCash,
+              isOtherPaymentMethod: matches[0].isOtherPaymentMethod,
+            }
+          : {}),
+        novoPedidoAt: updating
+          ? matches[0].novoPedidoAt
+          : status === "novoPedido"
+          ? new Date()
+          : null,
       };
       const select = { id: true, commandNumber: true, status: true } as const;
       const created = matches.length

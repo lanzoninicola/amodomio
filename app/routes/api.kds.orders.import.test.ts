@@ -134,7 +134,7 @@ it("stores pizza group snapshots and counts pizzas rather than flavors, ready fo
   expect(data.novoPedidoAt).toBeInstanceOf(Date);
   expect(data.customerName).toBe(body.customerName);
   expect(data.customerPhone).toBe(body.customerPhone);
-  expect(data.channel).toBe("Suitable");
+  expect(data.channel).toBe("CARDAPIO");
   expect((await response.json()).status).toBe("novoPedido");
 });
 it("returns stored items, name and phone in the API consumed by Windows/mobile", async () => {
@@ -217,6 +217,38 @@ it("refuses a duplicate command without overwriting its contents", async () => {
   expect(response.status).toBe(409);
   expect((await response.json()).error).toBe("duplicate_command_number");
   expect(mocks.create).not.toHaveBeenCalled();
+});
+it("updates an existing command explicitly while preserving production status and its starting time", async () => {
+  const started = new Date("2026-10-11T18:00:00Z");
+  mocks.rows.mockResolvedValue([
+    {
+      id: "existing",
+      commandNumber: 1,
+      status: "assando",
+      novoPedidoAt: started,
+      sortOrderIndex: 1000,
+      size: '{"I":1,"M":1,"F":1}',
+    },
+  ]);
+  mocks.stock.mockResolvedValue({
+    effective: { I: 1, M: 1, F: 1, P: 0, FT: 0 },
+  });
+  mocks.updateDetail.mockResolvedValue({
+    id: "existing",
+    commandNumber: 1,
+    status: "assando",
+  });
+  const response = await create({ ...body, updateExisting: true });
+  expect(response.status).toBe(200);
+  expect(mocks.create).not.toHaveBeenCalled();
+  expect(mocks.updateDetail.mock.calls[0][0]).toMatchObject({
+    where: { id: "existing" },
+    data: {
+      status: "assando",
+      novoPedidoAt: started,
+      customerName: body.customerName,
+    },
+  });
 });
 
 it.each([0, -1, 1.5, 2147483648, "1", null])(
@@ -459,4 +491,14 @@ it("retains legacy auto-opening for requests without snapshots", async () => {
   ).toBe(200);
   expect(mocks.updateHeader).toHaveBeenCalled();
   expect(mocks.transaction).not.toHaveBeenCalled();
+});
+
+it.each([
+  ["Suitable", "CARDAPIO"],
+  ["suitable", "CARDAPIO"],
+  ["cardapio", "CARDAPIO"],
+  ["aiqfome", "AIQFOME"],
+])("normalizes imported channel %s to %s", async (channel, expected) => {
+  expect((await create({ ...body, channel })).status).toBe(200);
+  expect(mocks.create.mock.calls[0][0].data.channel).toBe(expected);
 });
