@@ -169,10 +169,12 @@ function Review({
   order,
   close,
   portalContainer,
+  onConfirmed,
 }: {
   order: Order;
   close: () => void;
   portalContainer: HTMLElement;
+  onConfirmed: (exists: boolean) => void;
 }) {
   const [zones, setZones] = useState<Zone[]>([]);
   const [zoneId, setZoneId] = useState("");
@@ -231,7 +233,7 @@ function Review({
   const [editingCustomer, setEditingCustomer] = useState<string | null>(null);
   const [phone, setPhone] = useState(order.customerPhone);
   const [amount, setAmount] = useState(money(order.orderAmount));
-  const [channel, setChannel] = useState<string>("Suitable");
+  const [channel, setChannel] = useState<string>("CARDAPIO");
   const [pending, setPending] = useState(false);
   const [openingDay, setOpeningDay] = useState(false);
   const [openDayError, setOpenDayError] = useState("");
@@ -288,6 +290,8 @@ function Review({
               result?.error || "Não foi possível consultar pedido e estoque."
             );
           setCheck(result.check);
+          if (date === order.date && Number(command) === order.commandNumber)
+            onConfirmed(result.check.exists);
         })
         .catch((cause) => {
           if (active) setCheckError(cause.message);
@@ -351,6 +355,7 @@ function Review({
           orderAmount,
           channel,
           orderItems,
+          updateExisting: check?.exists === true,
           ...(!order.takeAway
             ? { deliveryZoneId: zoneId, deliveryFee: parseMoney(fee) }
             : {}),
@@ -358,9 +363,23 @@ function Review({
       });
       if (!result?.ok)
         throw new Error(result?.error || "Sem resposta da extensão.");
+      if (date === order.date && Number(command) === order.commandNumber)
+        onConfirmed(true);
       setDone(true);
+      setCheck((current) =>
+        current
+          ? {
+              ...current,
+              exists: true,
+              status: result.status || current.status,
+              canSend: false,
+            }
+          : current
+      );
       setMessage(
-        result.status === "pendente"
+        check?.exists
+          ? "Pedido atualizado no KDS. Status de produção preservado."
+          : result.status === "pendente"
           ? "Pedido criado como pendente. Complete os dados no Atendimento."
           : `Pedido enviado à cozinha com pizzas, tamanhos e sabores.${
               result.reopenedDay ? " Dia reaberto automaticamente." : ""
@@ -434,11 +453,13 @@ function Review({
                   <SelectValue placeholder="Origem do pedido" />
                 </SelectTrigger>
                 <SelectContent portalContainer={portalContainer}>
-                  {CHANNELS.map((value) => (
-                    <SelectItem key={value} value={value}>
-                      {value}
-                    </SelectItem>
-                  ))}
+                  {CHANNELS.filter((value) => value !== "Suitable").map(
+                    (value) => (
+                      <SelectItem key={value} value={value}>
+                        {value}
+                      </SelectItem>
+                    )
+                  )}
                 </SelectContent>
               </Select>
             </div>
@@ -577,13 +598,7 @@ function Review({
             <CheckColumn
               title="Comanda existente"
               state={
-                checking
-                  ? "loading"
-                  : checkError || !check
-                  ? "error"
-                  : check.exists
-                  ? "error"
-                  : "ok"
+                checking ? "loading" : checkError || !check ? "error" : "ok"
               }
               detail={
                 checking
@@ -591,7 +606,7 @@ function Review({
                   : checkError || !check
                   ? "Consulta indisponível"
                   : check.exists
-                  ? `Esta comanda já existe no servidor (${
+                  ? `Esta comanda será atualizada no servidor (${
                       check.status || "confira no Atendimento"
                     }).`
                   : "Comanda ainda não adicionada."
@@ -615,19 +630,20 @@ function Review({
                   ? "Consultando…"
                   : checkError || !check
                   ? "Consulta indisponível"
-                  : check.shortages.length
-                  ? `Massa insuficiente: ${check.shortages.join(", ")}.`
                   : !check.available
                   ? "Estoque de massas não cadastrado; saldo não verificado."
-                  : sizes
-                      .filter((size) => counts[size] > 0)
+                  : `${
+                      check.shortages.length
+                        ? `Massa insuficiente: ${check.shortages.join(", ")}. `
+                        : ""
+                    }${sizes
                       .map(
                         (size) =>
                           `${size}: ${check.available![size]} disponíveis / ${
                             counts[size]
                           } necessárias`
                       )
-                      .join(" · ") || "Sem massas necessárias."
+                      .join(" · ")}`
               }
             />
             <CheckColumn
@@ -922,7 +938,11 @@ function Review({
                     !check?.canSend
                   }
                 >
-                  {pending ? "Enviando…" : "Enviar"}
+                  {pending
+                    ? "Enviando…"
+                    : check?.exists
+                    ? "Atualizar"
+                    : "Enviar"}
                 </Button>
               )}
             </div>
@@ -947,7 +967,11 @@ function attach(host: HTMLElement) {
   host.addEventListener("keydown", (event) => event.stopPropagation());
   return { root, portalContainer };
 }
-function review(dialog: Element, order: Order) {
+function review(
+  dialog: Element,
+  order: Order,
+  onConfirmed: (exists: boolean) => void
+) {
   const previous = dialog.querySelector("[data-amodomio-review]");
   if (previous) {
     roots.get(previous)?.unmount();
@@ -965,6 +989,7 @@ function review(dialog: Element, order: Order) {
       <Review
         portalContainer={portalContainer}
         order={order}
+        onConfirmed={onConfirmed}
         close={() => {
           root.unmount();
           host.remove();
@@ -977,11 +1002,63 @@ function review(dialog: Element, order: Order) {
 
 function AddToKds({ dialog }: { dialog: Element }) {
   const [error, setError] = useState("");
+  const [confirmed, setConfirmed] = useState(false);
+  const [checking, setChecking] = useState(true);
+  useEffect(() => {
+    let active = true;
+    let currentKey = "";
+    let request = 0;
+    async function checkOrder() {
+      const order = SuitableKds.extractModal(dialog);
+      if (!order) return;
+      const key = `${order.date}:${order.commandNumber}`;
+      if (key === currentKey) return;
+      currentKey = key;
+      const version = ++request;
+      setConfirmed(false);
+      setChecking(true);
+      setError("");
+      try {
+        const result = await chrome.runtime.sendMessage({
+          type: "suitable:check",
+          order,
+        });
+        if (!active || version !== request) return;
+        if (!result?.ok || !result.check)
+          throw new Error(
+            result?.error || "Não foi possível consultar a comanda no KDS."
+          );
+        setConfirmed(result.check.exists);
+      } catch (cause) {
+        if (active && version === request)
+          setError(
+            cause instanceof Error
+              ? cause.message
+              : "Não foi possível consultar a comanda no KDS."
+          );
+      } finally {
+        if (active && version === request) setChecking(false);
+      }
+    }
+    const observer = new MutationObserver(() => void checkOrder());
+    observer.observe(dialog, {
+      subtree: true,
+      childList: true,
+      characterData: true,
+    });
+    void checkOrder();
+    return () => {
+      active = false;
+      observer.disconnect();
+    };
+  }, [dialog]);
   return (
     <div className="extension">
       <Button
         type="button"
         size="sm"
+        disabled={checking}
+        className={confirmed ? "bg-green-700 hover:bg-green-800" : undefined}
         onClick={() => {
           setError("");
           try {
@@ -991,7 +1068,7 @@ function AddToKds({ dialog }: { dialog: Element }) {
                 "Não foi possível ler o pedido. Aguarde o resumo de valores carregar e tente novamente."
               );
             }
-            review(dialog, order);
+            review(dialog, order, setConfirmed);
           } catch (cause) {
             console.error(
               "[Suitable → Amodomio] Falha ao abrir revisão",
@@ -1005,7 +1082,14 @@ function AddToKds({ dialog }: { dialog: Element }) {
           }
         }}
       >
-        Adicionar ao KDS
+        {confirmed && (
+          <CheckIcon className="mr-1.5 h-4 w-4" aria-hidden="true" />
+        )}
+        {checking
+          ? "Consultando KDS…"
+          : confirmed
+          ? "Comanda enviada"
+          : "Adicionar ao KDS"}
       </Button>
       {error && (
         <p role="alert" className="mt-2 max-w-xs text-xs text-red-700">

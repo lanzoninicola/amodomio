@@ -153,8 +153,12 @@ chrome.runtime.onMessage.addListener((message, sender, respond) => {
           motoValue: input.takeAway ? 0 : input.deliveryFee,
           deliveryZoneId: input.takeAway ? null : input.deliveryZoneId,
           channel:
-            input.channel === undefined ? "Suitable" : input.channel.trim(),
+            input.channel === undefined ||
+            input.channel.trim().toLowerCase() === "suitable"
+              ? "CARDAPIO"
+              : input.channel.trim(),
           orderItems,
+          updateExisting: input.updateExisting === true,
         }),
         signal: AbortSignal.timeout(20000),
       });

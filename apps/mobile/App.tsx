@@ -1,3 +1,5 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { orderWhatsappTemplate } from "./src/kds/whatsapp-templates";
 import { OrderContact } from "./src/kds/OrderContact";
 import { OvenRequestsBar } from "./src/kds/OvenRequestsBar";
 import { VoiceCommandButton } from "./src/kds/VoiceCommandButton";
@@ -79,7 +81,9 @@ import { Input } from "./src/ui/Input";
 import { Screen } from "./src/ui/Screen";
 import { theme } from "./src/ui/theme";
 
-const DEFAULT_API_URL = process.env.EXPO_PUBLIC_API_URL || PUBLIC_SERVER_URL;
+const DEFAULT_API_URL = desktop
+  ? PUBLIC_SERVER_URL
+  : process.env.EXPO_PUBLIC_API_URL || PUBLIC_SERVER_URL;
 const POLLING_MS = 4_000;
 
 function localDate() {
@@ -135,7 +139,7 @@ function LoginScreen({
   const serverEdited = useRef(false);
   const chooseServer = (url: string) => {
     serverEdited.current = true;
-    setApiUrl(url);
+    setApiUrl(desktop ? PUBLIC_SERVER_URL : url);
     setError("");
   };
   const [identifier, setIdentifier] = useState("");
@@ -149,7 +153,8 @@ function LoginScreen({
     sessionStorage
       .getApiUrl()
       .then((stored) => {
-        if (active && stored && !serverEdited.current) setApiUrl(stored);
+        if (active && stored && !serverEdited.current && !desktop)
+          setApiUrl(stored);
       })
       .catch(() => {});
     getServerPresets(controller.signal)
@@ -215,7 +220,12 @@ function LoginScreen({
         </View>
         <Card style={styles.loginCard}>
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-            {serverPresets.map((server) => (
+            {(desktop
+              ? DEFAULT_SERVER_PRESETS.filter(
+                  (server) => server.url === PUBLIC_SERVER_URL
+                )
+              : serverPresets
+            ).map((server) => (
               <Button
                 key={server.url}
                 disabled={busy}
@@ -235,7 +245,7 @@ function LoginScreen({
             label="Servidor Amodomio"
             value={apiUrl}
             onChangeText={chooseServer}
-            editable={!busy}
+            editable={!busy && !desktop}
             autoCapitalize="none"
             keyboardType="url"
             placeholder="https://seu-dominio.com"
@@ -444,12 +454,52 @@ function KanbanScreen({
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [contactOrder, setContactOrder] = useState<KdsOrder | null>(null);
   const [contactMessage, setContactMessage] = useState("");
+  const [useContactTemplate, setUseContactTemplate] = useState(true);
+  const [contactSuccess, setContactSuccess] = useState("");
+  const [sentMessages, setSentMessages] = useState<
+    Record<string, { status: string; sentAt: string }>
+  >({});
+  const sentMessagesKey = `amodomio.kds.whatsapp.sent:${apiUrl}`;
+  useEffect(() => {
+    let active = true;
+    setSentMessages({});
+    void AsyncStorage.getItem(sentMessagesKey)
+      .then((raw) => {
+        if (!active || !raw) return;
+        const entries = JSON.parse(raw);
+        if (entries && typeof entries === "object" && !Array.isArray(entries)) {
+          const valid = Object.fromEntries(
+            Object.entries(entries).filter(([, value]) => {
+              const entry = value as {
+                status?: unknown;
+                sentAt?: unknown;
+              } | null;
+              return (
+                entry &&
+                typeof entry.status === "string" &&
+                typeof entry.sentAt === "string" &&
+                Number.isFinite(new Date(entry.sentAt).getTime())
+              );
+            })
+          );
+          setSentMessages((current) => ({ ...valid, ...current }));
+        }
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [sentMessagesKey]);
   const [contactEnabled, setContactEnabled] = useState(false);
   const [contactBusy, setContactBusy] = useState(false);
+  const contactInFlight = useRef(false);
   const [contactError, setContactError] = useState("");
   const openContact = async (order: KdsOrder) => {
+    if (contactInFlight.current || !order.customerPhone?.trim()) return;
     setContactOrder(order);
-    setContactMessage("");
+    setContactMessage(orderWhatsappTemplate(order));
+    setUseContactTemplate(true);
+    setContactSuccess("");
     setContactError("");
     setContactEnabled(false);
     setContactBusy(true);
@@ -470,20 +520,52 @@ function KanbanScreen({
       setContactBusy(false);
     }
   };
+  const contactText = contactMessage;
   const sendContact = async () => {
     if (
       !contactOrder ||
+      contactInFlight.current ||
+      contactSuccess ||
+      !contactOrder.customerPhone?.trim() ||
       contactBusy ||
       !contactEnabled ||
-      !contactMessage.trim()
+      !contactText.trim()
     )
       return;
+    contactInFlight.current = true;
     setContactBusy(true);
     setContactError("");
     try {
-      await sendOrderWhatsapp(apiUrl, token, contactOrder.id, contactMessage);
-      setContactOrder(null);
-      Alert.alert("WhatsApp", "Mensagem enviada com sucesso.");
+      const result = await sendOrderWhatsapp(
+        apiUrl,
+        token,
+        contactOrder.id,
+        contactText
+      );
+      if (result.ok !== true)
+        throw new Error(
+          "A API não confirmou o envio. Confira o resultado antes de tentar novamente."
+        );
+      const next = {
+        ...sentMessages,
+        [contactOrder.id]: {
+          status:
+            KDS_STATUSES.find((status) => status.id === contactOrder.status)
+              ?.label ?? contactOrder.status,
+          sentAt: new Date().toISOString(),
+        },
+      };
+      setSentMessages(next);
+      setContactSuccess(
+        "Mensagem enviada com sucesso. Envio confirmado pela API."
+      );
+      try {
+        await AsyncStorage.setItem(sentMessagesKey, JSON.stringify(next));
+      } catch {
+        setContactSuccess(
+          "Mensagem enviada com sucesso, mas não foi possível salvar a indicação neste dispositivo."
+        );
+      }
     } catch (error) {
       setContactError(
         error instanceof Error
@@ -491,6 +573,7 @@ function KanbanScreen({
           : "Não foi possível enviar. Confira o resultado antes de tentar novamente."
       );
     } finally {
+      contactInFlight.current = false;
       setContactBusy(false);
     }
   };
@@ -850,6 +933,8 @@ function KanbanScreen({
           busy={loading || Boolean(mutatingId)}
           onToggleOven={toggleOven}
           onChooseStatus={setSelected}
+          onContact={openContact}
+          sentMessages={sentMessages}
         />
       ) : loading && !orders.length ? (
         <View style={styles.center}>
@@ -958,25 +1043,81 @@ function KanbanScreen({
                 {contactOrder?.customerName || "Cliente"} ·{" "}
                 {contactOrder?.customerPhone}
               </Text>
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: 12,
+                }}
+              >
+                <Text style={styles.detailValue}>
+                  Mensagem ·{" "}
+                  {KDS_STATUSES.find(
+                    (status) => status.id === contactOrder?.status
+                  )?.label ?? contactOrder?.status}
+                </Text>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Editar mensagem"
+                  accessibilityState={{
+                    disabled:
+                      !contactEnabled || contactBusy || Boolean(contactSuccess),
+                  }}
+                  disabled={
+                    !contactEnabled || contactBusy || Boolean(contactSuccess)
+                  }
+                  onPress={() => setUseContactTemplate(false)}
+                  style={{
+                    minWidth: 44,
+                    minHeight: 44,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    opacity:
+                      !contactEnabled || contactBusy || contactSuccess
+                        ? 0.3
+                        : 1,
+                  }}
+                >
+                  <Text style={[styles.detailValue, { fontSize: 24 }]}>✎</Text>
+                </Pressable>
+              </View>
               <Input
-                label="Mensagem"
+                accessibilityLabel="Mensagem de WhatsApp"
                 multiline
                 maxLength={4096}
                 value={contactMessage}
                 onChangeText={setContactMessage}
-                editable={contactEnabled && !contactBusy}
+                editable={
+                  !useContactTemplate &&
+                  contactEnabled &&
+                  !contactBusy &&
+                  !contactSuccess
+                }
                 placeholder="Digite a mensagem para o cliente"
-                style={{ minHeight: 100 }}
+                style={{ minHeight: 140, textAlignVertical: "top" }}
               />
+              {contactSuccess ? (
+                <Text
+                  accessibilityLiveRegion="polite"
+                  style={{ color: "#25d366" }}
+                >
+                  {contactSuccess}
+                </Text>
+              ) : null}
               {contactError ? (
                 <Text style={styles.error}>{contactError}</Text>
               ) : null}
               <Button
                 onPress={sendContact}
                 loading={contactBusy}
-                disabled={!contactEnabled || !contactMessage.trim()}
+                disabled={
+                  !contactEnabled ||
+                  !contactText.trim() ||
+                  Boolean(contactSuccess)
+                }
               >
-                Enviar WhatsApp
+                {useContactTemplate ? "Enviar template" : "Enviar mensagem"}
               </Button>
               <Button
                 variant="outline"
@@ -1179,6 +1320,12 @@ function AppContent() {
     void prepareNotifications();
     Promise.all([sessionStorage.getToken(), sessionStorage.getApiUrl()])
       .then(async ([token, apiUrl]) => {
+        if (desktop && apiUrl?.replace(/\/+$/, "") !== PUBLIC_SERVER_URL) {
+          await sessionStorage.clearToken();
+          await sessionStorage.setApiUrl(PUBLIC_SERVER_URL);
+          setBooting(false);
+          return;
+        }
         if (token && apiUrl) {
           try {
             const result = await getMe(apiUrl, token);

@@ -61,7 +61,7 @@ it("subtracts reserved dough and reports shortage before sending", async () => {
     canSend: false,
   });
 });
-it("reports existing commands even from other channels", async () => {
+it("allows updating existing commands even from other channels", async () => {
   mocks.rows.mockResolvedValue([
     {
       commandNumber: 1,
@@ -73,7 +73,7 @@ it("reports existing commands even from other channels", async () => {
   expect((await check()).body.check).toMatchObject({
     exists: true,
     status: "finalizado",
-    canSend: false,
+    canSend: true,
   });
 });
 it("allows an empty reservation", async () => {

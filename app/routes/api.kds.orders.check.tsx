@@ -74,7 +74,14 @@ export async function action({ request }: ActionFunctionArgs) {
           Math.max(
             0,
             stock.effective[size] -
-              rows.reduce((sum, row) => sum + storedCounts(row.size)[size], 0)
+              rows.reduce(
+                (sum, row) =>
+                  sum +
+                  (matches.length === 1 && row === matches[0] && !row.deletedAt
+                    ? 0
+                    : storedCounts(row.size)[size]),
+                0
+              )
           ),
         ])
       )
@@ -95,7 +102,8 @@ export async function action({ request }: ActionFunctionArgs) {
         shortages,
         dayStatus,
         canSend:
-          !exists &&
+          matches.length <= 1 &&
+          !matches[0]?.deletedAt &&
           !shortages.length &&
           ["OPENED", "REOPENED", "CLOSED"].includes(dayStatus),
       },

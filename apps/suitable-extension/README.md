@@ -17,10 +17,14 @@ A revisão adapta os campos à largura disponível.
 O cabeçalho segue a linha do Atendimento/KDS: comanda circular, valor, tamanhos,
 origem e, para entregas, bairro. Cliente e telefone aparecem logo abaixo. Os
 detalhes iniciam recolhidos. A origem usa a lista `CHANNELS` compartilhada com
-o servidor, começa em `Suitable` e a seleção é salva no campo `channel` do
+o servidor, começa em `CARDAPIO` e a seleção é salva no campo `channel` do
 pedido enviado ao KDS. O bairro pode ser alterado diretamente no cabeçalho,
 mesmo com os detalhes fechados, usando os bairros cadastrados no KDS. A escolha
-é enviada como `deliveryZoneId`. O botão de envio da revisão é **Enviar**.
+é enviada como `deliveryZoneId`. O botão de envio da revisão é **Enviar**. A extensão não oferece `Suitable`
+como canal; versões antigas que enviam esse valor são normalizadas para
+`CARDAPIO`. Após confirmação de envio ou existência pelo servidor, o botão
+no cabeçalho mostra **Comanda enviada** com um visto verde. A verificação
+de comanda existente também é verde, mantendo a proteção contra duplicação.
 
 A consulta aparece em três colunas: comanda existente, estoque de massa e
 abertura do dia. Indicadores verdes, vermelhos e amarelos mostram sucesso,
@@ -231,8 +235,10 @@ abre os campos do pedido sem perder alterações. A extensão consulta
 POST /api/kds/orders/check ao abrir e ao alterar data, comanda ou itens; Consultar
 servidor atualiza manualmente. Essa API autenticada é somente leitura.
 
-Comanda ocupada (mesma data e número, de qualquer canal), massa insuficiente
-ou dia não iniciado bloqueiam o envio. Reserva vazia continua disponível.
+Comanda existente (mesma data e número) permite Atualizar: substitui os dados
+do pedido preservando status, horários de produção e pagamentos não informados.
+A validação de massa desconsidera o consumo anterior da própria comanda.
+Comandas ambíguas ou excluídas, massa insuficiente e dia não iniciado bloqueiam o envio. Reserva vazia continua disponível.
 Sem estoque cadastrado, mostra que o saldo não foi verificado e mantém a regra
 atual de permitir envio. A consulta não reserva massas; o servidor repete as
 validações na transação do envio. Para usar esta versão, publique também a nova
@@ -262,3 +268,8 @@ O total fica no final da primeira linha; Mostrar detalhes tem ícone e fica à d
 dos tamanhos. Atualizar comanda e estoque repete apenas a consulta, sem criar pedido.
 A fonte Inter acompanha a extensão: arquivos locais no popup e FontFace com dados
 binários na revisão, sem depender de CDN ou da política de fontes do Suitable.
+
+Ao abrir o detalhe no Suitable, o botão consulta automaticamente a comanda no
+KDS. Estoque massa mostra as quantidades disponíveis e necessárias por tamanho,
+inclusive quando há insuficiência. Recarregue a extensão e a página após atualizar;
+o fluxo de atualização também exige a versão atualizada do servidor.

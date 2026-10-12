@@ -5,6 +5,14 @@ export const CHANNELS = [
   "IFOOD",
   "Suitable",
 ] as const;
+export function normalizeKdsChannel(value: string | null | undefined) {
+  const channel = value?.trim() || "";
+  if (channel.toLowerCase() === "suitable") return "CARDAPIO";
+  return (
+    CHANNELS.find((option) => option.toLowerCase() === channel.toLowerCase()) ||
+    channel
+  );
+}
 export const STATUS_COLORS: Record<string, string> = {
   pendente: "bg-slate-200 text-slate-800",
   novoPedido: "bg-gray-200 text-gray-800",

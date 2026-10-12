@@ -1,3 +1,4 @@
+import { normalizeKdsChannel } from "@/domain/kds/constants";
 // app/routes/admin.kds.atendimento.$date.grid.tsx
 import type {
   ActionFunctionArgs,
@@ -1857,7 +1858,7 @@ function RowItem({
 
           {/* Canal */}
           <div className="flex justify-center">
-            <Select name="channel" defaultValue={(o.channel ?? "").trim()}>
+            <Select name="channel" defaultValue={normalizeKdsChannel(o.channel)}>
               <SelectTrigger
                 className={`h-9 w-[240px] truncate ${
                   readOnly ? "opacity-60 pointer-events-none" : ""

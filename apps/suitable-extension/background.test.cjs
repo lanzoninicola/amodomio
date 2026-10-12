@@ -116,7 +116,7 @@ test("sends the modal items and leaves status calculation to the KDS", async () 
     assert.equal(body.customerName, order.customerName);
     assert.equal(body.status, undefined);
     assert.deepEqual(body.orderItems, order.orderItems);
-    assert.equal(body.channel, "Suitable");
+    assert.equal(body.channel, "CARDAPIO");
     assert.equal(body.sizes, undefined);
     assert.equal(body.orderAmount, 59.9);
     assert.equal(body.takeAway, true);
