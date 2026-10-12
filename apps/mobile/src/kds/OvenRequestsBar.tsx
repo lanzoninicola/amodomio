@@ -7,86 +7,145 @@ export function OvenRequestsBar({
   orders,
   busy,
   onBake,
+  onFinish,
 }: {
   orders: KdsOrder[];
   busy: boolean;
   onBake: (order: KdsOrder) => void;
+  onFinish: (order: KdsOrder) => void;
 }) {
   const requested = orders.filter(
     (order) => order.status === "aguardandoForno" && order.requestedForOven
   );
-  if (!requested.length) return null;
+  const baking = orders.filter((order) => order.status === "assando");
+
+  return (
+    <View style={{ flexDirection: "row", gap: 12 }}>
+      <OvenColumn
+        title="Forno solicitado"
+        backgroundColor={theme.colors.brandOrange}
+        orders={requested}
+        busy={busy}
+        onPressOrder={onBake}
+        actionLabel="Colocar pedido"
+        actionStatus="em Assando"
+      />
+      <OvenColumn
+        title="Assando"
+        backgroundColor={theme.colors.brandYellow}
+        orders={baking}
+        busy={busy}
+        onPressOrder={onFinish}
+        actionLabel="Finalizar pedido"
+        actionStatus=""
+      />
+    </View>
+  );
+}
+
+function OvenColumn({
+  title,
+  backgroundColor,
+  orders,
+  busy = false,
+  onPressOrder,
+  actionLabel,
+  actionStatus,
+}: {
+  title: string;
+  backgroundColor: string;
+  orders: KdsOrder[];
+  busy?: boolean;
+  onPressOrder: (order: KdsOrder) => void;
+  actionLabel: string;
+  actionStatus: string;
+}) {
   return (
     <View
       style={{
-        backgroundColor: theme.colors.brandOrange,
-        borderLeftWidth: 5,
-        borderLeftColor: theme.colors.brandOrange,
+        flex: 1,
+        minWidth: 0,
+        backgroundColor: "#141414",
         padding: 12,
         gap: 10,
       }}
     >
-      <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          flexWrap: "wrap",
+          gap: 10,
+        }}
+      >
         <Text
           style={{
-            color: "#080808",
+            color: "#ffffff",
             fontSize: 18,
             fontFamily: "IBMPlexMono_Bold",
           }}
         >
-          Forno solicitado
+          {title}
         </Text>
         <Text
           style={{
-            backgroundColor: theme.colors.brandOrange,
-            color: theme.colors.foreground,
+            color: "#ffffff",
             paddingHorizontal: 9,
             paddingVertical: 3,
-            borderRadius: theme.radius.full,
             fontSize: 16,
             fontFamily: "IBMPlexMono_Bold",
           }}
         >
-          {requested.length}
+          {orders.length}
         </Text>
       </View>
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
+        style={{ minHeight: 58 }}
         contentContainerStyle={{ gap: 10 }}
       >
-        {requested.map((order) => (
-          <Pressable
-            key={order.id}
-            accessibilityRole="button"
-            accessibilityLabel={`Colocar pedido ${
-              order.commandNumber ?? "VL"
-            } em Assando`}
-            disabled={busy}
-            onPress={() => onBake(order)}
-            style={({ pressed }) => ({
-              backgroundColor: "#282828",
-              borderRadius: theme.radius.md,
-              minHeight: 58,
-              minWidth: 92,
-              paddingHorizontal: 16,
-              paddingVertical: 8,
-              alignItems: "center",
-              justifyContent: "center",
-              opacity: busy || pressed ? 0.5 : 1,
-            })}
-          >
+        {orders.map((order) => {
+          const number = (
             <Text
               style={{
-                color: "#fff",
+                color: "#080808",
                 fontSize: 26,
                 fontFamily: "IBMPlexMono_Bold",
               }}
             >
               #{order.commandNumber ?? "VL"}
             </Text>
-          </Pressable>
-        ))}
+          );
+          const cardStyle = {
+            backgroundColor,
+            borderRadius: theme.radius.md,
+            minHeight: 58,
+            minWidth: 92,
+            paddingHorizontal: 16,
+            paddingVertical: 8,
+            alignItems: "center" as const,
+            justifyContent: "center" as const,
+          };
+
+          return (
+            <Pressable
+              key={order.id}
+              accessibilityRole="button"
+              accessibilityLabel={`${actionLabel} ${
+                order.commandNumber ?? "VL"
+              } ${actionStatus}`.trim()}
+              disabled={busy}
+              onPress={() => onPressOrder(order)}
+              style={({ pressed }) => ({
+                ...cardStyle,
+                opacity: busy || pressed ? 0.5 : 1,
+              })}
+            >
+              {number}
+            </Pressable>
+          );
+        })}
       </ScrollView>
     </View>
   );

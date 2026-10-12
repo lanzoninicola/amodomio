@@ -1,3 +1,20 @@
+import type { KdsOrder } from "./types";
+
+export function averageCompletionMinutes(orders: KdsOrder[]) {
+  let total = 0;
+  let count = 0;
+  for (const order of orders) {
+    if (order.status !== "finalizado" || !order.finalizadoAt) continue;
+    const start = new Date(order.novoPedidoAt ?? order.createdAt).getTime();
+    const end = new Date(order.finalizadoAt).getTime();
+    if (!Number.isFinite(start) || !Number.isFinite(end) || end < start)
+      continue;
+    total += end - start;
+    count++;
+  }
+  return { minutes: count ? total / count / 60_000 : null, count };
+}
+
 export function elapsedSince(value: string, now: number) {
   const minutes = Math.max(
     0,

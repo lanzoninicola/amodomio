@@ -1,8 +1,9 @@
 import { Text } from "../ui/Text";
-import { desktop } from "../platform/desktop";
+import { OvenRequestIndicator } from "./OvenRequestIndicator";
+import { averageCompletionMinutes, elapsedSince } from "./order-time";
+import { IconButton } from "../ui/IconButton";
 import { useDesktopWindow } from "../platform/useDesktopWindow";
 import { subscribeStatusPreferences } from "../platform/statusPreferences";
-import { IconButton } from "../ui/IconButton";
 import { useEffect, useState } from "react";
 import { Pressable, ScrollView, View } from "react-native";
 import { theme } from "../ui/theme";
@@ -12,12 +13,16 @@ const KEY = "amodomio.desktop.kds.statuses";
 const defaults: KdsStatus[] = ["aguardandoForno", "assando"];
 export function DesktopBoard({
   orders,
+  now,
   busy,
+  loading = false,
   onToggleOven,
   onChooseStatus,
 }: {
   orders: KdsOrder[];
+  now: number;
   busy: boolean;
+  loading?: boolean;
   onToggleOven: (order: KdsOrder) => void;
   onChooseStatus: (order: KdsOrder) => void;
 }) {
@@ -26,9 +31,9 @@ export function DesktopBoard({
     KDS_STATUSES.map((status) => status.id)
   );
   const { widget } = useDesktopWindow();
-  const [boardWidth, setBoardWidth] = useState(0);
-  const twoColumns = boardWidth >= 320;
-  const [error, setError] = useState("");
+  const [gridWidth, setGridWidth] = useState(0);
+  const cardWidth = Math.max(0, Math.floor((gridWidth - 16 - 6) / 2));
+  const completion = averageCompletionMinutes(orders);
 
   useEffect(() => {
     let active = true;
@@ -54,17 +59,8 @@ export function DesktopBoard({
       unsubscribe();
     };
   }, []);
-  useEffect(
-    () => () => {
-      void desktop?.setWidget(false).catch(() => {});
-    },
-    []
-  );
   return (
-    <View
-      onLayout={(event) => setBoardWidth(event.nativeEvent.layout.width)}
-      style={{ flex: 1, backgroundColor: "#000000" }}
-    >
+    <View style={{ flex: 1, backgroundColor: "#000000" }}>
       <View
         style={{
           flexDirection: "row",
@@ -74,42 +70,60 @@ export function DesktopBoard({
           zIndex: 10,
         }}
       >
-        <Text
-          style={{
-            color: "#b3b3b3",
-            fontSize: 12,
-            alignSelf: "center",
-            fontWeight: "600",
-          }}
+        <View
+          style={{ flex: 1, flexDirection: "row", flexWrap: "nowrap", gap: 16 }}
         >
-          Pedidos ·{" "}
-          {orders.filter((order) => visible.includes(order.status)).length}
-        </Text>
-        <View style={{ flexDirection: "row", gap: 6 }}>
-          <IconButton
-            icon="widget"
-            label={widget ? "Sair do modo widget" : "Modo widget"}
-            active={widget}
-            onPress={() => {
-              void desktop
-                ?.setWidget(!widget)
-                .catch(() => setError("Não foi possível ajustar a janela."));
-            }}
-          />
-          <IconButton
-            icon="settings"
-            label="Configurar status visíveis"
-            onPress={() => {
-              void desktop
-                ?.openKdsSettings()
-                .catch(() =>
-                  setError("Não foi possível abrir as configurações.")
-                );
-            }}
-          />
+          <View style={{ gap: 2, flex: 1, minWidth: 0 }}>
+            <Text style={{ color: "#b3b3b3", fontSize: 11 }}>
+              Total de pedidos
+            </Text>
+            <Text
+              style={{
+                color: "#ffffff",
+                fontSize: 28,
+                fontWeight: "700",
+                fontVariant: ["tabular-nums"],
+              }}
+            >
+              {orders.length}
+            </Text>
+          </View>
+          <View
+            style={{ gap: 2, flex: 1, minWidth: 0 }}
+            accessibilityLabel={`Tempo médio de finalização: ${
+              completion.minutes === null
+                ? "sem dados"
+                : `${Math.round(completion.minutes)} minutos`
+            }. Baseado em ${
+              completion.count
+            } pedidos finalizados com tempo válido.`}
+          >
+            <Text style={{ color: "#b3b3b3", fontSize: 11 }}>
+              {widget ? "Tempo médio" : "Tempo médio de finalização"}
+            </Text>
+            <Text
+              style={{
+                color: "#ffffff",
+                fontSize: 28,
+                fontWeight: "700",
+                fontVariant: ["tabular-nums"],
+              }}
+            >
+              {completion.minutes === null
+                ? "—"
+                : `${Math.round(completion.minutes)} min`}
+            </Text>
+          </View>
         </View>
       </View>
-      {error ? <Text accessibilityRole="alert">{error}</Text> : null}
+      {loading ? (
+        <Text
+          accessibilityLiveRegion="polite"
+          style={{ color: "#b3b3b3", paddingHorizontal: 8 }}
+        >
+          Carregando pedidos…
+        </Text>
+      ) : null}
       <ScrollView
         contentContainerStyle={{
           padding: widget ? 8 : 12,
@@ -152,7 +166,7 @@ export function DesktopBoard({
                     style={{
                       width: 8,
                       height: 8,
-                      borderRadius: 4,
+                      borderRadius: 8,
                       backgroundColor: status.color,
                     }}
                   />
@@ -168,17 +182,17 @@ export function DesktopBoard({
                   </Text>
                   <Text
                     style={{
-                      backgroundColor: status.tint,
-                      color: status.color,
+                      backgroundColor: "#000000",
+                      color: "#ffffff",
                       paddingHorizontal: 10,
                       paddingVertical: 4,
-                      minWidth: 34,
+                      minWidth: 52,
                       textAlign: "center",
                       fontVariant: ["tabular-nums"],
-                      borderRadius: theme.radius.full,
+                      borderRadius: 8,
                       fontWeight: "700",
-                      fontSize: 18,
-                      lineHeight: 24,
+                      fontSize: 32,
+                      lineHeight: 40,
                     }}
                   >
                     {items.length}
@@ -187,15 +201,18 @@ export function DesktopBoard({
                 </Pressable>
                 {expanded ? (
                   <View
+                    onLayout={(event) =>
+                      setGridWidth(event.nativeEvent.layout.width)
+                    }
                     style={{
                       padding: 8,
-                      gap: 8,
+                      gap: 6,
                       flexDirection: "row",
                       flexWrap: "wrap",
                       alignItems: "stretch",
                     }}
                   >
-                    {!items.length ? (
+                    {!loading && !items.length ? (
                       <Text
                         style={{
                           padding: 10,
@@ -209,9 +226,9 @@ export function DesktopBoard({
                       <View
                         key={order.id}
                         style={{
-                          width: twoColumns ? "48.5%" : "100%",
-                          minHeight: 156,
-                          padding: 10,
+                          width: cardWidth,
+                          minWidth: 0,
+                          padding: 6,
                           backgroundColor: "#282828",
                           gap: 8,
                           borderWidth: 1,
@@ -227,29 +244,68 @@ export function DesktopBoard({
                           style={{
                             flexDirection: "row",
                             justifyContent: "space-between",
-                            gap: 8,
+                            flexWrap: "wrap",
+                            gap: 4,
                           }}
                         >
-                          <Text
-                            style={{
-                              fontSize: 22,
-                              color: "#ffffff",
-                              fontWeight: "700",
-                            }}
+                          <Pressable
+                            accessibilityRole="button"
+                            accessibilityLabel={`Alterar status do pedido #${
+                              order.commandNumber ?? "VL"
+                            }`}
+                            accessibilityHint="Abre os detalhes e a escolha de status"
+                            accessibilityState={{ disabled: busy }}
+                            disabled={busy}
+                            onPress={() => onChooseStatus(order)}
+                            style={({ pressed }) => ({
+                              minHeight: 44,
+                              minWidth: 0,
+                              maxWidth: "100%",
+                              flexShrink: 1,
+                              justifyContent: "center",
+                              opacity: busy || pressed ? 0.65 : 1,
+                            })}
                           >
-                            #{order.commandNumber ?? "VL"}
+                            <Text
+                              numberOfLines={1}
+                              adjustsFontSizeToFit
+                              style={{
+                                fontSize: 24,
+                                color: "#ffffff",
+                                fontWeight: "700",
+                              }}
+                            >
+                              #{order.commandNumber ?? "VL"}
+                            </Text>
+                          </Pressable>
+                          {order.requestedForOven ? (
+                            <OvenRequestIndicator />
+                          ) : null}
+                        </View>
+                        <View style={{ gap: 2 }}>
+                          <Text style={{ fontSize: 10, color: "#b3b3b3" }}>
+                            {order.status === "finalizado"
+                              ? "Tempo total"
+                              : "Tempo decorrido"}
                           </Text>
                           <Text
+                            numberOfLines={1}
+                            adjustsFontSizeToFit
                             style={{
-                              fontSize: 11,
-                              color: "#b3b3b3",
-                              backgroundColor: "#333333",
-                              padding: 4,
-                              borderRadius: 4,
-                              alignSelf: "center",
+                              fontSize: 16,
+                              color: "#ffffff",
+                              fontWeight: "600",
+                              fontVariant: ["tabular-nums"],
                             }}
                           >
-                            {order.takeAway ? "Retirada" : "Entrega"}
+                            {elapsedSince(
+                              order.novoPedidoAt ?? order.createdAt,
+                              order.status === "finalizado"
+                                ? order.finalizadoAt
+                                  ? new Date(order.finalizadoAt).getTime()
+                                  : NaN
+                                : now
+                            )}
                           </Text>
                         </View>
                         {order.customerName ? (
@@ -263,75 +319,36 @@ export function DesktopBoard({
                             {order.customerName}
                           </Text>
                         ) : null}
-                        {order.sizes ? (
-                          <Text
-                            style={{
-                              fontSize: 13,
-                              fontWeight: "600",
-                              color: "#ffffff",
-                            }}
-                          >
-                            {Object.entries(order.sizes)
-                              .filter(([, count]) => count > 0)
-                              .map(([size, count]) => `${count}${size}`)
-                              .join(" · ")}
-                          </Text>
-                        ) : null}
-                        {order.requestedForOven &&
-                        status.id === "aguardandoForno" ? (
-                          <Text
-                            style={{
-                              color: status.color,
-                              fontSize: 11,
-                              fontWeight: "600",
-                            }}
-                          >
-                            Forno solicitado
-                          </Text>
-                        ) : null}
+
                         <View
                           style={{
                             flexDirection: "row",
                             alignItems: "center",
-                            justifyContent: "flex-end",
+                            justifyContent: "flex-start",
                             flexWrap: "wrap",
                             gap: 6,
-                            marginTop: "auto",
+                            marginTop: 2,
                             paddingTop: 4,
                           }}
                         >
                           {status.id === "aguardandoForno" ? (
                             <IconButton
-                              icon={order.requestedForOven ? "cancel" : "oven"}
+                              appearance="card"
+                              icon={order.requestedForOven ? "undo" : "flame"}
                               label={
                                 order.requestedForOven
-                                  ? `Cancelar solicitação do pedido #${
+                                  ? `Cancelar aviso de forno do pedido #${
                                       order.commandNumber ?? "VL"
                                     }`
                                   : `Avisar para colocar o pedido #${
                                       order.commandNumber ?? "VL"
                                     } no forno`
                               }
-                              caption={
-                                boardWidth < 440
-                                  ? undefined
-                                  : order.requestedForOven
-                                  ? "Cancelar"
-                                  : "Avisar forno"
-                              }
                               active={Boolean(order.requestedForOven)}
                               disabled={busy}
                               onPress={() => onToggleOven(order)}
                             />
                           ) : null}
-                          <IconButton
-                            icon="status"
-                            label={`Alterar status do pedido #${
-                              order.commandNumber ?? "VL"
-                            }`}
-                            disabled={busy}
-                            onPress={() => onChooseStatus(order)}
-                          />
                         </View>
                       </View>
                     ))}

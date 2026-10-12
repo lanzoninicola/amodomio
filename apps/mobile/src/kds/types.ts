@@ -46,6 +46,14 @@ export function getKdsStatusStyle(status: string | null | undefined) {
   );
 }
 
+export type KdsOrderItem = {
+  name: string;
+  quantity: number;
+  size: "F" | "M" | "P" | "I" | "FT" | null;
+  flavors: string[];
+  notes: string[];
+};
+
 export type KdsOrder = {
   id: string;
   dateInt: number;
@@ -59,6 +67,8 @@ export type KdsOrder = {
   takeAway: boolean;
   requestedForOven: boolean;
   customerName: string | null;
+  customerPhone?: string | null;
+  orderItems?: KdsOrderItem[];
   sizes: { F: number; M: number; P: number; I: number; FT: number } | null;
 };
 

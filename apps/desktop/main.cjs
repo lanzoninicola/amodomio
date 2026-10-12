@@ -152,7 +152,9 @@ else {
         } else if (!value) leaveWidget();
         return state();
       });
-      handle("kds:settings", async () => {
+      handle("feature:settings", async (feature) => {
+        if (feature !== "kds")
+          throw new Error("Funcionalidade não reconhecida.");
         if (settingsWindow && !settingsWindow.isDestroyed()) {
           settingsWindow.show();
           settingsWindow.focus();
@@ -161,8 +163,9 @@ else {
         settingsWindow = new BrowserWindow({
           parent: window,
           title: "Configurações do KDS",
+          backgroundColor: "#000000",
           width: 420,
-          height: 510,
+          height: 760,
           minWidth: 360,
           minHeight: 440,
           autoHideMenuBar: true,
@@ -204,6 +207,39 @@ else {
         }
         return state();
       });
+      handle("orders:awaiting-oven", (numbers) => {
+        if (
+          !Array.isArray(numbers) ||
+          !numbers.length ||
+          !numbers.every((n) => n === null || Number.isFinite(n))
+        )
+          return;
+        if (!Notification.isSupported()) return;
+        const label = numbers
+          .filter((n) => n !== null)
+          .slice(0, 30)
+          .map((n) => `#${n}`)
+          .join(", ");
+        const notification = new Notification({
+          title:
+            numbers.length === 1
+              ? `Pedido ${label || "VL"} aguardando forno`
+              : `${numbers.length} pedidos aguardando forno`,
+          body:
+            numbers.length === 1
+              ? "Clique para abrir o KDS."
+              : `${label || "Pedidos sem número"}. Clique para abrir o KDS.`,
+          silent: true,
+        });
+        notification.on("click", () => {
+          if (window.isDestroyed()) return;
+          if (window.isMinimized()) window.restore();
+          window.show();
+          window.focus();
+          window.webContents.send("kds:open");
+        });
+        notification.show();
+      });
       handle("orders:notify", (numbers) => {
         if (
           !Array.isArray(numbers) ||
@@ -217,6 +253,7 @@ else {
             numbers.length === 1
               ? "Novo pedido no KDS"
               : `${numbers.length} novos pedidos`,
+          silent: true,
           body:
             numbers
               .filter((n) => n !== null)
@@ -237,7 +274,7 @@ else {
         height: 820,
         minWidth: 400,
         minHeight: 560,
-        backgroundColor: "#ffffff",
+        backgroundColor: "#000000",
         autoHideMenuBar: true,
         webPreferences: {
           preload: path.join(__dirname, "preload.cjs"),
@@ -245,6 +282,7 @@ else {
           nodeIntegration: false,
           sandbox: true,
           backgroundThrottling: false,
+          autoplayPolicy: "no-user-gesture-required",
         },
       });
       window.setMenu(null);

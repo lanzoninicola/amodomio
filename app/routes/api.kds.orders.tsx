@@ -2,6 +2,7 @@ import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
 import { Prisma } from "@prisma/client";
 import prisma from "~/lib/prisma/client.server";
+import { createImportedOrder } from "~/domain/kds/import-order.server";
 import { restApi } from "~/domain/rest-api/rest-api.entity.server";
 import {
   ensureHeader,
@@ -21,6 +22,8 @@ import {
   ymdToDateInt,
   ymdToUtcNoon,
 } from "~/domain/kds/utils/date";
+
+import { readStoredOrderItems } from "~/domain/kds/order-items";
 
 type SizeCounts = {
   F: number;
@@ -47,6 +50,7 @@ type KdsOrderPayload = {
   isVendaLivre?: boolean;
   customerName?: string;
   customerPhone?: string;
+  orderItems?: unknown;
   status?: string;
 };
 
@@ -219,6 +223,7 @@ function serializeOrder(row: KdsOrderApiRow) {
     status: row.status,
     customerName: row.customerName,
     customerPhone: row.customerPhone,
+    orderItems: readStoredOrderItems(row.orderItems),
     takeAway: row.takeAway,
     requestedForOven: row.requestedForOven,
     sortOrderIndex: row.sortOrderIndex,
@@ -314,6 +319,15 @@ async function handleCreateOrder(request: Request) {
   } catch {
     return json({ error: "invalid_json" }, { status: 400 });
   }
+
+  if (!body || typeof body !== "object" || Array.isArray(body))
+    return json({ error: "invalid_json" }, { status: 400 });
+  if (
+    body.orderItems !== undefined ||
+    (typeof body.channel === "string" &&
+      body.channel.trim().toLowerCase() === "suitable")
+  )
+    return createImportedOrder(body as Record<string, unknown>);
 
   const dateParsed = parseDateOrResponse(body?.date);
   if ("error" in dateParsed) return dateParsed.error;

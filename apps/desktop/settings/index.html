@@ -6,9 +6,18 @@
     <link rel="stylesheet" href="/settings/style.css" />
   </head>
   <body>
-    <h1>Status visíveis</h1>
+    <h1>Configurações do KDS</h1>
+    <h2>Status visíveis</h2>
     <p>Escolha os accordions exibidos no KDS.</p>
     <form id="statuses"></form>
+    <h2>Som dos alertas</h2>
+    <label><input id="sound-enabled" type="checkbox" />Ativar som</label>
+    <div class="volume-control">
+      <label for="sound-volume"
+        >Volume <output id="volume-value"></output
+      ></label>
+      <input id="sound-volume" type="range" min="0" max="100" step="5" />
+    </div>
     <p id="error" role="alert"></p>
     <button id="save">Salvar e fechar</button>
     <script src="/settings/settings.js" defer></script>

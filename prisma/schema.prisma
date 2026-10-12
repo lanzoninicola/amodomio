@@ -1803,8 +1803,8 @@ enum UserRole {
   user
   admin
   superAdmin @map("super-admin")
-  kdsOperator @map("kds-operator")
-  kdsAdmin    @map("kds-admin")
+  kdsOperator @map("kds-cozinha")
+  kdsAdmin    @map("kds-atendimento")
 }
 
 enum UserProvisionSource {
@@ -2371,6 +2371,9 @@ model KdsDailyOrderDetail {
   /// Cliente (opcional)
   customerName  String? @map("customer_name")
   customerPhone String? @map("customer_phone")
+
+  /// Itens importados: pizzas, quantidades, tamanhos, sabores e observações
+  orderItems Json? @map("order_items")
 
   takeAway Boolean @default(false) @map("take_away")
 

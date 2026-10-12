@@ -35,6 +35,13 @@
           "microphonePermission": "Permita que o Amodomio use o microfone para os comandos de voz do KDS.",
           "speechRecognitionPermission": "Permita que o Amodomio reconheça sua fala para atualizar os pedidos do KDS."
         }
+      ],
+      [
+        "expo-audio",
+        {
+          "enableBackgroundPlayback": false,
+          "enableBackgroundRecording": false
+        }
       ]
     ],
     "runtimeVersion": {

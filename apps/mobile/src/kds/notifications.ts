@@ -44,3 +44,6 @@ export async function notifyNewOrders(commandNumbers: Array<number | null>) {
     trigger: null,
   });
 }
+
+// Desktop status alerts use the web audio adapter.
+export async function notifyAwaitingOven(_numbers: Array<number | null>) {}

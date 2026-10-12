@@ -6,6 +6,24 @@ const path = require("node:path");
 test("desktop mantém janela independente, restringe IPC e serve assets com CSP", async () => {
   const handlers = new Map();
   let instance, serve, failure;
+  const notifications = [];
+  const sent = [];
+  class Notification {
+    static isSupported() {
+      return true;
+    }
+    constructor(options) {
+      this.options = options;
+      this.events = {};
+      notifications.push(this);
+    }
+    on(event, callback) {
+      this.events[event] = callback;
+    }
+    show() {
+      this.shown = true;
+    }
+  }
   class BrowserWindow {
     constructor(options) {
       instance = this;
@@ -18,7 +36,9 @@ test("desktop mantém janela independente, restringe IPC e serve assets com CSP"
           this.popup = fn;
         },
         on() {},
-        send() {},
+        send(channel) {
+          sent.push(channel);
+        },
         session: { setPermissionRequestHandler() {} },
       };
     }
@@ -26,8 +46,18 @@ test("desktop mantém janela independente, restringe IPC e serve assets com CSP"
     isDestroyed() {
       return false;
     }
-    show() {}
-    focus() {}
+    show() {
+      this.shown = true;
+    }
+    focus() {
+      this.focused = true;
+    }
+    isMinimized() {
+      return true;
+    }
+    restore() {
+      this.restored = true;
+    }
     setMinimumSize(w, h) {
       this.minimum = [w, h];
     }
@@ -73,7 +103,7 @@ test("desktop mantém janela independente, restringe IPC e serve assets com CSP"
         }),
     },
     safeStorage: { isEncryptionAvailable: () => false },
-    Notification: { isSupported: () => false },
+    Notification,
     screen: {
       getDisplayMatching: () => ({
         workArea: { x: 0, y: 0, width: 1920, height: 1080 },
@@ -145,8 +175,32 @@ test("desktop mantém janela independente, restringe IPC e serve assets com CSP"
     /script-src 'self'/
   );
   assert.equal(await asset.text(), "asset");
+  assert.throws(
+    () => handlers.get("orders:awaiting-oven")({ sender: {} }, [39]),
+    /Origem/
+  );
+  handlers.get("orders:awaiting-oven")(event, ["invalid"]);
+  assert.equal(notifications.length, 0);
+  handlers.get("orders:awaiting-oven")(event, [39]);
+  const notification = notifications.at(-1);
+  assert.equal(notification.options.title, "Pedido #39 aguardando forno");
+  assert.equal(notification.options.silent, true);
+  assert.equal(notification.shown, true);
+  const bounds = instance.bounds;
+  notification.events.click();
+  assert.equal(instance.restored, true);
+  assert.equal(instance.shown, true);
+  assert.equal(instance.focused, true);
+  assert.equal(sent.at(-1), "kds:open");
+  assert.equal(instance.bounds, bounds);
+  handlers.get("orders:awaiting-oven")(event, [39, 40]);
+  assert.equal(
+    notifications.at(-1).options.title,
+    "2 pedidos aguardando forno"
+  );
+  assert.match(notifications.at(-1).options.body, /#39, #40/);
   const mainWindow = instance;
-  await handlers.get("kds:settings")(event);
+  await handlers.get("feature:settings")(event, "kds");
   assert.equal(instance.options.parent, mainWindow);
   assert.equal(instance.options.webPreferences.preload, undefined);
   assert.equal(instance.options.webPreferences.nodeIntegration, false);
@@ -160,6 +214,6 @@ test("desktop mantém janela independente, restringe IPC e serve assets com CSP"
     /Origem/
   );
   const settings = instance;
-  await handlers.get("kds:settings")(event);
+  await handlers.get("feature:settings")(event, "kds");
   assert.equal(instance, settings);
 });

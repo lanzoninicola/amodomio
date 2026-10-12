@@ -87,6 +87,27 @@ export function logout(baseUrl: string, token: string) {
   return request(baseUrl, "/api/kds/mobile-auth", { method: "DELETE" }, token);
 }
 
+export function getWhatsappConfig(baseUrl: string, token: string) {
+  return request<{ enabled: boolean }>(baseUrl, "/api/kds/whatsapp", {}, token);
+}
+
+export function sendOrderWhatsapp(
+  baseUrl: string,
+  token: string,
+  orderId: string,
+  message: string
+) {
+  return request<{ ok: boolean }>(
+    baseUrl,
+    "/api/kds/whatsapp",
+    {
+      method: "POST",
+      body: JSON.stringify({ orderId, message }),
+    },
+    token
+  );
+}
+
 export async function listOrders(baseUrl: string, token: string, date: string) {
   const result = await request<{ orders: KdsOrder[] }>(
     baseUrl,

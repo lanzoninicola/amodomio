@@ -24,6 +24,7 @@ export function IconButton({
   caption?: string;
   icon: string;
   active?: boolean;
+  appearance?: "toolbar" | "card";
   onPress: () => void;
 }) {
   const color = active ? theme.colors.primaryForeground : theme.colors.primary;

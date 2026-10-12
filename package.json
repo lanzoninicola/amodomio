@@ -4,6 +4,9 @@
   "type": "module",
   "scripts": {
     "dev": "remix vite:dev",
+    "preview:android": "bash scripts/preview-app.sh android",
+    "preview:android:native": "bash scripts/preview-app.sh android-native",
+    "preview:windows": "bash scripts/preview-app.sh desktop",
     "build:android:local": "bash apps/mobile/scripts/build-android-local.sh",
     "build:windows": "bash apps/desktop/scripts/build-windows.sh",
     "build": "bash -c 'export NVM_DIR=\"$HOME/.nvm\" && [ -s \"$NVM_DIR/nvm.sh\" ] && . \"$NVM_DIR/nvm.sh\" && nvm use && prisma generate && remix vite:build'",
@@ -13,7 +16,10 @@
     "migrate:deploy": "npx prisma migrate deploy",
     "graphify:refresh": "/home/lanzo/.local/share/pipx/venvs/graphifyy/bin/python scripts/rebuild-graphify-wiki.py",
     "postinstall": "prisma generate",
-    "test": "vitest"
+    "test": "vitest",
+    "test:suitable-extension": "node --test apps/suitable-extension/*.test.cjs",
+    "build:suitable-extension": "node apps/suitable-extension/build.mjs",
+    "test:suitable-import-db": "node scripts/verify-suitable-import-db.cjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <title>Suitable → Amodomio</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <header>
+      <button type="button" id="back" class="back" hidden>← Voltar</button>
+      <h1 id="title">Integração Suitable</h1>
+    </header>
+    <form id="config">
+      <nav aria-label="Configurações">
+        <button type="button" id="global-tab" aria-controls="global-panel">
+          <span>Configurações globais</span><span aria-hidden="true">›</span>
+        </button>
+        <button type="button" id="kds-tab" aria-controls="kds-panel">
+          <span>KDS</span><span aria-hidden="true">›</span>
+        </button>
+      </nav>
+      <section id="global-panel" aria-labelledby="title" hidden>
+        <h2>Conexão com o Amodomio</h2>
+        <label
+          >URL do servidor Amodomio<input
+            id="server"
+            type="url"
+            placeholder="https://seu-servidor.com"
+            required
+        /></label>
+        <label
+          >Chave da API<input
+            id="key"
+            type="password"
+            required
+            autocomplete="off"
+        /></label>
+        <div class="connection">
+          <h2>Site do Suitable</h2>
+          <p id="site">Nenhum site vinculado.</p>
+          <button type="button" id="activate" class="secondary">
+            Ativar na aba atual
+          </button>
+          <p>
+            Abra o Suitable e clique para vincular o site e permitir acesso.
+            Você pode salvar sem abrir o Suitable.
+          </p>
+        </div>
+      </section>
+      <section id="kds-panel" aria-labelledby="title" hidden>
+        <h2>Pedidos → KDS</h2>
+        <label class="toggle"
+          ><input id="kds-enabled" type="checkbox" checked /><span
+            >Habilitar integração com o KDS</span
+          ></label
+        >
+        <p>
+          Adiciona o botão nos detalhes dos pedidos para revisar cliente,
+          telefone, pizzas, sabores e entrega.
+        </p>
+        <div class="info">
+          Antes do envio, consulta a comanda e o estoque de massas no Amodomio.
+        </div>
+        <p>As demais configurações de conexão ficam em Globais.</p>
+      </section>
+      <footer hidden>
+        <button id="save" type="submit">Salvar configurações</button>
+        <p id="status" role="status" aria-live="polite"></p>
+      </footer>
+    </form>
+    <script src="popup.js"></script>
+  </body>
+</html>

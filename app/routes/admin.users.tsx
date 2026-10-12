@@ -69,13 +69,13 @@ const ROLE_OPTIONS: Array<{
   },
   {
     value: "kdsOperator",
-    label: "kds-operator",
+    label: "kds-cozinha",
     description: "Operações do dia a dia e alteração de status dos pedidos no KDS.",
   },
   {
     value: "kdsAdmin",
-    label: "kds-admin",
-    description: "Inclui kds-operator. Papel destinado à exclusão de pedidos e à sinalização de entrada no forno.",
+    label: "kds-atendimento",
+    description: "Inclui kds-cozinha. Papel destinado à exclusão de pedidos e à sinalização de entrada no forno.",
   },
 ];
 
@@ -125,8 +125,8 @@ function boolString(value: FormDataEntryValue | null) {
 
 function toLabel(role: UserRole) {
   if (role === "superAdmin") return "super-admin";
-  if (role === "kdsOperator") return "kds-operator";
-  if (role === "kdsAdmin") return "kds-admin";
+  if (role === "kdsOperator") return "kds-cozinha";
+  if (role === "kdsAdmin") return "kds-atendimento";
   return role;
 }
 
