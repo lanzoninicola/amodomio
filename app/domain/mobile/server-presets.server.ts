@@ -2,7 +2,7 @@ import prismaClient from "~/lib/prisma/client.server";
 import {
   DEFAULT_SERVER_PRESETS,
   parseServerPresets,
-} from "../../../apps/mobile/src/config/server-presets";
+} from "../../../shared/mobile/server-presets";
 
 export const MOBILE_SETTINGS_CONTEXT = "mobile";
 export const SERVER_PRESETS_SETTING_NAME = "login.servers";

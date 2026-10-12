@@ -82,7 +82,7 @@ import {
   MOBILE_SETTINGS_CONTEXT,
   SERVER_PRESETS_SETTING_NAME,
 } from "~/domain/mobile/server-presets.server";
-import { parseServerPresets } from "../../apps/mobile/src/config/server-presets";
+import { parseServerPresets } from "../../shared/mobile/server-presets";
 import {
   CARDAPIO_FILTER_VIEW_SETTING_NAME,
   DEFAULT_CARDAPIO_FILTER_VIEW_MODE,

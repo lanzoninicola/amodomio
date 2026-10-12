@@ -7,7 +7,7 @@ import {
   ensureServerPresetsSetting,
   readServerPresets,
 } from "./server-presets.server";
-import { DEFAULT_SERVER_PRESETS } from "../../../apps/mobile/src/config/server-presets";
+import { DEFAULT_SERVER_PRESETS } from "../../../shared/mobile/server-presets";
 import { loader } from "../../routes/api.mobile.servers";
 
 beforeEach(() => vi.resetAllMocks());
