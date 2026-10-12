@@ -1,0 +1,232 @@
+const { test } = require("node:test");
+const assert = require("node:assert/strict");
+const { readFileSync, mkdtempSync, writeFileSync, rmSync } = require("node:fs");
+const { tmpdir } = require("node:os");
+const { join } = require("node:path");
+const { spawnSync } = require("node:child_process");
+
+for (const [width, delivery, blocked] of [
+  [820, false],
+  [360, false],
+  [820, true],
+  [360, true],
+  [820, false, "exists"],
+  [360, true, "shortage"],
+]) {
+  test(`Chrome DOM ${delivery ? "delivery" : "pickup"} at ${width}px ${
+    blocked || ""
+  }: React review, isolated CSS, sizes, fixed footer and send`, () => {
+    const directory = mkdtempSync(join(tmpdir(), "suitable-modal-test-"));
+    try {
+      const fixture = readFileSync(
+        join(
+          __dirname,
+          delivery
+            ? "fixtures/suitable-delivery-modal.html"
+            : "fixtures/suitable-order-modal.html"
+        ),
+        "utf8"
+      );
+      const parser = readFileSync(join(__dirname, "parser.js"), "utf8");
+      const content = readFileSync(join(__dirname, "content.js"), "utf8");
+      const html = `<!doctype html><html><head><style>
+      html {font-size:40px} body {font:70px serif;color:magenta;line-height:7}
+      button,input,textarea {font-size:75px!important;background:magenta!important;width:10px!important;border:25px solid red!important}
+      [role=dialog] {width:${width}px;font-family:serif;color:magenta}
+    </style></head><body><div id="kanban"><h6>#1</h6><span title="Nicola Lanzoni"><h6>Nicola Lanzoni</h6></span></div>${fixture}<script>
+      window.jsErrors=[];window.addEventListener("error",event=>window.jsErrors.push(event.message));const originalAttach = Element.prototype.attachShadow;
+      Element.prototype.attachShadow = function(options) { return originalAttach.call(this, {...options, mode: 'open'}); };
+      window.chrome = { runtime: { async sendMessage(message) { if(message.type==='suitable:check') return {ok:true,check:{exists:${
+        blocked === "exists"
+      },status:${
+        blocked === "exists" ? "'finalizado'" : "null"
+      },available:{F:20,M:20,P:20,I:${
+        blocked === "shortage" ? 0 : 20
+      },FT:20},shortages:${
+        blocked === "shortage" ? "['I']" : "[]"
+      },dayStatus:'OPENED',canSend:${!blocked}}}; if(message.type==='suitable:zones') return {ok:true,zones:[{id:'morro-id',name:'Morro da Cruz',city:'Pato Branco'}]}; window.sent = message; return {ok:true, id:'imported', status:'novoPedido'}; } } };
+      ${parser}
+      ${content}
+      (async () => {
+        try {
+          const dialog = document.querySelector('[role=dialog]');
+          const extracted = SuitableKds.extractModal(dialog);
+          const cardButtons = document.querySelector('#kanban').querySelectorAll('[data-amodomio-kds]').length;
+          const buttonCount = dialog.querySelectorAll('[data-amodomio-kds]').length;
+          dialog.querySelector('[data-amodomio-kds]').shadowRoot.querySelector('button').click();
+          const review = dialog.querySelector('[data-amodomio-review]').shadowRoot;
+          const form = review.querySelector('form');
+          const refresh=review.querySelector('[aria-label="Atualizar comanda e estoque"]');
+          const detail=review.querySelector('[aria-controls=order-details]');
+          if(!refresh || refresh.textContent.trim() || detail.textContent.trim()) throw new Error('Refresh and details must be icon only');
+          if(refresh.nextElementSibling!==detail) throw new Error('Refresh must precede details');
+          if(!getComputedStyle(review.querySelector('.order-total')).fontFamily.includes('monospace')) throw new Error('Order total must use mono');
+          if(getComputedStyle(review.querySelector('.customer-name')).fontSize !== getComputedStyle(review.querySelector('.customer-phone')).fontSize) throw new Error('Customer styles should match');
+          if(!review.querySelector('.scroll').hidden) throw new Error('Details should start collapsed');
+          if(!review.querySelector('header [name=customerName]') || !review.querySelector('header [name=customerPhone]')) throw new Error('Customer must be in header');
+          if(review.querySelector('header').textContent.includes('Revisão') || review.querySelector('header').textContent.includes('Suitable → KDS')) throw new Error('Removed header labels returned');
+          const customer=review.querySelector('[name=customerName]');
+          if(!customer.readOnly) throw new Error('Customer should look like text initially');
+          customer.focus();
+          await new Promise(resolve=>setTimeout(resolve,20));
+          if(customer.readOnly) throw new Error('Click/focus must enable customer editing');
+          customer.blur();
+          await new Promise(resolve=>setTimeout(resolve,20));
+          if(!customer.readOnly) throw new Error('Blur must finish customer editing');
+          await document.fonts.ready;
+          if(!document.fonts.check('14px SuitableInter') || ![...document.fonts].some(face=>face.family==='SuitableInter' && face.status==='loaded')) throw new Error('Local Inter font did not load');
+          review.querySelector('[aria-controls=order-details]').click();
+          await new Promise(resolve=>setTimeout(resolve,20));
+            if (${Boolean(blocked)}) {
+              await new Promise(resolve=>setTimeout(resolve,450));
+              form.requestSubmit();
+              await new Promise(resolve=>setTimeout(resolve,20));
+              document.body.dataset.result=JSON.stringify({blocked:true,errorColor:getComputedStyle(review.querySelector('header [role=alert]')).color,disabled:review.querySelector('button[type=submit]').disabled,sent:!!window.sent,text:review.querySelector('header').textContent});
+              return;
+            }
+            let isolatedPortal = null;
+            if (${delivery}) {
+              for(let attempt=0;attempt<30 && !review.querySelector('[role=combobox]').textContent.includes('Morro da Cruz');attempt++) await new Promise(resolve=>setTimeout(resolve,10));
+              const trigger=review.querySelector('[role=combobox]');
+              trigger.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowDown',bubbles:true}));
+              await new Promise(resolve=>setTimeout(resolve,30));
+              isolatedPortal = !!review.querySelector('[role=listbox]') && !document.querySelector('[role=listbox]');
+              trigger.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));
+              await new Promise(resolve=>setTimeout(resolve,20));
+            }
+            const noProductField = !review.querySelector('.name');
+          const scroll = review.querySelector('.scroll');
+          const footer = review.querySelector('.footer');
+          const footerBefore = footer.getBoundingClientRect().top;
+          scroll.scrollTop = scroll.scrollHeight;
+          const layout = {
+            inputFont: getComputedStyle(form.querySelector('input')).fontSize,
+            inputBackground: getComputedStyle(form.querySelector('input')).backgroundColor,
+            panelWidth: form.getBoundingClientRect().width,
+            overflow: form.scrollWidth > form.clientWidth + 1,
+            footerFixed: Math.abs(footer.getBoundingClientRect().top - footerBefore) < 1,
+            footerVisible: footer.getBoundingClientRect().bottom <= form.getBoundingClientRect().bottom + 1, footerRect: footer.getBoundingClientRect().toJSON(), formRect: form.getBoundingClientRect().toJSON(),
+            footerButtonVisible: form.querySelector('[type=submit]').getBoundingClientRect().right <= form.getBoundingClientRect().right,
+            collapsedNotes: !review.querySelector('details').open,
+            total: form.querySelector('[name=orderAmount]').value,
+          };
+          const invalid = [...form.elements].filter(element=>element.validity && !element.validity.valid).map(element=>({name:element.name,validation:element.validationMessage,value:element.value}));
+          for(let attempt=0;attempt<60 && review.querySelector('button[type=submit]').disabled;attempt++) await new Promise(resolve=>setTimeout(resolve,10));
+          form.requestSubmit();
+          for (let attempt = 0; attempt < 30 && !review.querySelector('[type=submit]')?.hidden && review.querySelector('[type=submit]'); attempt++) {
+            if (review.querySelector('.message').textContent.includes('Pedido enviado')) break;
+            await new Promise(resolve => setTimeout(resolve, 10));
+          }
+          const success = review.querySelector('.message').textContent;
+          // Read again after the extension inserts its own form: capture must stay unchanged.
+          const reread = SuitableKds.extractModal(dialog);
+          // A recycled/updated order must be read on the next click.
+          dialog.querySelector('h6').textContent = 'Detalhes do pedido ordem 2';
+          dialog.querySelector('[data-amodomio-kds]').shadowRoot.querySelector('button').click();
+          const changedReview = dialog.querySelector('[data-amodomio-review]').shadowRoot;
+          const changedNumber = changedReview.querySelector('[name=commandNumber]').value;
+          changedReview.querySelector('[aria-label="Tamanho do item 1"] button').click();
+          await new Promise(resolve => setTimeout(resolve, 20));
+          const changedSize = changedReview.querySelector('[aria-label="Tamanho do item 1"] [aria-pressed=true]').textContent;
+          const summary = changedReview.querySelector('[aria-label="Resumo de tamanhos"]').textContent;
+          document.body.dataset.result = JSON.stringify({extracted,cardButtons,buttonCount,sent:window.sent,success,reread,changedNumber,layout,changedSize,summary,isolatedPortal,noProductField,invalid});
+        } catch (error) { document.body.dataset.result = JSON.stringify({error:error.stack, jsErrors:window.jsErrors, extracted:SuitableKds.extractModal(document.querySelector('[role=dialog]')),buttonCount:document.querySelectorAll('[data-amodomio-kds]').length}); }
+      })();
+    </script></body></html>`;
+      const file = join(directory, "test.html");
+      writeFileSync(file, html);
+
+      const chrome = spawnSync(
+        process.env.CHROME_BIN || "/usr/bin/google-chrome",
+        [
+          "--headless",
+          "--no-sandbox",
+          "--disable-gpu",
+          "--disable-dev-shm-usage",
+          "--no-first-run",
+          `--user-data-dir=${join(directory, "profile")}`,
+          "--virtual-time-budget=1000",
+          "--dump-dom",
+          `file://${file}`,
+        ],
+        { encoding: "utf8", timeout: 30000, maxBuffer: 5 * 1024 * 1024 }
+      );
+      assert.equal(chrome.status, 0, chrome.stderr);
+      const resultMatch = chrome.stdout.match(/data-result="([^"]*)"/);
+      assert.ok(resultMatch, "Browser result missing");
+      const result = JSON.parse(
+        resultMatch[1]
+          .replace(/&quot;/g, '"')
+          .replace(/&amp;/g, "&")
+          .replace(/&lt;/g, "<")
+          .replace(/&gt;/g, ">")
+      );
+      assert.equal(result.error, undefined, JSON.stringify(result));
+      if (blocked) {
+        assert.equal(result.disabled, true);
+        assert.equal(result.errorColor, "rgb(185, 28, 28)");
+        assert.equal(result.sent, false);
+        assert.match(
+          result.text,
+          blocked === "exists" ? /já existe no servidor/ : /Massa insuficiente/
+        );
+        return;
+      }
+      assert.equal(result.layout.inputFont, "14px");
+      assert.notEqual(result.layout.inputBackground, "rgb(255, 0, 255)");
+      assert.equal(result.layout.overflow, false);
+      assert.equal(result.layout.footerFixed, true);
+      assert.equal(
+        result.layout.footerVisible,
+        true,
+        JSON.stringify(result.layout)
+      );
+      assert.equal(result.layout.footerButtonVisible, true);
+      assert.equal(result.layout.collapsedNotes, true);
+      assert.equal(result.layout.total, delivery ? "479,60" : "359,70");
+      assert.equal(result.noProductField, true);
+      if (delivery) assert.equal(result.isolatedPortal, true);
+      assert.equal(result.changedSize, "F");
+      assert.match(result.summary, /F2/);
+      assert.equal(result.cardButtons, 0);
+      assert.equal(result.buttonCount, 1);
+      assert.equal(result.extracted.commandNumber, 1);
+      assert.equal(result.extracted.date, "2026-10-11");
+      assert.equal(result.extracted.customerName, "Nicola Lanzoni");
+      assert.equal(result.extracted.customerPhone, "46991052049");
+      assert.equal(result.extracted.orderAmount, delivery ? 479.6 : 359.7);
+      assert.equal(result.extracted.takeAway, !delivery);
+      assert.equal(result.extracted.deliveryFee, delivery ? 10 : 0);
+      assert.equal(
+        result.extracted.deliveryNeighborhood,
+        delivery ? "Morro da Cruz" : ""
+      );
+      assert.deepEqual(
+        result.extracted.orderItems.map((item) => [item.quantity, item.size]),
+        [
+          [1, "I"],
+          [delivery ? 2 : 1, "M"],
+          [1, "F"],
+        ]
+      );
+      assert.deepEqual(result.extracted.orderItems[2].flavors, [
+        "1x Boscaiola",
+        "1x Calabresa",
+        "1x Calabresa Acebolada",
+      ]);
+      assert.equal(result.extracted.orderItems[0].flavors[0], "1x A more mio");
+      assert.ok(result.sent, JSON.stringify(result));
+      assert.deepEqual(
+        result.sent.order,
+        delivery
+          ? { ...result.extracted, deliveryZoneId: "morro-id" }
+          : result.extracted
+      );
+      assert.deepEqual(result.reread, result.extracted);
+      assert.match(result.success, /Pedido enviado à cozinha/);
+      assert.equal(result.changedNumber, "2");
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+}

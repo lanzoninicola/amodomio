@@ -1,3 +1,4 @@
+import { ensureKdsWhatsappSetting } from "~/domain/kds/whatsapp-settings.server";
 import type {
   ActionFunctionArgs,
   LoaderFunctionArgs,
@@ -482,6 +483,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   await ensureAdminNavigationMenuLayoutSetting();
   await ensureBioSettings();
   await ensureServerPresetsSetting();
+  await ensureKdsWhatsappSetting();
 
   const settings = await prismaClient.setting.findMany({
     where,

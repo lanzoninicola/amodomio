@@ -2009,6 +2009,7 @@ function RowItem({
             channel={(o.channel ?? "").trim()}
             customerName={customerName}
             customerPhone={customerPhone}
+            orderItems={o.orderItems}
             onCustomerNameChange={setCustomerName}
             onCustomerPhoneChange={setCustomerPhone}
           />

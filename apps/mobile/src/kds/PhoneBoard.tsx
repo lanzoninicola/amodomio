@@ -1,4 +1,5 @@
 import { elapsedSince } from "./order-time";
+import { OrderContact } from "./OrderContact";
 import { Text } from "../ui/Text";
 import {
   FlatList,
@@ -179,6 +180,7 @@ export function PhoneBoard({
   onRefresh,
   onMove,
   onChooseStatus,
+  onContact,
   filter,
   onFilterChange,
   hideFilters = false,
@@ -190,6 +192,7 @@ export function PhoneBoard({
   onRefresh: () => void;
   onMove: (order: KdsOrder, status: KdsStatus) => void;
   onChooseStatus: (order: KdsOrder) => void;
+  onContact: (order: KdsOrder) => void;
   filter: string | null;
   onFilterChange: (value: string | null) => void;
   hideFilters?: boolean;
@@ -263,8 +266,23 @@ export function PhoneBoard({
                     #{order.commandNumber ?? "VL"}
                   </Text>
                 </Pressable>
-                <Text style={styles.statusLabel}>{statusStyle.label}</Text>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`Alterar status do pedido ${
+                    order.commandNumber ?? "VL"
+                  }: ${statusStyle.label}`}
+                  disabled={busy}
+                  onPress={() => onChooseStatus(order)}
+                  style={{
+                    minHeight: 44,
+                    justifyContent: "center",
+                    flexShrink: 1,
+                  }}
+                >
+                  <Text style={styles.statusLabel}>{statusStyle.label}</Text>
+                </Pressable>
               </View>
+              <OrderContact order={order} onContact={onContact} busy={busy} />
               <View style={styles.orderTime}>
                 <Text style={styles.timeLabel}>Horário pedido</Text>
                 <Text style={styles.time}>
@@ -431,7 +449,7 @@ const styles = StyleSheet.create({
   statusButton: {
     flex: 1,
     minWidth: 0,
-    minHeight: 64,
+    height: 96,
     gap: 4,
     paddingHorizontal: 8,
     paddingVertical: 12,

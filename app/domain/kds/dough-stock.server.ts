@@ -1,4 +1,5 @@
 import prisma from "~/lib/prisma/client.server";
+import type { Prisma } from "@prisma/client";
 import { logCrmWhatsappSentEventByPhone } from "~/domain/crm/crm-whatsapp-events.server";
 import { normalizePhone } from "~/domain/z-api/zapi.service";
 import { sendTextMessage } from "~/domain/z-api/zapi.service.server";
@@ -87,8 +88,8 @@ export function normalizeCounts(counts: Partial<SizeCounts> | null | undefined):
   };
 }
 
-export async function getDoughStock(dateInt: number): Promise<DoughStockSnapshot | null> {
-  const row = await prisma.doughDailyStock.findUnique({
+export async function getDoughStock(dateInt: number, client: Pick<Prisma.TransactionClient, "doughDailyStock"> = prisma): Promise<DoughStockSnapshot | null> {
+  const row = await client.doughDailyStock.findUnique({
     where: { dateInt },
     select: { size: true },
   });

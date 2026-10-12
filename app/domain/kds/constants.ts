@@ -3,6 +3,7 @@ export const CHANNELS = [
   "CARDAPIO",
   "AIQFOME",
   "IFOOD",
+  "Suitable",
 ] as const;
 export const STATUS_COLORS: Record<string, string> = {
   pendente: "bg-slate-200 text-slate-800",

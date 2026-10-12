@@ -62,7 +62,13 @@ function OvenColumn({
 }) {
   return (
     <View
-      style={{ flex: 1, minWidth: 0, backgroundColor, padding: 12, gap: 10 }}
+      style={{
+        flex: 1,
+        minWidth: 0,
+        backgroundColor: "#141414",
+        padding: 12,
+        gap: 10,
+      }}
     >
       <View
         style={{
@@ -74,7 +80,7 @@ function OvenColumn({
       >
         <Text
           style={{
-            color: "#080808",
+            color: "#ffffff",
             fontSize: 18,
             fontFamily: "IBMPlexMono_Bold",
           }}
@@ -83,7 +89,7 @@ function OvenColumn({
         </Text>
         <Text
           style={{
-            color: theme.colors.foreground,
+            color: "#ffffff",
             paddingHorizontal: 9,
             paddingVertical: 3,
             fontSize: 16,
@@ -103,7 +109,7 @@ function OvenColumn({
           const number = (
             <Text
               style={{
-                color: "#fff",
+                color: "#080808",
                 fontSize: 26,
                 fontFamily: "IBMPlexMono_Bold",
               }}
@@ -112,7 +118,7 @@ function OvenColumn({
             </Text>
           );
           const cardStyle = {
-            backgroundColor: "#282828",
+            backgroundColor,
             borderRadius: theme.radius.md,
             minHeight: 58,
             minWidth: 92,

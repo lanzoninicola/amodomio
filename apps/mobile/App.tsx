@@ -1,3 +1,4 @@
+import { OrderContact } from "./src/kds/OrderContact";
 import { OvenRequestsBar } from "./src/kds/OvenRequestsBar";
 import { VoiceCommandButton } from "./src/kds/VoiceCommandButton";
 import { OrderTiming } from "./src/kds/OrderTiming";
@@ -39,6 +40,8 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import {
   ApiError,
   getMe,
+  getWhatsappConfig,
+  sendOrderWhatsapp,
   getServerPresets,
   listOrders,
   login,
@@ -271,12 +274,14 @@ function OrderCard({
   busy,
   onChooseStatus,
   onToggleOven,
+  onContact,
 }: {
   order: KdsOrder;
   now: number;
   busy: boolean;
   onChooseStatus: () => void;
   onToggleOven: () => void;
+  onContact: (order: KdsOrder) => void;
 }) {
   const sizes = order.sizes
     ? Object.entries(order.sizes)
@@ -298,6 +303,7 @@ function OrderCard({
         <Text style={styles.command}>#{order.commandNumber ?? "VL"}</Text>
         <Text style={styles.elapsed}>{elapsed(order.createdAt, now)}</Text>
       </View>
+      <OrderContact order={order} onContact={onContact} busy={busy} />
       <Text style={styles.orderMeta}>
         {order.takeAway ? "Retirada" : "Entrega"}
         {order.channel ? ` · ${order.channel}` : ""}
@@ -436,6 +442,58 @@ function KanbanScreen({
   const compactHeader = !desktop && reduced && width > height && width >= 800;
   const [date, setDate] = useState(localDate());
   const [calendarOpen, setCalendarOpen] = useState(false);
+  const [contactOrder, setContactOrder] = useState<KdsOrder | null>(null);
+  const [contactMessage, setContactMessage] = useState("");
+  const [contactEnabled, setContactEnabled] = useState(false);
+  const [contactBusy, setContactBusy] = useState(false);
+  const [contactError, setContactError] = useState("");
+  const openContact = async (order: KdsOrder) => {
+    setContactOrder(order);
+    setContactMessage("");
+    setContactError("");
+    setContactEnabled(false);
+    setContactBusy(true);
+    try {
+      const config = await getWhatsappConfig(apiUrl, token);
+      setContactEnabled(config.enabled);
+      if (!config.enabled)
+        setContactError(
+          "Ative cozinha-whatsapp-enabled em /admin/administracao/settings para enviar mensagens."
+        );
+    } catch (error) {
+      setContactError(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível consultar a configuração."
+      );
+    } finally {
+      setContactBusy(false);
+    }
+  };
+  const sendContact = async () => {
+    if (
+      !contactOrder ||
+      contactBusy ||
+      !contactEnabled ||
+      !contactMessage.trim()
+    )
+      return;
+    setContactBusy(true);
+    setContactError("");
+    try {
+      await sendOrderWhatsapp(apiUrl, token, contactOrder.id, contactMessage);
+      setContactOrder(null);
+      Alert.alert("WhatsApp", "Mensagem enviada com sucesso.");
+    } catch (error) {
+      setContactError(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível enviar. Confira o resultado antes de tentar novamente."
+      );
+    } finally {
+      setContactBusy(false);
+    }
+  };
   const currentDate = useRef(date);
   currentDate.current = date;
   const [loadedOrders, setOrders] = useState<KdsOrder[]>([]);
@@ -809,6 +867,7 @@ function KanbanScreen({
           refreshing={refreshing}
           onRefresh={() => load(true)}
           onMove={move}
+          onContact={openContact}
           onChooseStatus={setSelected}
         />
       ) : (
@@ -843,6 +902,7 @@ function KanbanScreen({
                     now={now}
                     busy={mutatingId === order.id}
                     onChooseStatus={() => setSelected(order)}
+                    onContact={openContact}
                     onToggleOven={() => toggleOven(order)}
                   />
                 ))}
@@ -874,6 +934,61 @@ function KanbanScreen({
           onClose={() => setCalendarOpen(false)}
         />
       ) : null}
+      <Modal
+        visible={Boolean(contactOrder)}
+        transparent
+        animationType="fade"
+        onRequestClose={() => !contactBusy && setContactOrder(null)}
+        supportedOrientations={[
+          "portrait",
+          "landscape-left",
+          "landscape-right",
+        ]}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={[styles.modalCard, { maxHeight: "90%" }]}>
+            <ScrollView
+              keyboardShouldPersistTaps="handled"
+              contentContainerStyle={{ gap: 14, padding: 20 }}
+            >
+              <Text style={styles.modalTitle}>
+                WhatsApp · Pedido #{contactOrder?.commandNumber ?? "VL"}
+              </Text>
+              <Text style={styles.detailValue}>
+                {contactOrder?.customerName || "Cliente"} ·{" "}
+                {contactOrder?.customerPhone}
+              </Text>
+              <Input
+                label="Mensagem"
+                multiline
+                maxLength={4096}
+                value={contactMessage}
+                onChangeText={setContactMessage}
+                editable={contactEnabled && !contactBusy}
+                placeholder="Digite a mensagem para o cliente"
+                style={{ minHeight: 100 }}
+              />
+              {contactError ? (
+                <Text style={styles.error}>{contactError}</Text>
+              ) : null}
+              <Button
+                onPress={sendContact}
+                loading={contactBusy}
+                disabled={!contactEnabled || !contactMessage.trim()}
+              >
+                Enviar WhatsApp
+              </Button>
+              <Button
+                variant="outline"
+                disabled={contactBusy}
+                onPress={() => setContactOrder(null)}
+              >
+                Fechar
+              </Button>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
       <Modal
         supportedOrientations={[
           "portrait",
@@ -948,6 +1063,8 @@ function KanbanScreen({
                         "Modalidade",
                         selected.takeAway ? "Retirada" : "Entrega",
                       ],
+                      ["Cliente", selected.customerName || "Não informado"],
+                      ["Telefone", selected.customerPhone || "Não informado"],
                       ["Canal", selected.channel || "Não informado"],
                       [
                         "Forno solicitado",
@@ -969,6 +1086,31 @@ function KanbanScreen({
                       </View>
                     ))}
                   </View>
+                  {selected.orderItems?.length ? (
+                    <View style={styles.detailItems}>
+                      <Text style={styles.detailSectionTitle}>
+                        Pizzas e itens importados
+                      </Text>
+                      {selected.orderItems.map((item, index) => (
+                        <View key={index} style={styles.detailItem}>
+                          <Text style={styles.detailValue}>
+                            {item.quantity}× {item.name}
+                            {item.size ? ` · ${item.size}` : ""}
+                          </Text>
+                          {item.flavors.length ? (
+                            <Text style={styles.detailLabel}>
+                              Sabores: {item.flavors.join(" · ")}
+                            </Text>
+                          ) : null}
+                          {item.notes.length ? (
+                            <Text style={styles.detailLabel}>
+                              {item.notes.join(" · ")}
+                            </Text>
+                          ) : null}
+                        </View>
+                      ))}
+                    </View>
+                  ) : null}
                   <OrderTiming
                     order={selected}
                     now={now}
@@ -1568,6 +1710,15 @@ const styles = StyleSheet.create({
     padding: 12,
     rowGap: 16,
   },
+  detailItems: {
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    borderRadius: 12,
+    padding: 12,
+    gap: 16,
+    marginTop: 16,
+  },
+  detailItem: { width: "100%", gap: 6 },
   detailCell: {
     width: "33.333%",
     paddingRight: 8,

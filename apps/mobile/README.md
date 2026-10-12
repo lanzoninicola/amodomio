@@ -139,3 +139,25 @@ updates em um build compatível.
 Deploy da Vercel atualiza o site/backend. Alterações em `apps/mobile` precisam
 de EAS Update ou novo build conforme o tipo da mudança. Nenhum comando de
 publicação é executado automaticamente pelo deploy da Vercel.
+
+## WhatsApp da cozinha
+
+Em `/admin/administracao/settings`, contexto `kds`, ative o booleano
+`cozinha-whatsapp-enabled` (padrão: `false`). O registro é criado ao abrir
+a lista de settings ou consultar a configuração no app. O servidor usa as
+credenciais de WhatsApp já configuradas; nenhuma chave REST ou Z-API é
+armazenada no dispositivo.
+
+Nos cards de Reduzida e Kanban, o smartphone fica verde quando há telefone
+e opaco quando não há. Toque nele, escreva a mensagem e toque em **Enviar
+WhatsApp**. O envio é manual e não ocorre ao mudar o status do pedido.
+A sessão precisa ter o perfil cozinha, atendimento ou administrador.
+
+- `GET /api/kds/whatsapp`: configuração disponível para a sessão.
+- `POST /api/kds/whatsapp`: `{ orderId, message }`; o servidor consulta o telefone
+  do pedido, valida a configuração e registra o envio pelo serviço existente.
+
+Os perfis exibidos em `/admin/users` são `kds-cozinha` e `kds-atendimento`.
+A migração `20261012010000_rename_kds_roles` renomeia os valores do enum no
+banco e preserva os vínculos existentes. Aplique as migrações no ambiente
+de destino junto da atualização do servidor.

@@ -16,7 +16,10 @@
     "migrate:deploy": "npx prisma migrate deploy",
     "graphify:refresh": "/home/lanzo/.local/share/pipx/venvs/graphifyy/bin/python scripts/rebuild-graphify-wiki.py",
     "postinstall": "prisma generate",
-    "test": "vitest"
+    "test": "vitest",
+    "test:suitable-extension": "node --test apps/suitable-extension/*.test.cjs",
+    "build:suitable-extension": "node apps/suitable-extension/build.mjs",
+    "test:suitable-import-db": "node scripts/verify-suitable-import-db.cjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
