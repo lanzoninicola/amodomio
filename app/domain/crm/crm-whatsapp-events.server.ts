@@ -1,5 +1,6 @@
 import prisma from "~/lib/prisma/client.server";
 import { normalize_phone_e164_br } from "~/domain/crm/normalize-phone.server";
+import { attachTrackedCrmEvent } from "~/domain/z-api/message-tracking.server";
 
 type LogWhatsappSentEventInput = {
   phone: string;
@@ -9,7 +10,15 @@ type LogWhatsappSentEventInput = {
   payload?: Record<string, unknown>;
 };
 
-export async function logCrmWhatsappSentEventByPhone(input: LogWhatsappSentEventInput) {
+export async function logCrmWhatsappSentEventByPhone(
+  input: LogWhatsappSentEventInput
+) {
+  const response = input.payload?.wppResponse as
+    | Record<string, unknown>
+    | undefined;
+  if (typeof response?.trackingId === "string") {
+    return attachTrackedCrmEvent(response.trackingId, input);
+  }
   const phoneE164 = normalize_phone_e164_br(input.phone);
   if (!phoneE164) return { ok: false as const, reason: "invalid_phone" };
 

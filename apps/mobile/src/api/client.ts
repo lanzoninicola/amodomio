@@ -42,7 +42,16 @@ async function request<T>(
           ...init.headers,
         },
       });
-  } catch {
+  } catch (error) {
+    if (
+      desktop &&
+      error instanceof Error &&
+      error.message.includes("Operação não permitida")
+    ) {
+      throw new Error(
+        "Esta versão do aplicativo bloqueia esta operação. Atualize o aplicativo Windows para usar o WhatsApp."
+      );
+    }
     throw new Error(
       `Não foi possível conectar a ${normalizeBaseUrl(
         baseUrl

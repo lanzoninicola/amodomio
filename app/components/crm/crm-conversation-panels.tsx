@@ -1,3 +1,4 @@
+import { MESSAGE_STATUS_LABELS } from "~/domain/z-api/message-status";
 import { useState } from "react";
 import { Form, Link } from "@remix-run/react";
 import { Badge } from "@/components/ui/badge";
@@ -143,10 +144,20 @@ function MessageBubble({ message }: { message: CrmConversationMessage }) {
             </span>
             <span>{new Date(message.created_at).toLocaleString("pt-BR")}</span>
             {message.source ? <span>• {message.source}</span> : null}
+            {message.deliveryStatus ? (
+              <span className="font-semibold">
+                • {MESSAGE_STATUS_LABELS[message.deliveryStatus]}
+              </span>
+            ) : null}
           </div>
           <p className="whitespace-pre-wrap break-words text-sm leading-6 [overflow-wrap:anywhere]">
             {visibleText}
           </p>
+          {message.deliveryError ? (
+            <p className="mt-2 text-xs font-semibold">
+              {message.deliveryError}
+            </p>
+          ) : null}
           {canExpand ? (
             <button
               type="button"

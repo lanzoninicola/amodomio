@@ -3,6 +3,7 @@ import { orderWhatsappTemplate } from "./src/kds/whatsapp-templates";
 import { OrderContact } from "./src/kds/OrderContact";
 import { OvenRequestsBar } from "./src/kds/OvenRequestsBar";
 import { VoiceCommandButton } from "./src/kds/VoiceCommandButton";
+import { OrderStatusOptions } from "./src/kds/OrderStatusOptions";
 import { OrderTiming } from "./src/kds/OrderTiming";
 import { ToolbarLayout } from "./src/kds/ToolbarLayout";
 import { BrandLogo } from "./src/ui/BrandLogo";
@@ -612,6 +613,15 @@ function KanbanScreen({
   const [refreshing, setRefreshing] = useState(false);
   const [mutatingId, setMutatingId] = useState<string | null>(null);
   const [selected, setSelected] = useState<KdsOrder | null>(null);
+  const [statusOnly, setStatusOnly] = useState(false);
+  const openOrderDetails = (order: KdsOrder) => {
+    setStatusOnly(false);
+    setSelected(order);
+  };
+  const openOrderStatus = (order: KdsOrder) => {
+    setStatusOnly(true);
+    setSelected(order);
+  };
   const [now, setNow] = useState(Date.now());
   const [lastSync, setLastSync] = useState<Date | null>(null);
   const knownIds = useRef<Set<string> | null>(null);
@@ -932,7 +942,7 @@ function KanbanScreen({
           loading={loading}
           busy={loading || Boolean(mutatingId)}
           onToggleOven={toggleOven}
-          onChooseStatus={setSelected}
+          onChooseStatus={openOrderDetails}
           onContact={openContact}
           sentMessages={sentMessages}
         />
@@ -953,7 +963,8 @@ function KanbanScreen({
           onRefresh={() => load(true)}
           onMove={move}
           onContact={openContact}
-          onChooseStatus={setSelected}
+          onChooseStatus={openOrderStatus}
+          onOpenDetails={openOrderDetails}
         />
       ) : (
         <ScrollView
@@ -986,7 +997,7 @@ function KanbanScreen({
                     order={order}
                     now={now}
                     busy={mutatingId === order.id}
-                    onChooseStatus={() => setSelected(order)}
+                    onChooseStatus={() => openOrderDetails(order)}
                     onContact={openContact}
                     onToggleOven={() => toggleOven(order)}
                   />
@@ -1175,7 +1186,11 @@ function KanbanScreen({
               </View>
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel="Fechar detalhes do pedido"
+                accessibilityLabel={
+                  statusOnly
+                    ? "Fechar status do pedido"
+                    : "Fechar detalhes do pedido"
+                }
                 onPress={() => setSelected(null)}
                 style={({ pressed }) => [
                   styles.detailClose,
@@ -1186,7 +1201,7 @@ function KanbanScreen({
               </Pressable>
             </View>
             <ScrollView contentContainerStyle={styles.detailContent}>
-              {selected ? (
+              {selected && !statusOnly ? (
                 <View>
                   <View style={styles.detailGroup}>
                     {[
@@ -1260,28 +1275,13 @@ function KanbanScreen({
                   />
                 </View>
               ) : null}
-              {KDS_STATUSES.map((status) => (
-                <Pressable
-                  key={status.id}
-                  style={[
-                    styles.statusOption,
-                    selected?.status === status.id &&
-                      styles.statusOptionCurrent,
-                  ]}
-                  onPress={() => selected && move(selected, status.id)}
-                >
-                  <View
-                    style={[
-                      styles.statusMark,
-                      { backgroundColor: status.color },
-                    ]}
-                  />
-                  <Text style={styles.statusOptionText}>{status.label}</Text>
-                  {selected?.status === status.id ? (
-                    <Text style={styles.currentText}>Atual</Text>
-                  ) : null}
-                </Pressable>
-              ))}
+              {selected ? (
+                <OrderStatusOptions
+                  order={selected}
+                  busy={Boolean(mutatingId)}
+                  onMove={move}
+                />
+              ) : null}
             </ScrollView>
           </View>
         </Pressable>
@@ -1893,31 +1893,5 @@ const styles = StyleSheet.create({
     fontSize: 13,
     marginTop: 4,
     marginBottom: 14,
-  },
-  statusOption: {
-    minHeight: 50,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    paddingHorizontal: 14,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    marginTop: 8,
-  },
-  statusOptionCurrent: {
-    borderColor: theme.colors.ring,
-    backgroundColor: theme.colors.muted,
-  },
-  statusOptionText: {
-    color: theme.colors.foreground,
-    fontSize: 15,
-    fontFamily: theme.typography.semibold,
-    flex: 1,
-  },
-  currentText: {
-    color: theme.colors.mutedForeground,
-    fontSize: 11,
-    fontFamily: theme.typography.semibold,
   },
 });

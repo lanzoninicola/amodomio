@@ -2,6 +2,7 @@ import { NavLink, Outlet, useLocation } from "@remix-run/react";
 import { cn } from "@/lib/utils";
 
 const tabs = [
+  { href: "/admin/zapi/envios", label: "Envios e conexão" },
   { href: "/admin/zapi/playground", label: "Playground" },
   { href: "/admin/zapi/contacts", label: "Contatos" },
   { href: "/admin/zapi/logs", label: "Webhook Logs" },

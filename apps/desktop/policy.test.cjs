@@ -48,3 +48,24 @@ test("impede usar a ponte para acessar outros protocolos, servidores e rotas", (
       })
     );
 });
+
+test("permite consultar e enviar WhatsApp, mantendo outros métodos bloqueados", () => {
+  for (const method of ["GET", "POST"]) {
+    const request = apiRequest({
+      baseUrl: "https://www.amodomio.com.br",
+      path: "/api/kds/whatsapp",
+      method,
+    });
+    assert.equal(request.url, "https://www.amodomio.com.br/api/kds/whatsapp");
+    assert.equal(request.method, method);
+  }
+  for (const method of ["PATCH", "DELETE", "PUT"]) {
+    assert.throws(() =>
+      apiRequest({
+        baseUrl: "https://www.amodomio.com.br",
+        path: "/api/kds/whatsapp",
+        method,
+      })
+    );
+  }
+});

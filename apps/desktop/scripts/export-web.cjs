@@ -19,10 +19,15 @@ const result = spawnSync(
     env: { ...process.env, EXPO_NO_DOTENV: "1", EXPO_PUBLIC_API_URL: "" },
   }
 );
-if (result.status === 0)
+if (result.status === 0) {
   require("node:fs").cpSync(
     path.resolve(__dirname, "../settings"),
     path.resolve(__dirname, "../web/settings"),
     { recursive: true }
   );
+  require("node:fs").copyFileSync(
+    path.resolve(mobile, "assets/oven-alert.wav"),
+    path.resolve(__dirname, "../web/settings/oven-alert.wav")
+  );
+}
 process.exit(result.status ?? 1);

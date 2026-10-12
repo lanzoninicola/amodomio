@@ -1,3 +1,8 @@
+import {
+  MESSAGE_STATUS_LABELS,
+  type MessageStatus,
+} from "~/domain/z-api/message-status";
+
 export type CrmConversationMessage = {
   id: string;
   created_at: string;
@@ -5,6 +10,8 @@ export type CrmConversationMessage = {
   source: string | null;
   event_type: string;
   messageText: string;
+  deliveryStatus?: MessageStatus;
+  deliveryError?: string;
 };
 
 type CrmConversationEvent = {
@@ -53,6 +60,8 @@ export function toCrmConversationMessages(
   events: CrmConversationEvent[]
 ): CrmConversationMessage[] {
   return events.flatMap((event) => {
+    const payload =
+      parsePayloadObject(event.payload) || parsePayloadRaw(event.payload_raw);
     const messageText = pickMessageText(
       parsePayloadObject(event.payload),
       event.payload_raw
@@ -64,10 +73,19 @@ export function toCrmConversationMessages(
         id: event.id,
         created_at: event.created_at.toISOString(),
         direction:
-          event.event_type === "WHATSAPP_SENT" ? "outbound" : "inbound",
+          event.event_type === "WHATSAPP_RECEIVED" ? "inbound" : "outbound",
         source: event.source,
         event_type: event.event_type,
         messageText,
+        deliveryStatus:
+          typeof payload?.deliveryStatus === "string" &&
+          Object.hasOwn(MESSAGE_STATUS_LABELS, payload.deliveryStatus)
+            ? (payload.deliveryStatus as MessageStatus)
+            : undefined,
+        deliveryError:
+          typeof payload?.deliveryError === "string"
+            ? payload.deliveryError
+            : undefined,
       } satisfies CrmConversationMessage,
     ];
   });
@@ -84,7 +102,10 @@ export function buildCrmConversationTranscript(
     .map((message) => {
       const when = new Date(message.created_at).toLocaleString("pt-BR");
       const author = message.direction === "outbound" ? "Atendente" : "Cliente";
-      return `[${when}] ${author}: ${message.messageText}`;
+      const status = message.deliveryStatus
+        ? ` (${MESSAGE_STATUS_LABELS[message.deliveryStatus]})`
+        : "";
+      return `[${when}] ${author}${status}: ${message.messageText}`;
     })
     .join("\n");
 }

@@ -53,7 +53,14 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
 
   const baseWhere = {
     customer_id: customerId,
-    event_type: { in: ["WHATSAPP_RECEIVED", "WHATSAPP_SENT"] as const },
+    event_type: {
+      in: [
+        "WHATSAPP_RECEIVED",
+        "WHATSAPP_SENT",
+        "WHATSAPP_PENDING",
+        "WHATSAPP_FAILED",
+      ] as const,
+    },
     created_at: {
       ...(fromDate ? { gte: fromDate } : {}),
       ...(toDate ? { lte: toDate } : {}),

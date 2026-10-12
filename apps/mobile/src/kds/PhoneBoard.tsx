@@ -180,6 +180,7 @@ export function PhoneBoard({
   onRefresh,
   onMove,
   onChooseStatus,
+  onOpenDetails,
   onContact,
   filter,
   onFilterChange,
@@ -192,6 +193,7 @@ export function PhoneBoard({
   onRefresh: () => void;
   onMove: (order: KdsOrder, status: KdsStatus) => void;
   onChooseStatus: (order: KdsOrder) => void;
+  onOpenDetails: (order: KdsOrder) => void;
   onContact: (order: KdsOrder) => void;
   filter: string | null;
   onFilterChange: (value: string | null) => void;
@@ -250,7 +252,7 @@ export function PhoneBoard({
                     order.commandNumber ?? "VL"
                   }`}
                   disabled={busy}
-                  onPress={() => onChooseStatus(order)}
+                  onPress={() => onOpenDetails(order)}
                   style={({ pressed }) => ({
                     minHeight: 44,
                     justifyContent: "center",

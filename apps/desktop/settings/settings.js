@@ -37,13 +37,40 @@ try {
   if (typeof saved?.volume === "number" && Number.isFinite(saved.volume))
     volume.value = String(Math.min(100, Math.max(0, saved.volume * 100)));
 } catch {}
+const testSound = document.getElementById("test-sound");
+const soundFeedback = document.getElementById("sound-feedback");
+const preview = new Audio("/settings/oven-alert.wav");
 const updateVolume = () => {
+  testSound.disabled = !enabled.checked || Number(volume.value) === 0;
+  preview.volume = Number(volume.value) / 100;
+  if (testSound.disabled) preview.pause();
+  soundFeedback.textContent = testSound.disabled
+    ? "Som desativado ou volume em zero."
+    : "";
   volume.disabled = !enabled.checked;
   volumeValue.textContent = `${volume.value}%`;
 };
 enabled.addEventListener("change", updateVolume);
 volume.addEventListener("input", updateVolume);
 updateVolume();
+testSound.addEventListener("click", async () => {
+  if (testSound.disabled) return;
+  try {
+    preview.currentTime = 0;
+    await preview.play();
+    soundFeedback.textContent = "Reproduzindo som de teste.";
+  } catch {
+    soundFeedback.textContent =
+      "Não foi possível reproduzir o som. Tente novamente.";
+  }
+});
+preview.addEventListener("ended", () => {
+  soundFeedback.textContent = "Teste concluído.";
+});
+preview.addEventListener("error", () => {
+  soundFeedback.textContent = "Não foi possível carregar o som de teste.";
+});
+window.addEventListener("pagehide", () => preview.pause());
 document.getElementById("save").addEventListener("click", () => {
   const values = Array.from(form.querySelectorAll("input:checked")).map(
     (input) => input.value
