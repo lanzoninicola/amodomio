@@ -12,6 +12,8 @@ for (const [width, delivery, blocked] of [
   [360, true],
   [820, false, "exists"],
   [360, true, "shortage"],
+  [820, false, "missing-day"],
+  [360, false, "open-error"],
 ]) {
   test(`Chrome DOM ${delivery ? "delivery" : "pickup"} at ${width}px ${
     blocked || ""
@@ -33,18 +35,29 @@ for (const [width, delivery, blocked] of [
       html {font-size:40px} body {font:70px serif;color:magenta;line-height:7}
       button,input,textarea {font-size:75px!important;background:magenta!important;width:10px!important;border:25px solid red!important}
       [role=dialog] {width:${width}px;font-family:serif;color:magenta}
+      .MuiDialog-paper {display:flex;flex-direction:column;max-height:calc(100vh - 64px);overflow-y:auto}
+      .MuiDialog-paper > div {flex-shrink:0}
     </style></head><body><div id="kanban"><h6>#1</h6><span title="Nicola Lanzoni"><h6>Nicola Lanzoni</h6></span></div>${fixture}<script>
       window.jsErrors=[];window.addEventListener("error",event=>window.jsErrors.push(event.message));const originalAttach = Element.prototype.attachShadow;
       Element.prototype.attachShadow = function(options) { return originalAttach.call(this, {...options, mode: 'open'}); };
-      window.chrome = { runtime: { async sendMessage(message) { if(message.type==='suitable:check') return {ok:true,check:{exists:${
+      window.dayOpened=false;window.openCalls=0;
+      window.chrome = { runtime: { async sendMessage(message) { if(message.type==='suitable:open-day'){ window.openCalls++; await new Promise(resolve=>setTimeout(resolve,60)); if(${
+        blocked === "open-error"
+      }) return {ok:false,error:'Falha ao abrir dia'}; window.dayOpened=true; return {ok:true,dayStatus:'OPENED'}; } if(message.type==='suitable:check') return {ok:true,check:{exists:${
         blocked === "exists"
       },status:${
         blocked === "exists" ? "'finalizado'" : "null"
       },available:{F:20,M:20,P:20,I:${
         blocked === "shortage" ? 0 : 20
-      },FT:20},shortages:${
-        blocked === "shortage" ? "['I']" : "[]"
-      },dayStatus:'OPENED',canSend:${!blocked}}}; if(message.type==='suitable:zones') return {ok:true,zones:[{id:'morro-id',name:'Morro da Cruz',city:'Pato Branco'}]}; window.sent = message; return {ok:true, id:'imported', status:'novoPedido'}; } } };
+      },FT:20},shortages:${blocked === "shortage" ? "['I']" : "[]"},dayStatus:${
+        ["missing-day", "open-error"].includes(blocked)
+          ? "window.dayOpened?'OPENED':'MISSING'"
+          : "'OPENED'"
+      },canSend:${
+        ["missing-day", "open-error"].includes(blocked)
+          ? "window.dayOpened"
+          : !blocked
+      }}}; if(message.type==='suitable:zones') return {ok:true,zones:[{id:'morro-id',name:'Morro da Cruz',city:'Pato Branco'},{id:'centro-id',name:'Centro',city:'Pato Branco'}]}; window.sent = message; return {ok:true, id:'imported', status:'novoPedido'}; } } };
       ${parser}
       ${content}
       (async () => {
@@ -53,6 +66,13 @@ for (const [width, delivery, blocked] of [
           const extracted = SuitableKds.extractModal(dialog);
           const cardButtons = document.querySelector('#kanban').querySelectorAll('[data-amodomio-kds]').length;
           const buttonCount = dialog.querySelectorAll('[data-amodomio-kds]').length;
+          const summaryHeading = [...dialog.querySelectorAll('h6')].find(element=>element.textContent.trim()==='Resumo de valores');
+          summaryHeading.textContent='Carregando valores…';
+          dialog.querySelector('[data-amodomio-kds]').shadowRoot.querySelector('button').click();
+          await new Promise(resolve=>setTimeout(resolve,20));
+          if(!dialog.querySelector('[data-amodomio-kds]').shadowRoot.querySelector('[role=alert]')?.textContent.includes('Não foi possível ler o pedido')) throw new Error('Unreadable orders must show an error instead of silently ignoring the click');
+          if(dialog.querySelector('[data-amodomio-review]')) throw new Error('Unreadable orders must not open or send an incomplete review');
+          summaryHeading.textContent='Resumo de valores';
           dialog.querySelector('[data-amodomio-kds]').shadowRoot.querySelector('button').click();
           const review = dialog.querySelector('[data-amodomio-review]').shadowRoot;
           const form = review.querySelector('form');
@@ -60,9 +80,24 @@ for (const [width, delivery, blocked] of [
           const detail=review.querySelector('[aria-controls=order-details]');
           if(!refresh || refresh.textContent.trim() || detail.textContent.trim()) throw new Error('Refresh and details must be icon only');
           if(refresh.nextElementSibling!==detail) throw new Error('Refresh must precede details');
+          const kdsRow=review.querySelector('.kds-review-row');
+          if(!kdsRow || kdsRow.querySelector('.command-bubble')?.textContent.trim()!=='Revisar pedido · 1') throw new Error('Header must start with the KDS command bubble');
+          if(!kdsRow.querySelector('.order-total') || !kdsRow.querySelector('[aria-label="Resumo de tamanhos"]')) throw new Error('KDS row must show amount and sizes');
+          const neighborhood=review.querySelector('.delivery-neighborhood');
+          if(${delivery}) for(let attempt=0;attempt<30 && !neighborhood?.textContent.includes('Morro da Cruz');attempt++) await new Promise(resolve=>setTimeout(resolve,10));
+          if(${delivery} ? !neighborhood?.textContent.includes('Morro da Cruz') : !!neighborhood) throw new Error('Header must show the neighborhood only for delivery');
+          const channelTrigger=review.querySelector('[aria-labelledby=channel-label]');
+          if(!channelTrigger?.textContent.includes('Suitable')) throw new Error('Origin must default to Suitable');
           if(!getComputedStyle(review.querySelector('.order-total')).fontFamily.includes('monospace')) throw new Error('Order total must use mono');
           if(getComputedStyle(review.querySelector('.customer-name')).fontSize !== getComputedStyle(review.querySelector('.customer-phone')).fontSize) throw new Error('Customer styles should match');
-          if(!review.querySelector('.scroll').hidden) throw new Error('Details should start collapsed');
+          if(!review.querySelector('.scroll').hidden || detail.getAttribute('aria-expanded') !== 'false') throw new Error('Clicking Add to KDS must start with details collapsed');
+          if(review.querySelector('.heading').getBoundingClientRect().height < 30 || review.querySelector('.footer').getBoundingClientRect().height < 30) throw new Error('Summary and actions must remain visible with details collapsed');
+          detail.click();
+          await new Promise(resolve=>setTimeout(resolve,20));
+          if(review.querySelector('.scroll').hidden || review.querySelector('.scroll').getBoundingClientRect().height < 30) throw new Error('Details toggle must open the form inside the flex dialog');
+          detail.click();
+          await new Promise(resolve=>setTimeout(resolve,20));
+          if(!review.querySelector('.scroll').hidden) throw new Error('Details toggle must collapse the form');
           if(!review.querySelector('header [name=customerName]') || !review.querySelector('header [name=customerPhone]')) throw new Error('Customer must be in header');
           if(review.querySelector('header').textContent.includes('Revisão') || review.querySelector('header').textContent.includes('Suitable → KDS')) throw new Error('Removed header labels returned');
           const customer=review.querySelector('[name=customerName]');
@@ -75,9 +110,47 @@ for (const [width, delivery, blocked] of [
           if(!customer.readOnly) throw new Error('Blur must finish customer editing');
           await document.fonts.ready;
           if(!document.fonts.check('14px SuitableInter') || ![...document.fonts].some(face=>face.family==='SuitableInter' && face.status==='loaded')) throw new Error('Local Inter font did not load');
+          channelTrigger.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowDown',bubbles:true}));
+          await new Promise(resolve=>setTimeout(resolve,30));
+          const channelOption=[...review.querySelectorAll('[role=option]')].find(option=>option.textContent==='CARDAPIO');
+          if(!channelOption || document.querySelector('[role=listbox]')) throw new Error('Origin options must stay inside the Shadow DOM');
+          channelOption.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}));
+          await new Promise(resolve=>setTimeout(resolve,30));
+          if(!channelTrigger.textContent.includes('CARDAPIO')) throw new Error('Changing the order origin must update the select');
+          if (${delivery}) {
+            const trigger=review.querySelector('header [aria-labelledby=delivery-label]');
+            if(!trigger || !review.querySelector('.scroll').hidden) throw new Error('Delivery neighborhood must be editable with details collapsed');
+            for(let attempt=0;attempt<30 && trigger.disabled;attempt++) await new Promise(resolve=>setTimeout(resolve,10));
+            trigger.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowDown',bubbles:true}));
+            await new Promise(resolve=>setTimeout(resolve,30));
+            const option=[...review.querySelectorAll('[role=option]')].find(element=>element.textContent.includes('Centro'));
+            if(!option) throw new Error('Other registered neighborhoods must be available');
+            option.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}));
+            await new Promise(resolve=>setTimeout(resolve,30));
+            if(!trigger.textContent.includes('Centro') || !review.querySelector('.scroll').hidden) throw new Error('Neighborhood changes must update the header without opening details');
+          }
+          if(review.querySelector('button[type=submit]').textContent!=='Enviar') throw new Error('Submit button must say Enviar');
           review.querySelector('[aria-controls=order-details]').click();
           await new Promise(resolve=>setTimeout(resolve,20));
-            if (${Boolean(blocked)}) {
+            if (${["missing-day", "open-error"].includes(blocked)}) {
+              for(let attempt=0;attempt<60 && review.querySelector('.order-checks').getAttribute('aria-busy')==='true';attempt++) await new Promise(resolve=>setTimeout(resolve,10));
+              const column=[...review.querySelectorAll('.check-column')].find(element=>element.querySelector('h3').textContent==='Abertura dia');
+              if(column.dataset.state!=='error') throw new Error('Missing day must show X');
+              const opening=column.querySelector('button');
+              if(!opening || opening.textContent!=='Abrir o dia') throw new Error('Missing day must offer Abrir dia next to X');
+              opening.click();
+              await new Promise(resolve=>setTimeout(resolve,10));
+              if(column.dataset.state!=='loading' || !opening.disabled || !review.querySelector('button[type=submit]').disabled) throw new Error('Opening must wait with loading icon and disabled actions');
+              for(let attempt=0;attempt<80 && !review.querySelector('header').textContent.includes('Falha ao abrir dia') && (column.dataset.state!=='ok');attempt++) await new Promise(resolve=>setTimeout(resolve,10));
+              if(${blocked === "open-error"}) {
+                if(column.dataset.state!=='error' || !review.querySelector('header').textContent.includes('Falha ao abrir dia')) throw new Error('Opening failure must retain X and show the server error');
+                if(window.sent || window.openCalls!==1) throw new Error('Opening failure must not create an order');
+                document.body.dataset.result=JSON.stringify({openingFailed:true});return;
+              }
+              if(column.dataset.state!=='ok' || column.querySelector('button') || !getComputedStyle(column.querySelector('.check-icon')).animationName.includes('check-success')) throw new Error('Confirmed opening must change to animated check and remove the action');
+              if(window.openCalls!==1) throw new Error('Opening must not duplicate requests');
+            }
+            if (${["exists", "shortage"].includes(blocked)}) {
               await new Promise(resolve=>setTimeout(resolve,450));
               form.requestSubmit();
               await new Promise(resolve=>setTimeout(resolve,20));
@@ -86,8 +159,8 @@ for (const [width, delivery, blocked] of [
             }
             let isolatedPortal = null;
             if (${delivery}) {
-              for(let attempt=0;attempt<30 && !review.querySelector('[role=combobox]').textContent.includes('Morro da Cruz');attempt++) await new Promise(resolve=>setTimeout(resolve,10));
-              const trigger=review.querySelector('[role=combobox]');
+              for(let attempt=0;attempt<30 && !review.querySelector('[aria-labelledby=delivery-label]').textContent.includes('Centro');attempt++) await new Promise(resolve=>setTimeout(resolve,10));
+              const trigger=review.querySelector('[aria-labelledby=delivery-label]');
               trigger.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowDown',bubbles:true}));
               await new Promise(resolve=>setTimeout(resolve,30));
               isolatedPortal = !!review.querySelector('[role=listbox]') && !document.querySelector('[role=listbox]');
@@ -162,7 +235,11 @@ for (const [width, delivery, blocked] of [
           .replace(/&gt;/g, ">")
       );
       assert.equal(result.error, undefined, JSON.stringify(result));
-      if (blocked) {
+      if (blocked === "open-error") {
+        assert.equal(result.openingFailed, true);
+        return;
+      }
+      if (["exists", "shortage"].includes(blocked)) {
         assert.equal(result.disabled, true);
         assert.equal(result.errorColor, "rgb(185, 28, 28)");
         assert.equal(result.sent, false);
@@ -185,6 +262,7 @@ for (const [width, delivery, blocked] of [
       assert.equal(result.layout.collapsedNotes, true);
       assert.equal(result.layout.total, delivery ? "479,60" : "359,70");
       assert.equal(result.noProductField, true);
+      assert.equal(result.sent.order.channel, "CARDAPIO");
       if (delivery) assert.equal(result.isolatedPortal, true);
       assert.equal(result.changedSize, "F");
       assert.match(result.summary, /F2/);
@@ -219,8 +297,12 @@ for (const [width, delivery, blocked] of [
       assert.deepEqual(
         result.sent.order,
         delivery
-          ? { ...result.extracted, deliveryZoneId: "morro-id" }
-          : result.extracted
+          ? {
+              ...result.extracted,
+              channel: "CARDAPIO",
+              deliveryZoneId: "centro-id",
+            }
+          : { ...result.extracted, channel: "CARDAPIO" }
       );
       assert.deepEqual(result.reread, result.extracted);
       assert.match(result.success, /Pedido enviado à cozinha/);

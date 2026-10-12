@@ -4,9 +4,12 @@ chrome.storage.local.setAccessLevel({ accessLevel: "TRUSTED_CONTEXTS" });
 const inFlight = new Set();
 chrome.runtime.onMessage.addListener((message, sender, respond) => {
   if (
-    !["suitable:create", "suitable:zones", "suitable:check"].includes(
-      message?.type
-    )
+    ![
+      "suitable:create",
+      "suitable:zones",
+      "suitable:check",
+      "suitable:open-day",
+    ].includes(message?.type)
   )
     return;
   (async () => {
@@ -25,6 +28,32 @@ chrome.runtime.onMessage.addListener((message, sender, respond) => {
       );
     if (!serverUrl || !apiKey)
       throw new Error("Configure o servidor e a chave da API na extensão.");
+    if (message.type === "suitable:open-day") {
+      const response = await fetch(`${serverUrl}/api/kds/day/open`, {
+        method: "POST",
+        credentials: "omit",
+        redirect: "error",
+        headers: { "Content-Type": "application/json", "x-api-key": apiKey },
+        body: JSON.stringify({ date: message.order?.date }),
+        signal: AbortSignal.timeout(20000),
+      });
+      if ([404, 405].includes(response.status))
+        throw new Error(
+          "Atualize o servidor Amodomio com a rota /api/kds/day/open."
+        );
+      const result = await response.json().catch(() => {
+        throw new Error(
+          "O servidor não retornou uma resposta válida para a abertura do dia."
+        );
+      });
+      if (
+        !response.ok ||
+        !result.ok ||
+        !["OPENED", "REOPENED"].includes(result.status)
+      )
+        throw new Error(result.error || "Não foi possível abrir o dia.");
+      return { ok: true, dayStatus: result.status };
+    }
     if (message.type === "suitable:zones") {
       const response = await fetch(`${serverUrl}/api/kds/delivery-zones`, {
         credentials: "omit",
@@ -87,6 +116,13 @@ chrome.runtime.onMessage.addListener((message, sender, respond) => {
       throw new Error("Confira número, data, valor e cliente.");
     const orderItems = SuitableKds.validateItems(input.orderItems);
     if (
+      input.channel !== undefined &&
+      (typeof input.channel !== "string" ||
+        !input.channel.trim() ||
+        input.channel.length > 100)
+    )
+      throw new Error("Selecione uma origem válida para o pedido.");
+    if (
       !input.takeAway &&
       (!Number.isFinite(input.deliveryFee) ||
         input.deliveryFee < 0 ||
@@ -116,7 +152,8 @@ chrome.runtime.onMessage.addListener((message, sender, respond) => {
           hasMoto: input.takeAway !== true,
           motoValue: input.takeAway ? 0 : input.deliveryFee,
           deliveryZoneId: input.takeAway ? null : input.deliveryZoneId,
-          channel: "Suitable",
+          channel:
+            input.channel === undefined ? "Suitable" : input.channel.trim(),
           orderItems,
         }),
         signal: AbortSignal.timeout(20000),

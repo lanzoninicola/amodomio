@@ -4,6 +4,8 @@ import { flushSync } from "react-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { CHANNELS } from "@/domain/kds/constants";
+import { Check as CheckIcon, X, AlertTriangle, Loader2 } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -112,6 +114,57 @@ const normalize = (value: string) =>
     .replace(/\s+/g, " ")
     .toLowerCase();
 
+type CheckState = "ok" | "error" | "warning" | "loading";
+function CheckColumn({
+  title,
+  state,
+  detail,
+  action,
+}: {
+  title: string;
+  state: CheckState;
+  detail: string;
+  action?: React.ReactNode;
+}) {
+  const Icon = {
+    ok: CheckIcon,
+    error: X,
+    warning: AlertTriangle,
+    loading: Loader2,
+  }[state];
+  const label = {
+    ok: "OK",
+    error: "Erro",
+    warning: "Alerta",
+    loading: "Consultando",
+  }[state];
+  return (
+    <div
+      className="check-column"
+      data-state={state}
+      role={state === "error" ? "alert" : "status"}
+    >
+      <div className="check-heading">
+        <div className="check-icon-row">
+          <span
+            className="check-icon"
+            role="img"
+            aria-label={`${label}: ${detail}`}
+            title={detail}
+          >
+            <Icon size={18} aria-hidden="true" />
+          </span>
+        </div>
+        <h3 className="check-title">{title}</h3>
+        {action}
+      </div>
+      <div className="check-description">
+        <p className="check-detail">{detail}</p>
+      </div>
+    </div>
+  );
+}
+
 function Review({
   order,
   close,
@@ -178,12 +231,36 @@ function Review({
   const [editingCustomer, setEditingCustomer] = useState<string | null>(null);
   const [phone, setPhone] = useState(order.customerPhone);
   const [amount, setAmount] = useState(money(order.orderAmount));
+  const [channel, setChannel] = useState<string>("Suitable");
   const [pending, setPending] = useState(false);
+  const [openingDay, setOpeningDay] = useState(false);
+  const [openDayError, setOpenDayError] = useState("");
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [check, setCheck] = useState<Check | null>(null);
   const [checking, setChecking] = useState(true);
   const [checkError, setCheckError] = useState("");
   const [checkAttempt, setCheckAttempt] = useState(0);
+  async function openDay() {
+    if (openingDay || checking || !check || checkError) return;
+    setOpeningDay(true);
+    setOpenDayError("");
+    try {
+      const result = await chrome.runtime.sendMessage({
+        type: "suitable:open-day",
+        order: { date },
+      });
+      if (!result?.ok)
+        throw new Error(result?.error || "Sem resposta da extensão.");
+      setChecking(true);
+      setCheckAttempt((value) => value + 1);
+    } catch (cause) {
+      setOpenDayError(
+        cause instanceof Error ? cause.message : "Não foi possível abrir o dia."
+      );
+    } finally {
+      setOpeningDay(false);
+    }
+  }
   const [done, setDone] = useState(false);
   const [error, setError] = useState(false);
   const [message, setMessage] = useState(
@@ -238,7 +315,7 @@ function Review({
   );
   async function send(event: React.FormEvent) {
     event.preventDefault();
-    if (!check?.canSend || checking) return;
+    if (!check?.canSend || checking || openingDay) return;
     setPending(true);
     setError(false);
     setMessage("Enviando pedido…");
@@ -272,6 +349,7 @@ function Review({
           customerName: name,
           customerPhone: phone,
           orderAmount,
+          channel,
           orderItems,
           ...(!order.takeAway
             ? { deliveryZoneId: zoneId, deliveryFee: parseMoney(fee) }
@@ -313,58 +391,17 @@ function Review({
         }}
       >
         <header className="heading">
-          <div className="review-title-row">
-            <h2 className="text-base font-semibold text-slate-900">
-              Revisar pedido{" "}
-              <span className="text-blue-800 font-mono">
-                · #{command || "—"}
-              </span>
+          <div className="kds-review-row">
+            <h2 className="command-bubble" title={`Comanda ${command}`}>
+              <span className="sr-only">Revisar pedido · </span>
+              {command || "—"}
             </h2>
-            <div className="customer-inline">
-              <Input
-                aria-label="Cliente"
-                title="Clique para alterar o cliente"
-                name="customerName"
-                maxLength={200}
-                required
-                disabled={pending || done}
-                readOnly={editingCustomer !== "name"}
-                value={name}
-                placeholder="Nome do cliente"
-                onFocus={(e) => {
-                  setEditingCustomer("name");
-                  e.target.select();
-                }}
-                onBlur={() => setEditingCustomer(null)}
-                onChange={(e) => setName(e.target.value)}
-                className="inline-value customer-name"
-              />
-              <Input
-                aria-label="Telefone"
-                title="Clique para alterar o telefone"
-                name="customerPhone"
-                type="tel"
-                disabled={pending || done}
-                readOnly={editingCustomer !== "phone"}
-                value={phone}
-                placeholder="Adicionar telefone"
-                onFocus={(e) => {
-                  setEditingCustomer("phone");
-                  e.target.select();
-                }}
-                onBlur={() => setEditingCustomer(null)}
-                onChange={(e) => setPhone(e.target.value)}
-                className="inline-value customer-phone font-mono"
-              />
-            </div>
             <span className="order-total font-mono text-sm font-semibold text-slate-900">
               R${" "}
               {Number.isFinite(parseMoney(amount))
                 ? money(parseMoney(amount))
                 : "—"}
             </span>
-          </div>
-          <div className="summary-row">
             <div className="sizes" aria-label="Resumo de tamanhos">
               {sizes.map((size) => (
                 <span
@@ -379,13 +416,75 @@ function Review({
                 </span>
               ))}
             </div>
-            <div className="ml-auto flex items-center gap-1">
+            <div className="w-[180px] max-w-full">
+              <span id="channel-label" className="sr-only">
+                Origem do pedido
+              </span>
+              <Select
+                name="channel"
+                value={channel}
+                onValueChange={setChannel}
+                disabled={pending || done}
+              >
+                <SelectTrigger
+                  aria-labelledby="channel-label"
+                  title="Origem do pedido"
+                  className="h-9 text-xs"
+                >
+                  <SelectValue placeholder="Origem do pedido" />
+                </SelectTrigger>
+                <SelectContent portalContainer={portalContainer}>
+                  {CHANNELS.map((value) => (
+                    <SelectItem key={value} value={value}>
+                      {value}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            {!order.takeAway && (
+              <div className="delivery-neighborhood">
+                <span id="delivery-label" className="sr-only">
+                  Bairro de entrega no KDS
+                </span>
+                <Select
+                  value={zoneId}
+                  onValueChange={(value) => {
+                    if (value) setZoneId(value);
+                  }}
+                  disabled={loadingZones || pending || done}
+                >
+                  <SelectTrigger
+                    aria-labelledby="delivery-label"
+                    className="h-9 text-xs"
+                    title="Alterar bairro de entrega"
+                  >
+                    <SelectValue
+                      placeholder={
+                        loadingZones
+                          ? order.deliveryNeighborhood || "Carregando bairros…"
+                          : "Selecionar bairro"
+                      }
+                    />
+                  </SelectTrigger>
+                  <SelectContent portalContainer={portalContainer}>
+                    {zones.map((zone) => (
+                      <SelectItem key={zone.id} value={zone.id}>
+                        {zone.name}
+                        {zone.city ? ` · ${zone.city}` : ""}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>{" "}
+              </div>
+            )}
+            <div className="flex items-center gap-1">
               <Button
                 type="button"
                 variant="outline"
                 size="icon"
                 className="h-9 w-9"
-                disabled={checking || pending}
+                disabled={checking || pending || openingDay}
                 aria-label="Atualizar comanda e estoque"
                 title="Atualizar comanda e estoque"
                 onClick={() => setCheckAttempt((value) => value + 1)}
@@ -433,52 +532,162 @@ function Review({
               </Button>
             </div>
           </div>
-          <p
-            className={`mt-2 text-xs ${
-              !checking && (checkError || (check && !check.canSend))
-                ? "text-red-700"
-                : "text-slate-500"
-            }`}
-            role={
-              !checking && (checkError || (check && !check.canSend))
-                ? "alert"
-                : "status"
-            }
-            aria-live="polite"
+          <div className="customer-inline">
+            <Input
+              aria-label="Cliente"
+              title="Clique para alterar o cliente"
+              name="customerName"
+              maxLength={200}
+              required
+              disabled={pending || done}
+              readOnly={editingCustomer !== "name"}
+              value={name}
+              placeholder="Nome do cliente"
+              onFocus={(e) => {
+                setEditingCustomer("name");
+                e.target.select();
+              }}
+              onBlur={() => setEditingCustomer(null)}
+              onChange={(e) => setName(e.target.value)}
+              className="inline-value customer-name"
+            />
+            <Input
+              aria-label="Telefone"
+              title="Clique para alterar o telefone"
+              name="customerPhone"
+              type="tel"
+              disabled={pending || done}
+              readOnly={editingCustomer !== "phone"}
+              value={phone}
+              placeholder="Adicionar telefone"
+              onFocus={(e) => {
+                setEditingCustomer("phone");
+                e.target.select();
+              }}
+              onBlur={() => setEditingCustomer(null)}
+              onChange={(e) => setPhone(e.target.value)}
+              className="inline-value customer-phone font-mono"
+            />
+          </div>
+          <div
+            className="order-checks"
+            aria-label="Verificações do pedido"
+            aria-busy={checking}
           >
-            {checking
-              ? "Consultando pedido e massas…"
-              : checkError ||
-                (check?.exists
+            <CheckColumn
+              title="Comanda existente"
+              state={
+                checking
+                  ? "loading"
+                  : checkError || !check
+                  ? "error"
+                  : check.exists
+                  ? "error"
+                  : "ok"
+              }
+              detail={
+                checking
+                  ? "Consultando…"
+                  : checkError || !check
+                  ? "Consulta indisponível"
+                  : check.exists
                   ? `Esta comanda já existe no servidor (${
                       check.status || "confira no Atendimento"
-                    }). Confira se corresponde a este pedido.`
-                  : check
-                  ? `Comanda ainda não adicionada. ${
-                      check.available
-                        ? sizes
-                            .filter((size) => counts[size] > 0)
-                            .map(
-                              (size) =>
-                                `${size}: ${
-                                  check.available![size]
-                                } disponíveis / ${counts[size]} necessárias`
-                            )
-                            .join(" · ")
-                        : "Estoque de massas não cadastrado; saldo não verificado."
-                    }${check.shortages.length ? " — Massa insuficiente." : ""}${
-                      check.dayStatus === "CLOSED"
-                        ? " O envio reabrirá o dia."
-                        : !["OPENED", "REOPENED"].includes(check.dayStatus)
-                        ? " Abra o dia no Atendimento."
-                        : ""
-                    }`
-                  : "")}
-          </p>
+                    }).`
+                  : "Comanda ainda não adicionada."
+              }
+            />
+            <CheckColumn
+              title="Estoque massa"
+              state={
+                checking
+                  ? "loading"
+                  : checkError || !check
+                  ? "error"
+                  : check.shortages.length
+                  ? "error"
+                  : !check.available
+                  ? "warning"
+                  : "ok"
+              }
+              detail={
+                checking
+                  ? "Consultando…"
+                  : checkError || !check
+                  ? "Consulta indisponível"
+                  : check.shortages.length
+                  ? `Massa insuficiente: ${check.shortages.join(", ")}.`
+                  : !check.available
+                  ? "Estoque de massas não cadastrado; saldo não verificado."
+                  : sizes
+                      .filter((size) => counts[size] > 0)
+                      .map(
+                        (size) =>
+                          `${size}: ${check.available![size]} disponíveis / ${
+                            counts[size]
+                          } necessárias`
+                      )
+                      .join(" · ") || "Sem massas necessárias."
+              }
+            />
+            <CheckColumn
+              title="Abertura dia"
+              state={
+                checking || openingDay
+                  ? "loading"
+                  : checkError || !check
+                  ? "error"
+                  : ["OPENED", "REOPENED"].includes(check.dayStatus)
+                  ? "ok"
+                  : "error"
+              }
+              detail={
+                openingDay
+                  ? "Abrindo dia…"
+                  : checking
+                  ? "Consultando…"
+                  : checkError || !check
+                  ? "Consulta indisponível"
+                  : check.dayStatus === "OPENED"
+                  ? "Dia aberto."
+                  : check.dayStatus === "REOPENED"
+                  ? "Dia reaberto."
+                  : check.dayStatus === "CLOSED"
+                  ? "Dia fechado."
+                  : "Dia ainda não aberto."
+              }
+              action={
+                check &&
+                !checkError &&
+                !["OPENED", "REOPENED"].includes(check.dayStatus) && (
+                  <Button
+                    type="button"
+                    variant="link"
+                    size="sm"
+                    className="open-day-action"
+                    disabled={openingDay || checking || pending || done}
+                    onClick={openDay}
+                  >
+                    {openingDay ? "Abrindo…" : "Abrir o dia"}
+                  </Button>
+                )
+              }
+            />
+          </div>
+          {openDayError && (
+            <p role="alert" className="mt-2 text-xs text-red-700">
+              {openDayError}
+            </p>
+          )}
+          {!checking && checkError && (
+            <p role="alert" className="mt-2 text-xs text-red-700">
+              {checkError}
+            </p>
+          )}
         </header>
         <div className="scroll" id="order-details" hidden={!detailsOpen}>
           <fieldset
-            disabled={pending || done}
+            disabled={pending || done || openingDay}
             className="review-details min-w-0"
           >
             <section aria-label="Dados do pedido">
@@ -529,35 +738,11 @@ function Review({
                   <h3 className="section-title">Entrega</h3>
                   <div className="delivery">
                     <div className="field">
-                      <span id="delivery-label">Bairro no KDS</span>
-                      <Select
-                        value={zoneId}
-                        onValueChange={(value) => {
-                          if (value) setZoneId(value);
-                        }}
-                        disabled={loadingZones || pending || done}
-                      >
-                        <SelectTrigger
-                          aria-labelledby="delivery-label"
-                          className="h-9 text-sm"
-                        >
-                          <SelectValue
-                            placeholder={
-                              loadingZones
-                                ? "Carregando bairros…"
-                                : "Selecionar bairro"
-                            }
-                          />
-                        </SelectTrigger>
-                        <SelectContent portalContainer={portalContainer}>
-                          {zones.map((zone) => (
-                            <SelectItem key={zone.id} value={zone.id}>
-                              {zone.name}
-                              {zone.city ? ` · ${zone.city}` : ""}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <span>Bairro no KDS</span>
+                      <span className="text-sm text-slate-900">
+                        {zones.find((zone) => zone.id === zoneId)?.name ||
+                          "Selecionar bairro no cabeçalho"}
+                      </span>
                       <span className="text-xs text-slate-500">
                         Suitable:{" "}
                         {order.deliveryNeighborhood || "bairro não informado"}
@@ -730,10 +915,14 @@ function Review({
                   type="submit"
                   size="sm"
                   disabled={
-                    pending || !items.length || checking || !check?.canSend
+                    pending ||
+                    openingDay ||
+                    !items.length ||
+                    checking ||
+                    !check?.canSend
                   }
                 >
-                  {pending ? "Enviando…" : "Adicionar ao KDS"}
+                  {pending ? "Enviando…" : "Enviar"}
                 </Button>
               )}
             </div>
@@ -766,6 +955,9 @@ function review(dialog: Element, order: Order) {
   }
   const host = document.createElement("div");
   host.dataset.amodomioReview = "true";
+  // The Suitable paper is a flex column. Keep the review from shrinking
+  // behind the original order content when the dialog reaches its height limit.
+  host.style.cssText = "flex:0 0 auto;min-width:0;width:100%";
   const { root, portalContainer } = attach(host);
   dialog.firstElementChild!.after(host);
   flushSync(() =>
@@ -780,7 +972,50 @@ function review(dialog: Element, order: Order) {
       />
     )
   );
+  host.scrollIntoView({ block: "nearest" });
 }
+
+function AddToKds({ dialog }: { dialog: Element }) {
+  const [error, setError] = useState("");
+  return (
+    <div className="extension">
+      <Button
+        type="button"
+        size="sm"
+        onClick={() => {
+          setError("");
+          try {
+            const order = SuitableKds.extractModal(dialog);
+            if (!order) {
+              throw new Error(
+                "Não foi possível ler o pedido. Aguarde o resumo de valores carregar e tente novamente."
+              );
+            }
+            review(dialog, order);
+          } catch (cause) {
+            console.error(
+              "[Suitable → Amodomio] Falha ao abrir revisão",
+              cause
+            );
+            setError(
+              cause instanceof Error
+                ? cause.message
+                : "Não foi possível abrir a revisão. Recarregue a extensão e a página do Suitable."
+            );
+          }
+        }}
+      >
+        Adicionar ao KDS
+      </Button>
+      {error && (
+        <p role="alert" className="mt-2 max-w-xs text-xs text-red-700">
+          {error}
+        </p>
+      )}
+    </div>
+  );
+}
+
 if (!(globalThis as any).suitableKdsStarted) {
   (globalThis as any).suitableKdsStarted = true;
   let kdsEnabled = true;
@@ -800,22 +1035,7 @@ if (!(globalThis as any).suitableKdsStarted) {
       const { root } = attach(host);
       const header = dialog.firstElementChild!;
       (header.children[1] || header).prepend(host);
-      flushSync(() =>
-        root.render(
-          <div className="extension">
-            <Button
-              type="button"
-              size="sm"
-              onClick={() => {
-                const order = SuitableKds.extractModal(dialog);
-                if (order) review(dialog, order);
-              }}
-            >
-              Adicionar ao KDS
-            </Button>
-          </div>
-        )
-      );
+      flushSync(() => root.render(<AddToKds dialog={dialog} />));
     }
   }
   chrome.runtime.onMessage?.addListener((message) => {

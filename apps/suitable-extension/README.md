@@ -14,6 +14,27 @@ por produto e rodapé de envio sempre visível. Sabores ficam vinculados à pizz
 o resumo soma quantidades dos produtos. Observações vazias ficam recolhidas.
 A revisão adapta os campos à largura disponível.
 
+O cabeçalho segue a linha do Atendimento/KDS: comanda circular, valor, tamanhos,
+origem e, para entregas, bairro. Cliente e telefone aparecem logo abaixo. Os
+detalhes iniciam recolhidos. A origem usa a lista `CHANNELS` compartilhada com
+o servidor, começa em `Suitable` e a seleção é salva no campo `channel` do
+pedido enviado ao KDS. O bairro pode ser alterado diretamente no cabeçalho,
+mesmo com os detalhes fechados, usando os bairros cadastrados no KDS. A escolha
+é enviada como `deliveryZoneId`. O botão de envio da revisão é **Enviar**.
+
+A consulta aparece em três colunas: comanda existente, estoque de massa e
+abertura do dia. Indicadores verdes, vermelhos e amarelos mostram sucesso,
+bloqueio e atenção; alertas têm animação discreta, respeitando a preferência
+de movimento reduzido. Quando o dia não está aberto, **Abrir o dia** chama
+`POST /api/kds/day/open` com a data do pedido e a chave da API pelo serviço
+de fundo. O indicador aguarda a resposta e uma nova consulta antes de mostrar
+sucesso. Falhas mantêm o erro e não enviam o pedido.
+
+A rota precisa estar publicada no servidor Amodomio. A primeira abertura
+reserva as comandas ausentes de 1 a 40, como o padrão do Atendimento; reabrir
+um dia fechado preserva os pedidos e não cria reservas. Chamadas repetidas
+para um dia aberto não alteram seus dados.
+
 O React e o CSS são empacotados localmente em `content.js`, sem CDN. Todos os
 controles ficam dentro de Shadow DOM fechado, com tema e reset próprios. O menu
 shadcn de bairros usa um portal dentro do mesmo Shadow DOM, sem renderizar em
