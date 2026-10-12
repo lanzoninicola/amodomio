@@ -66,6 +66,47 @@ const order = {
     },
   ],
 };
+test("opens the order date through the authenticated REST endpoint", async () => {
+  const send = setup(async (url, options) => {
+    assert.equal(url, "https://kds.test/api/kds/day/open");
+    assert.equal(options.method, "POST");
+    assert.equal(options.headers["x-api-key"], "test-key");
+    assert.deepEqual(JSON.parse(options.body), { date: order.date });
+    return {
+      ok: true,
+      async json() {
+        return { ok: true, status: "OPENED" };
+      },
+    };
+  });
+  assert.equal(
+    (await send(order, "https://suitable.test", "suitable:open-day")).dayStatus,
+    "OPENED"
+  );
+});
+test("opening a day from an unauthorized origin never calls the server", async () => {
+  const send = setup(() => assert.fail("Must not send"));
+  assert.equal(
+    (await send(order, "https://other.test", "suitable:open-day")).ok,
+    false
+  );
+});
+test("an opening refusal keeps the error instead of reporting success", async () => {
+  const send = setup(async () => ({
+    ok: false,
+    status: 500,
+    async json() {
+      return { ok: false, error: "Falha ao abrir dia" };
+    },
+  }));
+  const result = await send(
+    order,
+    "https://suitable.test",
+    "suitable:open-day"
+  );
+  assert.equal(result.ok, false);
+  assert.equal(result.error, "Falha ao abrir dia");
+});
 test("sends the modal items and leaves status calculation to the KDS", async () => {
   const send = setup(async (url, options) => {
     assert.equal(url, "https://kds.test/api/kds/orders");
@@ -91,6 +132,24 @@ test("sends the modal items and leaves status calculation to the KDS", async () 
 test("rejects messages from a different website without calling the API", async () => {
   const send = setup(() => assert.fail("Must not send"));
   assert.equal((await send(order, "https://other.test")).ok, false);
+});
+test("sends the selected order channel to the server", async () => {
+  const send = setup(async (_url, options) => {
+    assert.equal(JSON.parse(options.body).channel, "CARDAPIO");
+    return {
+      ok: true,
+      async json() {
+        return { ok: true, id: "created" };
+      },
+    };
+  });
+  assert.equal((await send({ ...order, channel: "CARDAPIO" })).ok, true);
+});
+test("invalid order channels prevent a POST", async () => {
+  const send = setup(() => assert.fail("Must not send"));
+  for (const channel of ["", "  ", 123, "a".repeat(101)]) {
+    assert.equal((await send({ ...order, channel })).ok, false);
+  }
 });
 test("reports duplicate numbers without treating an existing order as imported", async () => {
   const send = setup(async () => ({
