@@ -107,6 +107,6 @@ export default defineConfig(({ command }) => ({
       },
     }),
 
-    tsconfigPaths(),
+    tsconfigPaths({ projects: ["./tsconfig.json"] }),
   ].filter(Boolean),
 }));

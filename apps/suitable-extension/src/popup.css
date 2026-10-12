@@ -1,0 +1,122 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@font-face {
+  font-family: Inter;
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("fonts/Inter-400.ttf") format("truetype");
+}
+@font-face {
+  font-family: Inter;
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("fonts/Inter-600.ttf") format("truetype");
+}
+@font-face {
+  font-family: Inter;
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("fonts/Inter-700.ttf") format("truetype");
+}
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222 35% 15%;
+    --border: 216 28% 88%;
+    --input: 216 28% 84%;
+    --ring: 224 68% 38%;
+    --primary: 224 68% 38%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 215 30% 96%;
+    --secondary-foreground: 222 35% 15%;
+    --accent: 215 30% 96%;
+    --accent-foreground: 222 35% 15%;
+    --muted: 215 30% 96%;
+    --muted-foreground: 215 15% 42%;
+    --destructive: 0 72% 42%;
+    --destructive-foreground: 0 0% 100%;
+  }
+  body {
+    @apply m-0 flex w-[480px] max-h-[600px] flex-col bg-slate-50 text-sm text-foreground;
+    font-family: Inter, sans-serif;
+    line-height: 1.45;
+  }
+  header {
+    @apply flex-none border-b border-border bg-background px-5 pb-4 pt-5;
+  }
+  h1 {
+    @apply my-1 text-base font-bold;
+  }
+  h2 {
+    @apply mb-1.5 text-sm font-bold;
+  }
+  p {
+    @apply mb-3 mt-1.5 text-xs text-muted-foreground;
+  }
+  nav {
+    @apply flex flex-none flex-col gap-2.5 p-5;
+  }
+  section {
+    @apply min-h-0 flex-1 overflow-y-auto p-5;
+  }
+  label {
+    @apply my-3.5 block text-xs font-semibold;
+  }
+  label input:not([type="checkbox"]) {
+    @apply mt-1.5 bg-background font-normal;
+  }
+  footer {
+    @apply flex-none border-t border-border bg-background px-5 py-3.5;
+  }
+  button {
+    @apply cursor-pointer;
+  }
+  [hidden] {
+    display: none !important;
+  }
+}
+
+@layer components {
+  nav button {
+    @apply h-auto w-full justify-between bg-background p-4 text-left;
+  }
+  nav button span:last-child {
+    @apply text-xl text-muted-foreground;
+  }
+  .back {
+    @apply mb-3 h-auto p-0 text-xs;
+  }
+  .connection {
+    @apply mt-5 border-t border-border pt-4;
+  }
+  .toggle {
+    @apply flex items-center gap-2.5 text-sm;
+  }
+  .toggle input {
+    @apply h-[18px] w-[18px] accent-primary;
+  }
+  .info {
+    @apply my-4 rounded-md bg-blue-50 p-3 text-xs text-primary;
+  }
+  #site {
+    overflow-wrap: anywhere;
+  }
+  #config {
+    @apply flex min-h-0 flex-1 flex-col;
+  }
+  #status {
+    @apply mb-0 whitespace-pre-wrap text-slate-700;
+  }
+  #status[data-error="true"] {
+    @apply text-red-700;
+  }
+  body:has(nav[hidden]) {
+    @apply h-[600px] min-h-[600px];
+  }
+}

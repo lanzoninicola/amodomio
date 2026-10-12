@@ -20,7 +20,14 @@ shadcn de bairros usa um portal dentro do mesmo Shadow DOM, sem renderizar em
 `document.body`. Os atalhos de teclado usados dentro
 da revisão não propagam para o Suitable.
 
-Para desenvolver a interface, edite `src/content.tsx` e `src/review.css`.
+As interfaces usam Tailwind CSS e os componentes shadcn/ui compartilhados do
+projeto. O popup usa `Button` e `Input`, renderizados em HTML durante o build;
+o controlador `popup.js` mantém os fluxos de configuração e ativação.
+O CSS é compilado localmente, sem CDN ou estilos remotos.
+
+Para desenvolver a revisão, edite `src/content.tsx` e `src/review.css`.
+Para o popup de configurações, edite `src/popup.tsx` e `src/popup.css`.
+Não edite diretamente `content.js`, `popup.html` ou `popup.css`: são gerados pelo build.
 Na raiz do projeto, ative o Node da `.nvmrc` e execute:
 
 ```bash

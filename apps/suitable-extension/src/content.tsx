@@ -477,8 +477,12 @@ function Review({
           </p>
         </header>
         <div className="scroll" id="order-details" hidden={!detailsOpen}>
-          <fieldset disabled={pending || done} className="min-w-0 space-y-4">
-            <div>
+          <fieldset
+            disabled={pending || done}
+            className="review-details min-w-0"
+          >
+            <section aria-label="Dados do pedido">
+              <h3 className="section-title">Dados do pedido</h3>
               <div className="fields">
                 <label className="field">
                   Comanda
@@ -521,93 +525,95 @@ function Review({
                 </label>
               </div>
               {!order.takeAway && (
-                <div className="delivery mt-3">
-                  <div className="field">
-                    <span id="delivery-label">Bairro no KDS</span>
-                    <Select
-                      value={zoneId}
-                      onValueChange={(value) => {
-                        if (value) setZoneId(value);
-                      }}
-                      disabled={loadingZones || pending || done}
-                    >
-                      <SelectTrigger
-                        aria-labelledby="delivery-label"
-                        className="h-9 text-sm"
+                <section className="delivery-section" aria-label="Entrega">
+                  <h3 className="section-title">Entrega</h3>
+                  <div className="delivery">
+                    <div className="field">
+                      <span id="delivery-label">Bairro no KDS</span>
+                      <Select
+                        value={zoneId}
+                        onValueChange={(value) => {
+                          if (value) setZoneId(value);
+                        }}
+                        disabled={loadingZones || pending || done}
                       >
-                        <SelectValue
-                          placeholder={
-                            loadingZones
-                              ? "Carregando bairros…"
-                              : "Selecionar bairro"
-                          }
-                        />
-                      </SelectTrigger>
-                      <SelectContent portalContainer={portalContainer}>
-                        {zones.map((zone) => (
-                          <SelectItem key={zone.id} value={zone.id}>
-                            {zone.name}
-                            {zone.city ? ` · ${zone.city}` : ""}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <span className="text-xs text-slate-500">
-                      Suitable:{" "}
-                      {order.deliveryNeighborhood || "bairro não informado"}
-                      {order.deliveryCity ? ` · ${order.deliveryCity}` : ""}
-                    </span>
-                    {zoneError && (
-                      <div role="alert" className="text-xs text-red-700">
-                        {zoneError}{" "}
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setZoneAttempt((value) => value + 1)}
+                        <SelectTrigger
+                          aria-labelledby="delivery-label"
+                          className="h-9 text-sm"
                         >
-                          Tentar novamente
-                        </Button>
-                      </div>
-                    )}
-                    {!loadingZones && !zoneError && !zoneId && (
-                      <span className="text-xs text-amber-700">
-                        Selecione o bairro correspondente. Nenhum cadastro será
-                        criado automaticamente.
+                          <SelectValue
+                            placeholder={
+                              loadingZones
+                                ? "Carregando bairros…"
+                                : "Selecionar bairro"
+                            }
+                          />
+                        </SelectTrigger>
+                        <SelectContent portalContainer={portalContainer}>
+                          {zones.map((zone) => (
+                            <SelectItem key={zone.id} value={zone.id}>
+                              {zone.name}
+                              {zone.city ? ` · ${zone.city}` : ""}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <span className="text-xs text-slate-500">
+                        Suitable:{" "}
+                        {order.deliveryNeighborhood || "bairro não informado"}
+                        {order.deliveryCity ? ` · ${order.deliveryCity}` : ""}
                       </span>
-                    )}
+                      {zoneError && (
+                        <div role="alert" className="text-xs text-red-700">
+                          {zoneError}{" "}
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setZoneAttempt((value) => value + 1)}
+                          >
+                            Tentar novamente
+                          </Button>
+                        </div>
+                      )}
+                      {!loadingZones && !zoneError && !zoneId && (
+                        <span className="text-xs text-amber-700">
+                          Selecione o bairro correspondente. Nenhum cadastro
+                          será criado automaticamente.
+                        </span>
+                      )}
+                    </div>
+                    <label className="field">
+                      Taxa de entrega (R$)
+                      <Input
+                        name="deliveryFee"
+                        inputMode="decimal"
+                        required
+                        value={fee}
+                        onChange={(e) => setFee(e.target.value)}
+                        onBlur={() => {
+                          if (fee.trim() && Number.isFinite(parseMoney(fee)))
+                            setFee(money(parseMoney(fee)));
+                        }}
+                        className="h-9 font-mono"
+                      />
+                    </label>
+                    <p className="delivery-hint text-xs text-slate-500">
+                      O total do pedido já inclui a taxa de entrega.
+                    </p>
                   </div>
-                  <label className="field">
-                    Taxa de entrega (R$)
-                    <Input
-                      name="deliveryFee"
-                      inputMode="decimal"
-                      required
-                      value={fee}
-                      onChange={(e) => setFee(e.target.value)}
-                      onBlur={() => {
-                        if (fee.trim() && Number.isFinite(parseMoney(fee)))
-                          setFee(money(parseMoney(fee)));
-                      }}
-                      className="h-9 font-mono"
-                    />
-                  </label>
-                  <p className="delivery-hint text-xs text-slate-500">
-                    O total do pedido já inclui a taxa de entrega.
-                  </p>
-                </div>
+                </section>
               )}
-            </div>
-            <section aria-label="Pizzas e itens">
-              <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Pizzas e itens · {items.length}
+            </section>
+            <section className="items-section" aria-label="Pizzas e itens">
+              <h3 className="section-title items-title">
+                Pizzas e itens{" "}
+                <span className="section-count">{items.length}</span>
               </h3>
               {items.map((item, index) => (
                 <article className="item" key={index}>
                   <div className="item-row">
-                    <span className="item-label text-sm font-medium text-slate-600">
-                      Item {index + 1}
-                    </span>
+                    <span className="item-label">Item {index + 1}</span>
                     <label className="field">
                       Qtd.
                       <Input
