@@ -50,7 +50,8 @@
       "Bash(npx tsc *)",
       "Bash(sed -i 's/async function request\\(payload: Record<string, unknown>\\) {/async function request\\(payload: Record<string, unknown>\\): Promise<any> {/' apps/suitable-extension/src/content.tsx)",
       "Bash(sed -i 's/expected.length === received.length \\\\&\\\\& timingSafeEqual\\(expected, received\\)/expected.length === received.length \\\\&\\\\&\\\\n    timingSafeEqual\\(new Uint8Array\\(expected\\), new Uint8Array\\(received\\)\\)/' app/domain/auth/embed-session.server.ts)",
-      "Bash(npx vitest *)"
+      "Bash(npx vitest *)",
+      "Bash(grep -rhno \"\\\\\"/api/[a-zA-Z0-9_./\\\\$-]*\\\\|\\\\`/api/[a-zA-Z0-9_./\\\\$-]*\\\\|'/api/[a-zA-Z0-9_./\\\\$-]*\" app/components/admin/import-stock-*.tsx app/routes/admin.import-stock-movements.\\\\$batchId*.tsx | sort -u; ls app/routes | grep \"admin-stock-import-batch\")"
     ]
   },
   "hooks": {

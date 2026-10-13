@@ -55,25 +55,44 @@ export function embedCookiePath(batchId: string) {
   return `/admin/import-stock-movements/${encodeURIComponent(batchId)}`;
 }
 
-/** Set-Cookie value for the iframe session, limited to a single batch path. */
+// API routes called by the batch screen (fetcher posts outside the batch path).
+const EMBED_API_PATHS = ["/api/admin-stock-import-batch-import-step"];
+
+/** Set-Cookie values for the iframe session, limited to the batch screen paths. */
 export async function commitEmbedSession(batchId: string) {
   const session = await embedStorage.getSession();
   session.set("batchId", batchId);
   session.set("expires", Date.now() + SESSION_TTL_S * 1000);
-  const cookie = await embedStorage.commitSession(session, {
-    path: embedCookiePath(batchId),
-  });
-  return `${cookie}; Partitioned`;
+  return Promise.all(
+    [embedCookiePath(batchId), ...EMBED_API_PATHS].map(
+      async (path) =>
+        `${await embedStorage.commitSession(session, { path })}; Partitioned`
+    )
+  );
 }
 
-export async function readEmbedUser(
-  cookieHeader: string | null
-): Promise<LoggedUser> {
+async function readEmbedBatchId(cookieHeader: string | null) {
   if (!cookieHeader?.includes(EMBED_COOKIE_NAME)) return null;
   const session = await embedStorage.getSession(cookieHeader);
   const batchId = session.get("batchId");
   const expires = Number(session.get("expires"));
   if (!batchId || !Number.isFinite(expires) || expires < Date.now())
     return null;
-  return EMBED_USER;
+  return String(batchId);
+}
+
+export async function readEmbedUser(
+  cookieHeader: string | null
+): Promise<LoggedUser> {
+  return (await readEmbedBatchId(cookieHeader)) ? EMBED_USER : null;
+}
+
+/** True when the request may act on this batch (normal login, or an embed session for the same batch). */
+export async function embedSessionAllowsBatch(
+  user: LoggedUser,
+  cookieHeader: string | null,
+  batchId: string
+) {
+  if (!user || user.email !== EMBED_USER_EMAIL) return true;
+  return (await readEmbedBatchId(cookieHeader)) === batchId;
 }

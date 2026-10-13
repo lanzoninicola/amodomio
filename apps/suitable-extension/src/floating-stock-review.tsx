@@ -1,10 +1,20 @@
-import { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { GripHorizontal, X } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import type { PurchaseNote } from "./stock-parser";
 
 const WIDTH = 1080;
+const MIN_WIDTH = 480;
+const MIN_HEIGHT = 320;
+type Edge = "e" | "s" | "se" | "w" | "sw";
+const HANDLES: { edge: Edge; className: string; cursor: string }[] = [
+  { edge: "e", className: "right-0 top-3 bottom-3 w-2", cursor: "ew-resize" },
+  { edge: "w", className: "left-0 top-3 bottom-3 w-2", cursor: "ew-resize" },
+  { edge: "s", className: "bottom-0 left-3 right-3 h-2", cursor: "ns-resize" },
+  { edge: "se", className: "bottom-0 right-0 h-4 w-4", cursor: "nwse-resize" },
+  { edge: "sw", className: "bottom-0 left-0 h-4 w-4", cursor: "nesw-resize" },
+];
 
 export function FloatingStockReview({
   embedUrl,
@@ -30,6 +40,66 @@ export function FloatingStockReview({
     ),
     y: 64,
   });
+  const [size, setSize] = useState(() => ({
+    w: Math.min(WIDTH, window.innerWidth - 16),
+    h: Math.min(820, window.innerHeight - 80),
+  }));
+  const resize = useRef<{
+    pointerId: number;
+    edge: Edge;
+    x: number;
+    y: number;
+    left: number;
+    w: number;
+    h: number;
+  } | null>(null);
+  function startResize(edge: Edge, event: React.PointerEvent) {
+    if (event.button !== 0) return;
+    event.preventDefault();
+    event.stopPropagation();
+    resize.current = {
+      pointerId: event.pointerId,
+      edge,
+      x: event.clientX,
+      y: event.clientY,
+      left: position.x,
+      w: panel.current?.offsetWidth || size.w,
+      h: panel.current?.offsetHeight || size.h,
+    };
+    try {
+      (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
+    } catch {}
+  }
+  function moveResize(event: React.PointerEvent) {
+    const start = resize.current;
+    if (!start || start.pointerId !== event.pointerId) return;
+    const dx = event.clientX - start.x;
+    const dy = event.clientY - start.y;
+    let w = start.w;
+    let h = start.h;
+    let x = start.left;
+    if (start.edge.includes("e")) w = start.w + dx;
+    if (start.edge.includes("w")) {
+      w = start.w - dx;
+      x = start.left + dx;
+    }
+    if (start.edge.includes("s")) h = start.h + dy;
+    const maxW = window.innerWidth - 16;
+    const maxH = window.innerHeight - position.y - 8;
+    const nextW = Math.max(MIN_WIDTH, Math.min(w, maxW));
+    if (start.edge.includes("w")) x = start.left + start.w - nextW;
+    setSize({
+      w: nextW,
+      h: Math.max(MIN_HEIGHT, Math.min(h, Math.max(MIN_HEIGHT, maxH))),
+    });
+    setPosition((current) => ({
+      ...current,
+      x: Math.max(8, Math.min(x, window.innerWidth - nextW - 8)),
+    }));
+  }
+  function endResize(event: React.PointerEvent) {
+    if (resize.current?.pointerId === event.pointerId) resize.current = null;
+  }
   function constrain(x: number, y: number) {
     return {
       x: Math.max(
@@ -71,10 +141,9 @@ export function FloatingStockReview({
         display: hidden ? "none" : "flex",
         left: position.x,
         top: position.y,
-        width: WIDTH,
-        height: "min(820px, calc(100vh - 80px))",
+        width: size.w,
+        height: size.h,
         maxHeight: "calc(100vh - 16px)",
-        resize: "both",
       }}
       onKeyDown={(event) => {
         if (event.key === "Escape" && !event.defaultPrevented) {
@@ -164,11 +233,27 @@ export function FloatingStockReview({
           <X className="h-4 w-4" aria-hidden="true" />
         </Button>
       </header>
-      <iframe
-        title="Importação de estoque Amodomio"
-        src={embedUrl}
-        className="min-h-0 w-full flex-1 border-0 bg-white"
-      />
+      <div className="flex min-h-0 flex-1 bg-white px-5 py-4">
+        <iframe
+          title="Importação de estoque Amodomio"
+          src={embedUrl}
+          className="min-h-0 w-full flex-1 border-0 bg-white"
+        />
+      </div>
+      {HANDLES.map(({ edge, className, cursor }) => (
+        <div
+          key={edge}
+          data-stock-resize={edge}
+          aria-hidden="true"
+          className={`absolute z-10 ${className}`}
+          style={{ cursor, touchAction: "none" }}
+          onPointerDown={(event) => startResize(edge, event)}
+          onPointerMove={moveResize}
+          onPointerUp={endResize}
+          onPointerCancel={endResize}
+          onLostPointerCapture={endResize}
+        />
+      ))}
     </section>,
     portalContainer
   );

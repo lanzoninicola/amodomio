@@ -1,4 +1,5 @@
 import type { ActionFunctionArgs } from '@remix-run/node';
+import { embedSessionAllowsBatch } from '~/domain/auth/embed-session.server';
 import { authenticator } from '~/domain/auth/google.server';
 import { importStockMovementImportBatchStep } from '~/domain/stock-movement/stock-movement-import.server';
 import { badRequest, ok, serverError } from '~/utils/http-response.server';
@@ -16,6 +17,8 @@ export async function action({ request }: ActionFunctionArgs) {
     const formData = await request.formData();
     const batchId = str(formData.get('batchId'));
     if (!batchId) return badRequest('Lote inválido');
+    if (!(await embedSessionAllowsBatch(user, request.headers.get('Cookie'), batchId)))
+      return badRequest('Sessão sem acesso a este lote');
 
     const result = await importStockMovementImportBatchStep({
       batchId,
