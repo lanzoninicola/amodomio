@@ -2,6 +2,7 @@ import { LoaderFunction, type LinksFunction, MetaFunction, LoaderFunctionArgs, r
 import { Link, Outlet, useFetcher, useLoaderData, useLocation, useRevalidator, useRouteError } from "@remix-run/react";
 import { AdminHeader } from "~/components/layout/admin-header/admin-header";
 import { SidebarProvider, SidebarTrigger } from "~/components/ui/sidebar";
+import { EMBED_USER_EMAIL } from "~/domain/auth/embed-session.server";
 import { authenticator } from "~/domain/auth/google.server";
 import { LoggedUser } from "~/domain/auth/types.server";
 import ADMIN_NAVIGATION_LINKS from "~/domain/website-navigation/links/admin-navigation";
@@ -90,9 +91,10 @@ export const loader: LoaderFunction = async ({ request }: LoaderFunctionArgs) =>
     }
 
     const slug = lastUrlSegment(request.url)
-    const whatsappNoResponseEnabled = isMobileRoute ? false : await isWhatsappNoResponseEnabled();
+    const isEmbed = (user as any)?.email === EMBED_USER_EMAIL;
+    const whatsappNoResponseEnabled = isMobileRoute || isEmbed ? false : await isWhatsappNoResponseEnabled();
 
-    const [pinnedNav, pendingReplyAlerts, topNavItems, adminNavigationMenuLayout, actionNotifications] = isMobileRoute
+    const [pinnedNav, pendingReplyAlerts, topNavItems, adminNavigationMenuLayout, actionNotifications] = isMobileRoute || isEmbed
         ? [[], [], [], "sidebar" as const, []]
         : await Promise.all([
             prismaClient.adminNavigationClick.findMany({
@@ -147,6 +149,7 @@ export const loader: LoaderFunction = async ({ request }: LoaderFunctionArgs) =>
 
     return ok({
         user,
+        isEmbed,
         slug,
         environment,
         prismaDbName,
@@ -328,6 +331,14 @@ export default function AdminOutlet() {
             });
         }
     }, []);
+
+    if (loaderData?.payload?.isEmbed) {
+        return (
+            <div className="min-h-screen bg-white" data-embed="suitable">
+                <Outlet context={{ loggedUser }} />
+            </div>
+        );
+    }
 
     if (isMobileRoute) {
         return (

@@ -1,7 +1,6 @@
 module.exports = {
   content: [
     "apps/suitable-extension/src/**/*.{ts,tsx}",
-    "app/components/admin/stock-batch-review.tsx",
     "app/components/ui/{button,input,textarea,select}.tsx",
   ],
   theme: {

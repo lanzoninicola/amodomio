@@ -1,5 +1,4 @@
 import { FloatingStockReview } from "./floating-stock-review";
-import type { StockBatchView } from "~/components/admin/stock-batch-review";
 import {
   invoiceFromButton,
   isProducts,
@@ -1219,11 +1218,11 @@ function StockEntry({
   note: PurchaseNote | null;
   portalContainer: HTMLElement;
 }) {
-  const [view, setView] = useState<StockBatchView | null>(null);
+  const [view, setView] = useState<{ embedUrl: string } | null>(null);
   const [collapsed, setCollapsed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  async function request(payload: Record<string, unknown>) {
+  async function request(payload: Record<string, unknown>): Promise<any> {
     const result = await chrome.runtime.sendMessage({
       type: "suitable:stock",
       payload,
@@ -1256,7 +1255,10 @@ function StockEntry({
                 setError("");
                 try {
                   const input = await collectProducts(dialog, note);
-                  setView(await request({ action: "create", note: input }));
+                  const result = await request({ action: "create", note: input });
+                  if (!result.embedUrl)
+                    throw new Error("Atualize o servidor Amodomio.");
+                  setView({ embedUrl: result.embedUrl });
                 } catch (cause) {
                   setError(
                     cause instanceof Error ? cause.message : "Falha ao ler nota"
@@ -1310,9 +1312,8 @@ function StockEntry({
       </div>
       {view && (
         <FloatingStockReview
-          view={view}
+          embedUrl={view.embedUrl}
           note={note}
-          request={request}
           portalContainer={portalContainer}
           hidden={collapsed}
           onClose={() => setCollapsed(true)}

@@ -41,7 +41,16 @@
       "Bash(sleep 4 && cat /tmp/remix-dev.log)",
       "Read(//tmp/**)",
       "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:3000/cardapio)",
-      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:3002/cardapio)"
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:3002/cardapio)",
+      "Bash(ls app/routes | grep -i \"import-stock\" ; wc -l app/routes/admin.import-stock-movements.\\\\$id*.tsx app/components/admin/stock-batch-review.tsx apps/suitable-extension/src/*.tsx; sed -n 1,60p graphify-out/GRAPH_REPORT.md | head -5)",
+      "Bash(sed -n 78,135p app/routes/admin.tsx; grep -rn \"isAuthenticated\" app/routes/admin.import-stock-movements.\\\\$batchId.tsx | head -3; grep -rn \"export\" app/domain/auth/user-session.server.ts | head -20)",
+      "Bash(grep -n \"roles\" app/routes/admin.tsx app/routes/admin.import-stock-movements.\\\\$batchId.tsx app/components/admin/import-stock-lines.tsx | head; grep -n \"AUTH_COOKIE_SECRET\" app/domain/auth/constants.server.ts; sed -n 2215,2235p app/routes/admin.import-stock-movements.\\\\$batchId.tsx; ls app/routes | grep -i \"^login\\\\|^embed\")",
+      "Bash(python3 -)",
+      "Bash(git rm *)",
+      "Bash(npx tsc *)",
+      "Bash(sed -i 's/async function request\\(payload: Record<string, unknown>\\) {/async function request\\(payload: Record<string, unknown>\\): Promise<any> {/' apps/suitable-extension/src/content.tsx)",
+      "Bash(sed -i 's/expected.length === received.length \\\\&\\\\& timingSafeEqual\\(expected, received\\)/expected.length === received.length \\\\&\\\\&\\\\n    timingSafeEqual\\(new Uint8Array\\(expected\\), new Uint8Array\\(received\\)\\)/' app/domain/auth/embed-session.server.ts)",
+      "Bash(npx vitest *)"
     ]
   },
   "hooks": {

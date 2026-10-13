@@ -2,24 +2,19 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { GripHorizontal, X } from "lucide-react";
 import { Button } from "~/components/ui/button";
-import {
-  StockBatchReview,
-  type StockBatchView,
-  type StockRequest,
-} from "~/components/admin/stock-batch-review";
 import type { PurchaseNote } from "./stock-parser";
 
+const WIDTH = 1080;
+
 export function FloatingStockReview({
-  view,
+  embedUrl,
   note,
-  request,
   portalContainer,
   hidden,
   onClose,
 }: {
-  view: StockBatchView;
+  embedUrl: string;
   note: PurchaseNote | null;
-  request: StockRequest;
   portalContainer: HTMLElement;
   hidden: boolean;
   onClose: () => void;
@@ -31,7 +26,7 @@ export function FloatingStockReview({
   const [position, setPosition] = useState({
     x: Math.max(
       8,
-      window.innerWidth - Math.min(640, window.innerWidth - 16) - 24
+      window.innerWidth - Math.min(WIDTH, window.innerWidth - 16) - 24
     ),
     y: 64,
   });
@@ -43,7 +38,7 @@ export function FloatingStockReview({
           x,
           window.innerWidth -
             (panel.current?.offsetWidth ||
-              Math.min(640, window.innerWidth - 16)) -
+              Math.min(WIDTH, window.innerWidth - 16)) -
             8
         )
       ),
@@ -71,12 +66,15 @@ export function FloatingStockReview({
       aria-modal="false"
       aria-labelledby="stock-link-title"
       hidden={hidden}
-      className="extension fixed z-[1400] flex w-[640px] max-w-[calc(100vw-16px)] flex-col overflow-hidden rounded-xl border bg-white shadow-xl"
+      className="extension fixed z-[1400] flex max-w-[calc(100vw-16px)] flex-col overflow-hidden rounded-xl border bg-white shadow-xl"
       style={{
         display: hidden ? "none" : "flex",
         left: position.x,
         top: position.y,
+        width: WIDTH,
+        height: "min(820px, calc(100vh - 80px))",
         maxHeight: "calc(100vh - 16px)",
+        resize: "both",
       }}
       onKeyDown={(event) => {
         if (event.key === "Escape" && !event.defaultPrevented) {
@@ -146,7 +144,7 @@ export function FloatingStockReview({
           />
           <div className="min-w-0">
             <h2 id="stock-link-title" className="font-semibold text-slate-900">
-              Vincular produtos ao estoque
+              Importação de estoque
             </h2>
             <p className="mt-0.5 truncate text-xs text-slate-500">
               {note
@@ -166,14 +164,11 @@ export function FloatingStockReview({
           <X className="h-4 w-4" aria-hidden="true" />
         </Button>
       </header>
-      <div className="min-h-0 overflow-auto p-4">
-        <StockBatchReview
-          initial={view}
-          request={request}
-          portalContainer={portalContainer}
-          portalZIndex={1500}
-        />
-      </div>
+      <iframe
+        title="Importação de estoque Amodomio"
+        src={embedUrl}
+        className="min-h-0 w-full flex-1 border-0 bg-white"
+      />
     </section>,
     portalContainer
   );

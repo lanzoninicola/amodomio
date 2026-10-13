@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { json, type ActionFunctionArgs } from "@remix-run/node";
+import { createEmbedToken } from "~/domain/auth/embed-session.server";
 import { authenticator } from "~/domain/auth/google.server";
 import prisma from "~/lib/prisma/client.server";
 import { restApi } from "~/domain/rest-api/rest-api.entity.server";
@@ -210,6 +211,7 @@ export async function action({ request }: ActionFunctionArgs) {
         ok: true,
         batchId,
         path: `/admin/import-stock-movements/${batchId}`,
+        embedPath: `/embed/stock-batch/${batchId}?token=${createEmbedToken(batchId)}`,
         summary: view.summary,
         suppliers: await prisma.supplier.findMany({
           select: { id: true, name: true },

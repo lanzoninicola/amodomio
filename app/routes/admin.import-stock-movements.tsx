@@ -1,8 +1,15 @@
-import { Link, Outlet } from '@remix-run/react';
+import { Link, Outlet, useRouteLoaderData } from '@remix-run/react';
 import { ChevronLeft, PlusCircle } from 'lucide-react';
 import Container from '~/components/layout/container/container';
 
 export default function AdminImportStockMovementsOutlet() {
+  const admin = useRouteLoaderData<any>('routes/admin');
+  if (admin?.payload?.isEmbed)
+    return (
+      <Container fullWidth className="px-4 py-2">
+        <Outlet />
+      </Container>
+    );
   return (
     <Container fullWidth className="px-4">
       <div className="flex flex-col gap-6">

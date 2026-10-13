@@ -54,6 +54,9 @@ chrome.runtime.onMessage.addListener((message, sender, respond) => {
       return {
         ...result,
         url: result.path ? new URL(result.path, serverUrl).href : undefined,
+        embedUrl: result.embedPath
+          ? new URL(result.embedPath, serverUrl).href
+          : undefined,
       };
     }
     if (message.type === "suitable:open-day") {
