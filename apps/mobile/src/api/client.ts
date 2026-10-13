@@ -4,6 +4,46 @@ import {
   PUBLIC_SERVER_URL,
 } from "../config/server-presets";
 import type { KdsOrder, KdsStatus, KdsUser } from "../kds/types";
+import type {
+  DoughCounts,
+  DoughSnapshot,
+  DoughStockData,
+  DoughStockIntent,
+} from "../dough-stock/types";
+
+export function getDoughStock(
+  baseUrl: string,
+  token: string,
+  date: string,
+  signal?: AbortSignal
+) {
+  return request<DoughStockData>(
+    baseUrl,
+    `/api/kds/dough-stock?date=${encodeURIComponent(date)}`,
+    { signal },
+    token
+  );
+}
+
+export function submitDoughStock(
+  baseUrl: string,
+  token: string,
+  date: string,
+  intent: DoughStockIntent,
+  counts: DoughCounts
+) {
+  return request<{
+    ok: boolean;
+    stock?: DoughSnapshot;
+    message: string;
+    whatsappSent: boolean;
+  }>(
+    baseUrl,
+    "/api/kds/dough-stock",
+    { method: "POST", body: JSON.stringify({ date, intent, counts }) },
+    token
+  );
+}
 
 export class ApiError extends Error {
   constructor(message: string, readonly status: number) {
@@ -66,6 +106,48 @@ async function request<T>(
     );
   }
   return data as T;
+}
+
+export function getRecipes(
+  baseUrl: string,
+  token: string,
+  params = "",
+  signal?: AbortSignal
+) {
+  return request<{
+    recipes?: import("../recipes/types").RecipeSummary[];
+    recipe?: import("../recipes/types").MobileRecipe;
+    templates?: import("../recipes/types").TemplateSummary[];
+    template?: import("../recipes/types").SavedTemplate;
+  }>(
+    baseUrl,
+    `/api/mobile/recipes${params ? `?${params}` : ""}`,
+    { signal },
+    token
+  );
+}
+
+export function submitRecipe(
+  baseUrl: string,
+  token: string,
+  body: {
+    recipeId: string;
+    intent: "create-template" | "delete-template" | "save-display-unit";
+    name?: string;
+    description?: string;
+    scaleFactor?: number;
+    selectedUnits?: Record<string, string>;
+    templateId?: string;
+    ingredientId?: string;
+    unit?: string;
+  }
+) {
+  return request<{ createdTemplateId?: string }>(
+    baseUrl,
+    "/api/mobile/recipes",
+    { method: "POST", body: JSON.stringify(body) },
+    token
+  );
 }
 
 export async function getServerPresets(signal?: AbortSignal) {

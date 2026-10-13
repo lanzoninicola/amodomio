@@ -21,7 +21,6 @@ export function DesktopBoard({
   onToggleOven,
   onChooseStatus,
   onContact,
-  sentMessages,
 }: {
   orders: KdsOrder[];
   now: number;
@@ -30,7 +29,6 @@ export function DesktopBoard({
   onToggleOven: (order: KdsOrder) => void;
   onChooseStatus: (order: KdsOrder) => void;
   onContact: (order: KdsOrder) => void;
-  sentMessages: Record<string, { status: string; sentAt: string }>;
 }) {
   const [visible, setVisible] = useState<KdsStatus[]>(defaults);
   const [closed, setClosed] = useState<KdsStatus[]>(
@@ -38,7 +36,7 @@ export function DesktopBoard({
   );
   const { widget } = useDesktopWindow();
   const [gridWidth, setGridWidth] = useState(0);
-  const cardWidth = Math.max(0, Math.floor((gridWidth - 16 - 6) / 2));
+  const cardWidth = Math.max(0, Math.floor((gridWidth - 22) / 2));
   const completion = averageCompletionMinutes(orders);
 
   useEffect(() => {
@@ -375,21 +373,12 @@ export function DesktopBoard({
                           <View
                             style={{
                               marginLeft: "auto",
+                              flex: 1,
+                              minWidth: 0,
                               alignItems: "flex-end",
                               gap: 2,
                             }}
                           >
-                            {sentMessages[order.id] ? (
-                              <Text style={{ fontSize: 10, color: "#25d366" }}>
-                                ✓ Enviada · {sentMessages[order.id].status} ·{" "}
-                                {new Date(
-                                  sentMessages[order.id].sentAt
-                                ).toLocaleTimeString("pt-BR", {
-                                  hour: "2-digit",
-                                  minute: "2-digit",
-                                })}
-                              </Text>
-                            ) : null}
                             <OrderWhatsappButton
                               order={order}
                               onContact={onContact}

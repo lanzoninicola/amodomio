@@ -961,6 +961,13 @@ const ADMIN_NAVIGATION_LINKS: WebsiteNavigationConfig = {
           tags: ["distancia", "raio", "entrega", "km", "area"],
         },
         {
+          title: "Z-API Envios e conexão",
+          href: "/admin/zapi/envios",
+          items: [],
+          disabled: false,
+          tags: ["zapi", "whatsapp", "envio", "conexao", "reconectar", "qr code"],
+        },
+        {
           title: "Z-API Contatos",
           href: "/admin/zapi/contacts",
           items: [],

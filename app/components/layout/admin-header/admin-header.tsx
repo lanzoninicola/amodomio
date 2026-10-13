@@ -20,6 +20,7 @@ import { toast } from "~/components/ui/use-toast";
 
 import { UserNav } from "~/domain/auth/components/user-nav";
 import type { LoggedUser } from "~/domain/auth/types.server";
+import { WhatsappHeaderStatus, useWhatsappHeaderStatus } from "~/components/z-api/whatsapp-header-status";
 
 type TopNavItem = {
     id: string;
@@ -167,6 +168,8 @@ export function AdminHeader({
     topNavItems = [],
     actionNotifications = [],
 }: AdminHeaderProps) {
+    const whatsappStatus = useWhatsappHeaderStatus(Boolean(loggedUser));
+    const canManageWhatsapp = Boolean(loggedUser && loggedUser.roles?.some((role) => role === "admin" || role === "superAdmin"));
     const [openingStatus, setOpeningStatus] = useState<StoreOpeningStatusResponse | null>(null)
     const [isLoading, setIsLoading] = useState(false)
     const [openSearch, setOpenSearch] = useState(false)
@@ -355,6 +358,7 @@ export function AdminHeader({
                                     </DropdownMenuContent>
                                 </DropdownMenu>
                             </div>
+                            {loggedUser ? <div className="hidden md:block"><WhatsappHeaderStatus status={whatsappStatus} canManage={canManageWhatsapp} /></div> : null}
                             <AdminActionNotificationsMenu notifications={actionNotifications} />
                             <Link to={"/admin"}>
                                 <div className="flex flex-col items-center gap-0.5 hover:bg-slate-50 rounded-md p-2">
@@ -392,22 +396,22 @@ export function AdminHeader({
                 </div>
 
                 {/* Mobile store status banner */}
-                <div className="md:hidden">
+                <div className={cn("md:hidden", loggedUser && "grid grid-cols-2 items-stretch border-t")}>
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                             <button
                                 disabled={!openingStatus}
                                 className={cn(
-                                    "w-full flex items-center justify-center gap-2 px-4 py-1.5 text-xs font-semibold uppercase tracking-wide",
+                                    "w-full min-w-0 flex items-center justify-center gap-1 px-2 py-1.5 text-xs font-semibold uppercase tracking-wide",
                                     openingStatus?.isOpen
                                         ? "bg-emerald-500 text-white"
                                         : "bg-red-500 text-white"
                                 )}
                             >
-                                <span className="h-2 w-2 rounded-full bg-white/80" />
-                                {statusLabel}
+                                <span className="h-2 w-2 shrink-0 rounded-full bg-white/80" />
+                                <span className="truncate">{statusLabel}</span>
                                 {isManual && (
-                                    <span className="rounded-full bg-white/20 px-2 py-0.5 text-[10px]">
+                                    <span className="shrink-0 rounded-full bg-white/20 px-1 py-0.5 text-[10px]">
                                         manual
                                     </span>
                                 )}
@@ -430,6 +434,7 @@ export function AdminHeader({
                             </DropdownMenuItem>
                         </DropdownMenuContent>
                     </DropdownMenu>
+                    {loggedUser ? <WhatsappHeaderStatus status={whatsappStatus} canManage={canManageWhatsapp} compact /> : null}
                 </div>
 
                 <CommandDialog

@@ -41,7 +41,7 @@ for (const [width, delivery, blocked] of [
       window.jsErrors=[];window.addEventListener("error",event=>window.jsErrors.push(event.message));const originalAttach = Element.prototype.attachShadow;
       Element.prototype.attachShadow = function(options) { return originalAttach.call(this, {...options, mode: 'open'}); };
       window.dayOpened=false;window.openCalls=0;window.checkCalls=0;
-      window.chrome = { runtime: { async sendMessage(message) { if(message.type==='suitable:open-day'){ window.openCalls++; await new Promise(resolve=>setTimeout(resolve,60)); if(${
+      window.chrome = { runtime: { async sendMessage(message) { if(message.type==='suitable:customer') return {ok:true,purchaseSummary:{last:'2026-10-10T00:00:00-03:00',weekly:1.5,monthly:6}}; if(message.type==='suitable:open-day'){ window.openCalls++; await new Promise(resolve=>setTimeout(resolve,60)); if(${
         blocked === "open-error"
       }) return {ok:false,error:'Falha ao abrir dia'}; window.dayOpened=true; return {ok:true,dayStatus:'OPENED'}; } if(message.type==='suitable:check') {window.checkCalls++; return {ok:true,check:{exists:${
         blocked === "exists"
@@ -166,7 +166,7 @@ for (const [width, delivery, blocked] of [
               await new Promise(resolve=>setTimeout(resolve,20));
               document.body.dataset.result=JSON.stringify({blocked:true,errorColor:getComputedStyle(review.querySelectorAll('.check-column')[${
                 blocked === "exists" ? 0 : 1
-              }]).color,disabled:review.querySelector('button[type=submit]').disabled,sent:!!window.sent,text:review.querySelector('header').textContent});
+              }]).color,disabled:review.querySelector('button[type=submit]').disabled,sent:!!window.sent,text:review.querySelector('header').textContent,stock:[...review.querySelectorAll('.dough-number')].map(el=>({size:el.querySelector('span').textContent,value:el.querySelector('strong').textContent,shortage:el.dataset.shortage}))});
               return;
             }
             let isolatedPortal = null;
@@ -264,8 +264,14 @@ for (const [width, delivery, blocked] of [
           blocked === "exists" ? /já existe no servidor/ : /Massa insuficiente/
         );
         if (blocked === "shortage") {
-          assert.match(result.text, /I: 0 disponíveis/);
-          assert.match(result.text, /P: 20 disponíveis/);
+          assert.deepEqual(
+            result.stock.find((row) => row.size === "I"),
+            { size: "I", value: "0", shortage: "true" }
+          );
+          assert.deepEqual(
+            result.stock.find((row) => row.size === "P"),
+            { size: "P", value: "20", shortage: "false" }
+          );
         }
         return;
       }

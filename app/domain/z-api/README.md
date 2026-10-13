@@ -49,6 +49,8 @@ Referências oficiais: [conexão](https://developer.z-api.io/instance/status), [
 
 ## Reconectar pelo painel
 
+O cabeçalho administrativo mostra o estado do WhatsApp ao lado do estado da loja, no desktop e no celular. O menu do indicador permite verificar a conexão e abrir a reconexão ou o QR Code em uma janela, sem sair da tela atual. O estado é consultado ao carregar, ao voltar à janela, ao abrir o menu e a cada 60 segundos enquanto a aba estiver visível; não é uma conexão em tempo real. Falhas na consulta são exibidas como estado não verificado. Somente administradores podem executar reconexão e pareamento.
+
 Administradores (`admin` ou `superAdmin`) podem usar **Tentar reconectar** em `/admin/zapi/envios`. A operação verifica a conexão antes de agir. Se estiver desconectada, chama `/restart` uma vez e consulta a conexão até quatro vezes, com intervalo de dois segundos. Se a sessão continuar desconectada, solicita o QR Code de pareamento.
 
 O QR Code fica visível por até 20 segundos, com verificações de conexão durante esse período. Depois de expirar, use **Gerar novo QR Code**; essa ação não reinicia a instância. **Verificar conexão** também não reinicia. Se o WhatsApp pedir autenticação adicional por Challenge, a tela orienta concluir pelo painel Z-API.

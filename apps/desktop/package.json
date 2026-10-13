@@ -24,6 +24,8 @@
       "main.cjs",
       "preload.cjs",
       "policy.cjs",
+      "oven-popup.cjs",
+      "oven-alert-preload.cjs",
       "web/**/*"
     ],
     "win": {

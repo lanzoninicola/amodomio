@@ -1,3 +1,4 @@
+import { syncKdsOrderHistory } from "~/domain/crm/order-history.server";
 import { json } from "@remix-run/node";
 import { Prisma } from "@prisma/client";
 import prisma from "~/lib/prisma/client.server";
@@ -325,6 +326,7 @@ export async function createImportedOrder(body: Record<string, unknown>) {
             select,
           })
         : await tx.kdsDailyOrderDetail.create({ data, select });
+      await syncKdsOrderHistory(tx, { ...data, id: created.id } as Prisma.KdsDailyOrderDetailGetPayload<{}>);
       const total = await tx.kdsDailyOrderDetail.aggregate({
         where: { dateInt },
         _sum: { orderAmount: true },

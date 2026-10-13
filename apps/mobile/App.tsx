@@ -28,6 +28,9 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   useWindowDimensions,
+  KeyboardAvoidingView,
+  Keyboard,
+  TextInput,
   ActivityIndicator,
   Platform,
   AppState,
@@ -81,6 +84,8 @@ import { Card } from "./src/ui/Card";
 import { Input } from "./src/ui/Input";
 import { Screen } from "./src/ui/Screen";
 import { theme } from "./src/ui/theme";
+import { DoughStockScreen } from "./src/dough-stock/DoughStockScreen";
+import { RecipesScreen } from "./src/recipes/RecipesScreen";
 
 const DEFAULT_API_URL = desktop
   ? PUBLIC_SERVER_URL
@@ -133,6 +138,23 @@ function LoginScreen({
     apiUrl: string;
   }) => void;
 }) {
+  const { width, height } = useWindowDimensions();
+  const horizontal = width > height && width >= 600;
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
+  const passwordInput = useRef<TextInput>(null);
+  useEffect(() => {
+    const show = Keyboard.addListener("keyboardDidShow", () =>
+      setKeyboardVisible(true)
+    );
+    const hide = Keyboard.addListener("keyboardDidHide", () =>
+      setKeyboardVisible(false)
+    );
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
+  const [showServer, setShowServer] = useState(false);
   const [apiUrl, setApiUrl] = useState(DEFAULT_API_URL);
   const [serverPresets, setServerPresets] = useState<ServerPreset[]>(
     DEFAULT_SERVER_PRESETS
@@ -207,74 +229,126 @@ function LoginScreen({
   };
   return (
     <Screen style={styles.loginSafe}>
-      <StatusBar style="light" />
-      <ScrollView
-        keyboardShouldPersistTaps="handled"
-        contentContainerStyle={{ paddingBottom: 24 }}
+      <StatusBar style={desktop ? "light" : "dark"} />
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
-        <View style={styles.loginHero}>
-          <BrandLogo light width={200} />
-          <Text style={styles.loginTitle}>Bem-vindo</Text>
-          <Text style={styles.loginSubtitle}>
-            Entre para acessar as funcionalidades do Amodomio.
-          </Text>
-        </View>
-        <Card style={styles.loginCard}>
-          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-            {(desktop
-              ? DEFAULT_SERVER_PRESETS.filter(
-                  (server) => server.url === PUBLIC_SERVER_URL
-                )
-              : serverPresets
-            ).map((server) => (
-              <Button
-                key={server.url}
-                disabled={busy}
-                variant={
-                  apiUrl.trim().replace(/\/+$/, "") === server.url
-                    ? "primary"
-                    : "outline"
-                }
-                style={{ minHeight: 44 }}
-                onPress={() => chooseServer(server.url)}
+        <ScrollView
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+          contentContainerStyle={[
+            styles.loginScroll,
+            (horizontal || keyboardVisible) && styles.loginScrollCompact,
+          ]}
+        >
+          <View
+            style={[
+              styles.loginLayout,
+              horizontal && styles.loginLayoutHorizontal,
+            ]}
+          >
+            {(!keyboardVisible || desktop) && (
+              <View
+                style={[
+                  styles.loginHero,
+                  horizontal && styles.loginHeroHorizontal,
+                ]}
               >
-                {server.name}
+                <BrandLogo light={!!desktop} width={180} />
+              </View>
+            )}
+            <View
+              style={[
+                styles.loginCard,
+                horizontal && styles.loginCardHorizontal,
+              ]}
+            >
+              <Text style={styles.loginFormTitle}>Entrar</Text>
+              {showServer && !desktop ? (
+                <View style={{ gap: 12 }}>
+                  <View
+                    style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}
+                  >
+                    {(desktop
+                      ? DEFAULT_SERVER_PRESETS.filter(
+                          (server) => server.url === PUBLIC_SERVER_URL
+                        )
+                      : serverPresets
+                    ).map((server) => (
+                      <Button
+                        key={server.url}
+                        disabled={busy}
+                        variant={
+                          apiUrl.trim().replace(/\/+$/, "") === server.url
+                            ? "primary"
+                            : "outline"
+                        }
+                        style={{ minHeight: 44 }}
+                        onPress={() => chooseServer(server.url)}
+                      >
+                        {server.name}
+                      </Button>
+                    ))}
+                  </View>
+                  <Input
+                    label="Servidor Amodomio"
+                    value={apiUrl}
+                    onChangeText={chooseServer}
+                    editable={!busy && !desktop}
+                    autoCapitalize="none"
+                    keyboardType="url"
+                    placeholder="https://seu-dominio.com"
+                  />
+                </View>
+              ) : null}
+              <Input
+                label="Usuário ou e-mail"
+                value={identifier}
+                onChangeText={setIdentifier}
+                autoCapitalize="none"
+                autoCorrect={false}
+                editable={!busy}
+                autoComplete="username"
+                returnKeyType="next"
+                onSubmitEditing={() => passwordInput.current?.focus()}
+                placeholder="operador"
+              />
+              <Input
+                ref={passwordInput}
+                label="Senha"
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry
+                autoCapitalize="none"
+                autoCorrect={false}
+                editable={!busy}
+                autoComplete="current-password"
+                returnKeyType="go"
+                placeholder="Sua senha"
+                onSubmitEditing={submit}
+              />
+              {error ? <Text style={styles.error}>{error}</Text> : null}
+              <Button
+                onPress={submit}
+                loading={busy}
+                style={styles.loginButton}
+              >
+                Entrar
               </Button>
-            ))}
+              {!desktop ? (
+                <Button
+                  variant="ghost"
+                  disabled={busy}
+                  onPress={() => setShowServer((value) => !value)}
+                >
+                  {showServer ? "Fechar configuração" : "Alterar servidor"}
+                </Button>
+              ) : null}
+            </View>
           </View>
-          <Input
-            label="Servidor Amodomio"
-            value={apiUrl}
-            onChangeText={chooseServer}
-            editable={!busy && !desktop}
-            autoCapitalize="none"
-            keyboardType="url"
-            placeholder="https://seu-dominio.com"
-          />
-          <Input
-            label="Usuário ou e-mail"
-            value={identifier}
-            onChangeText={setIdentifier}
-            autoCapitalize="none"
-            autoCorrect={false}
-            placeholder="operador"
-          />
-          <Input
-            label="Senha"
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry
-            autoCapitalize="none"
-            autoCorrect={false}
-            placeholder="Sua senha"
-            onSubmitEditing={submit}
-          />
-          {error ? <Text style={styles.error}>{error}</Text> : null}
-          <Button onPress={submit} loading={busy} style={styles.loginButton}>
-            Entrar
-          </Button>
-        </Card>
-      </ScrollView>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </Screen>
   );
 }
@@ -356,14 +430,22 @@ function HomeScreen({
   user,
   apiUrl,
   onOpenKds,
+  onOpenDoughStock,
+  onOpenRecipes,
   onSignedOut,
 }: {
   token: string;
   user: KdsUser;
   apiUrl: string;
   onOpenKds: () => void;
+  onOpenDoughStock: () => void;
+  onOpenRecipes: () => void;
   onSignedOut: () => void;
 }) {
+  const [gridWidth, setGridWidth] = useState(0);
+  const featureWidth = desktop
+    ? undefined
+    : { width: Math.max(0, (gridWidth - 24) / 3) };
   const signOut = () =>
     Alert.alert(
       "Sair do Amodomio?",
@@ -403,24 +485,76 @@ function HomeScreen({
         <Text style={styles.homeSubtitle}>
           Escolha onde você quer trabalhar.
         </Text>
-        <Pressable
-          style={({ pressed }) => [
-            styles.featureCard,
-            pressed && styles.pressed,
-          ]}
-          onPress={onOpenKds}
+        <View
+          style={styles.featureGrid}
+          onLayout={(event) => setGridWidth(event.nativeEvent.layout.width)}
         >
-          <View style={styles.featureIcon}>
-            <Text style={styles.featureEmoji}>KDS</Text>
-          </View>
-          <View style={styles.featureCopy}>
-            <Text style={styles.featureTitle}>KDS</Text>
-            <Text style={styles.featureDescription}>
-              Acompanhe e mova os pedidos entre as etapas de produção.
-            </Text>
-          </View>
-          <Text style={styles.featureArrow}>›</Text>
-        </Pressable>
+          <Pressable
+            style={({ pressed }) => [
+              styles.featureCard,
+              featureWidth,
+              pressed && styles.pressed,
+            ]}
+            accessibilityRole="button"
+            onPress={onOpenKds}
+          >
+            <View style={styles.featureIcon}>
+              <Text style={styles.featureEmoji}>KDS</Text>
+            </View>
+            <View style={styles.featureCopy}>
+              <Text style={styles.featureTitle}>KDS</Text>
+              <Text style={styles.featureDescription}>
+                Acompanhe e mova os pedidos entre as etapas de produção.
+              </Text>
+            </View>
+          </Pressable>
+          {!desktop &&
+          user.roles.some((role) =>
+            ["admin", "superAdmin", "kdsOperator", "kdsAdmin"].includes(role)
+          ) ? (
+            <Pressable
+              accessibilityRole="button"
+              style={({ pressed }) => [
+                styles.featureCard,
+                featureWidth,
+                pressed && styles.pressed,
+              ]}
+              onPress={onOpenDoughStock}
+            >
+              <View style={styles.featureIcon}>
+                <Text style={styles.featureEmoji}>M</Text>
+              </View>
+              <View style={styles.featureCopy}>
+                <Text style={styles.featureTitle}>Estoque de massa</Text>
+                <Text style={styles.featureDescription}>
+                  Atualize o saldo por tamanho e envie o estoque pelo WhatsApp.
+                </Text>
+              </View>
+            </Pressable>
+          ) : null}
+          {!desktop ? (
+            <Pressable
+              accessibilityRole="button"
+              style={({ pressed }) => [
+                styles.featureCard,
+                featureWidth,
+                pressed && styles.pressed,
+              ]}
+              onPress={onOpenRecipes}
+            >
+              <View style={styles.featureIcon}>
+                <Text style={styles.featureEmoji}>R</Text>
+              </View>
+              <View style={styles.featureCopy}>
+                <Text style={styles.featureTitle}>Receitas</Text>
+                <Text style={styles.featureDescription}>
+                  Consulte ingredientes, ajuste quantidades e salve templates de
+                  produção.
+                </Text>
+              </View>
+            </Pressable>
+          ) : null}
+        </View>
       </ScrollView>
     </Screen>
   );
@@ -457,8 +591,9 @@ function KanbanScreen({
   const [contactMessage, setContactMessage] = useState("");
   const [useContactTemplate, setUseContactTemplate] = useState(true);
   const [contactSuccess, setContactSuccess] = useState("");
+  const [contactTab, setContactTab] = useState<"send" | "logs">("send");
   const [sentMessages, setSentMessages] = useState<
-    Record<string, { status: string; sentAt: string }>
+    Record<string, { status: string; sentAt: string; message?: string }[]>
   >({});
   const sentMessagesKey = `amodomio.kds.whatsapp.sent:${apiUrl}`;
   useEffect(() => {
@@ -470,18 +605,24 @@ function KanbanScreen({
         const entries = JSON.parse(raw);
         if (entries && typeof entries === "object" && !Array.isArray(entries)) {
           const valid = Object.fromEntries(
-            Object.entries(entries).filter(([, value]) => {
-              const entry = value as {
-                status?: unknown;
-                sentAt?: unknown;
-              } | null;
-              return (
-                entry &&
-                typeof entry.status === "string" &&
-                typeof entry.sentAt === "string" &&
-                Number.isFinite(new Date(entry.sentAt).getTime())
-              );
-            })
+            Object.entries(entries).map(([orderId, value]) => [
+              orderId,
+              (Array.isArray(value) ? value : [value])
+                .filter(
+                  (entry) =>
+                    entry &&
+                    typeof entry.status === "string" &&
+                    typeof entry.sentAt === "string" &&
+                    Number.isFinite(new Date(entry.sentAt).getTime())
+                )
+                .map((entry) => ({
+                  status: entry.status,
+                  sentAt: entry.sentAt,
+                  ...(typeof entry.message === "string"
+                    ? { message: entry.message }
+                    : {}),
+                })),
+            ])
           );
           setSentMessages((current) => ({ ...valid, ...current }));
         }
@@ -497,6 +638,7 @@ function KanbanScreen({
   const [contactError, setContactError] = useState("");
   const openContact = async (order: KdsOrder) => {
     if (contactInFlight.current || !order.customerPhone?.trim()) return;
+    setContactTab("send");
     setContactOrder(order);
     setContactMessage(orderWhatsappTemplate(order));
     setUseContactTemplate(true);
@@ -522,6 +664,9 @@ function KanbanScreen({
     }
   };
   const contactText = contactMessage;
+  const lastContactSentAt = contactOrder
+    ? sentMessages[contactOrder.id]?.[0]?.sentAt
+    : undefined;
   const sendContact = async () => {
     if (
       !contactOrder ||
@@ -549,12 +694,16 @@ function KanbanScreen({
         );
       const next = {
         ...sentMessages,
-        [contactOrder.id]: {
-          status:
-            KDS_STATUSES.find((status) => status.id === contactOrder.status)
-              ?.label ?? contactOrder.status,
-          sentAt: new Date().toISOString(),
-        },
+        [contactOrder.id]: [
+          {
+            status:
+              KDS_STATUSES.find((status) => status.id === contactOrder.status)
+                ?.label ?? contactOrder.status,
+            sentAt: new Date().toISOString(),
+            message: contactText.trim(),
+          },
+          ...(sentMessages[contactOrder.id] ?? []),
+        ],
       };
       setSentMessages(next);
       setContactSuccess(
@@ -944,7 +1093,6 @@ function KanbanScreen({
           onToggleOven={toggleOven}
           onChooseStatus={openOrderDetails}
           onContact={openContact}
-          sentMessages={sentMessages}
         />
       ) : loading && !orders.length ? (
         <View style={styles.center}>
@@ -1054,82 +1202,158 @@ function KanbanScreen({
                 {contactOrder?.customerName || "Cliente"} ·{" "}
                 {contactOrder?.customerPhone}
               </Text>
-              <View
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  gap: 12,
-                }}
-              >
-                <Text style={styles.detailValue}>
-                  Mensagem ·{" "}
-                  {KDS_STATUSES.find(
-                    (status) => status.id === contactOrder?.status
-                  )?.label ?? contactOrder?.status}
-                </Text>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="Editar mensagem"
-                  accessibilityState={{
-                    disabled:
-                      !contactEnabled || contactBusy || Boolean(contactSuccess),
-                  }}
-                  disabled={
-                    !contactEnabled || contactBusy || Boolean(contactSuccess)
-                  }
-                  onPress={() => setUseContactTemplate(false)}
-                  style={{
-                    minWidth: 44,
-                    minHeight: 44,
-                    alignItems: "center",
-                    justifyContent: "center",
-                    opacity:
-                      !contactEnabled || contactBusy || contactSuccess
-                        ? 0.3
-                        : 1,
-                  }}
-                >
-                  <Text style={[styles.detailValue, { fontSize: 24 }]}>✎</Text>
-                </Pressable>
+              <Text style={styles.detailValue}>
+                {lastContactSentAt
+                  ? `Último envio: ${new Date(lastContactSentAt).toLocaleString("pt-BR")}`
+                  : "Nenhum envio registrado neste dispositivo"}
+              </Text>
+              <View style={{ flexDirection: "row", gap: 8 }}>
+                {(
+                  [
+                    ["send", "Enviar mensagem"],
+                    ["logs", "Logs de envio"],
+                  ] as const
+                ).map(([tab, label]) => (
+                  <Pressable
+                    key={tab}
+                    accessibilityRole="tab"
+                    accessibilityState={{ selected: contactTab === tab }}
+                    onPress={() => setContactTab(tab)}
+                    style={{
+                      flex: 1,
+                      minHeight: 44,
+                      padding: 10,
+                      justifyContent: "center",
+                      borderBottomWidth: 2,
+                      borderBottomColor:
+                        contactTab === tab
+                          ? theme.colors.primary
+                          : "transparent",
+                    }}
+                  >
+                    <Text style={[styles.detailValue, { textAlign: "center" }]}>
+                      {label}
+                    </Text>
+                  </Pressable>
+                ))}
               </View>
-              <Input
-                accessibilityLabel="Mensagem de WhatsApp"
-                multiline
-                maxLength={4096}
-                value={contactMessage}
-                onChangeText={setContactMessage}
-                editable={
-                  !useContactTemplate &&
-                  contactEnabled &&
-                  !contactBusy &&
-                  !contactSuccess
-                }
-                placeholder="Digite a mensagem para o cliente"
-                style={{ minHeight: 140, textAlignVertical: "top" }}
-              />
-              {contactSuccess ? (
-                <Text
-                  accessibilityLiveRegion="polite"
-                  style={{ color: "#25d366" }}
-                >
-                  {contactSuccess}
-                </Text>
-              ) : null}
-              {contactError ? (
-                <Text style={styles.error}>{contactError}</Text>
-              ) : null}
-              <Button
-                onPress={sendContact}
-                loading={contactBusy}
-                disabled={
-                  !contactEnabled ||
-                  !contactText.trim() ||
-                  Boolean(contactSuccess)
-                }
-              >
-                {useContactTemplate ? "Enviar template" : "Enviar mensagem"}
-              </Button>
+              {contactTab === "send" ? (
+                <>
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      justifyContent: "flex-end",
+                      gap: 12,
+                    }}
+                  >
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel="Editar mensagem"
+                      accessibilityState={{
+                        disabled:
+                          !contactEnabled ||
+                          contactBusy ||
+                          Boolean(contactSuccess),
+                      }}
+                      disabled={
+                        !contactEnabled ||
+                        contactBusy ||
+                        Boolean(contactSuccess)
+                      }
+                      onPress={() => setUseContactTemplate(false)}
+                      style={{
+                        minWidth: 44,
+                        minHeight: 44,
+                        alignItems: "center",
+                        justifyContent: "center",
+                        opacity:
+                          !contactEnabled || contactBusy || contactSuccess
+                            ? 0.3
+                            : 1,
+                      }}
+                    >
+                      <Text style={[styles.detailValue, { fontSize: 24 }]}>
+                        ✎
+                      </Text>
+                    </Pressable>
+                  </View>
+                  <Input
+                    accessibilityLabel="Mensagem de WhatsApp"
+                    multiline
+                    maxLength={4096}
+                    value={contactMessage}
+                    onChangeText={setContactMessage}
+                    editable={
+                      !useContactTemplate &&
+                      contactEnabled &&
+                      !contactBusy &&
+                      !contactSuccess
+                    }
+                    placeholder="Digite a mensagem para o cliente"
+                    style={{ minHeight: 140, textAlignVertical: "top" }}
+                  />
+                  {contactSuccess ? (
+                    <Text
+                      accessibilityLiveRegion="polite"
+                      style={{ color: "#25d366" }}
+                    >
+                      {contactSuccess}
+                    </Text>
+                  ) : null}
+                  {contactError ? (
+                    <Text style={styles.error}>{contactError}</Text>
+                  ) : null}
+                  <Button
+                    onPress={sendContact}
+                    loading={contactBusy}
+                    disabled={
+                      !contactEnabled ||
+                      !contactText.trim() ||
+                      Boolean(contactSuccess)
+                    }
+                  >
+                    {useContactTemplate ? "Enviar template" : "Enviar mensagem"}
+                  </Button>
+                </>
+              ) : (
+                <View style={{ gap: 12 }}>
+                  <Text style={styles.detailValue}>
+                    Envios confirmados pela API neste dispositivo.
+                  </Text>
+                  {(contactOrder
+                    ? sentMessages[contactOrder.id] ?? []
+                    : []
+                  ).map((entry, index) => (
+                    <View
+                      key={`${entry.sentAt}:${index}`}
+                      style={{
+                        gap: 6,
+                        padding: 12,
+                        borderWidth: 1,
+                        borderColor: theme.colors.border,
+                        borderRadius: 8,
+                      }}
+                    >
+                      <Text style={{ color: "#25d366" }}>
+                        Enviada · {entry.status}
+                      </Text>
+                      <Text style={styles.detailValue}>
+                        {new Date(entry.sentAt).toLocaleString("pt-BR")}
+                      </Text>
+                      {entry.message ? (
+                        <Text style={styles.detailValue}>{entry.message}</Text>
+                      ) : null}
+                    </View>
+                  ))}
+                  {!contactOrder || !sentMessages[contactOrder.id]?.length ? (
+                    <Text style={styles.detailValue}>
+                      Nenhum envio registrado neste dispositivo para este
+                      pedido.
+                    </Text>
+                  ) : null}
+                </View>
+              )}
               <Button
                 variant="outline"
                 disabled={contactBusy}
@@ -1305,7 +1529,9 @@ function AppContent() {
     user: KdsUser;
     apiUrl: string;
   } | null>(null);
-  const [activeFeature, setActiveFeature] = useState<"kds" | null>(null);
+  const [activeFeature, setActiveFeature] = useState<
+    "kds" | "dough-stock" | "recipes" | null
+  >(null);
   useEffect(() => desktop?.onOpenKds(() => setActiveFeature("kds")), []);
   const [booting, setBooting] = useState(true);
 
@@ -1356,6 +1582,32 @@ function AppContent() {
           }}
         />
       );
+    if (activeFeature === "recipes") {
+      return (
+        <RecipesScreen
+          {...session}
+          onBack={() => setActiveFeature(null)}
+          onUnauthorized={() => {
+            void sessionStorage.clearToken();
+            setActiveFeature(null);
+            setSession(null);
+          }}
+        />
+      );
+    }
+    if (activeFeature === "dough-stock") {
+      return (
+        <DoughStockScreen
+          {...session}
+          onBack={() => setActiveFeature(null)}
+          onUnauthorized={() => {
+            void sessionStorage.clearToken();
+            setActiveFeature(null);
+            setSession(null);
+          }}
+        />
+      );
+    }
     if (activeFeature === "kds") {
       return (
         <KdsTypographyContext.Provider value={true}>
@@ -1375,6 +1627,8 @@ function AppContent() {
       <HomeScreen
         {...session}
         onOpenKds={() => setActiveFeature("kds")}
+        onOpenDoughStock={() => setActiveFeature("dough-stock")}
+        onOpenRecipes={() => setActiveFeature("recipes")}
         onSignedOut={() => {
           setActiveFeature(null);
           setSession(null);
@@ -1425,12 +1679,22 @@ const styles = StyleSheet.create({
     fontFamily: theme.typography.bold,
     letterSpacing: 3,
   },
-  loginSafe: { flex: 1, backgroundColor: theme.colors.muted },
-  loginHero: {
-    backgroundColor: theme.colors.primary,
-    paddingHorizontal: 28,
-    paddingTop: 72,
-    paddingBottom: 72,
+  loginSafe: { flex: 1, backgroundColor: theme.colors.background },
+  loginScroll: { flexGrow: 1, padding: 20, justifyContent: "center" },
+  loginScrollCompact: { paddingVertical: 12 },
+  loginLayout: { width: "100%", maxWidth: 840, alignSelf: "center", gap: 24 },
+  loginLayoutHorizontal: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 32,
+  },
+  loginHero: { alignItems: "center", paddingVertical: 16 },
+  loginHeroHorizontal: { flex: 1, alignItems: "center" },
+  loginCardHorizontal: { flex: 1 },
+  loginFormTitle: {
+    color: theme.colors.foreground,
+    fontSize: 24,
+    fontFamily: theme.typography.semibold,
   },
   brandEyebrow: {
     color: theme.colors.border,
@@ -1439,23 +1703,25 @@ const styles = StyleSheet.create({
     letterSpacing: 2.5,
   },
   loginTitle: {
-    color: "#fff",
-    fontSize: 34,
+    color: theme.colors.foreground,
+    fontSize: 28,
     lineHeight: 42,
     fontFamily: theme.typography.bold,
     marginTop: 8,
   },
   loginSubtitle: {
-    color: theme.colors.border,
+    color: theme.colors.mutedForeground,
     fontFamily: theme.typography.regular,
     fontSize: 16,
     lineHeight: 23,
     marginTop: 8,
   },
   loginCard: {
-    marginHorizontal: 20,
-    marginTop: -32,
-    gap: 14,
+    width: "100%",
+    maxWidth: 440,
+    flexShrink: 1,
+    alignSelf: "center",
+    gap: 12,
   },
   fieldLabel: {
     color: theme.colors.foreground,
@@ -1530,15 +1796,17 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginBottom: 16,
   },
+  featureGrid: { flexDirection: "row", flexWrap: "wrap", gap: 12 },
   featureCard: {
-    minHeight: 116,
-    padding: 16,
+    width: desktop ? "100%" : undefined,
+    minHeight: 180,
+    padding: 12,
     borderRadius: 18,
     backgroundColor: theme.colors.card,
     borderWidth: 1,
     borderColor: theme.colors.border,
-    flexDirection: "row",
-    alignItems: "center",
+    flexDirection: "column",
+    alignItems: "flex-start",
     gap: 14,
     elevation: 2,
   },
@@ -1555,10 +1823,10 @@ const styles = StyleSheet.create({
     color: theme.colors.foreground,
     fontFamily: theme.typography.semibold,
   },
-  featureCopy: { flex: 1 },
+  featureCopy: { width: "100%" },
   featureTitle: {
     color: theme.colors.foreground,
-    fontSize: 18,
+    fontSize: 15,
     fontFamily: theme.typography.semibold,
   },
   featureDescription: {

@@ -1,0 +1,57 @@
+:root {
+  color-scheme: dark;
+}
+body {
+  margin: 0;
+  padding: 18px 22px;
+  border: 6px solid #141414;
+  min-height: 100vh;
+  box-sizing: border-box;
+  background: #ffba52;
+  color: #141414;
+  font: 14px system-ui, sans-serif;
+}
+h1 {
+  font-size: 23px;
+  text-transform: uppercase;
+  color: #141414;
+  margin: 0;
+}
+#orders {
+  font-size: 64px;
+  line-height: 1.05;
+  font-weight: bold;
+  margin: 12px 0;
+  max-height: 90px;
+  overflow: auto;
+  overflow-wrap: anywhere;
+}
+p {
+  color: #141414;
+}
+div {
+  display: flex;
+  gap: 12px;
+}
+button {
+  padding: 12px 18px;
+  border: 1px solid #666;
+  border-radius: 8px;
+  background: #262626;
+  color: white;
+  font: inherit;
+  cursor: pointer;
+}
+#open {
+  background: #141414;
+  color: white;
+  border-color: #141414;
+  font-weight: bold;
+}
+button:focus-visible {
+  outline: 3px solid #141414;
+  outline-offset: 3px;
+}
+#error {
+  color: #f87171;
+}

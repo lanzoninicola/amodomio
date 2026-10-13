@@ -54,10 +54,19 @@ let running = false,
       "KdsDailyOrderDetail",
       "DoughDailyStock",
       "DeliveryZone",
+      "CrmCustomer",
+      "CustomerOrder",
+      "CustomerOrderItem",
     ]) {
       const model = Prisma.dmmf.datamodel.models.find(
         (model) => model.name === name
       );
+      const modelSchema = readFileSync(
+        join(root, "prisma/schema.prisma"),
+        "utf8"
+      )
+        .split(`model ${name} {`)[1]
+        .split("\n}")[0];
       const scalar = {
         String: "TEXT",
         Int: "INTEGER",
@@ -71,9 +80,19 @@ let running = false,
         .map((field) => {
           let type = scalar[field.type];
           if (!type) throw new Error("Unsupported fixture type");
-          if (field.isList) type += "[]";
+          const definition = modelSchema.match(
+            new RegExp(`^\\s+${field.name}\\s+\\w+(\\[\\]|\\?)?(.*)$`, "m")
+          );
+          const isList = definition?.[1] === "[]";
+          const required = definition?.[1] !== "?";
+          const annotations = definition?.[2] || "";
+          if (isList) type += "[]";
           let fallback = "";
-          if (field.name === "createdAt" || field.name === "updatedAt")
+          if (
+            ["createdAt", "updatedAt", "created_at", "updated_at"].includes(
+              field.name
+            )
+          )
             fallback = " DEFAULT CURRENT_TIMESTAMP";
           else if (typeof field.default === "boolean")
             fallback = ` DEFAULT ${field.default ? "TRUE" : "FALSE"}`;
@@ -81,20 +100,40 @@ let running = false,
             fallback = ` DEFAULT ${field.default}`;
           else if (typeof field.default === "string")
             fallback = ` DEFAULT '${field.default.replace(/'/g, "''")}'`;
-          else if (field.isList) fallback = " DEFAULT '{}'";
+          else if (isList) fallback = " DEFAULT '{}'";
+          else if (annotations.includes("@default(true)"))
+            fallback = " DEFAULT TRUE";
+          else if (annotations.includes("@default(false)"))
+            fallback = " DEFAULT FALSE";
+          else if (annotations.match(/@default\((-?\d+)\)/))
+            fallback = ` DEFAULT ${
+              annotations.match(/@default\((-?\d+)\)/)[1]
+            }`;
+          else if (annotations.match(/@default\("([^"]*)"\)/))
+            fallback = ` DEFAULT '${annotations
+              .match(/@default\("([^"]*)"\)/)[1]
+              .replace(/'/g, "''")}'`;
           return `"${field.dbName || field.name}" ${type}${
-            field.isRequired ? " NOT NULL" : ""
-          }${fallback}${field.isId ? " PRIMARY KEY" : ""}`;
+            required ? " NOT NULL" : ""
+          }${fallback}${annotations.includes("@id") ? " PRIMARY KEY" : ""}`;
         });
       await pool.query(
         `CREATE TABLE "${model.dbName || model.name}" (${columns.join(",")})`
       );
     }
+    await pool.query(
+      "CREATE UNIQUE INDEX fixture_kds_id ON kds_daily_order_details(id); CREATE UNIQUE INDEX fixture_history_id ON customer_orders(id); CREATE UNIQUE INDEX fixture_crm_id ON crm_customer(id); CREATE UNIQUE INDEX fixture_crm_phone ON crm_customer(phone_e164); CREATE UNIQUE INDEX fixture_kds_history ON customer_orders(kds_order_id); ALTER TABLE customer_orders ADD FOREIGN KEY(kds_order_id) REFERENCES kds_daily_order_details(id) ON DELETE SET NULL"
+    );
     client = new PrismaClient({ adapter: new PrismaPg(pool) });
     global.testPrisma = client;
     symlinkSync(join(root, "node_modules"), join(temp, "node_modules"), "dir");
     await build({
-      entryPoints: [join(root, "app/domain/kds/import-order.server.ts")],
+      stdin: {
+        contents:
+          'export { createImportedOrder } from "./app/domain/kds/import-order.server"; export { getCustomerPurchaseHistory } from "./app/domain/crm/order-history.server";',
+        resolveDir: root,
+        loader: "ts",
+      },
       outfile: join(temp, "import.cjs"),
       bundle: true,
       alias: { "~": join(root, "app") },
@@ -124,7 +163,10 @@ let running = false,
         },
       ],
     });
-    const { createImportedOrder } = require(join(temp, "import.cjs"));
+    const { createImportedOrder, getCustomerPurchaseHistory } = require(join(
+      temp,
+      "import.cjs"
+    ));
     await pool.query(
       "INSERT INTO kds_daily_orders(id,date,date_int,operation_status,closed_at) VALUES('header','2026-10-11',20261011,'CLOSED',NOW())"
     );
@@ -139,6 +181,8 @@ let running = false,
       commandNumber: 1,
       takeAway: true,
       orderAmount: 50,
+      customerName: "Cliente teste",
+      customerPhone: "46991052049",
       channel: "Suitable",
       orderItems: [
         {
@@ -201,8 +245,49 @@ let running = false,
     header = await client.kdsDailyOrder.findUnique({ where: { id: "header" } });
     assert.equal(header.operationStatus, "CLOSED");
     assert.equal(Number(header.totOrdersAmount), 100);
+    assert.equal(await client.crmCustomer.count(), 1);
+    assert.equal(await client.customerOrder.count(), 2);
+    const history = await client.customerOrder.findUnique({
+      where: { kdsOrderId: "reserved" },
+      include: { items: true },
+    });
+    assert.equal(history.items[0].flavors.length, 2);
+    await pool.query(
+      "ALTER TABLE kds_daily_orders DROP CONSTRAINT fixture_total_limit"
+    );
+    const corrected = await createImportedOrder({
+      ...body,
+      updateExisting: true,
+      customerPhone: "46999999999",
+      orderAmount: 60,
+      orderItems: [{ ...body.orderItems[0], flavors: ["1x Margherita"] }],
+    });
+    assert.equal(corrected.status, 200);
+    const updatedHistory = await client.customerOrder.findUnique({
+      where: { kdsOrderId: "reserved" },
+      include: { items: true },
+    });
+    assert.equal(updatedHistory.id, history.id);
+    assert.equal(updatedHistory.phoneE164, "+5546999999999");
+    assert.equal(Number(updatedHistory.totalAmount), 60);
+    assert.equal(updatedHistory.items.length, 1);
+    assert.deepEqual(updatedHistory.items[0].flavors, ["1x Margherita"]);
+    assert.equal(await client.customerOrder.count(), 2);
+    await client.kdsDailyOrderDetail.delete({ where: { id: "reserved" } });
+    const canceled = await client.customerOrder.findUnique({
+      where: { id: history.id },
+    });
+    assert.equal(canceled.kdsOrderId, null);
+    const report = await getCustomerPurchaseHistory(
+      updatedHistory.customerId,
+      updatedHistory.phoneE164
+    );
+    assert.equal(report.orders.length, 1);
+    assert.equal(report.summary.orders, 0);
+    assert.deepEqual(report.summary.flavors, []);
+    assert.equal(report.orders[0].active, false);
     process.stdout.write(
-      "PASS isolated PostgreSQL: reserved command, duplicate race, stock race, automatic reopening, transactional total and rollback\n"
+      "PASS isolated PostgreSQL: reserved command, duplicate race, stock race, automatic reopening, transactional total, CRM identity, corrections, flavor snapshots, cancellation and rollback\n"
     );
   } finally {
     if (client) await client.$disconnect();
