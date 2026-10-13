@@ -86,7 +86,12 @@
       "Bash(grep -n \"SearchableSelect\\\\|options\\\\|itemId\\\\|MenuItem\" /home/lanzo/Documents/Coding/amodomio/app/routes/admin.item-cost-sheets.\\\\$id.custos.tsx | head -60)",
       "Bash(xargs -I{} sh -c 'grep -l \"SearchableSelect\\\\|Select\\\\b\" {}')",
       "Bash(git -C /home/lanzo/Documents/Coding/amodomio diff --stat prisma/schema.prisma)",
-      "Bash(/home/lanzo/.local/share/pipx/venvs/graphifyy/bin/python -c \"from graphify.watch import _rebuild_code; print\\('ok'\\)\")"
+      "Bash(/home/lanzo/.local/share/pipx/venvs/graphifyy/bin/python -c \"from graphify.watch import _rebuild_code; print\\('ok'\\)\")",
+      "Bash(mkdir -p ../../build/extensions)",
+      "Bash(rm -f ../../build/extensions/suitable-amodomio-1.5.0.zip)",
+      "Bash(zip -qr ../../build/extensions/suitable-amodomio-1.5.0.zip manifest.json content.js background.js popup.html popup.js popup.css fonts parser.js activation.js)",
+      "Read(//home/lanzo/Documents/build/**)",
+      "Bash(unzip -l ../../build/extensions/suitable-amodomio-1.4.2.zip)"
     ],
     "additionalDirectories": [
       "/home/lanzo/Documents/Coding/amodomio/app/routes"
