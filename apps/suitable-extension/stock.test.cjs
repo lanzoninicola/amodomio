@@ -9,6 +9,8 @@ for (const scenario of [
   "paged",
   "virtual",
   "pending",
+  "collapse",
+  "floating",
   "missing-lines",
   "total-mismatch",
   "no-note",
@@ -37,16 +39,25 @@ for (const scenario of [
         const original=Element.prototype.attachShadow;Element.prototype.attachShadow=function(options){return original.call(this,{...options,mode:'open'})};
         window.calls=[];window.errors=[];addEventListener('error',e=>errors.push(e.message));
         const view={ok:true,batchId:'batch',url:'https://test/admin/import-stock-movements/batch',summary:{total:2,readyToImport:${
-          scenario === "pending" ? 0 : 2
+          scenario === "pending"
+            ? 0
+            : ["collapse", "floating"].includes(scenario)
+            ? 1
+            : 2
         },imported:0,skippedDuplicate:0},
           lines:[{id:'a',ingredientName:'Abobrinha Verde Kg',qtyEntry:3.38,unitEntry:'KG',costAmount:5.95,costTotalAmount:20.08,status:'${
             scenario === "pending" ? "pending_mapping" : "ready"
           }',mappedItemId:'${
         scenario === "pending" ? "" : "item"
-      }'},{id:'b',ingredientName:'Cogumelo Paris Uni',qtyEntry:6,unitEntry:'AGR',costAmount:11.99,costTotalAmount:71.94,status:'ready',mappedItemId:'item'}],items:[{id:'item',name:'Abobrinha',unit:'KG'}]};
+      }'},{id:'b',ingredientName:'Cogumelo Paris Uni',qtyEntry:6,unitEntry:'AGR',costAmount:11.99,costTotalAmount:71.94,status:'${
+        ["collapse", "floating"].includes(scenario)
+          ? "pending_conversion"
+          : "ready"
+      }',targetUnit:'KG',mappedItemId:'item'}],items:[{id:'item',name:'Abobrinha',unit:'KG'},{id:'mushrooms',name:'Cogumelos',unit:'KG'}]};
         window.chrome={runtime:{onMessage:{addListener(){}},async sendMessage(message){
           if(message.type==='suitable:preferences-read')return {ok:true,kdsEnabled:false};
           calls.push(message.payload);
+          if(message.payload.action==='map'){view.lines.find(line=>line.id===message.payload.lineId).mappedItemId=message.payload.itemId;}
           if(message.payload.action==='step'){view.summary.readyToImport=0;view.summary.imported=2;view.lines.forEach(line=>line.status='imported');return {ok:true,done:true,progress:{processedCount:2,totalCount:2,errorCount:0}};}
           return structuredClone(view);
         }}};
@@ -88,13 +99,58 @@ for (const scenario of [
             [...root.querySelectorAll('button')].find(b=>b.textContent.includes('Criar / recuperar')).click();
             for(let i=0;i<30&&!calls.length&&!root.querySelector('[role=alert]');i++)await pause();
             await pause();
+            if('${scenario}'==='collapse') {
+              const input=root.querySelector('input[name="factor"]');if(!input)throw new Error('Conversion input missing');
+              input.value='0,250';
+              [...root.querySelectorAll('button')].find(b=>b.textContent.includes('Ver tabela do Suitable')).click();await pause();
+              if(!root.querySelector('#stock-entry-body').hidden)throw new Error('Review did not collapse');
+              if(getComputedStyle(root.querySelector('#stock-entry-body')).display!=='none')throw new Error('Review still takes space');
+              if(!document.querySelector('[role=dialog] [data-index]').textContent.includes('Abobrinha'))throw new Error('Suitable rows missing');
+              const nativeRow=document.querySelector('[role=dialog] [data-index]');
+              if(nativeRow.closest('[hidden]'))throw new Error('Native table was hidden');
+              [...root.querySelectorAll('button')].find(b=>b.textContent.includes('Abrir vínculo de produtos')).click();await pause();
+              if(root.querySelector('#stock-entry-body').hidden)throw new Error('Review did not reopen');
+              if(root.querySelector('input[name="factor"]')!==input||input.value!=='0,250')throw new Error('Conversion draft lost');
+              if(calls.length!==1)throw new Error('Collapse must not create, update or import a lot');
+              window.collapseVerified=true;
+            }
+            if('${scenario}'==='floating') {
+              const panel=root.querySelector('#stock-entry-body');const handle=root.querySelector('[data-stock-drag-handle]');
+              if(!panel||panel.getAttribute('aria-modal')!=='false'||getComputedStyle(panel).position!=='fixed')throw new Error('Floating dialog missing');
+              const initialLeft=parseFloat(panel.style.left);
+              const input=root.querySelector('input[name="factor"]');input.value='0,250';
+              handle.dispatchEvent(new PointerEvent('pointerdown',{pointerId:1,button:0,clientX:initialLeft+20,clientY:30,bubbles:true}));
+              handle.dispatchEvent(new PointerEvent('pointermove',{pointerId:1,clientX:initialLeft-40,clientY:30,bubbles:true}));await pause();
+              handle.dispatchEvent(new PointerEvent('pointerup',{pointerId:1,bubbles:true}));
+              if(parseFloat(panel.style.left)>=initialLeft)throw new Error('Pointer drag did not move dialog');
+              const movedLeft=panel.style.left;
+              root.querySelector('[aria-label="Fechar vínculo de produtos"]').click();await pause();
+              if(getComputedStyle(panel).display!=='none')throw new Error('Close did not hide floating dialog');
+              [...root.querySelectorAll('button')].find(b=>b.textContent.includes('Abrir vínculo de produtos')).click();await pause();
+              if(panel.hidden||input.value!=='0,250'||panel.style.left!==movedLeft)throw new Error('Reopening lost draft or position');
+              handle.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowLeft',bubbles:true}));await pause();
+              if(parseFloat(panel.style.left)>=parseFloat(movedLeft))throw new Error('Keyboard movement failed');
+              const trigger=root.querySelector('[aria-label="Produto para Cogumelo Paris Uni"]');
+              trigger.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowDown',bubbles:true}));await pause();
+              const option=[...root.querySelectorAll('[role=option]')].find(element=>element.textContent.includes('Cogumelos'));
+              if(!option)throw new Error('Product select missing inside floating dialog');
+              if(Number(getComputedStyle(root.querySelector('[role=listbox]')).zIndex)<=Number(getComputedStyle(panel).zIndex))throw new Error('Product list is behind floating dialog');
+              option.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}));await pause();
+              if(!calls.some(call=>call.action==='map'&&call.lineId==='b'&&call.itemId==='mushrooms'))throw new Error('Product link not saved');
+              if(input.value!=='0,250')throw new Error('Mapping lost conversion draft');
+              handle.dispatchEvent(new PointerEvent('pointerdown',{pointerId:2,button:0,clientX:20,clientY:30,bubbles:true}));
+              handle.dispatchEvent(new PointerEvent('pointermove',{pointerId:2,clientX:-10000,clientY:-10000,bubbles:true}));await pause();
+              handle.dispatchEvent(new PointerEvent('pointerup',{pointerId:2,bubbles:true}));
+              if(parseFloat(panel.style.left)<8||parseFloat(panel.style.top)<8)throw new Error('Dialog moved outside screen');
+              window.floatingVerified=true;
+            }
             if(['ready','paged','virtual'].includes('${scenario}')){
               const button=[...root.querySelectorAll('button')].find(b=>b.textContent==='Importar nota no estoque');
               if(!button||button.disabled)throw new Error('Import unavailable: '+root.querySelector('.extension').textContent);button.click();
               for(let i=0;i<30&&!calls.some(c=>c.action==='step');i++)await pause();await pause();
             }
           }
-          document.body.dataset.result=JSON.stringify({calls,errors,text:root.querySelector(".extension").textContent,importDisabled:[...root.querySelectorAll('button')].find(b=>b.textContent==='Importar nota no estoque')?.disabled});
+          document.body.dataset.result=JSON.stringify({calls,errors,text:[...root.querySelectorAll(".extension")].map(element=>element.textContent).join(" "),collapseVerified:window.collapseVerified,floatingVerified:window.floatingVerified,importDisabled:[...root.querySelectorAll('button')].find(b=>b.textContent==='Importar nota no estoque')?.disabled});
         })().catch(error=>document.body.dataset.result=JSON.stringify({error:error.stack,calls,errors}));
         </script></body></html>`;
       const file = join(directory, "test.html");
@@ -125,7 +181,16 @@ for (const scenario of [
       );
       assert.equal(result.error, undefined, JSON.stringify(result));
       assert.deepEqual(result.errors, []);
-      if (["ready", "pending", "paged", "virtual"].includes(scenario)) {
+      if (
+        [
+          "ready",
+          "pending",
+          "paged",
+          "virtual",
+          "collapse",
+          "floating",
+        ].includes(scenario)
+      ) {
         assert.equal(result.calls[0].note.invoiceNumber, "000002377");
         assert.equal(result.calls[0].note.supplierName, "Agrilar Hortifruti");
         assert.equal(result.calls[0].note.date, "2026-10-08");
@@ -147,6 +212,18 @@ for (const scenario of [
           ["create", "start", "step", "status"]
         );
         assert.match(result.text, /2 importados/);
+      }
+      if (scenario === "floating") {
+        assert.equal(result.floatingVerified, true);
+        assert.deepEqual(
+          result.calls.map((c) => c.action),
+          ["create", "map"]
+        );
+      }
+      if (scenario === "collapse") {
+        assert.equal(result.collapseVerified, true);
+        assert.equal(result.calls.length, 1);
+        assert.match(result.text, /Conversão da nota para o estoque/);
       }
       if (scenario === "pending") {
         assert.equal(result.importDisabled, true);

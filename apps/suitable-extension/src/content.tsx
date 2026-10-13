@@ -1,7 +1,5 @@
-import {
-  StockBatchReview,
-  type StockBatchView,
-} from "~/components/admin/stock-batch-review";
+import { FloatingStockReview } from "./floating-stock-review";
+import type { StockBatchView } from "~/components/admin/stock-batch-review";
 import {
   invoiceFromButton,
   isProducts,
@@ -1222,6 +1220,7 @@ function StockEntry({
   portalContainer: HTMLElement;
 }) {
   const [view, setView] = useState<StockBatchView | null>(null);
+  const [collapsed, setCollapsed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   async function request(payload: Record<string, unknown>) {
@@ -1234,51 +1233,89 @@ function StockEntry({
     return result;
   }
   return (
-    <div className="extension space-y-3 rounded-md border bg-white p-4 text-sm">
-      <strong>
-        Entrada no estoque Amodomio{" "}
-        {note ? `· NF ${note.invoiceNumber} · ${note.supplierName}` : ""}
-      </strong>
-      {!note && (
-        <p>
-          Volte à lista de notas e clique em Lançar entrada para identificar o
-          número e a data da nota.
-        </p>
-      )}
-      {note && !view && (
-        <>
-          <p>Crie o lote para revisar os produtos e importar nesta janela.</p>
+    <div className="extension overflow-hidden rounded-lg border bg-white text-sm">
+      <header className="flex flex-wrap items-center justify-between gap-3 bg-slate-50 px-4 py-3">
+        <div className="min-w-0">
+          <h2 className="font-semibold text-slate-900">
+            Importação de estoque
+          </h2>
+          {note && (
+            <p className="mt-0.5 text-xs text-slate-500">
+              NF {note.invoiceNumber} · {note.supplierName}
+            </p>
+          )}
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          {note && !view && !collapsed && (
+            <Button
+              type="button"
+              size="sm"
+              disabled={busy}
+              onClick={async () => {
+                setBusy(true);
+                setError("");
+                try {
+                  const input = await collectProducts(dialog, note);
+                  setView(await request({ action: "create", note: input }));
+                } catch (cause) {
+                  setError(
+                    cause instanceof Error ? cause.message : "Falha ao ler nota"
+                  );
+                } finally {
+                  setBusy(false);
+                }
+              }}
+            >
+              {busy ? "Lendo nota…" : "Criar / recuperar lote"}
+            </Button>
+          )}
           <Button
-            disabled={busy}
-            onClick={async () => {
-              setBusy(true);
-              setError("");
-              try {
-                const input = await collectProducts(dialog, note);
-                setView(await request({ action: "create", note: input }));
-              } catch (cause) {
-                setError(
-                  cause instanceof Error ? cause.message : "Falha ao ler nota"
-                );
-              } finally {
-                setBusy(false);
-              }
-            }}
+            type="button"
+            variant="outline"
+            size="sm"
+            aria-expanded={!!view && !collapsed}
+            aria-controls={view ? "stock-entry-body" : undefined}
+            onClick={() => setCollapsed((value) => !value)}
           >
-            {busy ? "Lendo nota…" : "Criar / recuperar lote"}
+            {collapsed ? (
+              <>
+                <span>
+                  {view ? "Abrir vínculo de produtos" : "Voltar à importação"}
+                </span>
+              </>
+            ) : (
+              <>
+                <X className="mr-2 h-4 w-4" aria-hidden="true" />
+                <span>Ver tabela do Suitable</span>
+              </>
+            )}
           </Button>
-        </>
-      )}
-      {error && (
-        <p role="alert" className="text-red-700">
-          {error}
-        </p>
-      )}
+        </div>
+      </header>
+      <div
+        hidden={collapsed || (!!note && !error)}
+        className="space-y-4 border-t p-4"
+      >
+        {!note && (
+          <p>
+            Volte à lista de notas e clique em Lançar entrada para identificar o
+            número e a data da nota.
+          </p>
+        )}
+        {error && (
+          <p role="alert" className="text-red-700">
+            {error}
+          </p>
+        )}
+      </div>
       {view && (
-        <StockBatchReview
-          initial={view}
+        <FloatingStockReview
+          view={view}
+          note={note}
           request={request}
           portalContainer={portalContainer}
+          hidden={collapsed}
+          onClose={() => setCollapsed(true)}
         />
       )}
     </div>
