@@ -381,6 +381,21 @@
 .check-column[data-state="error"] {
   color: #b91c1c;
 }
+.check-column[data-state="error"] .check-heading {
+  padding: 2px 6px;
+  border-radius: 5px;
+  background: #b91c1c;
+  color: #ffffff;
+}
+.check-column[data-state="error"] .check-title,
+.check-column[data-state="error"] .check-icon,
+.check-column[data-state="error"] .open-day-action {
+  color: #ffffff;
+}
+.check-column[data-state="error"] .open-day-action:hover {
+  background: #991b1b;
+  color: #ffffff;
+}
 .check-column[data-state="warning"] {
   color: #a16207;
 }

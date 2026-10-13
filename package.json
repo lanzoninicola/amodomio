@@ -19,6 +19,7 @@
     "test": "vitest",
     "test:suitable-extension": "node --test apps/suitable-extension/*.test.cjs",
     "build:suitable-extension": "node apps/suitable-extension/build.mjs",
+    "build:extension": "node scripts/build-extension.mjs",
     "crm:backfill-purchases": "node scripts/backfill-crm-purchases.cjs",
     "test:suitable-import-db": "node scripts/verify-suitable-import-db.cjs"
   },
@@ -84,6 +85,7 @@
     "papaparse": "^5.5.2",
     "pg": "^8.12.0",
     "qrcode": "^1.5.4",
+    "rclone": "^1.4.0",
     "react": "^18.2.0",
     "react-day-picker": "^8.10.1",
     "react-dom": "^18.2.0",

@@ -26,19 +26,6 @@ async function activateSavedConfiguration(tabId) {
     "activationTabId",
     "modules",
   ]);
-  if (config.modules?.kds?.enabled === false) {
-    const registered = await chrome.scripting.getRegisteredContentScripts({
-      ids: [SCRIPT_ID],
-    });
-    if (registered.length)
-      await chrome.scripting.unregisterContentScripts({ ids: [SCRIPT_ID] });
-    const status = {
-      state: "disabled",
-      message: "Configurações salvas. A integração com o KDS está desativada.",
-    };
-    await chrome.storage.local.set({ activationStatus: status });
-    return status;
-  }
   if (!config.serverUrl || !config.apiKey || !config.suitableOrigin) {
     return {
       state: "unconfigured",
@@ -89,8 +76,8 @@ async function activateSavedConfiguration(tabId) {
   const status = {
     state: "active",
     message: injected
-      ? "Dados salvos e extensão ativada. Abra os detalhes do pedido para ver Adicionar ao KDS."
-      : "Dados salvos e extensão ativada. Recarregue o Suitable e abra os detalhes do pedido.",
+      ? "Dados salvos e extensão ativada. Abra um pedido ou uma nota de compra para usar as integrações."
+      : "Dados salvos e extensão ativada. Recarregue o Suitable e abra um pedido ou uma nota de compra.",
   };
   await chrome.storage.local.set({ activationStatus: status });
   return status;

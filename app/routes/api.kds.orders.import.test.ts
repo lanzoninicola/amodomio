@@ -18,7 +18,9 @@ const mocks = vi.hoisted(() => ({
   bearer: vi.fn(),
   list: vi.fn(),
 }));
-vi.mock("~/domain/crm/order-history.server", () => ({ syncKdsOrderHistory: vi.fn() }));
+vi.mock("~/domain/crm/order-history.server", () => ({
+  syncKdsOrderHistory: vi.fn(),
+}));
 vi.mock("~/lib/prisma/client.server", () => ({
   default: {
     kdsDailyOrder: { findUnique: mocks.findHeader, update: mocks.updateHeader },
@@ -303,16 +305,11 @@ it("reopens a closed day only after successful import, using the same status as 
   );
   expect(mocks.updateHeader.mock.calls[0][0].data.closedAt).toBeUndefined();
 });
-it("failed stock or duplicate validation leaves a closed day closed", async () => {
+it("duplicate validation leaves a closed day closed", async () => {
   mocks.findHeader.mockResolvedValue({
     id: "header",
     operationStatus: "CLOSED",
   });
-  mocks.stock.mockResolvedValue({
-    effective: { F: 0, M: 0, P: 0, I: 0, FT: 0 },
-  });
-  expect((await create(body)).status).toBe(409);
-  expect(mocks.updateHeader).not.toHaveBeenCalled();
   mocks.rows.mockResolvedValue([
     { id: "existing", commandNumber: 1, status: "novoPedido" },
   ]);
@@ -330,7 +327,7 @@ it("accepts an already reopened day without changing its operation status", asyn
   ).toBeUndefined();
 });
 
-it("rejects insufficient dough counting all sizes already reserved for the day", async () => {
+it("accepts importing an order even when existing reservations exhaust dough", async () => {
   mocks.rows.mockResolvedValue([
     {
       id: "other",
@@ -343,10 +340,11 @@ it("rejects insufficient dough counting all sizes already reserved for the day",
     effective: { F: 1, M: 2, P: 0, I: 1, FT: 0 },
   });
   const response = await create(body);
-  expect(response.status).toBe(409);
-  expect((await response.json()).shortages).toEqual(["F"]);
-  expect(mocks.create).not.toHaveBeenCalled();
-  expect(mocks.updateHeader).not.toHaveBeenCalled();
+  expect(response.status).toBe(200);
+  expect(mocks.create).toHaveBeenCalled();
+  expect(mocks.create.mock.calls[0][0].data.size).toBe(
+    JSON.stringify({ F: 1, M: 1, P: 0, I: 1, FT: 0 })
+  );
 });
 it("accepts exact remaining dough, counts quantities rather than flavors and recalculates total inside the transaction", async () => {
   mocks.rows.mockResolvedValue([

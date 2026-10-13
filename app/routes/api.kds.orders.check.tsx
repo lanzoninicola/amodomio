@@ -104,7 +104,6 @@ export async function action({ request }: ActionFunctionArgs) {
         canSend:
           matches.length <= 1 &&
           !matches[0]?.deletedAt &&
-          !shortages.length &&
           ["OPENED", "REOPENED", "CLOSED"].includes(dayStatus),
       },
     },

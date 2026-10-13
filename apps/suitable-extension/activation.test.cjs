@@ -192,7 +192,7 @@ test("preserves the linked site and other modules when saving globals", async ()
   });
   assert.equal(worker.saved.modules.kds.enabled, false);
 });
-test("disabling KDS unregisters its scripts without deleting global credentials", async () => {
+test("disabling KDS keeps stock integration registered without deleting global credentials", async () => {
   const worker = setup();
   worker.granted = true;
   await worker.send(configure);
@@ -200,7 +200,7 @@ test("disabling KDS unregisters its scripts without deleting global credentials"
     type: "suitable:configure",
     config: { ...configure.config, modules: { kds: { enabled: false } } },
   });
-  assert.equal(worker.scripts.length, 0);
+  assert.equal(worker.scripts.length, 1);
   assert.equal(worker.saved.apiKey, "test-key");
-  assert.equal(worker.saved.activationStatus.state, "disabled");
+  assert.equal(worker.saved.activationStatus.state, "active");
 });

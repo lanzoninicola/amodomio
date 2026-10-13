@@ -51,14 +51,14 @@ beforeEach(() => {
     effective: { F: 0, M: 0, P: 0, I: 3, FT: 0 },
   });
 });
-it("subtracts reserved dough and reports shortage before sending", async () => {
+it("subtracts reserved dough and reports advisory shortage without blocking sending", async () => {
   mocks.rows.mockResolvedValue([{ commandNumber: 2, size: '{"I":2}' }]);
   const result = await check();
   expect(result.body.check).toMatchObject({
     exists: false,
     available: { I: 1 },
     shortages: ["I"],
-    canSend: false,
+    canSend: true,
   });
 });
 it("allows updating existing commands even from other channels", async () => {

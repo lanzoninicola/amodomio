@@ -217,11 +217,6 @@ let running = false,
     assert.equal(Number(header.totOrdersAmount), 50);
     assert.ok(header.closedAt);
     await pool.query("UPDATE kds_daily_orders SET operation_status='CLOSED'");
-    const rejected = await createImportedOrder({ ...body, commandNumber: 2 });
-    assert.equal(rejected.status, 409);
-    assert.equal((await rejected.json()).error, "insufficient_dough_stock");
-    header = await client.kdsDailyOrder.findUnique({ where: { id: "header" } });
-    assert.equal(header.operationStatus, "CLOSED");
     await pool.query(
       'UPDATE dough_daily_stock SET size=\'{"base":{"F":999},"adjustment":{"F":2},"adjustmentMode":"override"}\''
     );
@@ -229,24 +224,24 @@ let running = false,
       createImportedOrder({ ...body, commandNumber: 2 }),
       createImportedOrder({ ...body, commandNumber: 3 }),
     ]);
-    assert.deepEqual(stockRace.map((r) => r.status).sort(), [200, 409]);
-    assert.equal(await client.kdsDailyOrderDetail.count(), 2);
+    assert.deepEqual(stockRace.map((r) => r.status).sort(), [200, 200]);
+    assert.equal(await client.kdsDailyOrderDetail.count(), 3);
     header = await client.kdsDailyOrder.findUnique({ where: { id: "header" } });
-    assert.equal(Number(header.totOrdersAmount), 100);
+    assert.equal(Number(header.totOrdersAmount), 150);
     assert.equal(header.operationStatus, "REOPENED");
     // Force a post-create failure to prove the write and reopening roll back together.
     await pool.query("UPDATE kds_daily_orders SET operation_status='CLOSED'");
     await pool.query("UPDATE dough_daily_stock SET size='{\"F\":3}'");
     await pool.query(
-      "ALTER TABLE kds_daily_orders ADD CONSTRAINT fixture_total_limit CHECK (tot_orders_amount <= 100)"
+      "ALTER TABLE kds_daily_orders ADD CONSTRAINT fixture_total_limit CHECK (tot_orders_amount <= 150)"
     );
     await assert.rejects(createImportedOrder({ ...body, commandNumber: 4 }));
-    assert.equal(await client.kdsDailyOrderDetail.count(), 2);
+    assert.equal(await client.kdsDailyOrderDetail.count(), 3);
     header = await client.kdsDailyOrder.findUnique({ where: { id: "header" } });
     assert.equal(header.operationStatus, "CLOSED");
-    assert.equal(Number(header.totOrdersAmount), 100);
+    assert.equal(Number(header.totOrdersAmount), 150);
     assert.equal(await client.crmCustomer.count(), 1);
-    assert.equal(await client.customerOrder.count(), 2);
+    assert.equal(await client.customerOrder.count(), 3);
     const history = await client.customerOrder.findUnique({
       where: { kdsOrderId: "reserved" },
       include: { items: true },
@@ -272,7 +267,7 @@ let running = false,
     assert.equal(Number(updatedHistory.totalAmount), 60);
     assert.equal(updatedHistory.items.length, 1);
     assert.deepEqual(updatedHistory.items[0].flavors, ["1x Margherita"]);
-    assert.equal(await client.customerOrder.count(), 2);
+    assert.equal(await client.customerOrder.count(), 3);
     await client.kdsDailyOrderDetail.delete({ where: { id: "reserved" } });
     const canceled = await client.customerOrder.findUnique({
       where: { id: history.id },
@@ -287,7 +282,7 @@ let running = false,
     assert.deepEqual(report.summary.flavors, []);
     assert.equal(report.orders[0].active, false);
     process.stdout.write(
-      "PASS isolated PostgreSQL: reserved command, duplicate race, stock race, automatic reopening, transactional total, CRM identity, corrections, flavor snapshots, cancellation and rollback\n"
+      "PASS isolated PostgreSQL: reserved command, duplicate race, advisory stock shortage, automatic reopening, transactional total, CRM identity, corrections, flavor snapshots, cancellation and rollback\n"
     );
   } finally {
     if (client) await client.$disconnect();

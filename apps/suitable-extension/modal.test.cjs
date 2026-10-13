@@ -41,7 +41,7 @@ for (const [width, delivery, blocked] of [
       window.jsErrors=[];window.addEventListener("error",event=>window.jsErrors.push(event.message));const originalAttach = Element.prototype.attachShadow;
       Element.prototype.attachShadow = function(options) { return originalAttach.call(this, {...options, mode: 'open'}); };
       window.dayOpened=false;window.openCalls=0;window.checkCalls=0;
-      window.chrome = { runtime: { async sendMessage(message) { if(message.type==='suitable:customer') return {ok:true,purchaseSummary:{last:'2026-10-10T00:00:00-03:00',weekly:1.5,monthly:6}}; if(message.type==='suitable:open-day'){ window.openCalls++; await new Promise(resolve=>setTimeout(resolve,60)); if(${
+      window.chrome = { runtime: { async sendMessage(message) { if(message.type==='suitable:preferences-read') return {ok:true,kdsEnabled:true}; if(message.type==='suitable:customer') return {ok:true,purchaseSummary:{last:'2026-10-10T00:00:00-03:00',weekly:1.5,monthly:6}}; if(message.type==='suitable:open-day'){ window.openCalls++; await new Promise(resolve=>setTimeout(resolve,60)); if(${
         blocked === "open-error"
       }) return {ok:false,error:'Falha ao abrir dia'}; window.dayOpened=true; return {ok:true,dayStatus:'OPENED'}; } if(message.type==='suitable:check') {window.checkCalls++; return {ok:true,check:{exists:${
         blocked === "exists"
@@ -56,11 +56,12 @@ for (const [width, delivery, blocked] of [
       },canSend:${
         ["missing-day", "open-error"].includes(blocked)
           ? "window.dayOpened"
-          : blocked !== "shortage"
+          : true
       }}};} if(message.type==='suitable:zones') return {ok:true,zones:[{id:'morro-id',name:'Morro da Cruz',city:'Pato Branco'},{id:'centro-id',name:'Centro',city:'Pato Branco'}]}; window.sent = message; return {ok:true, id:'imported', status:'novoPedido'}; } } };
       ${parser}
       ${content}
       (async () => {
+        await new Promise(resolve=>setTimeout(resolve,20));
         try {
           const dialog = document.querySelector('[role=dialog]');
           const headerButton = dialog.querySelector('[data-amodomio-kds]').shadowRoot.querySelector('button');
@@ -157,18 +158,6 @@ for (const [width, delivery, blocked] of [
               if(column.dataset.state!=='ok' || column.querySelector('button') || !getComputedStyle(column.querySelector('.check-icon')).animationName.includes('check-success')) throw new Error('Confirmed opening must change to animated check and remove the action');
               if(window.openCalls!==1) throw new Error('Opening must not duplicate requests');
             }
-            if (${blocked === "shortage"}) {
-              await new Promise(resolve=>setTimeout(resolve,450));
-              if(${
-                blocked === "exists"
-              } && !dialog.querySelector('[data-amodomio-kds]').shadowRoot.querySelector('button').textContent.includes('Comanda enviada')) throw new Error('Existing command must update the header to Comanda enviada');
-              form.requestSubmit();
-              await new Promise(resolve=>setTimeout(resolve,20));
-              document.body.dataset.result=JSON.stringify({blocked:true,errorColor:getComputedStyle(review.querySelectorAll('.check-column')[${
-                blocked === "exists" ? 0 : 1
-              }]).color,disabled:review.querySelector('button[type=submit]').disabled,sent:!!window.sent,text:review.querySelector('header').textContent,stock:[...review.querySelectorAll('.dough-number')].map(el=>({size:el.querySelector('span').textContent,value:el.querySelector('strong').textContent,shortage:el.dataset.shortage}))});
-              return;
-            }
             let isolatedPortal = null;
             if (${delivery}) {
               for(let attempt=0;attempt<30 && !review.querySelector('[aria-labelledby=delivery-label]').textContent.includes('Centro');attempt++) await new Promise(resolve=>setTimeout(resolve,10));
@@ -197,6 +186,11 @@ for (const [width, delivery, blocked] of [
           };
           const invalid = [...form.elements].filter(element=>element.validity && !element.validity.valid).map(element=>({name:element.name,validation:element.validationMessage,value:element.value}));
           for(let attempt=0;attempt<60 && review.querySelector('button[type=submit]').disabled;attempt++) await new Promise(resolve=>setTimeout(resolve,10));
+          if (${blocked === "shortage"}) {
+            if(review.querySelector('button[type=submit]').disabled) throw new Error('Dough shortage must not block sending');
+            if(!review.querySelector('header').textContent.includes('O envio continua disponível')) throw new Error('Attendant must see an advisory shortage warning');
+            if(review.querySelector('.dough-number[data-shortage="true"] strong').textContent!=='0') throw new Error('Short size must remain highlighted');
+          }
           form.requestSubmit();
           for (let attempt = 0; attempt < 30 && !review.querySelector('[type=submit]')?.hidden && review.querySelector('[type=submit]'); attempt++) {
             if (review.querySelector('.message').textContent.includes('Pedido enviado')) break;
@@ -250,29 +244,6 @@ for (const [width, delivery, blocked] of [
       assert.equal(result.error, undefined, JSON.stringify(result));
       if (blocked === "open-error") {
         assert.equal(result.openingFailed, true);
-        return;
-      }
-      if (blocked === "shortage") {
-        assert.equal(result.disabled, true);
-        assert.equal(
-          result.errorColor,
-          blocked === "exists" ? "rgb(21, 128, 61)" : "rgb(185, 28, 28)"
-        );
-        assert.equal(result.sent, false);
-        assert.match(
-          result.text,
-          blocked === "exists" ? /já existe no servidor/ : /Massa insuficiente/
-        );
-        if (blocked === "shortage") {
-          assert.deepEqual(
-            result.stock.find((row) => row.size === "I"),
-            { size: "I", value: "0", shortage: "true" }
-          );
-          assert.deepEqual(
-            result.stock.find((row) => row.size === "P"),
-            { size: "P", value: "20", shortage: "false" }
-          );
-        }
         return;
       }
       assert.equal(result.layout.inputFont, "14px");

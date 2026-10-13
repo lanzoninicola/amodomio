@@ -2,7 +2,6 @@ import { syncKdsOrderHistory } from "~/domain/crm/order-history.server";
 import { json } from "@remix-run/node";
 import { Prisma } from "@prisma/client";
 import prisma from "~/lib/prisma/client.server";
-import { getDoughStock } from "./dough-stock.server";
 import {
   countOrderItemSizes,
   KDS_PIZZA_SIZES,
@@ -235,39 +234,7 @@ export async function createImportedOrder(body: Record<string, unknown>) {
           409,
           { commandNumber }
         );
-      await tx.$queryRaw`SELECT id FROM dough_daily_stock WHERE date_int = ${dateInt} FOR UPDATE`;
-      const stock = await getDoughStock(dateInt, tx);
-      if (stock) {
-        // Match Atendimento: all existing sizes reserve dough, irrespective of status.
-        const used = rows.reduce(
-          (sum, row) => {
-            if (updating && row.id === matches[0].id) return sum;
-            const sizes = storedCounts(row.size);
-            for (const key of KDS_PIZZA_SIZES) sum[key] += sizes[key];
-            return sum;
-          },
-          { F: 0, M: 0, P: 0, I: 0, FT: 0 }
-        );
-        const shortages = KDS_PIZZA_SIZES.filter(
-          (key) =>
-            counts[key] > 0 && counts[key] > stock.effective[key] - used[key]
-        );
-        if (shortages.length)
-          return failure(
-            "insufficient_dough_stock",
-            shortages
-              .map(
-                (key) =>
-                  `${key}: solicitadas ${counts[key]}, disponíveis ${Math.max(
-                    0,
-                    stock.effective[key] - used[key]
-                  )}`
-              )
-              .join("; "),
-            409,
-            { shortages }
-          );
-      }
+      // Dough availability is advisory; the attendant decides how to handle shortages.
       const maxSort = rows.reduce(
         (maximum, row) => Math.max(maximum, row.sortOrderIndex),
         0
@@ -326,7 +293,10 @@ export async function createImportedOrder(body: Record<string, unknown>) {
             select,
           })
         : await tx.kdsDailyOrderDetail.create({ data, select });
-      await syncKdsOrderHistory(tx, { ...data, id: created.id } as Prisma.KdsDailyOrderDetailGetPayload<{}>);
+      await syncKdsOrderHistory(tx, {
+        ...data,
+        id: created.id,
+      } as Prisma.KdsDailyOrderDetailGetPayload<{}>);
       const total = await tx.kdsDailyOrderDetail.aggregate({
         where: { dateInt },
         _sum: { orderAmount: true },
