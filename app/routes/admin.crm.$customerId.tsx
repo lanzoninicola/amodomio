@@ -41,6 +41,7 @@ export const meta: MetaFunction = ({ data }) => {
 
 const tabs = [
   { href: (id: string) => `/admin/crm/${id}/profile`, label: "Dados" },
+  { href: (id: string) => `/admin/crm/${id}/orders`, label: "Compras e sabores" },
   { href: (id: string) => `/admin/crm/${id}/conversation`, label: "Conversa" },
   { href: (id: string) => `/admin/crm/${id}/timeline`, label: "Timeline" },
   { href: (id: string) => `/admin/crm/${id}/tags`, label: "Tags" },
@@ -89,7 +90,7 @@ export default function AdminCrmCustomerLayout() {
         </Link>
       </div>
 
-      <div className="flex gap-4 border-b border-border text-sm">
+      <div className="flex flex-wrap gap-x-4 gap-y-2 border-b border-border text-sm">
         {tabs.map((tab) => {
           const href = tab.href(customer.id);
           const isActive = location.pathname === href;

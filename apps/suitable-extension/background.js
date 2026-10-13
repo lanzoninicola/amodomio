@@ -8,6 +8,7 @@ chrome.runtime.onMessage.addListener((message, sender, respond) => {
       "suitable:create",
       "suitable:zones",
       "suitable:check",
+      "suitable:customer",
       "suitable:open-day",
     ].includes(message?.type)
   )
@@ -53,6 +54,22 @@ chrome.runtime.onMessage.addListener((message, sender, respond) => {
       )
         throw new Error(result.error || "Não foi possível abrir o dia.");
       return { ok: true, dayStatus: result.status };
+    }
+    if (message.type === "suitable:customer") {
+      const query = new URLSearchParams({
+        phone: String(message.phone || ""),
+        purchaseSummary: "1",
+      });
+      const response = await fetch(`${serverUrl}/api/crm/customers?${query}`, {
+        credentials: "omit",
+        redirect: "error",
+        headers: { "x-api-key": apiKey },
+        signal: AbortSignal.timeout(20000),
+      });
+      const result = await response.json();
+      if (!response.ok)
+        throw new Error("Não foi possível consultar o histórico do CRM.");
+      return { ok: true, purchaseSummary: result.purchaseSummary ?? null };
     }
     if (message.type === "suitable:zones") {
       const response = await fetch(`${serverUrl}/api/kds/delivery-zones`, {

@@ -71,6 +71,11 @@ declare const chrome: {
       error?: string;
       zones?: Zone[];
       check?: Check;
+      purchaseSummary?: {
+        last: string | null;
+        weekly: number;
+        monthly: number;
+      } | null;
     }>;
   };
 };
@@ -120,11 +125,13 @@ function CheckColumn({
   state,
   detail,
   action,
+  children,
 }: {
   title: string;
   state: CheckState;
   detail: string;
   action?: React.ReactNode;
+  children?: React.ReactNode;
 }) {
   const Icon = {
     ok: CheckIcon,
@@ -159,7 +166,7 @@ function CheckColumn({
         {action}
       </div>
       <div className="check-description">
-        <p className="check-detail">{detail}</p>
+        {children || <p className="check-detail">{detail}</p>}
       </div>
     </div>
   );
@@ -232,6 +239,35 @@ function Review({
   const [name, setName] = useState(order.customerName);
   const [editingCustomer, setEditingCustomer] = useState<string | null>(null);
   const [phone, setPhone] = useState(order.customerPhone);
+  const [purchaseSummary, setPurchaseSummary] = useState<{
+    last: string | null;
+    weekly: number;
+    monthly: number;
+  } | null>(null);
+  const [crmState, setCrmState] = useState("loading");
+  useEffect(() => {
+    let active = true;
+    setPurchaseSummary(null);
+    setCrmState(phone.replace(/\D/g, "").length < 8 ? "empty" : "loading");
+    if (phone.replace(/\D/g, "").length < 8) return;
+    const timer = setTimeout(() => {
+      chrome.runtime
+        .sendMessage({ type: "suitable:customer", phone })
+        .then((result) => {
+          if (!active) return;
+          if (!result?.ok) throw new Error(result?.error);
+          setPurchaseSummary(result.purchaseSummary ?? null);
+          setCrmState("ready");
+        })
+        .catch(() => {
+          if (active) setCrmState("error");
+        });
+    }, 300);
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
+  }, [phone]);
   const [amount, setAmount] = useState(money(order.orderAmount));
   const [channel, setChannel] = useState<string>("CARDAPIO");
   const [pending, setPending] = useState(false);
@@ -589,6 +625,51 @@ function Review({
               onChange={(e) => setPhone(e.target.value)}
               className="inline-value customer-phone font-mono"
             />
+            <div
+              className="customer-kpis"
+              aria-label="Histórico de compras do cliente"
+              aria-busy={crmState === "loading"}
+              title="Média de compras desde a primeira compra registrada no CRM. Pedidos cancelados ou pendentes não entram na média."
+            >
+              {[
+                [
+                  "Última compra",
+                  purchaseSummary?.last
+                    ? new Date(purchaseSummary.last).toLocaleDateString(
+                        "pt-BR",
+                        { timeZone: "America/Sao_Paulo" }
+                      )
+                    : null,
+                ],
+                [
+                  "Média semanal",
+                  purchaseSummary
+                    ? `${purchaseSummary.weekly.toLocaleString("pt-BR", {
+                        maximumFractionDigits: 1,
+                      })} compras`
+                    : null,
+                ],
+                [
+                  "Média mensal",
+                  purchaseSummary
+                    ? `${purchaseSummary.monthly.toLocaleString("pt-BR", {
+                        maximumFractionDigits: 1,
+                      })} compras`
+                    : null,
+                ],
+              ].map(([label, value]) => (
+                <div className="customer-kpi" key={label}>
+                  <span>{label}</span>
+                  <strong>
+                    {crmState === "loading"
+                      ? "…"
+                      : crmState === "error"
+                      ? "Indisponível"
+                      : value || "—"}
+                  </strong>
+                </div>
+              ))}
+            </div>
           </div>
           <div
             className="order-checks"
@@ -632,20 +713,39 @@ function Review({
                   ? "Consulta indisponível"
                   : !check.available
                   ? "Estoque de massas não cadastrado; saldo não verificado."
-                  : `${
-                      check.shortages.length
-                        ? `Massa insuficiente: ${check.shortages.join(", ")}. `
-                        : ""
-                    }${sizes
-                      .map(
-                        (size) =>
-                          `${size}: ${check.available![size]} disponíveis / ${
-                            counts[size]
-                          } necessárias`
-                      )
-                      .join(" · ")}`
+                  : check.shortages.length
+                  ? `Massa insuficiente: ${check.shortages.join(", ")}.`
+                  : "Saldo disponível por tamanho."
               }
-            />
+            >
+              {!checking && !checkError && check?.available && (
+                <>
+                  {check.shortages.length > 0 && (
+                    <p className="check-detail">
+                      Massa insuficiente: {check.shortages.join(", ")}.
+                    </p>
+                  )}
+                  <div className="dough-numbers">
+                    {sizes.map((size) => (
+                      <div
+                        className="dough-number"
+                        key={size}
+                        data-shortage={check.shortages.includes(size)}
+                        title={`${sizeNames[size]}: ${
+                          check.available![size]
+                        } disponíveis / ${counts[size]} necessárias`}
+                        aria-label={`${sizeNames[size]}: ${
+                          check.available![size]
+                        } disponíveis / ${counts[size]} necessárias`}
+                      >
+                        <span>{size}</span>
+                        <strong>{check.available![size]}</strong>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+            </CheckColumn>
             <CheckColumn
               title="Abertura dia"
               state={

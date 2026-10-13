@@ -11,7 +11,8 @@ export function normalize_phone_e164_br(input: string): string | null {
   const digits = (input || "").replace(/\D+/g, "");
   let num = digits;
 
-  if (num.startsWith("55")) num = num.slice(2);
+  if (num.startsWith("55") && (num.length === 12 || num.length === 13))
+    num = num.slice(2);
   else if (num.startsWith("0")) num = num.replace(/^0+/, "");
 
   if (num.length < 10 || num.length > 11) return null;

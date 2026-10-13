@@ -12,6 +12,7 @@ const {
 const fs = require("node:fs/promises");
 const path = require("node:path");
 const { pathToFileURL } = require("node:url");
+const { createOvenPopup } = require("./oven-popup.cjs");
 const { apiRequest } = require("./policy.cjs");
 protocol.registerSchemesAsPrivileged([
   {
@@ -207,6 +208,10 @@ else {
         }
         return state();
       });
+      const showOvenPopup = createOvenPopup(
+        { BrowserWindow, ipcMain, screen },
+        () => window
+      );
       handle("orders:awaiting-oven", (numbers) => {
         if (
           !Array.isArray(numbers) ||
@@ -215,6 +220,7 @@ else {
         )
           return;
         window.flashFrame(true);
+        showOvenPopup(numbers);
         if (!Notification.isSupported()) return;
         const label = numbers
           .filter((n) => n !== null)

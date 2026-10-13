@@ -21,6 +21,6 @@ export function isDatabaseConnectivityError(error: unknown) {
 
   return (
     ["EHOSTUNREACH", "ECONNREFUSED", "ETIMEDOUT", "P1001"].includes(code) ||
-    /EHOSTUNREACH|ECONNREFUSED|ETIMEDOUT|P1001|Can't reach database server|connect/i.test(message)
+    /EHOSTUNREACH|ECONNREFUSED|ETIMEDOUT|P1001|Can't reach database server|(?:connection|connect)\s+(?:refused|timed out)|(?:failed|unable) to connect to (?:the )?(?:database|postgres)|Connection terminated unexpectedly/i.test(message)
   );
 }

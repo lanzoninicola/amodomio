@@ -4,6 +4,8 @@ import prisma from "~/lib/prisma/client.server";
 import { restApi } from "~/domain/rest-api/rest-api.entity.server";
 import { normalize_phone_e164_br } from "~/domain/crm/normalize-phone.server";
 
+import { getCustomerPurchaseHistory } from "~/domain/crm/order-history.server";
+
 type ContactRequest = {
   name?: string;
   phone?: string;
@@ -37,14 +39,38 @@ export async function loader({ request }: LoaderFunctionArgs) {
   }
 
   const customer = await prisma.crmCustomer.findFirst({
-    where: { phone_e164: { endsWith: last8 } },
+    where:
+      url.searchParams.get("purchaseSummary") === "1"
+        ? { phone_e164: normalize_phone_e164_br(phone) || "invalid" }
+        : { phone_e164: { endsWith: last8 } },
     select: { id: true, name: true, phone_e164: true },
   });
 
-  return json({
-    exists: Boolean(customer),
-    customer,
-  });
+  const history =
+    customer && url.searchParams.get("purchaseSummary") === "1"
+      ? await getCustomerPurchaseHistory(customer.id, customer.phone_e164)
+      : null;
+  const summary = history?.summary;
+  const days = summary?.first
+    ? Math.max(
+        1,
+        (Date.now() - new Date(summary.first).getTime()) / 86400000 + 1
+      )
+    : 1;
+  return json(
+    {
+      exists: Boolean(customer),
+      customer,
+      purchaseSummary: summary
+        ? {
+            last: summary.last,
+            weekly: summary.orders / Math.max(1, days / 7),
+            monthly: summary.orders / Math.max(1, days / (365.25 / 12)),
+          }
+        : null,
+    },
+    { headers: { "Cache-Control": "no-store" } }
+  );
 }
 
 export async function action({ request }: ActionFunctionArgs) {
@@ -61,7 +87,9 @@ export async function action({ request }: ActionFunctionArgs) {
   });
 
   if (!rateLimit.success) {
-    const retrySeconds = rateLimit.retryIn ? Math.ceil(rateLimit.retryIn / 1000) : 60;
+    const retrySeconds = rateLimit.retryIn
+      ? Math.ceil(rateLimit.retryIn / 1000)
+      : 60;
     return json(
       { error: "too_many_requests" },
       { status: 429, headers: { "Retry-After": String(retrySeconds) } }
@@ -85,25 +113,34 @@ export async function action({ request }: ActionFunctionArgs) {
   const phone = typeof body?.phone === "string" ? body.phone.trim() : "";
   const email = typeof body?.email === "string" ? body.email.trim() : "";
   const message = typeof body?.message === "string" ? body.message.trim() : "";
-  const source = typeof body?.source === "string" && body.source.trim() ? body.source.trim() : "rest-api";
+  const source =
+    typeof body?.source === "string" && body.source.trim()
+      ? body.source.trim()
+      : "rest-api";
   const preferredChannelRaw =
-    typeof body?.preferred_channel === "string" ? body.preferred_channel.trim().toLowerCase() : "";
-  const genderRaw =
-    typeof body?.gender === "string"
-      ? body.gender.trim().toLowerCase()
+    typeof body?.preferred_channel === "string"
+      ? body.preferred_channel.trim().toLowerCase()
       : "";
+  const genderRaw =
+    typeof body?.gender === "string" ? body.gender.trim().toLowerCase() : "";
 
   if (!phone) return json({ error: "invalid_phone" }, { status: 400 });
 
   const phone_e164 = normalize_phone_e164_br(phone);
   if (!phone_e164) return json({ error: "invalid_phone" }, { status: 400 });
 
-  const preferred_channel = ["whatsapp", "phone", "unknown"].includes(preferredChannelRaw)
+  const preferred_channel = ["whatsapp", "phone", "unknown"].includes(
+    preferredChannelRaw
+  )
     ? preferredChannelRaw
     : undefined;
-  const gender = ["female", "male", "unknown"].includes(genderRaw) ? genderRaw : undefined;
+  const gender = ["female", "male", "unknown"].includes(genderRaw)
+    ? genderRaw
+    : undefined;
 
-  const existing = await prisma.crmCustomer.findUnique({ where: { phone_e164 } });
+  const existing = await prisma.crmCustomer.findUnique({
+    where: { phone_e164 },
+  });
   const customer = existing
     ? await prisma.crmCustomer.update({
         where: { phone_e164 },

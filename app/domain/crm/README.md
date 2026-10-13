@@ -162,3 +162,28 @@ Toda mensagem de texto enviada por `sendTextMessage()` é registrada automaticam
 Veja o contrato REST, os webhooks e os passos de configuração em [../z-api/README.md](../z-api/README.md).
 
 Mensagens recebidas (`WHATSAPP_RECEIVED`) são registradas por outra parte do sistema e aparecem na aba Conversa.
+
+## Histórico de compras e sabores (Suitable/KDS + CSV)
+
+A aba **Compras e sabores**, em `/admin/crm/:customerId/orders`, usa `CustomerOrder` e `CustomerOrderItem`. O telefone E.164 localiza/cria `CrmCustomer`, sem sobrescrever seus dados cadastrais nem as métricas importadas do ERP. A nova aba calcula pedidos, receita, ticket médio, primeira/última compra e ranking de sabores a partir do histórico disponível. Ela exibe os 50 pedidos mais recentes; as estatísticas consideram todos.
+
+- A importação de snapshots no KDS persiste o histórico na mesma transação. `kdsOrderId` único dá identidade estável mesmo quando telefone/comanda mudam; correções substituem os itens. Edições no Atendimento também sincronizam o vínculo.
+- Pedidos excluídos do KDS mantêm o snapshot histórico com vínculo nulo, mas ficam inativos e fora das estatísticas. Pedidos com `deletedAt` ou status `pendente` também ficam fora. Não há status de cancelamento externo recebido da Suitable neste contrato: o cancelamento considerado é o registrado no KDS.
+- Quantidade/tamanho/sabores/observações são preservados. Preço por item é `null` quando a integração fornece apenas o total do pedido. A data é a data operacional da comanda, sem horário de pagamento fornecido pela integração.
+- O ranking remove prefixos como `1x`, normaliza espaços/caixa e conta cada sabor uma vez por pizza, multiplicando pela quantidade do item. Também informa quantos pedidos contêm o sabor. Não estima frações nem vincula sabores automaticamente ao Cardápio.
+- O ETL de CSV passa a vincular pedidos ao CRM na mesma transação; nomes de produtos do CSV não são interpretados automaticamente como sabores. A antiga base `Customer` de campanhas permanece separada.
+- A identificação impede duplicação dentro de cada fonte. CSV e KDS não têm um identificador externo comum confiável: importar a mesma compra nas duas fontes pode duplicar métricas. Evite períodos sobrepostos até definir uma conciliação entre fontes.
+
+### Ativação e pedidos anteriores
+
+Aplicar a migração `20261012190000_link_crm_order_history` antes de disponibilizar o código. Ela adiciona vínculos/arrays e liga pedidos antigos aos clientes já existentes com telefone E.164 igual. Não remove pedidos nem altera os totais antigos do ERP.
+
+O comando de manutenção exige ambiente explícito e funciona como simulação sem `--apply`:
+
+```bash
+source ~/.nvm/nvm.sh >/dev/null 2>&1; nvm use >/dev/null 2>&1
+npm run crm:backfill-purchases -- --development
+npm run crm:backfill-purchases -- --development --apply
+```
+
+Para produção, use `--production`. O comando cria/vincula clientes, incorpora os snapshots existentes do KDS e liga pedidos CSV sem cliente; não consegue recuperar pedidos KDS já apagados antes da implantação. Cada pedido usa transação própria, permite retomada e preserva nomes/dados existentes. Executar apenas depois da migração.

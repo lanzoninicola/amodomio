@@ -1,11 +1,17 @@
 import { useFetcher } from "@remix-run/react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import type { ReconnectionResult } from "~/domain/z-api/reconnection.server";
 
 const ACTION_URL = "/admin/zapi/envios";
 
-export function ZapiReconnectionControls() {
+export function ZapiReconnectionControls({
+  initialIntent,
+  onConnectionChange,
+}: {
+  initialIntent?: "reconnect" | "qr-code";
+  onConnectionChange?: (connected: boolean | null) => void;
+} = {}) {
   const reconnect = useFetcher<ReconnectionResult>();
   const connection = useFetcher<ReconnectionResult>();
   const [expired, setExpired] = useState(false);
@@ -19,6 +25,28 @@ export function ZapiReconnectionControls() {
   const qr = result?.state === "qr" && !connected ? result : null;
   const submit = connection.submit;
   const checking = connection.state !== "idle";
+  const started = useRef(false);
+  const commandSubmit = reconnect.submit;
+
+  useEffect(() => {
+    if (!initialIntent || started.current) return;
+    started.current = true;
+    commandSubmit(
+      { _intent: initialIntent },
+      { method: "post", action: ACTION_URL }
+    );
+  }, [initialIntent, commandSubmit]);
+
+  useEffect(() => {
+    if (!latest) return;
+    onConnectionChange?.(
+      latest.state === "connected"
+        ? true
+        : latest.state === "error"
+        ? null
+        : false
+    );
+  }, [latest, onConnectionChange]);
 
   useEffect(() => {
     setExpired(false);

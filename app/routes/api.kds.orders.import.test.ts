@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => ({
   bearer: vi.fn(),
   list: vi.fn(),
 }));
+vi.mock("~/domain/crm/order-history.server", () => ({ syncKdsOrderHistory: vi.fn() }));
 vi.mock("~/lib/prisma/client.server", () => ({
   default: {
     kdsDailyOrder: { findUnique: mocks.findHeader, update: mocks.updateHeader },

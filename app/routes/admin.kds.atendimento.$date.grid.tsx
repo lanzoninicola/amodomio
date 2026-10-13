@@ -1,3 +1,4 @@
+import { syncKdsOrderHistory } from "~/domain/crm/order-history.server";
 import { normalizeKdsChannel } from "@/domain/kds/constants";
 // app/routes/admin.kds.atendimento.$date.grid.tsx
 import type {
@@ -1547,25 +1548,28 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
       const paymentFlags = paymentFlagsFromForm(form);
 
-      await prisma.kdsDailyOrderDetail.update({
-        where: { id },
-        data: {
-          commandNumber: cmd,
-          isVendaLivre, // agora persiste direto
-          orderAmount: amountDecimal,
-          channel: String(form.get("channel") ?? ""),
-          hasMoto: String(form.get("hasMoto") ?? "") === "on",
-          motoValue: toDecimal(form.get("motoValue")),
-          takeAway: String(form.get("takeAway") ?? "") === "on",
-          size: stringifySize(sizeCounts as any),
-          deliveryZoneId: deliveryZoneId as any,
-          ...paymentFlags,
-          customerName: customerNameRaw === "" ? null : customerNameRaw,
-          customerPhone: customerPhoneRaw === "" ? null : customerPhoneRaw,
-          ...(patchNovoPedidoAt !== undefined
-            ? { novoPedidoAt: patchNovoPedidoAt as any }
-            : {}),
-        },
+      await prisma.$transaction(async (tx) => {
+        const updated = await tx.kdsDailyOrderDetail.update({
+          where: { id },
+          data: {
+            commandNumber: cmd,
+            isVendaLivre, // agora persiste direto
+            orderAmount: amountDecimal,
+            channel: String(form.get("channel") ?? ""),
+            hasMoto: String(form.get("hasMoto") ?? "") === "on",
+            motoValue: toDecimal(form.get("motoValue")),
+            takeAway: String(form.get("takeAway") ?? "") === "on",
+            size: stringifySize(sizeCounts as any),
+            deliveryZoneId: deliveryZoneId as any,
+            ...paymentFlags,
+            customerName: customerNameRaw === "" ? null : customerNameRaw,
+            customerPhone: customerPhoneRaw === "" ? null : customerPhoneRaw,
+            ...(patchNovoPedidoAt !== undefined
+              ? { novoPedidoAt: patchNovoPedidoAt as any }
+              : {}),
+          },
+        });
+        await syncKdsOrderHistory(tx, updated);
       });
 
       await recalcHeaderTotal(dateInt);

@@ -21,6 +21,11 @@ const result = spawnSync(
 );
 if (result.status === 0) {
   require("node:fs").cpSync(
+    path.resolve(__dirname, "../oven-alert"),
+    path.resolve(__dirname, "../web/oven-alert"),
+    { recursive: true }
+  );
+  require("node:fs").cpSync(
     path.resolve(__dirname, "../settings"),
     path.resolve(__dirname, "../web/settings"),
     { recursive: true }

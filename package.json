@@ -19,6 +19,7 @@
     "test": "vitest",
     "test:suitable-extension": "node --test apps/suitable-extension/*.test.cjs",
     "build:suitable-extension": "node apps/suitable-extension/build.mjs",
+    "crm:backfill-purchases": "node scripts/backfill-crm-purchases.cjs",
     "test:suitable-import-db": "node scripts/verify-suitable-import-db.cjs"
   },
   "dependencies": {

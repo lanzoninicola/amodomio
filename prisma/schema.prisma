@@ -2395,6 +2395,8 @@ model KdsDailyOrderDetail {
   DeliveryZone      DeliveryZone? @relation(fields: [deliveryZoneId], references: [id])
   deliveryZoneId    String?       @map("delivery_zone_id")
 
+  customerOrder CustomerOrder?
+
   /// Regras/índices
   @@index([dateInt, sortOrderIndex])
   @@index([dateInt])
@@ -2789,11 +2791,16 @@ model Customer {
   @@map("customers")
 }
 
-/// Cabeçalho do pedido (não referencia Customer; relação futura por telefone)
+/// Histórico de compras ligado ao CRM por telefone normalizado.
 model CustomerOrder {
   id                  String @id @default(uuid()) @map("id")
   source              String @default("csv") @map("source")
   externalOrderNumber String @map("order_number")
+
+  customerId String?              @map("customer_id")
+  customer   CrmCustomer?         @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  kdsOrderId String?              @unique @map("kds_order_id")
+  kdsOrder   KdsDailyOrderDetail? @relation(fields: [kdsOrderId], references: [id], onDelete: SetNull)
 
   customerName String  @map("customer_name")
   phoneRaw     String? @map("phone_raw")
@@ -2821,6 +2828,7 @@ model CustomerOrder {
   // Evita duplicar o mesmo pedido dessa fonte (usamos os campos “brutos” do CSV p/ chave estável)
   @@unique([source, externalOrderNumber, paidAtDate, paidAtHour])
   @@index([paidAt])
+  @@index([customerId, paidAt])
   @@index([phoneE164])
   @@index([externalOrderNumber])
   @@map("customer_orders")
@@ -2833,9 +2841,12 @@ model CustomerOrderItem {
   orderId String        @map("order_id")
   order   CustomerOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
-  productName String  @map("product_name")
-  quantity    Int     @default(1) @map("quantity")
-  amount      Decimal @map("amount") @db.Decimal(10, 2)
+  size        String?
+  flavors     String[] @default([])
+  notes       String[] @default([])
+  productName String   @map("product_name")
+  quantity    Int      @default(1) @map("quantity")
+  amount      Decimal? @map("amount") @db.Decimal(10, 2)
 
   isFee      Boolean @default(false) @map("is_fee")
   isDiscount Boolean @default(false) @map("is_discount")
@@ -2927,6 +2938,7 @@ model CrmCustomer {
   preferred_payment_method String               @default("unknown") @db.VarChar(20)
   created_at               DateTime             @default(now())
   updated_at               DateTime             @updatedAt
+  orders                   CustomerOrder[]
   events                   CrmCustomerEvent[]
   images                   CrmCustomerImage[]
   tags                     CrmCustomerTagLink[]

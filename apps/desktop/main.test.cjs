@@ -123,7 +123,12 @@ test("desktop mantém janela independente, restringe IPC e serve assets com CSP"
   vm.runInNewContext(
     fs.readFileSync(path.join(__dirname, "main.cjs"), "utf8"),
     {
-      require: (name) => (name === "electron" ? electron : require(name)),
+      require: (name) =>
+        name === "electron"
+          ? electron
+          : name === "./oven-popup.cjs"
+          ? { createOvenPopup: () => () => {} }
+          : require(name),
       __dirname,
       process,
       URL,

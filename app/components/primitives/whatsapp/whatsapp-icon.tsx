@@ -1,7 +1,7 @@
 
 
 interface WhatsAppIconProps {
-    color?: "black" | "white"
+    color?: string
     width?: number
     height?: number
 }
