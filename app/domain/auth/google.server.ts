@@ -11,6 +11,7 @@ import {
 } from "./constants.server";
 import { LoggedUser } from "./types.server";
 import prismaClient from "~/lib/prisma/client.server";
+import { readEmbedUser } from "./embed-session.server";
 
 function normalizeUserEmail(email?: string | null) {
   const value = String(email || "").trim().toLowerCase();
@@ -98,3 +99,13 @@ let googleStrategy = new GoogleStrategy(
 );
 
 authenticator.use(googleStrategy);
+
+// Iframe da extensão Suitable: sessão restrita a um lote (cookie com Path do lote).
+const isAuthenticatedBase = authenticator.isAuthenticated.bind(authenticator);
+authenticator.isAuthenticated = (async (request: Request, options?: any) => {
+  const user = await isAuthenticatedBase(request);
+  if (user) return user;
+  const embedUser = await readEmbedUser(request.headers.get("Cookie"));
+  if (embedUser) return embedUser;
+  return isAuthenticatedBase(request, options);
+}) as typeof authenticator.isAuthenticated;
