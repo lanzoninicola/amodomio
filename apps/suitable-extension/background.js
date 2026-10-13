@@ -5,6 +5,8 @@ const inFlight = new Set();
 chrome.runtime.onMessage.addListener((message, sender, respond) => {
   if (
     ![
+      "suitable:preferences-read",
+      "suitable:stock",
       "suitable:create",
       "suitable:zones",
       "suitable:check",
@@ -23,12 +25,37 @@ chrome.runtime.onMessage.addListener((message, sender, respond) => {
       ]);
     if (!sender.tab || new URL(sender.url).origin !== suitableOrigin)
       throw new Error("Página não autorizada. Ative a extensão nesta página.");
-    if (modules?.kds?.enabled === false)
+    if (message.type === "suitable:preferences-read")
+      return { ok: true, kdsEnabled: modules?.kds?.enabled !== false };
+    if (message.type !== "suitable:stock" && modules?.kds?.enabled === false)
       throw new Error(
         "A integração com o KDS está desativada nas configurações."
       );
     if (!serverUrl || !apiKey)
       throw new Error("Configure o servidor e a chave da API na extensão.");
+    if (message.type === "suitable:stock") {
+      const response = await fetch(`${serverUrl}/api/stock/suitable`, {
+        method: "POST",
+        credentials: "omit",
+        redirect: "error",
+        headers: { "Content-Type": "application/json", "x-api-key": apiKey },
+        body: JSON.stringify(message.payload),
+        signal: AbortSignal.timeout(60000),
+      });
+      if ([404, 405].includes(response.status))
+        throw new Error(
+          "Atualize o servidor Amodomio com a rota /api/stock/suitable."
+        );
+      const result = await response.json().catch(() => {
+        throw new Error("Resposta inválida do servidor");
+      });
+      if (!response.ok || !result.ok)
+        throw new Error(result.error || "Não foi possível processar a nota");
+      return {
+        ...result,
+        url: result.path ? new URL(result.path, serverUrl).href : undefined,
+      };
+    }
     if (message.type === "suitable:open-day") {
       const response = await fetch(`${serverUrl}/api/kds/day/open`, {
         method: "POST",

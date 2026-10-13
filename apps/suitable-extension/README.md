@@ -66,6 +66,39 @@ necessário informar servidor e chave novamente se já estiverem salvos.
 
 ## Instalar no Windows (Chrome ou Edge)
 
+### Gerar ZIP e enviar ao Google Drive
+
+Na raiz do projeto, com o Node da `.nvmrc` ativo:
+
+```bash
+npm run build:extension
+```
+
+Compila a extensão e gera `build/extensions/suitable-amodomio-<versão>-<data UTC>.zip`.
+O ZIP contém a pasta `suitable-extension` com os arquivos de instalação e fontes,
+sem código-fonte, testes e fixtures. O envio usa a pasta
+https://drive.google.com/drive/folders/1Nj1uctv-kyEHECYeTqIKqTabKgXSEubR.
+Cada execução usa um nome novo e preserva os pacotes anteriores.
+
+Instale `zip` e [rclone](https://rclone.org/install/) na máquina que executa o comando.
+Antes do primeiro envio, execute `rclone config`, crie um remote chamado
+`amodomio-drive`, escolha Google Drive e autentique uma conta com acesso de escrita
+à pasta. Siga o [guia de configuração](https://rclone.org/drive/), incluindo a
+criação de um client ID OAuth próprio recomendada pelo rclone. As credenciais ficam
+na configuração local do rclone, fora do repositório e do ZIP.
+
+Para gerar apenas o ZIP, sem exigir rclone nem autenticação:
+
+```bash
+npm run build:extension -- --no-upload
+```
+
+Opcionalmente, defina `EXTENSION_DRIVE_REMOTE` para outro nome de remote e
+`EXTENSION_DRIVE_FOLDER_ID` para outro ID de pasta (não o link completo).
+Se o upload falhar, o comando termina com erro e mantém o ZIP local.
+No Windows, extraia o ZIP e selecione a pasta `suitable-extension` em
+**Carregar sem compactação**.
+
 1. Copie a pasta `apps/suitable-extension` para o Windows.
 2. Abra `chrome://extensions` ou `edge://extensions`, ative **Modo do desenvolvedor**
    e escolha **Carregar sem compactação**, selecionando essa pasta.
@@ -273,3 +306,11 @@ Ao abrir o detalhe no Suitable, o botão consulta automaticamente a comanda no
 KDS. Estoque massa mostra as quantidades disponíveis e necessárias por tamanho,
 inclusive quando há insuficiência. Recarregue a extensão e a página após atualizar;
 o fluxo de atualização também exige a versão atualizada do servidor.
+
+### Notas de entrada → estoque (1.4.0)
+
+Na janela **Cadastrar nota de compra**, clique em **Lançar entrada** (ou **Ver detalhes**) na lista de notas. Em **Produtos/Insumos**, a extensão oferece **Criar / recuperar lote**. A captura preserva identificador, quantidade e unidade originais, custo unitário e total, fornecedor, número e data da nota. Percorre a lista virtualizada e as páginas; bloqueia a criação se faltar alguma linha ou se a soma diferir do total da nota (incluindo casos de filtros, frete ou itens removidos).
+
+A revisão ocorre na mesma janela: vínculo de produtos e fornecedor, conversão manual e aprovação de custos. O componente `app/components/admin/stock-batch-review.tsx` é compartilhado com a visualização de cards dos lotes Suitable no servidor. **Importar nota no estoque** fica disponível somente quando todas as linhas estão resolvidas. A criação de lote não movimenta o estoque. O link **Abrir lote** é opcional.
+
+Requer publicar a rota `/api/stock/suitable` no Amodomio e recarregar a extensão e o Suitable. Usa o servidor/chave globais já configurados; a integração de estoque permanece disponível quando o KDS está desativado. Repetir a criação recupera o lote pelo fornecedor, número e data; não substitui o conteúdo de um lote existente. Após erro de conexão durante a importação, use **Atualizar lote** para conferir o progresso antes de tentar novamente.

@@ -142,7 +142,8 @@ function movementMetadataBase(params: {
     importLineId: params.lineId,
     direction: "entry",
     movementType: "import",
-    sourceSystem: SOURCE_SYSTEM,
+    sourceSystem:
+      params.line?.metadata?.source === "suitable" ? "suitable" : SOURCE_SYSTEM,
     sourceType: ALIAS_SOURCE_TYPE,
     ingredientName: params.line?.ingredientName || null,
     invoiceNumber: params.line?.invoiceNumber || null,
@@ -1664,6 +1665,7 @@ async function resolveDirectSupplierFromLookup(
 
 export async function createStockMovementImportBatchFromVisionPayload(params: {
   batchName: string;
+  sourceSystem?: "saipos" | "suitable";
   sourceType?: typeof SOURCE_TYPE_VISION | typeof SOURCE_TYPE_API;
   uploadedBy?: string | null;
   originalFileName?: string | null;
@@ -1735,8 +1737,14 @@ export async function createStockMovementImportBatchFromVisionPayload(params: {
       ).toUpperCase() || null;
 
     const sourceFingerprint = hashFingerprint({
-      sourceSystem: SOURCE_SYSTEM,
+      sourceSystem: params.sourceSystem || SOURCE_SYSTEM,
       sourceType: params.sourceType || SOURCE_TYPE_VISION,
+      ...(params.sourceSystem === "suitable"
+        ? {
+            supplierName: supplier.supplierNameNormalized,
+            supplierCnpj: supplier.supplierCnpj,
+          }
+        : {}),
       movementAt: movementAt?.toISOString() || "",
       ingredientName: normalizeName(ingredientName),
       invoiceNumber,
@@ -1778,7 +1786,8 @@ export async function createStockMovementImportBatchFromVisionPayload(params: {
       observation: str(rawLine.observation) || null,
       sourceFingerprint,
       rawData: rawLine.rawData || {
-        source: "chatgpt-vision",
+        source:
+          params.sourceSystem === "suitable" ? "suitable" : "chatgpt-vision",
         batchDefaults: {
           movementAt: params.movementAt?.toISOString() || null,
           invoiceNumber: params.invoiceNumber || null,
@@ -1788,7 +1797,8 @@ export async function createStockMovementImportBatchFromVisionPayload(params: {
         },
       },
       metadata: {
-        source: "chatgpt-vision",
+        source:
+          params.sourceSystem === "suitable" ? "suitable" : "chatgpt-vision",
         invoiceNumberProvidedByModel: Boolean(
           rawLine.invoiceNumber || params.invoiceNumber
         ),
@@ -1852,7 +1862,7 @@ export async function createStockMovementImportBatchFromVisionPayload(params: {
         `Importação de movimentações por foto ${new Date().toLocaleString(
           "pt-BR"
         )}`,
-      sourceSystem: SOURCE_SYSTEM,
+      sourceSystem: params.sourceSystem || SOURCE_SYSTEM,
       sourceType: params.sourceType || SOURCE_TYPE_VISION,
       status: derivePreApplyBatchStatus(summary),
       originalFileName:

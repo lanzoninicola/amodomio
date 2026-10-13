@@ -43,7 +43,7 @@ function setup(fetch, modules) {
   return (order, origin = "https://suitable.test", type = "suitable:create") =>
     new Promise((resolve) =>
       listener(
-        { type, order },
+        type === "suitable:stock" ? { type, payload: order } : { type, order },
         { tab: { id: 1 }, url: `${origin}/pedido` },
         resolve
       )
@@ -287,4 +287,46 @@ test("missing check route explains the required server update", async () => {
   assert.equal(result.ok, false);
   assert.match(result.error, /Atualize o servidor/);
   assert.match(result.error, /api\/kds\/orders\/check/);
+});
+
+test("stock uses global connection independently of disabled KDS", async () => {
+  let called;
+  const send = setup(
+    async (url, options) => {
+      called = { url, options };
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          ok: true,
+          batchId: "batch",
+          path: "/admin/import-stock-movements/batch",
+        }),
+      };
+    },
+    { kds: { enabled: false } }
+  );
+  const payload = { action: "create", note: { invoiceNumber: "000002377" } };
+  const result = await send(payload, "https://suitable.test", "suitable:stock");
+  assert.equal(result.ok, true);
+  assert.equal(called.url, "https://kds.test/api/stock/suitable");
+  assert.deepEqual(JSON.parse(called.options.body), payload);
+  assert.equal(called.options.headers["x-api-key"], "test-key");
+  assert.equal(
+    result.url,
+    "https://kds.test/admin/import-stock-movements/batch"
+  );
+});
+test("stock rejects an unauthorized page before any request", async () => {
+  let called = false;
+  const send = setup(async () => {
+    called = true;
+  });
+  const result = await send(
+    { action: "start" },
+    "https://other.test",
+    "suitable:stock"
+  );
+  assert.equal(result.ok, false);
+  assert.equal(called, false);
 });

@@ -1,3 +1,13 @@
+import {
+  StockBatchReview,
+  type StockBatchView,
+} from "~/components/admin/stock-batch-review";
+import {
+  invoiceFromButton,
+  isProducts,
+  collectProducts,
+  type PurchaseNote,
+} from "./stock-parser";
 import React, { useState, useEffect } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { flushSync } from "react-dom";
@@ -722,7 +732,9 @@ function Review({
                 <>
                   {check.shortages.length > 0 && (
                     <p className="check-detail">
-                      Massa insuficiente: {check.shortages.join(", ")}.
+                      Massa insuficiente: {check.shortages.join(", ")}. Avise o
+                      cliente para avaliar outro tamanho ou cancelar o pedido. O
+                      envio continua disponível.
                     </p>
                   )}
                   <div className="dough-numbers">
@@ -1200,10 +1212,141 @@ function AddToKds({ dialog }: { dialog: Element }) {
   );
 }
 
+function StockEntry({
+  dialog,
+  note,
+  portalContainer,
+}: {
+  dialog: Element;
+  note: PurchaseNote | null;
+  portalContainer: HTMLElement;
+}) {
+  const [view, setView] = useState<StockBatchView | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  async function request(payload: Record<string, unknown>) {
+    const result = await chrome.runtime.sendMessage({
+      type: "suitable:stock",
+      payload,
+    });
+    if (!result?.ok)
+      throw new Error(result?.error || "Não foi possível acessar o servidor");
+    return result;
+  }
+  return (
+    <div className="extension space-y-3 rounded-md border bg-white p-4 text-sm">
+      <strong>
+        Entrada no estoque Amodomio{" "}
+        {note ? `· NF ${note.invoiceNumber} · ${note.supplierName}` : ""}
+      </strong>
+      {!note && (
+        <p>
+          Volte à lista de notas e clique em Lançar entrada para identificar o
+          número e a data da nota.
+        </p>
+      )}
+      {note && !view && (
+        <>
+          <p>Crie o lote para revisar os produtos e importar nesta janela.</p>
+          <Button
+            disabled={busy}
+            onClick={async () => {
+              setBusy(true);
+              setError("");
+              try {
+                const input = await collectProducts(dialog, note);
+                setView(await request({ action: "create", note: input }));
+              } catch (cause) {
+                setError(
+                  cause instanceof Error ? cause.message : "Falha ao ler nota"
+                );
+              } finally {
+                setBusy(false);
+              }
+            }}
+          >
+            {busy ? "Lendo nota…" : "Criar / recuperar lote"}
+          </Button>
+        </>
+      )}
+      {error && (
+        <p role="alert" className="text-red-700">
+          {error}
+        </p>
+      )}
+      {view && (
+        <StockBatchReview
+          initial={view}
+          request={request}
+          portalContainer={portalContainer}
+        />
+      )}
+    </div>
+  );
+}
+
 if (!(globalThis as any).suitableKdsStarted) {
   (globalThis as any).suitableKdsStarted = true;
-  let kdsEnabled = true;
+  let kdsEnabled = false;
+  chrome.runtime
+    .sendMessage({ type: "suitable:preferences-read" })
+    .then((result) => {
+      kdsEnabled = result?.ok === true && result.kdsEnabled !== false;
+      scan();
+    })
+    .catch(() => {});
+  let selectedNote: PurchaseNote | null = null;
+  document.addEventListener(
+    "click",
+    (event) => {
+      const target =
+        event.target instanceof Element ? event.target.closest("button") : null;
+      if (!target || !target.closest('.MuiDialog-paper[role="dialog"]')) return;
+      const note = invoiceFromButton(target);
+      if (note) selectedNote = note;
+    },
+    true
+  );
   function scan() {
+    for (const dialog of document.querySelectorAll(
+      '.MuiDialog-paper[role="dialog"]'
+    )) {
+      const previous = dialog.querySelector<HTMLElement>(
+        "[data-amodomio-stock]"
+      );
+      if (!isProducts(dialog)) {
+        if (previous) {
+          roots.get(previous)?.unmount();
+          roots.delete(previous);
+          previous.remove();
+        }
+        continue;
+      }
+      const key = selectedNote
+        ? `${selectedNote.supplierName}:${selectedNote.invoiceNumber}`
+        : "unknown";
+      if (previous?.dataset.noteKey === key) continue;
+      if (previous) {
+        roots.get(previous)?.unmount();
+        roots.delete(previous);
+        previous.remove();
+      }
+      const host = document.createElement("div");
+      host.dataset.amodomioStock = "true";
+      host.dataset.noteKey = key;
+      host.style.cssText = "flex-shrink:0;margin:12px 24px";
+      const { root, portalContainer } = attach(host);
+      dialog.firstElementChild?.after(host);
+      flushSync(() =>
+        root.render(
+          <StockEntry
+            dialog={dialog}
+            note={selectedNote}
+            portalContainer={portalContainer}
+          />
+        )
+      );
+    }
     if (!kdsEnabled) return;
     for (const dialog of document.querySelectorAll(
       '.MuiDialog-paper[role="dialog"]'

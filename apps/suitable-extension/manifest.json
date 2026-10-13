@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Suitable \u2192 Amodomio",
-  "version": "1.3.2",
-  "description": "Integra o Suitable ao Amodomio, com configurações globais e integrações por área, incluindo o KDS.",
+  "version": "1.4.0",
+  "description": "Integra o Suitable ao Amodomio, com configurações globais e integrações por área, incluindo KDS e notas de entrada para estoque.",
   "permissions": ["activeTab", "scripting", "storage"],
   "optional_host_permissions": ["https://*/*", "http://*/*"],
   "background": {
