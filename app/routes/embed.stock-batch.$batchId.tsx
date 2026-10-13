@@ -13,8 +13,11 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     return new Response("Link expirado. Reabra a importação na extensão.", {
       status: 403,
     });
+  const headers = new Headers();
+  for (const cookie of await commitEmbedSession(batchId))
+    headers.append("Set-Cookie", cookie);
   return redirect(
     `/admin/import-stock-movements/${encodeURIComponent(batchId)}/cards`,
-    { headers: { "Set-Cookie": await commitEmbedSession(batchId) } }
+    { headers }
   );
 }

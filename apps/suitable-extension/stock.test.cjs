@@ -133,6 +133,12 @@ for (const scenario of [
               handle.dispatchEvent(new PointerEvent('pointermove',{pointerId:2,clientX:-10000,clientY:-10000,bubbles:true}));await pause();
               handle.dispatchEvent(new PointerEvent('pointerup',{pointerId:2,bubbles:true}));
               if(parseFloat(panel.style.left)<8||parseFloat(panel.style.top)<8)throw new Error('Dialog moved outside screen');
+              const grip=root.querySelector('[data-stock-resize="se"]');if(!grip)throw new Error('Resize handle missing');
+              const before=panel.offsetWidth;
+              grip.dispatchEvent(new PointerEvent('pointerdown',{pointerId:3,button:0,clientX:500,clientY:500,bubbles:true}));
+              grip.dispatchEvent(new PointerEvent('pointermove',{pointerId:3,clientX:400,clientY:450,bubbles:true}));await pause();
+              grip.dispatchEvent(new PointerEvent('pointerup',{pointerId:3,bubbles:true}));
+              if(!(panel.offsetWidth<before))throw new Error('Resize did not shrink dialog');
               window.floatingVerified=true;
             }
           }
