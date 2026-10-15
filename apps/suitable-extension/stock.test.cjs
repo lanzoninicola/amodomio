@@ -9,10 +9,12 @@ for (const scenario of [
   "paged",
   "virtual",
   "pending",
-  "collapse",
-  "floating",
+  "open-here",
+  "supplier-name-differs",
   "missing-lines",
   "total-mismatch",
+  "total-mismatch-unchecked",
+  "existing-batch",
   "no-note",
 ]) {
   test(`stock invoice Chrome DOM: ${scenario}`, () => {
@@ -31,14 +33,16 @@ for (const scenario of [
           "Mostrando 2 resultados de 2 resultados",
           "Mostrando 3 resultados de 3 resultados"
         );
-      if (scenario === "total-mismatch")
+      if (["total-mismatch", "total-mismatch-unchecked"].includes(scenario))
         products = products.replace("R$ 71,94", "R$ 70,94");
+      if (scenario === "supplier-name-differs")
+        products = products.replaceAll("Agrilar Hortifruti", "AGRILAR HORTIFRUTI LTDA");
       const html = `<!doctype html><html><body>${
         scenario === "no-note" ? products : notes
       }<script>
         const original=Element.prototype.attachShadow;Element.prototype.attachShadow=function(options){return original.call(this,{...options,mode:'open'})};
         window.calls=[];window.errors=[];addEventListener('error',e=>errors.push(e.message));
-        const view={ok:true,batchId:'batch',url:'https://test/admin/import-stock-movements/batch',embedUrl:'https://test/embed/stock-batch/batch?token=t',summary:{total:2,readyToImport:${
+        const view={ok:true,batchId:'batch',existing:${scenario==='existing-batch'},batchStatus:'imported',url:'https://test/admin/import-stock-movements/batch',embedUrl:'https://test/embed/stock-batch/batch?token=t',summary:{total:2,readyToImport:${
           scenario === "pending"
             ? 0
             : ["collapse", "floating"].includes(scenario)
@@ -55,7 +59,7 @@ for (const scenario of [
           : "ready"
       }',targetUnit:'KG',mappedItemId:'item'}],items:[{id:'item',name:'Abobrinha',unit:'KG'},{id:'mushrooms',name:'Cogumelos',unit:'KG'}]};
         window.chrome={runtime:{onMessage:{addListener(){}},async sendMessage(message){
-          if(message.type==='suitable:preferences-read')return {ok:true,kdsEnabled:false};
+          if(message.type==='suitable:preferences-read')return {ok:true,kdsEnabled:false,stockCheckTotal:${scenario==='total-mismatch'}};
           calls.push(message.payload);
           if(message.payload.action==='map'){view.lines.find(line=>line.id===message.payload.lineId).mappedItemId=message.payload.itemId;}
           if(message.payload.action==='step'){view.summary.readyToImport=0;view.summary.imported=2;view.lines.forEach(line=>line.status='imported');return {ok:true,done:true,progress:{processedCount:2,totalCount:2,errorCount:0}};}
@@ -95,54 +99,43 @@ for (const scenario of [
           for(let i=0;i<20&&!document.querySelector('[data-amodomio-stock]');i++)await pause();
           const host=document.querySelector('[data-amodomio-stock]');if(!host)throw new Error('Stock panel missing');
           const root=host.shadowRoot;
+          if('${scenario}'==='ready'){const bar=host.previousElementSibling;if(!bar||!bar.textContent.includes('Fornecedor')||!bar.parentElement.contains(document.querySelector('input[type=text]')))throw new Error('Card is not placed below the supplier bar');window.belowBar=true;}
           if('${scenario}'!=='no-note'){
-            [...root.querySelectorAll('button')].find(b=>b.textContent.includes('Criar / recuperar')).click();
-            for(let i=0;i<30&&!calls.length&&!root.querySelector('[role=alert]');i++)await pause();
-            await pause();
-            if('${scenario}'==='collapse') {
-              const frame=root.querySelector('iframe');if(!frame||frame.src!=='https://test/embed/stock-batch/batch?token=t')throw new Error('Embedded import missing');
-              [...root.querySelectorAll('button')].find(b=>b.textContent.includes('Ver tabela do Suitable')).click();await pause();
-              if(!root.querySelector('#stock-entry-body').hidden)throw new Error('Review did not collapse');
-              if(getComputedStyle(root.querySelector('#stock-entry-body')).display!=='none')throw new Error('Review still takes space');
-              if(!document.querySelector('[role=dialog] [data-index]').textContent.includes('Abobrinha'))throw new Error('Suitable rows missing');
-              const nativeRow=document.querySelector('[role=dialog] [data-index]');
-              if(nativeRow.closest('[hidden]'))throw new Error('Native table was hidden');
-              [...root.querySelectorAll('button')].find(b=>b.textContent.includes('Abrir vínculo de produtos')).click();await pause();
-              if(root.querySelector('#stock-entry-body').hidden)throw new Error('Review did not reopen');
-              if(root.querySelector('iframe')!==frame)throw new Error('Embedded page reloaded');
-              if(calls.length!==1)throw new Error('Collapse must not create, update or import a lot');
-              window.collapseVerified=true;
+            if('${scenario}'==='ready'){
+              const tab=[...document.querySelectorAll('button')].find(b=>b.textContent.trim()==='Contas');let reached=false;tab.addEventListener('click',()=>{reached=true});
+              tab.click();await pause();
+              if(reached)throw new Error('Contas tab opened before the batch exists');
+              if(!root.querySelector('[role=alert]')?.textContent.includes('Crie o lote de entrada'))throw new Error('Blocked tab gave no message');
+              tab.click();await pause();window.blockedTab=true;
             }
-            if('${scenario}'==='floating') {
-              const panel=root.querySelector('#stock-entry-body');const handle=root.querySelector('[data-stock-drag-handle]');
-              if(!panel||panel.getAttribute('aria-modal')!=='false'||getComputedStyle(panel).position!=='fixed')throw new Error('Floating dialog missing');
-              const initialLeft=parseFloat(panel.style.left);
-              const frame=root.querySelector('iframe');if(!frame)throw new Error('Embedded import missing');
-              handle.dispatchEvent(new PointerEvent('pointerdown',{pointerId:1,button:0,clientX:initialLeft+20,clientY:30,bubbles:true}));
-              handle.dispatchEvent(new PointerEvent('pointermove',{pointerId:1,clientX:initialLeft+60,clientY:30,bubbles:true}));await pause();
+            [...root.querySelectorAll('button')].find(b=>b.textContent.includes('Criar lote de entrada')).click();
+            for(let i=0;i<30&&!calls.length&&(window.blockedTab||!root.querySelector('[role=alert]'));i++)await pause();
+            await pause();
+            const link=[...root.querySelectorAll('a')].find(a=>a.textContent.includes('Abrir no Amodomio'));
+            window.batchLink=link?.href;window.noIframe=!root.querySelector('iframe')&&!document.querySelector('iframe');
+            if('${scenario}'==='open-here'){
+              const open=[...root.querySelectorAll('button')].find(b=>b.textContent.includes('Abrir importação aqui'));if(!open)throw new Error('Open-here button missing');
+              open.click();await pause();
+              const frame=root.querySelector('iframe');if(!frame||frame.src!=='https://test/embed/stock-batch/batch?token=t')throw new Error('Embedded import missing');
+              const panel=root.querySelector('#stock-entry-body');if(panel.hidden)throw new Error('Panel hidden');
+              const handle=root.querySelector('[data-stock-drag-handle]');const left=parseFloat(panel.style.left);
+              handle.dispatchEvent(new PointerEvent('pointerdown',{pointerId:1,button:0,clientX:left+20,clientY:30,bubbles:true}));
+              handle.dispatchEvent(new PointerEvent('pointermove',{pointerId:1,clientX:left+80,clientY:30,bubbles:true}));await pause();
               handle.dispatchEvent(new PointerEvent('pointerup',{pointerId:1,bubbles:true}));
-              if(parseFloat(panel.style.left)<=initialLeft)throw new Error('Pointer drag did not move dialog');
-              const movedLeft=panel.style.left;
-              root.querySelector('[aria-label="Fechar vínculo de produtos"]').click();await pause();
-              if(getComputedStyle(panel).display!=='none')throw new Error('Close did not hide floating dialog');
-              [...root.querySelectorAll('button')].find(b=>b.textContent.includes('Abrir vínculo de produtos')).click();await pause();
-              if(panel.hidden||root.querySelector('iframe')!==frame||panel.style.left!==movedLeft)throw new Error('Reopening lost draft or position');
-              handle.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowLeft',bubbles:true}));await pause();
-              if(parseFloat(panel.style.left)>=parseFloat(movedLeft))throw new Error('Keyboard movement failed');
-              handle.dispatchEvent(new PointerEvent('pointerdown',{pointerId:2,button:0,clientX:20,clientY:30,bubbles:true}));
-              handle.dispatchEvent(new PointerEvent('pointermove',{pointerId:2,clientX:-10000,clientY:-10000,bubbles:true}));await pause();
-              handle.dispatchEvent(new PointerEvent('pointerup',{pointerId:2,bubbles:true}));
-              if(parseFloat(panel.style.left)<8||parseFloat(panel.style.top)<8)throw new Error('Dialog moved outside screen');
-              const grip=root.querySelector('[data-stock-resize="se"]');if(!grip)throw new Error('Resize handle missing');
-              const before=panel.offsetWidth;
+              if(!(parseFloat(panel.style.left)>left))throw new Error('Drag failed');
+              const grip=root.querySelector('[data-stock-resize="se"]');const before=panel.offsetWidth;
               grip.dispatchEvent(new PointerEvent('pointerdown',{pointerId:3,button:0,clientX:500,clientY:500,bubbles:true}));
               grip.dispatchEvent(new PointerEvent('pointermove',{pointerId:3,clientX:400,clientY:450,bubbles:true}));await pause();
               grip.dispatchEvent(new PointerEvent('pointerup',{pointerId:3,bubbles:true}));
-              if(!(panel.offsetWidth<before))throw new Error('Resize did not shrink dialog');
-              window.floatingVerified=true;
+              if(!(panel.offsetWidth<before))throw new Error('Resize failed');
+              root.querySelector('[aria-label="Fechar vínculo de produtos"]').click();await pause();
+              if(getComputedStyle(panel).display!=='none')throw new Error('Close failed');
+              [...root.querySelectorAll('button')].find(b=>b.textContent.includes('Abrir importação aqui')).click();await pause();
+              if(panel.hidden||root.querySelector('iframe')!==frame)throw new Error('Reopen reloaded the page');
+              window.openVerified=true;
             }
           }
-          document.body.dataset.result=JSON.stringify({calls,errors,text:[...root.querySelectorAll(".extension")].map(element=>element.textContent).join(" "),collapseVerified:window.collapseVerified,floatingVerified:window.floatingVerified});
+          document.body.dataset.result=JSON.stringify({calls,errors,text:[...root.querySelectorAll(".extension")].map(element=>element.textContent).join(" "),batchLink:window.batchLink,noIframe:window.noIframe,openVerified:window.openVerified,belowBar:window.belowBar,blockedTab:window.blockedTab,tabAfter:(()=>{const t=[...document.querySelectorAll('button')].find(b=>b.textContent.trim()==='Contas');let r=false;if(t){t.addEventListener('click',()=>{r=true});t.click();}return r})()});
         })().catch(error=>document.body.dataset.result=JSON.stringify({error:error.stack,calls,errors}));
         </script></body></html>`;
       const file = join(directory, "test.html");
@@ -180,8 +173,8 @@ for (const scenario of [
           "pending",
           "paged",
           "virtual",
-          "collapse",
-          "floating",
+          "open-here",
+          "supplier-name-differs",
         ].includes(scenario)
       ) {
         assert.equal(result.calls[0].note.invoiceNumber, "000002377");
@@ -199,22 +192,28 @@ for (const scenario of [
           ]
         );
       }
-      if (["ready", "paged", "virtual", "pending"].includes(scenario)) {
+      if (["ready", "paged", "virtual", "pending", "open-here", "supplier-name-differs", "total-mismatch-unchecked", "existing-batch"].includes(scenario)) {
         assert.deepEqual(
           result.calls.map((c) => c.action),
           ["create"]
         );
-      }
-      if (scenario === "floating") {
-        assert.equal(result.floatingVerified, true);
-        assert.deepEqual(
-          result.calls.map((c) => c.action),
-          ["create"]
+        assert.equal(
+          result.batchLink,
+          "https://test/admin/import-stock-movements/batch"
         );
-      }
-      if (scenario === "collapse") {
-        assert.equal(result.collapseVerified, true);
-        assert.equal(result.calls.length, 1);
+        if (scenario === "ready") {
+          assert.equal(result.belowBar, true);
+          assert.equal(result.blockedTab, true);
+          assert.equal(result.tabAfter, true);
+        }
+        if (scenario === "open-here") assert.equal(result.openVerified, true);
+        else assert.equal(result.noIframe, true);
+        if (scenario === "existing-batch")
+          assert.match(
+            result.text,
+            /Lote já existia no Amodomio \(já importado\)/
+          );
+        else assert.match(result.text, /Lote criado/);
       }
       if (scenario === "missing-lines") {
         assert.equal(result.calls.length, 0);

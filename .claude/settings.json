@@ -51,7 +51,24 @@
       "Bash(sed -i 's/async function request\\(payload: Record<string, unknown>\\) {/async function request\\(payload: Record<string, unknown>\\): Promise<any> {/' apps/suitable-extension/src/content.tsx)",
       "Bash(sed -i 's/expected.length === received.length \\\\&\\\\& timingSafeEqual\\(expected, received\\)/expected.length === received.length \\\\&\\\\&\\\\n    timingSafeEqual\\(new Uint8Array\\(expected\\), new Uint8Array\\(received\\)\\)/' app/domain/auth/embed-session.server.ts)",
       "Bash(npx vitest *)",
-      "Bash(grep -rhno \"\\\\\"/api/[a-zA-Z0-9_./\\\\$-]*\\\\|\\\\`/api/[a-zA-Z0-9_./\\\\$-]*\\\\|'/api/[a-zA-Z0-9_./\\\\$-]*\" app/components/admin/import-stock-*.tsx app/routes/admin.import-stock-movements.\\\\$batchId*.tsx | sort -u; ls app/routes | grep \"admin-stock-import-batch\")"
+      "Bash(grep -rhno \"\\\\\"/api/[a-zA-Z0-9_./\\\\$-]*\\\\|\\\\`/api/[a-zA-Z0-9_./\\\\$-]*\\\\|'/api/[a-zA-Z0-9_./\\\\$-]*\" app/components/admin/import-stock-*.tsx app/routes/admin.import-stock-movements.\\\\$batchId*.tsx | sort -u; ls app/routes | grep \"admin-stock-import-batch\")",
+      "Bash(sed -i 's/Criar \\\\/ recuperar lote/Vincular produtos/' apps/suitable-extension/src/content.tsx)",
+      "Bash(sed -i \"s/includes\\('Criar \\\\/ recuperar'\\)/includes\\('Vincular produtos'\\)/g\" apps/suitable-extension/stock.test.cjs)",
+      "Bash(pkill -f \"node --test\")",
+      "Bash(pkill -f \"headless\")",
+      "Bash(npx prettier *)",
+      "Bash(sed -i '170d' stock.test.cjs)",
+      "Bash(sed -i 's/\"version\": \"1.8.0\"/\"version\": \"1.8.1\"/' apps/suitable-extension/manifest.json)",
+      "Bash(sed -i \"s/Abrir lote no Amodomio/Abrir no Amodomio/\" apps/suitable-extension/stock.test.cjs apps/suitable-extension/README.md)",
+      "Bash(npm run *)",
+      "Bash(cd /home/lanzo/Documents/Coding/amodomio/apps/suitable-extension && grep -n \"nav button\" -A4 src/popup.css; grep -n \"build\\\\|css\" ../../package.json | head)",
+      "Read(//home/lanzo/Documents/**)",
+      "Bash(sed -i '86s/nav button {/nav button[type=\"button\"] {/;89s/nav button span:last-child/nav button[type=\"button\"] span:last-child/' apps/suitable-extension/src/popup.css)",
+      "Bash(sed -i '87s/text-left/text-left/' apps/suitable-extension/src/popup.css)",
+      "Bash(sed -i 's/Criar lote de importação/Criar lote de entrada/' src/content.tsx stock.test.cjs README.md)",
+      "Bash(sed -i 's/\"version\": \"1.8.1\"/\"version\": \"1.9.0\"/' manifest.json)",
+      "Bash(sed -i 's/\"version\": \"1.9.0\"/\"version\": \"1.9.1\"/' manifest.json)",
+      "Bash(timeout 100 npx vitest run app/routes/api.stock.suitable.test.ts)"
     ]
   },
   "hooks": {

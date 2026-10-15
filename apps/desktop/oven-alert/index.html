@@ -7,10 +7,12 @@
   </head>
   <body>
     <h1>Aguardando forno</h1>
-    <p id="orders" aria-live="polite"></p>
-    <p>Pedido pronto para entrar no forno.</p>
-    <div>
-      <button id="open">Abrir KDS</button><button id="dismiss">Entendi</button>
+    <div class="alert-content">
+      <p id="orders" aria-live="polite"></p>
+      <div class="actions">
+        <button id="open">Abrir KDS</button>
+        <button id="dismiss">Entendi</button>
+      </div>
     </div>
     <p id="error" role="alert"></p>
     <script src="/oven-alert/alert.js" defer></script>

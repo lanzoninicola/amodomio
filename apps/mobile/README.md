@@ -161,3 +161,13 @@ Os perfis exibidos em `/admin/users` são `kds-cozinha` e `kds-atendimento`.
 A migração `20261012010000_rename_kds_roles` renomeia os valores do enum no
 banco e preserva os vínculos existentes. Aplique as migrações no ambiente
 de destino junto da atualização do servidor.
+
+### Envio dos instaladores ao Google Drive
+
+O build local envia automaticamente o instalador para a mesma pasta da extensão:
+https://drive.google.com/drive/folders/1Nj1uctv-kyEHECYeTqIKqTabKgXSEubR.
+Requer o rclone com o remote `amodomio-drive`. As variáveis
+`EXTENSION_DRIVE_REMOTE` e `EXTENSION_DRIVE_FOLDER_ID` alteram o destino,
+assim como em `build:extension`. Cada envio recebe um nome com data para
+preservar builds anteriores. Falhas no envio fazem o comando falhar, mantendo
+o instalador local. Use `-- --no-upload` para gerar apenas localmente.

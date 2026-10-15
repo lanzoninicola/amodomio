@@ -55,6 +55,7 @@ import {
   ChevronsLeft,
   ChevronsRight,
   Trash2,
+  Monitor,
 } from "lucide-react";
 
 import { badRequest, ok } from "~/utils/http-response.server";
@@ -318,7 +319,9 @@ export async function action({ request }: ActionFunctionArgs) {
       await recipeEntity.delete(recipeId);
       return ok({ message: "Receita eliminada" });
     } catch (error) {
-      return badRequest((error as Error)?.message || "Erro ao eliminar receita");
+      return badRequest(
+        (error as Error)?.message || "Erro ao eliminar receita"
+      );
     }
   }
 
@@ -924,6 +927,17 @@ function RecipeRow({ item }: RecipeItemProps) {
       <TableCell className="px-4 py-3">
         <div className="flex items-center justify-end gap-1">
           <EditItemButton to={`/admin/recipes/${item.id}`} />
+          <Button asChild variant="outline" size="sm">
+            <Link
+              to={`/admin/receitas-tv/${item.id}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label={`Ver ${item.name} na TV (nova aba)`}
+            >
+              <Monitor className="mr-2 h-4 w-4" />
+              Ver na TV
+            </Link>
+          </Button>
           <AlertDialog
             open={showDeleteDialog}
             onOpenChange={setShowDeleteDialog}
@@ -942,10 +956,10 @@ function RecipeRow({ item }: RecipeItemProps) {
               <AlertDialogHeader>
                 <AlertDialogTitle>Eliminar receita?</AlertDialogTitle>
                 <AlertDialogDescription>
-                  Esta ação remove <strong>{item.name}</strong>{" "}
-                  permanentemente, junto com sua composição e etapas de
-                  produção. Se houver fichas técnicas vinculadas, elas não
-                  serão apagadas, mas deixarão de referenciar esta receita.
+                  Esta ação remove <strong>{item.name}</strong> permanentemente,
+                  junto com sua composição e etapas de produção. Se houver
+                  fichas técnicas vinculadas, elas não serão apagadas, mas
+                  deixarão de referenciar esta receita.
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>

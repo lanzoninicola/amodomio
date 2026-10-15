@@ -309,7 +309,7 @@ o fluxo de atualização também exige a versão atualizada do servidor.
 
 ### Notas de entrada → estoque (1.4.0)
 
-Na janela **Cadastrar nota de compra**, clique em **Lançar entrada** (ou **Ver detalhes**) na lista de notas. Em **Produtos/Insumos**, a extensão oferece **Criar / recuperar lote**. A captura preserva identificador, quantidade e unidade originais, custo unitário e total, fornecedor, número e data da nota. Percorre a lista virtualizada e as páginas; bloqueia a criação se faltar alguma linha ou se a soma diferir do total da nota (incluindo casos de filtros, frete ou itens removidos).
+Na janela **Cadastrar nota de compra**, clique em **Lançar entrada** (ou **Ver detalhes**) na lista de notas. Em **Produtos/Insumos**, a extensão oferece **Criar lote de entrada**. A captura preserva identificador, quantidade e unidade originais, custo unitário e total, fornecedor, número e data da nota. Percorre a lista virtualizada e as páginas; bloqueia a criação se faltar alguma linha ou se a soma diferir do total da nota (incluindo casos de filtros, frete ou itens removidos).
 
 A revisão ocorre na mesma janela: vínculo de produtos e fornecedor, conversão manual e aprovação de custos. O componente `app/components/admin/stock-batch-review.tsx` é compartilhado com a visualização de cards dos lotes Suitable no servidor. **Importar nota no estoque** fica disponível somente quando todas as linhas estão resolvidas. A criação de lote não movimenta o estoque. O link **Abrir lote** é opcional.
 

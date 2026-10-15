@@ -17,4 +17,17 @@ if ! nvm use; then
   exit 1
 fi
 
-exec npm run dist:win -- "$@"
+source ../../scripts/build-drive.sh
+build_drive_init "$@"
+# Isolate this run so old installers cannot be uploaded after a successful build.
+windows_output="$PWD/release/build-$(date -u +%Y-%m-%dT%H-%M-%S)-$$"
+npm run dist:win -- "${build_args[@]}" --config.directories.output="$windows_output"
+shopt -s nullglob
+windows_installers=("$windows_output/"*.exe)
+if [ "${#windows_installers[@]}" -eq 0 ]; then
+  echo "Nenhum instalador .exe gerado em $windows_output." >&2
+  exit 1
+fi
+for installer in "${windows_installers[@]}"; do
+  build_drive_upload "$installer"
+done

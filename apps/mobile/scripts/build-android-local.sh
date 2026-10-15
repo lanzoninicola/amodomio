@@ -37,4 +37,27 @@ export ANDROID_HOME="$android_sdk_path"
 export ANDROID_SDK_ROOT="$android_sdk_path"
 export PATH="$ANDROID_HOME/platform-tools:$PATH"
 
-exec npx --no-install eas build --platform android --profile preview --local "$@"
+source ../../scripts/build-drive.sh
+build_drive_init "$@"
+android_build_args=()
+android_output="${EAS_LOCAL_BUILD_ARTIFACTS_DIR:-$PWD}/amodomio-android-$(date -u +%Y-%m-%dT%H-%M-%S)-$$.apk"
+for ((i = 0; i < ${#build_args[@]}; i++)); do
+  case "${build_args[i]}" in
+    --output)
+      i=$((i + 1))
+      android_output="${build_args[i]:-}"
+      if [ -z "$android_output" ]; then
+        echo "Informe o caminho após --output." >&2
+        exit 1
+      fi
+      ;;
+    --output=*) android_output="${build_args[i]#--output=}" ;;
+    *) android_build_args+=("${build_args[i]}") ;;
+  esac
+done
+if [[ "$android_output" != *.apk ]]; then
+  echo "O arquivo de saída deve usar a extensão .apk." >&2
+  exit 1
+fi
+npx --no-install eas build --platform android --profile preview --local --output "$android_output" "${android_build_args[@]}"
+build_drive_upload "$android_output"

@@ -1,15 +1,19 @@
 :root {
-  color-scheme: dark;
+  color-scheme: light;
+  height: 100%;
 }
 body {
   margin: 0;
   padding: 18px 22px;
   border: 6px solid #141414;
-  min-height: 100vh;
+  height: 100%;
   box-sizing: border-box;
   background: #ffba52;
   color: #141414;
   font: 14px system-ui, sans-serif;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
 }
 h1 {
   font-size: 23px;
@@ -18,19 +22,26 @@ h1 {
   margin: 0;
 }
 #orders {
-  font-size: 64px;
+  font-size: clamp(32px, 12vw, 64px);
   line-height: 1.05;
   font-weight: bold;
-  margin: 12px 0;
-  max-height: 90px;
-  overflow: auto;
+  margin: 0;
+  min-width: 0;
   overflow-wrap: anywhere;
 }
 p {
   color: #141414;
 }
-div {
+.alert-content {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  flex: 1;
+  gap: 18px;
+}
+.actions {
   display: flex;
+  flex-direction: column;
   gap: 12px;
 }
 button {
@@ -48,10 +59,19 @@ button {
   border-color: #141414;
   font-weight: bold;
 }
+#dismiss {
+  background: transparent;
+  color: #141414;
+  border-color: #141414;
+}
 button:focus-visible {
   outline: 3px solid #141414;
   outline-offset: 3px;
 }
 #error {
-  color: #f87171;
+  color: #991b1b;
+  margin: 0;
+}
+#error:empty {
+  display: none;
 }

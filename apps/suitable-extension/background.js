@@ -26,7 +26,16 @@ chrome.runtime.onMessage.addListener((message, sender, respond) => {
     if (!sender.tab || new URL(sender.url).origin !== suitableOrigin)
       throw new Error("Página não autorizada. Ative a extensão nesta página.");
     if (message.type === "suitable:preferences-read")
-      return { ok: true, kdsEnabled: modules?.kds?.enabled !== false };
+      return {
+        ok: true,
+        kdsEnabled: modules?.kds?.enabled !== false,
+        stockEnabled: modules?.stock?.enabled !== false,
+        stockCheckTotal: modules?.stock?.checkTotal === true,
+      };
+    if (message.type === "suitable:stock" && modules?.stock?.enabled === false)
+      throw new Error(
+        "A entrada de NFs está desativada nas configurações."
+      );
     if (message.type !== "suitable:stock" && modules?.kds?.enabled === false)
       throw new Error(
         "A integração com o KDS está desativada nas configurações."

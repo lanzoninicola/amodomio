@@ -1,10 +1,11 @@
-import { FloatingStockReview } from "./floating-stock-review";
 import {
   invoiceFromButton,
   isProducts,
+  supplierBar,
   collectProducts,
   type PurchaseNote,
 } from "./stock-parser";
+import { FloatingStockReview } from "./floating-stock-review";
 import React, { useState, useEffect } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { flushSync } from "react-dom";
@@ -12,7 +13,17 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { CHANNELS } from "@/domain/kds/constants";
-import { Check as CheckIcon, X, AlertTriangle, Loader2 } from "lucide-react";
+import {
+  Check as CheckIcon,
+  X,
+  AlertTriangle,
+  Loader2,
+  PackagePlus,
+  CircleCheck,
+  CircleAlert,
+  ExternalLink,
+  PanelTopOpen,
+} from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -68,7 +79,12 @@ declare const chrome: {
   runtime: {
     onMessage?: {
       addListener(
-        listener: (message: { type?: string; kdsEnabled?: boolean }) => void
+        listener: (message: {
+          type?: string;
+          kdsEnabled?: boolean;
+          stockEnabled?: boolean;
+          stockCheckTotal?: boolean;
+        }) => void
       ): void;
     };
     sendMessage(message: unknown): Promise<{
@@ -1209,17 +1225,51 @@ function AddToKds({ dialog }: { dialog: Element }) {
   );
 }
 
+const BATCH_STATUS: Record<string, string> = {
+  draft: "pendente",
+  validated: "validado",
+  imported: "já importado",
+  partial: "importado em parte",
+  rolled_back: "desfeito",
+};
 function StockEntry({
   dialog,
   note,
   portalContainer,
+  checkTotal,
 }: {
   dialog: Element;
   note: PurchaseNote | null;
   portalContainer: HTMLElement;
+  checkTotal: () => boolean;
 }) {
-  const [view, setView] = useState<{ embedUrl: string } | null>(null);
-  const [collapsed, setCollapsed] = useState(false);
+  const [batch, setBatch] = useState<{
+    url: string;
+    embedUrl?: string;
+    existing?: boolean;
+    status?: string;
+  } | null>(null);
+  const [panel, setPanel] = useState<"none" | "open" | "closed">("none");
+  const created = !!batch;
+  // Suitable only lets the user open "Contas" after products are linked, so
+  // keep that tab closed until the entry batch exists.
+  useEffect(() => {
+    if (!note || created) return;
+    const block = (event: Event) => {
+      const button = (event.target as Element | null)?.closest?.("button");
+      if (
+        !button ||
+        !dialog.contains(button) ||
+        button.textContent?.trim() !== "Contas"
+      )
+        return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      setError("Crie o lote de entrada antes de abrir Contas.");
+    };
+    dialog.addEventListener("click", block, true);
+    return () => dialog.removeEventListener("click", block, true);
+  }, [dialog, note, created]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   async function request(payload: Record<string, unknown>): Promise<any> {
@@ -1232,91 +1282,142 @@ function StockEntry({
     return result;
   }
   return (
-    <div className="extension overflow-hidden rounded-lg border bg-white text-sm">
-      <header className="flex flex-wrap items-center justify-between gap-3 bg-slate-50 px-4 py-3">
-        <div className="min-w-0">
-          <h2 className="font-semibold text-slate-900">
-            Importação de estoque
-          </h2>
-          {note && (
-            <p className="mt-0.5 text-xs text-slate-500">
-              NF {note.invoiceNumber} · {note.supplierName}
+    <div className="extension overflow-hidden rounded-lg border border-l-4 border-l-[#46a69d] bg-white text-sm shadow-sm">
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-2.5">
+        <div className="flex min-w-0 items-center gap-3">
+          <span
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-700"
+            aria-hidden="true"
+          >
+            <PackagePlus className="h-4 w-4" />
+          </span>
+          <div className="min-w-0">
+            <h2 className="font-semibold leading-tight text-slate-900">
+              Importação de estoque
+            </h2>
+            <p className="truncate text-xs text-slate-500">
+              {note ? (
+                <>
+                  NF {note.invoiceNumber}
+                  <span aria-hidden="true"> · </span>
+                  {note.supplierName}
+                </>
+              ) : (
+                "Nenhuma nota selecionada"
+              )}
+            </p>
+          </div>
+        </div>
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
+          {batch ? (
+            <>
+              {batch.embedUrl && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  aria-expanded={panel === "open"}
+                  onClick={() =>
+                    setPanel((value) => (value === "open" ? "closed" : "open"))
+                  }
+                >
+                  <PanelTopOpen className="mr-2 h-4 w-4" aria-hidden="true" />
+                  {panel === "open"
+                    ? "Fechar importação"
+                    : "Abrir importação aqui"}
+                </Button>
+              )}
+              <Button asChild variant="outline" size="sm">
+                <a href={batch.url} target="_blank" rel="noopener noreferrer">
+                  <ExternalLink className="mr-2 h-4 w-4" aria-hidden="true" />
+                  Abrir no Amodomio
+                </a>
+              </Button>
+            </>
+          ) : (
+            note && (
+              <Button
+                type="button"
+                size="sm"
+                disabled={busy}
+                onClick={async () => {
+                  setBusy(true);
+                  setError("");
+                  try {
+                    const input = await collectProducts(dialog, note, {
+                      checkTotal: checkTotal(),
+                    });
+                    const result = await request({
+                      action: "create",
+                      note: input,
+                    });
+                    if (!result.url)
+                      throw new Error("Atualize o servidor Amodomio.");
+                    setBatch({
+                      url: result.url,
+                      embedUrl: result.embedUrl,
+                      existing: result.existing === true,
+                      status: result.batchStatus,
+                    });
+                  } catch (cause) {
+                    setError(
+                      cause instanceof Error
+                        ? cause.message
+                        : "Falha ao ler nota"
+                    );
+                  } finally {
+                    setBusy(false);
+                  }
+                }}
+              >
+                {busy ? (
+                  <Loader2
+                    className="mr-2 h-4 w-4 animate-spin"
+                    aria-hidden="true"
+                  />
+                ) : null}
+                {busy ? "Lendo nota…" : "Criar lote de entrada"}
+              </Button>
+            )
+          )}
+        </div>
+      </div>
+      {(!note || error || batch) && (
+        <div className="space-y-1 border-t bg-slate-50 px-4 py-2 text-xs">
+          {!note && (
+            <p className="flex items-center gap-2 text-slate-600">
+              <CircleAlert className="h-4 w-4 shrink-0" aria-hidden="true" />
+              Volte à lista de notas e clique em Lançar entrada para identificar
+              o número e a data da nota.
+            </p>
+          )}
+          {batch && (
+            <p role="status" className="flex items-center gap-2 text-green-800">
+              <CircleCheck className="h-4 w-4 shrink-0" aria-hidden="true" />
+              {batch.existing
+                ? `Lote já existia no Amodomio (${
+                    BATCH_STATUS[batch.status || ""] || "em andamento"
+                  }). `
+                : "Lote criado no Amodomio. "}
+              Vincule os produtos no Suitable; o vínculo no estoque pode ser
+              feito depois ou aqui.
+            </p>
+          )}
+          {error && (
+            <p role="alert" className="flex items-center gap-2 text-red-700">
+              <CircleAlert className="h-4 w-4 shrink-0" aria-hidden="true" />
+              {error}
             </p>
           )}
         </div>
-        <div className="flex shrink-0 items-center gap-2">
-          {note && !view && !collapsed && (
-            <Button
-              type="button"
-              size="sm"
-              disabled={busy}
-              onClick={async () => {
-                setBusy(true);
-                setError("");
-                try {
-                  const input = await collectProducts(dialog, note);
-                  const result = await request({ action: "create", note: input });
-                  if (!result.embedUrl)
-                    throw new Error("Atualize o servidor Amodomio.");
-                  setView({ embedUrl: result.embedUrl });
-                } catch (cause) {
-                  setError(
-                    cause instanceof Error ? cause.message : "Falha ao ler nota"
-                  );
-                } finally {
-                  setBusy(false);
-                }
-              }}
-            >
-              {busy ? "Lendo nota…" : "Criar / recuperar lote"}
-            </Button>
-          )}
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            aria-expanded={!!view && !collapsed}
-            aria-controls={view ? "stock-entry-body" : undefined}
-            onClick={() => setCollapsed((value) => !value)}
-          >
-            {collapsed ? (
-              <>
-                <span>
-                  {view ? "Abrir vínculo de produtos" : "Voltar à importação"}
-                </span>
-              </>
-            ) : (
-              <>
-                <X className="mr-2 h-4 w-4" aria-hidden="true" />
-                <span>Ver tabela do Suitable</span>
-              </>
-            )}
-          </Button>
-        </div>
-      </header>
-      <div
-        hidden={collapsed || (!!note && !error)}
-        className="space-y-4 border-t p-4"
-      >
-        {!note && (
-          <p>
-            Volte à lista de notas e clique em Lançar entrada para identificar o
-            número e a data da nota.
-          </p>
-        )}
-        {error && (
-          <p role="alert" className="text-red-700">
-            {error}
-          </p>
-        )}
-      </div>
-      {view && (
+      )}
+      {batch?.embedUrl && panel !== "none" && (
         <FloatingStockReview
-          embedUrl={view.embedUrl}
+          embedUrl={batch.embedUrl}
           note={note}
           portalContainer={portalContainer}
-          hidden={collapsed}
-          onClose={() => setCollapsed(true)}
+          hidden={panel === "closed"}
+          onClose={() => setPanel("closed")}
         />
       )}
     </div>
@@ -1326,10 +1427,14 @@ function StockEntry({
 if (!(globalThis as any).suitableKdsStarted) {
   (globalThis as any).suitableKdsStarted = true;
   let kdsEnabled = false;
+  let stockEnabled = false;
+  let stockCheckTotal = false;
   chrome.runtime
     .sendMessage({ type: "suitable:preferences-read" })
     .then((result) => {
       kdsEnabled = result?.ok === true && result.kdsEnabled !== false;
+      stockEnabled = result?.ok === true && result.stockEnabled !== false;
+      stockCheckTotal = result?.ok === true && result.stockCheckTotal === true;
       scan();
     })
     .catch(() => {});
@@ -1345,10 +1450,18 @@ if (!(globalThis as any).suitableKdsStarted) {
     },
     true
   );
+  function removeStock() {
+    for (const host of document.querySelectorAll("[data-amodomio-stock]")) {
+      roots.get(host as HTMLElement)?.unmount();
+      roots.delete(host as HTMLElement);
+      host.remove();
+    }
+  }
   function scan() {
-    for (const dialog of document.querySelectorAll(
-      '.MuiDialog-paper[role="dialog"]'
-    )) {
+    if (!stockEnabled) removeStock();
+    for (const dialog of stockEnabled
+      ? document.querySelectorAll('.MuiDialog-paper[role="dialog"]')
+      : []) {
       const previous = dialog.querySelector<HTMLElement>(
         "[data-amodomio-stock]"
       );
@@ -1372,15 +1485,19 @@ if (!(globalThis as any).suitableKdsStarted) {
       const host = document.createElement("div");
       host.dataset.amodomioStock = "true";
       host.dataset.noteKey = key;
-      host.style.cssText = "flex-shrink:0;margin:12px 24px";
+      const bar = supplierBar(dialog);
+      host.style.cssText = bar
+        ? "flex-shrink:0;margin:8px 0"
+        : "flex-shrink:0;margin:12px 24px";
       const { root, portalContainer } = attach(host);
-      dialog.firstElementChild?.after(host);
+      (bar || dialog.firstElementChild)?.after(host);
       flushSync(() =>
         root.render(
           <StockEntry
             dialog={dialog}
             note={selectedNote}
             portalContainer={portalContainer}
+            checkTotal={() => stockCheckTotal}
           />
         )
       );
@@ -1406,6 +1523,9 @@ if (!(globalThis as any).suitableKdsStarted) {
   chrome.runtime.onMessage?.addListener((message) => {
     if (message.type !== "suitable:preferences") return;
     kdsEnabled = message.kdsEnabled !== false;
+    stockEnabled = message.stockEnabled !== false;
+    stockCheckTotal = message.stockCheckTotal === true;
+    if (!stockEnabled) removeStock();
     if (!kdsEnabled) {
       for (const host of document.querySelectorAll(
         "[data-amodomio-kds], [data-amodomio-review]"

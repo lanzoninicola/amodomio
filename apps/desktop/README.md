@@ -94,3 +94,13 @@ sessão/API do Electron. Validar no Ubuntu: alternar widget/compacto, voltar ao 
 abrir configurações duas vezes (uma única janela), salvar e reiniciar o app.
 
 Os accordions começam fechados; os padrões visíveis continuam Aguardando forno e Assando.
+
+### Envio dos instaladores ao Google Drive
+
+O build local envia automaticamente o instalador para a mesma pasta da extensão:
+https://drive.google.com/drive/folders/1Nj1uctv-kyEHECYeTqIKqTabKgXSEubR.
+Requer o rclone com o remote `amodomio-drive`. As variáveis
+`EXTENSION_DRIVE_REMOTE` e `EXTENSION_DRIVE_FOLDER_ID` alteram o destino,
+assim como em `build:extension`. Cada envio recebe um nome com data para
+preservar builds anteriores. Falhas no envio fazem o comando falhar, mantendo
+o instalador local. Use `-- --no-upload` para gerar apenas localmente.
