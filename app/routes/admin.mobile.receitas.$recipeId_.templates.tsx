@@ -65,7 +65,11 @@ export async function action({ request, params }: ActionFunctionArgs) {
   return deleteRecipeTemplate(recipeId, form);
 }
 
-export default function RecipeTemplatesPage() {
+export default function RecipeTemplatesPage({
+  recipeBasePath = "/admin/mobile/receitas",
+  presentation = "mobile",
+}: { recipeBasePath?: string; presentation?: "mobile" | "tv" } = {}) {
+  const tv = presentation === "tv";
   const data = useLoaderData<typeof loader>();
   const { recipe } = data.payload;
   const navigate = useNavigate();
@@ -74,32 +78,70 @@ export default function RecipeTemplatesPage() {
     id: string;
     name: string;
   } | null>(null);
-  const recipePath = `/admin/mobile/receitas/${recipe.id}`;
+  const recipePath = `${recipeBasePath}/${recipe.id}`;
   const listPath = `${recipePath}/templates`;
   const search = params.size ? `?${params}` : "";
   const page = Math.max(0, Math.floor(Number(params.get("page")) || 0));
   return (
-    <div className="space-y-4 pb-6">
+    <div className={tv ? "space-y-8 pb-6" : "space-y-4 pb-6"}>
       <Link
         to={`${recipePath}${search}`}
-        className="inline-flex h-11 items-center gap-1 text-sm font-semibold text-slate-600"
+        className={
+          tv
+            ? "inline-flex min-h-12 items-center gap-2 text-lg font-semibold text-slate-300 hover:text-white"
+            : "inline-flex h-11 items-center gap-1 text-sm font-semibold text-slate-600"
+        }
       >
         <ChevronLeft className="h-4 w-4" /> Voltar à receita
       </Link>
-      <div className="flex items-start justify-between gap-3">
+      <div
+        className={
+          tv
+            ? "flex items-center justify-between gap-6 border-b border-slate-700 pb-8"
+            : "flex items-start justify-between gap-3"
+        }
+      >
         <div className="min-w-0">
-          <h2 className="text-2xl font-semibold text-slate-950">Templates</h2>
-          <p className="mt-1 text-sm text-slate-500">{recipe.name}</p>
+          <h2
+            className={
+              tv
+                ? "text-4xl font-bold leading-tight text-white xl:text-5xl"
+                : "text-2xl font-semibold text-slate-950"
+            }
+          >
+            Templates
+          </h2>
+          <p
+            className={
+              tv
+                ? "mt-3 text-2xl text-slate-300"
+                : "mt-1 text-sm text-slate-500"
+            }
+          >
+            {recipe.name}
+          </p>
         </div>
-        <Button asChild variant="outline" className="h-11 shrink-0">
+        <Button
+          asChild
+          variant="outline"
+          className={
+            tv
+              ? "h-16 shrink-0 gap-2 border-violet-500 bg-violet-600 px-6 text-xl text-white hover:bg-violet-700 hover:text-white"
+              : "h-11 shrink-0"
+          }
+        >
           <Link to={`${listPath}/novo${search}`}>
-            <FilePlus2 className="mr-2 h-4 w-4" /> Criar
+            <FilePlus2 className={tv ? "h-6 w-6" : "mr-2 h-4 w-4"} />{" "}
+            {tv ? "Criar template" : "Criar"}
           </Link>
         </Button>
       </div>
       <Suspense
         fallback={
-          <p role="status" className="text-sm text-slate-500">
+          <p
+            role="status"
+            className={tv ? "text-xl text-slate-300" : "text-sm text-slate-500"}
+          >
             Carregando templates…
           </p>
         }
@@ -107,7 +149,10 @@ export default function RecipeTemplatesPage() {
         <Await
           resolve={data.templates}
           errorElement={
-            <p role="alert" className="text-sm text-red-600">
+            <p
+              role="alert"
+              className={tv ? "text-xl text-red-300" : "text-sm text-red-600"}
+            >
               Não foi possível carregar os templates. Atualize a página para
               tentar novamente.
             </p>
@@ -115,6 +160,7 @@ export default function RecipeTemplatesPage() {
         >
           {(templates) => (
             <RecipeTemplateList
+              presentation={presentation}
               templates={templates}
               query={params.get("q") || ""}
               page={page}

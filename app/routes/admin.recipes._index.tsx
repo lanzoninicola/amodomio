@@ -440,6 +440,12 @@ function RecipesIndexContent({ payload }: { payload: RecipesIndexPayload }) {
 
   return (
     <div className="flex flex-col gap-4">
+      <Button asChild variant="outline" className="self-start">
+        <Link to="/admin/receitas-tv" target="_blank" rel="noopener noreferrer">
+          <Monitor className="mr-2 h-4 w-4" />
+          Lista para TV / monitor
+        </Link>
+      </Button>
       <div className="space-y-4 border-b border-slate-200 pb-4">
         <div className="flex flex-col gap-4">
           <p className="text-sm text-slate-600">

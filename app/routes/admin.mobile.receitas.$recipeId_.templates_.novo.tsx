@@ -64,7 +64,9 @@ function formatQuantity(value: number) {
   return Number(value).toLocaleString("pt-BR", { maximumFractionDigits: 3 });
 }
 
-export default function CreateRecipeTemplatePage() {
+export default function CreateRecipeTemplatePage({
+  recipeBasePath = "/admin/mobile/receitas",
+}: { recipeBasePath?: string } = {}) {
   const {
     payload: { recipe, configuration, snapshot },
   } = useLoaderData<typeof loader>();
@@ -79,7 +81,7 @@ export default function CreateRecipeTemplatePage() {
     snapshot.yieldQuantity === null ? null : Number(recipe.yieldQuantity);
   const yieldUnit = snapshot.yieldUnit;
   const search = getRecipeTemplateSearch(configuration);
-  const recipeUrl = `/admin/mobile/receitas/${recipe.id}${search}`;
+  const recipeUrl = `${recipeBasePath}/${recipe.id}${search}`;
   useEffect(() => {
     if (
       createFetcher.state === "idle" &&
@@ -87,11 +89,18 @@ export default function CreateRecipeTemplatePage() {
       "createdTemplateId" in createFetcher.data
     ) {
       navigate(
-        `/admin/mobile/receitas/${recipe.id}/templates/${createFetcher.data.createdTemplateId}${search}`,
+        `${recipeBasePath}/${recipe.id}/templates/${createFetcher.data.createdTemplateId}${search}`,
         { replace: true }
       );
     }
-  }, [createFetcher.state, createFetcher.data, navigate, recipe.id, search]);
+  }, [
+    createFetcher.state,
+    createFetcher.data,
+    navigate,
+    recipe.id,
+    search,
+    recipeBasePath,
+  ]);
   return (
     <div className="space-y-6 pb-6">
       <Link
