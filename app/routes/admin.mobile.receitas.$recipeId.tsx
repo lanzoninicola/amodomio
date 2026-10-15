@@ -1,3 +1,5 @@
+import { RecipeFontSizeControls } from "~/domain/recipe/components/recipe-font-size-controls";
+import { RecipePendingIngredientsAlert } from "~/domain/recipe/components/recipe-pending-ingredients-alert";
 import { json, redirect } from "@remix-run/node";
 import type {
   ActionFunctionArgs,
@@ -15,6 +17,7 @@ import {
   Info,
   Thermometer,
   X,
+  Trash2,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useRef, useState } from "react";
@@ -96,7 +99,11 @@ function IngredientReadRow({
   onScaleFromIngredient,
   displayUnit,
   onDisplayUnitChange,
+  isAdded,
+  onToggleAdded,
+  fontScale,
 }: {
+  fontScale: number;
   ingredient: {
     id: string;
     name: string;
@@ -110,14 +117,18 @@ function IngredientReadRow({
   onScaleFromIngredient?: (scaleFactor: number) => void;
   displayUnit: string;
   onDisplayUnitChange: (unit: string) => void;
+  isAdded: boolean;
+  onToggleAdded: () => void;
 }) {
+  const listFont = (size: number) => ({
+    fontSize: `${(size * fontScale) / 100}rem`,
+  });
   const sourceUnit = String(ingredient.unit || "UN").toUpperCase();
   const [notesOpen, setNotesOpen] = useState(false);
   const [recalculateOpen, setRecalculateOpen] = useState(false);
   const [availableQuantityInput, setAvailableQuantityInput] = useState("");
   const availableQuantityRef = useRef<HTMLInputElement>(null);
   const [availableUnit, setAvailableUnit] = useState(sourceUnit);
-  const [isAdded, setIsAdded] = useState(false);
   const selectedDisplayUnit = ingredient.displayUnits.find(
     (entry) => entry.unit === displayUnit
   ) ||
@@ -185,7 +196,8 @@ function IngredientReadRow({
         <div className="flex min-w-0 items-start gap-1">
           <button
             type="button"
-            onClick={() => setIsAdded((current) => !current)}
+            onClick={onToggleAdded}
+            style={listFont(1)}
             aria-pressed={isAdded}
             aria-label={`${isAdded ? "Desmarcar" : "Marcar"} ${
               ingredient.name
@@ -220,13 +232,17 @@ function IngredientReadRow({
             type="button"
             onClick={openRecalculateDialog}
             aria-label={`Recalcular receita pela quantidade de ${ingredient.name}`}
+            style={listFont(1.125)}
             className="inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded-lg px-1 text-right text-lg font-semibold text-violet-700 active:bg-violet-50"
           >
             {formatIngredientQuantity(displayQuantity)}
             <Calculator className="h-4 w-4" />
           </button>
         ) : (
-          <p className="shrink-0 text-right text-lg font-semibold text-violet-700">
+          <p
+            style={listFont(1.125)}
+            className="shrink-0 text-right text-lg font-semibold text-violet-700"
+          >
             {formatIngredientQuantity(displayQuantity)}
           </p>
         )}
@@ -245,6 +261,7 @@ function IngredientReadRow({
                 type="button"
                 onClick={() => onDisplayUnitChange(unit)}
                 aria-pressed={displayUnit === unit}
+                style={listFont(0.875)}
                 className={`h-[48px] min-h-[48px] min-w-14 rounded-md px-4 text-sm font-bold transition-colors ${
                   displayUnit === unit
                     ? "bg-white text-violet-700 shadow-sm"
@@ -256,7 +273,10 @@ function IngredientReadRow({
             ))}
           </div>
         ) : (
-          <span className="inline-flex h-[48px] min-h-[48px] min-w-14 items-center justify-center rounded-md bg-slate-100 px-4 text-sm font-bold text-slate-700">
+          <span
+            style={listFont(0.875)}
+            className="inline-flex h-[48px] min-h-[48px] min-w-14 items-center justify-center rounded-md bg-slate-100 px-4 text-sm font-bold text-slate-700"
+          >
             {sourceUnit}
           </span>
         )}
@@ -475,9 +495,45 @@ export default function AdminMobileRecipeDetail() {
   return <RecipeDetail key={data.payload.recipe.id} />;
 }
 
-function RecipeDetail() {
+export function RecipeDetail({
+  recipeOverride,
+  configurationOverride,
+  template,
+}: {
+  recipeOverride?: Awaited<ReturnType<typeof getMobileRecipe>>;
+  configurationOverride?: {
+    scaleFactor: number;
+    selectedUnits: Record<string, string>;
+  };
+  template?: {
+    recipeName: string;
+    backUrl: string;
+    onDelete: () => void;
+    checklist: {
+      addedIds: string[];
+      toggle: (id: string) => void;
+      reset: () => void;
+    };
+  };
+} = {}) {
   const data = useLoaderData<typeof loader>();
-  const recipe = data.payload.recipe;
+  const recipe = recipeOverride || data.payload.recipe;
+  const configuration = configurationOverride || data.payload.configuration;
+  const [fontScale, setFontScale] = useState(100);
+  const [localAddedIds, setLocalAddedIds] = useState<string[]>([]);
+  const addedIds = template?.checklist.addedIds || localAddedIds;
+  function toggleAdded(id: string) {
+    if (template) template.checklist.toggle(id);
+    else
+      setLocalAddedIds((current) =>
+        current.includes(id)
+          ? current.filter((entry) => entry !== id)
+          : [...current, id]
+      );
+  }
+  const remainingIngredients = recipe.ingredients.filter(
+    (ingredient) => !addedIds.includes(ingredient.id)
+  ).length;
   const baseYield =
     recipe.costingMode === "yield" && Number(recipe.yieldQuantity) > 0
       ? Number(recipe.yieldQuantity)
@@ -486,16 +542,13 @@ function RecipeDetail() {
   const [desiredYieldInput, setDesiredYieldInput] = useState(
     baseYield == null
       ? ""
-      : String(baseYield * data.payload.configuration.scaleFactor).replace(
-          ".",
-          ","
-        )
+      : String(baseYield * configuration.scaleFactor).replace(".", ",")
   );
   const [ingredientScaleFactor, setIngredientScaleFactor] = useState(
-    data.payload.configuration.scaleFactor
+    configuration.scaleFactor
   );
   const [selectedUnits, setSelectedUnits] = useState<Record<string, string>>(
-    data.payload.configuration.selectedUnits
+    configuration.selectedUnits
   );
   const navigate = useNavigate();
   const [unitPrompt, setUnitPrompt] = useState<{
@@ -530,63 +583,87 @@ function RecipeDetail() {
 
   return (
     <div className="pb-6">
+      <RecipePendingIngredientsAlert remaining={remainingIngredients} />
       <Link
-        to="/admin/mobile/receitas"
+        to={template?.backUrl || "/admin/mobile/receitas"}
         className="mb-3 inline-flex min-h-10 items-center gap-1 text-sm font-semibold text-slate-600"
       >
-        <ChevronLeft className="h-4 w-4" /> Todas as receitas
+        <ChevronLeft className="h-4 w-4" />{" "}
+        {template ? "Voltar aos templates" : "Todas as receitas"}
       </Link>
       <div className="mb-4">
         <div className="flex items-start justify-between gap-2">
           <h2 className="min-w-0 flex-1 break-words text-2xl font-semibold leading-tight text-slate-950">
             {recipe.name}
           </h2>
-          <div className="flex shrink-0 items-center gap-1">
+          {template ? (
             <Button
               type="button"
               variant="ghost"
-              className="h-auto min-h-11 flex-col gap-1 px-2 py-1.5"
-              aria-label="Criar template"
-              disabled={!canCreateTemplate}
-              onClick={() =>
-                navigate(
-                  `/admin/mobile/receitas/${
-                    recipe.id
-                  }/templates/novo${getRecipeTemplateSearch({
-                    scaleFactor: yieldScaleFactor,
-                    selectedUnits,
-                  })}`
-                )
-              }
+              onClick={template.onDelete}
+              aria-label="Excluir template"
+              className="min-h-11 gap-2 text-red-600"
             >
-              <FilePlus2 className="h-5 w-5" aria-hidden="true" />
-              <span className="text-[10px] font-medium leading-none">
-                Criar template
-              </span>
+              <Trash2 className="h-5 w-5" />
+              Excluir template
             </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              className="h-auto min-h-11 flex-col gap-1 px-2 py-1.5"
-              aria-label="Ver templates"
-              onClick={() =>
-                navigate(
-                  `/admin/mobile/receitas/${
-                    recipe.id
-                  }/templates${getRecipeTemplateSearch({
-                    scaleFactor: yieldScaleFactor,
-                    selectedUnits,
-                  })}`
-                )
-              }
-            >
-              <Files className="h-5 w-5" aria-hidden="true" />
-              <span className="text-[10px] font-medium leading-none">
-                Templates
-              </span>
-            </Button>
-          </div>
+          ) : (
+            <div className="flex shrink-0 items-center gap-1">
+              <Button
+                type="button"
+                variant="ghost"
+                className="h-auto min-h-11 flex-col gap-1 px-2 py-1.5"
+                aria-label="Criar template"
+                disabled={!canCreateTemplate}
+                onClick={() =>
+                  navigate(
+                    `/admin/mobile/receitas/${
+                      recipe.id
+                    }/templates/novo${getRecipeTemplateSearch({
+                      scaleFactor: yieldScaleFactor,
+                      selectedUnits,
+                    })}`
+                  )
+                }
+              >
+                <FilePlus2 className="h-5 w-5" aria-hidden="true" />
+                <span className="text-[10px] font-medium leading-none">
+                  Criar template
+                </span>
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                className="h-auto min-h-11 flex-col gap-1 px-2 py-1.5"
+                aria-label="Ver templates"
+                onClick={() =>
+                  navigate(
+                    `/admin/mobile/receitas/${
+                      recipe.id
+                    }/templates${getRecipeTemplateSearch({
+                      scaleFactor: yieldScaleFactor,
+                      selectedUnits,
+                    })}`
+                  )
+                }
+              >
+                <Files className="h-5 w-5" aria-hidden="true" />
+                <span className="text-[10px] font-medium leading-none">
+                  Templates
+                </span>
+              </Button>
+            </div>
+          )}
         </div>
+        <div className="mt-3">
+          <RecipeFontSizeControls value={fontScale} onChange={setFontScale} />
+        </div>
+        {template ? (
+          <p className="mt-2 text-sm text-slate-500">
+            {template.recipeName}
+            {recipe.description ? ` · ${recipe.description}` : ""}
+          </p>
+        ) : null}
         {baseYield ? (
           <div className="mt-4 flex items-center justify-between gap-3">
             <div>
@@ -594,7 +671,7 @@ function RecipeDetail() {
                 htmlFor="desired-recipe-yield"
                 className="block text-sm font-semibold text-violet-950"
               >
-                Rendimento desejado
+                {template ? "Rendimento salvo" : "Rendimento desejado"}
               </label>
               <p className="mt-0.5 text-xs text-violet-700">
                 Receita-base: {formatQuantity(baseYield)} {yieldUnit}
@@ -603,6 +680,7 @@ function RecipeDetail() {
             <div className="flex items-center rounded-lg border border-violet-200 bg-white focus-within:ring-2 focus-within:ring-violet-200">
               <input
                 id="desired-recipe-yield"
+                readOnly={Boolean(template)}
                 type="text"
                 inputMode="decimal"
                 value={desiredYieldInput}
@@ -620,12 +698,22 @@ function RecipeDetail() {
       {unitPrompt ? (
         <RecipeDisplayUnitDialog
           prompt={unitPrompt}
-          recipeName={recipe.name}
+          recipeName={template?.recipeName || recipe.name}
           action={`/admin/mobile/receitas/${recipe.id}`}
           onClose={() => setUnitPrompt(null)}
         />
       ) : null}
 
+      {template && addedIds.length > 0 ? (
+        <Button
+          type="button"
+          variant="outline"
+          className="mb-3"
+          onClick={template.checklist.reset}
+        >
+          Reiniciar marcações ({addedIds.length}/{recipe.ingredients.length})
+        </Button>
+      ) : null}
       <Tabs defaultValue="ingredients" className="w-full">
         <div className="-mx-4 overflow-x-auto px-4 pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           <TabsList className="h-11 min-w-max justify-start rounded-xl bg-slate-200 p-1">
@@ -653,8 +741,13 @@ function RecipeDetail() {
               <IngredientReadRow
                 key={ingredient.id}
                 ingredient={ingredient}
+                fontScale={fontScale}
+                isAdded={addedIds.includes(ingredient.id)}
+                onToggleAdded={() => toggleAdded(ingredient.id)}
                 scaleFactor={yieldScaleFactor}
-                onScaleFromIngredient={applyIngredientScale}
+                onScaleFromIngredient={
+                  template ? undefined : applyIngredientScale
+                }
                 displayUnit={
                   selectedUnits[ingredient.id] ||
                   ingredient.preferredUnit ||

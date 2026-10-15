@@ -61,6 +61,15 @@ export default function AdminMobileRecipesIndex() {
 
   return (
     <div className="space-y-4 pb-6">
+      <Link
+        to="/admin/receitas-tv"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="flex min-h-12 items-center justify-center gap-2 rounded-xl border border-violet-200 bg-white px-4 text-sm font-semibold text-violet-700 hover:bg-violet-50"
+      >
+        <Monitor className="h-5 w-5" />
+        Lista para TV / monitor
+      </Link>
       <section>
         <label
           htmlFor="recipe-search"
