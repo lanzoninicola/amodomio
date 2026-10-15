@@ -130,6 +130,25 @@ chrome.runtime.onMessage.addListener((message, sender, respond) => {
       )
         throw new Error("Confira a configuração da integração KDS.");
       if (
+        message.config?.modules?.stock !== undefined &&
+        (typeof message.config.modules.stock.enabled !== "boolean" ||
+          (message.config.modules.stock.checkTotal !== undefined &&
+            typeof message.config.modules.stock.checkTotal !== "boolean"))
+      )
+        throw new Error("Confira a configuração da entrada de NFs.");
+      const kdsEnabled =
+        message.config?.modules?.kds?.enabled ??
+        saved.modules?.kds?.enabled ??
+        true;
+      const stockEnabled =
+        message.config?.modules?.stock?.enabled ??
+        saved.modules?.stock?.enabled ??
+        true;
+      const stockCheckTotal =
+        message.config?.modules?.stock?.checkTotal ??
+        saved.modules?.stock?.checkTotal ??
+        false;
+      if (
         typeof message.config?.apiKey !== "string" ||
         !message.config.apiKey.trim() ||
         message.config.apiKey.length > 10000
@@ -144,10 +163,12 @@ chrome.runtime.onMessage.addListener((message, sender, respond) => {
           ...saved.modules,
           kds: {
             ...saved.modules?.kds,
-            enabled:
-              message.config?.modules?.kds?.enabled ??
-              saved.modules?.kds?.enabled ??
-              true,
+            enabled: kdsEnabled,
+          },
+          stock: {
+            ...saved.modules?.stock,
+            enabled: stockEnabled,
+            checkTotal: stockCheckTotal,
           },
         },
         ...(Number.isInteger(message.tabId)
@@ -165,10 +186,9 @@ chrome.runtime.onMessage.addListener((message, sender, respond) => {
             await chrome.tabs
               .sendMessage(tab.id, {
                 type: "suitable:preferences",
-                kdsEnabled:
-                  message.config?.modules?.kds?.enabled ??
-                  saved.modules?.kds?.enabled ??
-                  true,
+                kdsEnabled,
+                stockEnabled,
+                stockCheckTotal,
               })
               .catch(() => {});
           }

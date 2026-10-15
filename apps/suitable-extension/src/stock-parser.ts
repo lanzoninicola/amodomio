@@ -68,16 +68,40 @@ export function productRows(dialog: Element) {
     };
   });
 }
-const wait = () => new Promise((resolve) => setTimeout(resolve, 150));
-export async function collectProducts(dialog: Element, note: PurchaseNote) {
+function searchField(dialog: Element) {
+  const label = Array.from(dialog.querySelectorAll("label")).find(
+    (node) => text(node) === "Buscar"
+  );
+  return (
+    label?.parentElement?.querySelector<HTMLInputElement>("input") ||
+    dialog.querySelector<HTMLInputElement>('input[placeholder="Buscar"]')
+  );
+}
+/** Grey "Fornecedor" bar of the products tab; the import card goes right below it. */
+export function supplierBar(dialog: Element): HTMLElement | null {
   const label = Array.from(dialog.querySelectorAll("h6")).find(
     (node) => text(node) === "Fornecedor"
   );
-  const supplier =
-    label?.parentElement?.parentElement?.querySelectorAll("h6")[1];
-  if (text(supplier) !== note.supplierName)
+  const search = searchField(dialog);
+  if (!label || !search) return null;
+  for (
+    let node: HTMLElement | null = label.parentElement;
+    node && node !== dialog;
+    node = node.parentElement
+  )
+    if (node.parentElement?.contains(search) && !node.contains(search))
+      return node;
+  return null;
+}
+const wait = () => new Promise((resolve) => setTimeout(resolve, 150));
+export async function collectProducts(
+  dialog: Element,
+  note: PurchaseNote,
+  options: { checkTotal?: boolean } = {}
+) {
+  if (!note.supplierName.trim())
     throw new Error(
-      "Fornecedor mudou. Volte à lista e selecione a nota novamente"
+      "Fornecedor da nota não identificado. Volte à lista e selecione a nota novamente"
     );
   const count = () =>
     text(
@@ -89,9 +113,7 @@ export async function collectProducts(dialog: Element, note: PurchaseNote) {
   if (!initial || Number(initial[2]) < 1 || Number(initial[2]) > 500)
     throw new Error("Confira a lista de produtos (máximo 500)");
   // A filter would silently omit products. Require the unfiltered invoice.
-  const search = dialog.querySelector<HTMLInputElement>(
-    'input[placeholder="Buscar"]'
-  );
+  const search = searchField(dialog);
   if (search?.value)
     throw new Error("Limpe a busca dos produtos antes de capturar a nota");
   const firstPage = dialog.querySelector<HTMLButtonElement>(
@@ -159,7 +181,7 @@ export async function collectProducts(dialog: Element, note: PurchaseNote) {
   if (lines.length !== Number(initial[2]))
     throw new Error("A contagem dos produtos não confere");
   const sum = lines.reduce((total, line) => total + line.costTotalAmount, 0);
-  if (Math.abs(sum - note.total) > 0.02)
+  if (options.checkTotal && Math.abs(sum - note.total) > 0.02)
     throw new Error(
       "A soma dos produtos difere do total da nota. Confira filtros, frete ou itens removidos antes de criar o lote"
     );

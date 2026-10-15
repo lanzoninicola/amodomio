@@ -1193,9 +1193,18 @@ function KanbanScreen({
           <View style={[styles.modalCard, { maxHeight: "90%" }]}>
             <ScrollView
               keyboardShouldPersistTaps="handled"
-              contentContainerStyle={{ gap: 14, padding: 20 }}
+              showsVerticalScrollIndicator={!desktop}
+              contentContainerStyle={{
+                gap: desktop ? 8 : 14,
+                padding: desktop ? 12 : 20,
+              }}
             >
-              <Text style={styles.modalTitle}>
+              <Text
+                style={[
+                  styles.modalTitle,
+                  desktop && { fontSize: 18, paddingRight: 44 },
+                ]}
+              >
                 WhatsApp · Pedido #{contactOrder?.commandNumber ?? "VL"}
               </Text>
               <Text style={styles.detailValue}>
@@ -1204,7 +1213,9 @@ function KanbanScreen({
               </Text>
               <Text style={styles.detailValue}>
                 {lastContactSentAt
-                  ? `Último envio: ${new Date(lastContactSentAt).toLocaleString("pt-BR")}`
+                  ? `Último envio: ${new Date(lastContactSentAt).toLocaleString(
+                      "pt-BR"
+                    )}`
                   : "Nenhum envio registrado neste dispositivo"}
               </Text>
               <View style={{ flexDirection: "row", gap: 8 }}>
@@ -1241,6 +1252,9 @@ function KanbanScreen({
                 <>
                   <View
                     style={{
+                      ...(desktop
+                        ? { position: "absolute" as const, top: 4, right: 8 }
+                        : {}),
                       flexDirection: "row",
                       alignItems: "center",
                       justifyContent: "flex-end",
@@ -1291,7 +1305,12 @@ function KanbanScreen({
                       !contactSuccess
                     }
                     placeholder="Digite a mensagem para o cliente"
-                    style={{ minHeight: 140, textAlignVertical: "top" }}
+                    style={{
+                      height: desktop
+                        ? Math.max(80, Math.min(180, height - 350))
+                        : 140,
+                      textAlignVertical: "top",
+                    }}
                   />
                   {contactSuccess ? (
                     <Text
@@ -1304,17 +1323,6 @@ function KanbanScreen({
                   {contactError ? (
                     <Text style={styles.error}>{contactError}</Text>
                   ) : null}
-                  <Button
-                    onPress={sendContact}
-                    loading={contactBusy}
-                    disabled={
-                      !contactEnabled ||
-                      !contactText.trim() ||
-                      Boolean(contactSuccess)
-                    }
-                  >
-                    {useContactTemplate ? "Enviar template" : "Enviar mensagem"}
-                  </Button>
                 </>
               ) : (
                 <View style={{ gap: 12 }}>
@@ -1354,14 +1362,38 @@ function KanbanScreen({
                   ) : null}
                 </View>
               )}
+            </ScrollView>
+            <View
+              style={{
+                flexDirection: "row",
+                gap: 8,
+                padding: desktop ? 12 : 20,
+                paddingTop: 0,
+              }}
+            >
               <Button
+                style={{ flex: 1 }}
                 variant="outline"
                 disabled={contactBusy}
                 onPress={() => setContactOrder(null)}
               >
                 Fechar
               </Button>
-            </ScrollView>
+              {contactTab === "send" ? (
+                <Button
+                  style={{ flex: 1 }}
+                  onPress={sendContact}
+                  loading={contactBusy}
+                  disabled={
+                    !contactEnabled ||
+                    !contactText.trim() ||
+                    Boolean(contactSuccess)
+                  }
+                >
+                  {useContactTemplate ? "Enviar template" : "Enviar mensagem"}
+                </Button>
+              ) : null}
+            </View>
           </View>
         </View>
       </Modal>

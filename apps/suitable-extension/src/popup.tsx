@@ -33,6 +33,15 @@ function Popup() {
             <span>KDS</span>
             <span aria-hidden="true">›</span>
           </Button>
+          <Button
+            type="button"
+            id="stock-tab"
+            variant="outline"
+            aria-controls="stock-panel"
+          >
+            <span>Entrada de NFs</span>
+            <span aria-hidden="true">›</span>
+          </Button>
         </nav>
         <section id="global-panel" aria-labelledby="title" hidden>
           <h2>Conexão com o Amodomio</h2>
@@ -80,6 +89,27 @@ function Popup() {
             Antes do envio, consulta a comanda e o estoque de massas no
             Amodomio.
           </div>
+          <p>As demais configurações de conexão ficam em Globais.</p>
+        </section>
+        <section id="stock-panel" aria-labelledby="title" hidden>
+          <h2>Notas de compra → Estoque</h2>
+          <label className="toggle">
+            <input id="stock-enabled" type="checkbox" defaultChecked />
+            <span>Habilitar entrada de NFs no estoque</span>
+          </label>
+          <p>
+            Adiciona a revisão de produtos nas notas de compra para lançar a
+            entrada no estoque do Amodomio.
+          </p>
+          <label className="toggle">
+            <input id="stock-check-total" type="checkbox" />
+            <span>Conferir soma dos produtos com o total da nota</span>
+          </label>
+          <p>
+            Desligado por padrão. Quando ligado, bloqueia a criação do lote se a
+            soma dos produtos diferir do total da nota (filtros, frete ou itens
+            removidos).
+          </p>
           <p>As demais configurações de conexão ficam em Globais.</p>
         </section>
         <footer hidden>

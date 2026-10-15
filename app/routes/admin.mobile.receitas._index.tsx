@@ -1,6 +1,6 @@
 import type { LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
 import { Link, useLoaderData } from "@remix-run/react";
-import { ChevronRight, Search } from "lucide-react";
+import { ChevronRight, Monitor, Search } from "lucide-react";
 import { useMemo, useState } from "react";
 import prismaClient from "~/lib/prisma/client.server";
 import { ok } from "~/utils/http-response.server";
@@ -129,23 +129,34 @@ export default function AdminMobileRecipesIndex() {
 
       <section className="space-y-2" aria-live="polite">
         {filteredRecipes.map((recipe) => (
-          <Link
-            key={recipe.id}
-            to={`/admin/mobile/receitas/${recipe.id}`}
-            className="flex min-h-16 items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm active:bg-slate-50"
-          >
-            <span className="min-w-0 flex-1">
-              <span className="block text-base font-semibold leading-tight text-slate-950">
-                {recipe.name}
-              </span>
-              {recipe.Item?.name && recipe.Item.name !== recipe.name ? (
-                <span className="mt-1 block truncate text-xs text-slate-500">
-                  {recipe.Item.name}
+          <div key={recipe.id} className="flex items-center gap-2">
+            <Link
+              to={`/admin/mobile/receitas/${recipe.id}`}
+              className="flex min-h-16 flex-1 items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm active:bg-slate-50"
+            >
+              <span className="min-w-0 flex-1">
+                <span className="block text-base font-semibold leading-tight text-slate-950">
+                  {recipe.name}
                 </span>
-              ) : null}
-            </span>
-            <ChevronRight className="h-5 w-5 shrink-0 text-slate-400" />
-          </Link>
+                {recipe.Item?.name && recipe.Item.name !== recipe.name ? (
+                  <span className="mt-1 block truncate text-xs text-slate-500">
+                    {recipe.Item.name}
+                  </span>
+                ) : null}
+              </span>
+              <ChevronRight className="h-5 w-5 shrink-0 text-slate-400" />
+            </Link>
+            <Link
+              to={`/admin/receitas-tv/${recipe.id}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label={`Ver ${recipe.name} na TV (nova aba)`}
+              className="inline-flex min-h-16 flex-col items-center justify-center gap-1 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-violet-700 hover:bg-violet-50"
+            >
+              <Monitor className="h-5 w-5" />
+              Ver na TV
+            </Link>
+          </div>
         ))}
 
         {filteredRecipes.length === 0 ? (

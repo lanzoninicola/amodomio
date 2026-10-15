@@ -162,7 +162,7 @@ test("desktop mantém janela independente, restringe IPC e serve assets com CSP"
   assert.equal(instance.bounds.width, 1100);
   handlers.get("window:widget")(event, true);
   assert.equal(instance.bounds.width, 360);
-  assert.equal(instance.bounds.height, 810);
+  assert.equal(instance.bounds.height, 972);
   assert.equal(handlers.get("window:state")(event).widget, true);
   handlers.get("window:widget")(event, false);
   assert.equal(instance.bounds.width, 1100);

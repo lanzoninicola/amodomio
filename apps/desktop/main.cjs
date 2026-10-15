@@ -147,7 +147,7 @@ else {
             x: area.x + Math.max(0, area.width - 360),
             y: area.y,
             width: 360,
-            height: Math.round(area.height * 0.75),
+            height: Math.round(area.height * 0.9),
           });
           widget = true;
         } else if (!value) leaveWidget();

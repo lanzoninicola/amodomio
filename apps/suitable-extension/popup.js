@@ -2,6 +2,8 @@ const form = document.querySelector("#config");
 const server = document.querySelector("#server");
 const key = document.querySelector("#key");
 const enabled = document.querySelector("#kds-enabled");
+const stockEnabled = document.querySelector("#stock-enabled");
+const stockCheckTotal = document.querySelector("#stock-check-total");
 const status = document.querySelector("#status");
 const save = document.querySelector("#save");
 const activate = document.querySelector("#activate");
@@ -17,7 +19,7 @@ function notify(message, error = false) {
 }
 function showArea(area) {
   const isMenu = area === null;
-  for (const name of ["global", "kds"]) {
+  for (const name of ["global", "kds", "stock"]) {
     document.querySelector(`#${name}-panel`).hidden = name !== area;
   }
   document.querySelector("nav").hidden = !isMenu;
@@ -27,12 +29,15 @@ function showArea(area) {
     ? "Integração Suitable"
     : area === "global"
     ? "Configurações globais"
-    : "KDS";
+    : area === "kds"
+    ? "KDS"
+    : "Entrada de NFs";
   document.querySelector(isMenu ? "#global-tab" : "#back").focus();
 }
 document.querySelector("#back").onclick = () => showArea(null);
 document.querySelector("#global-tab").onclick = () => showArea("global");
 document.querySelector("#kds-tab").onclick = () => showArea("kds");
+document.querySelector("#stock-tab").onclick = () => showArea("stock");
 form.addEventListener("input", () => {
   edited = true;
 });
@@ -50,6 +55,8 @@ save.disabled = activate.disabled = true;
       server.value = saved.serverUrl || "";
       key.value = saved.apiKey || "";
       enabled.checked = saved.modules?.kds?.enabled !== false;
+      stockEnabled.checked = saved.modules?.stock?.enabled !== false;
+      stockCheckTotal.checked = saved.modules?.stock?.checkTotal === true;
     }
     suitableOrigin = saved.suitableOrigin || null;
     site.textContent = suitableOrigin || "Nenhum site vinculado.";
@@ -82,7 +89,13 @@ function configuration() {
     serverUrl: url.origin,
     apiKey: key.value.trim(),
     suitableOrigin,
-    modules: { kds: { enabled: enabled.checked } },
+    modules: {
+      kds: { enabled: enabled.checked },
+      stock: {
+        enabled: stockEnabled.checked,
+        checkTotal: stockCheckTotal.checked,
+      },
+    },
   };
 }
 form.addEventListener("submit", async (event) => {

@@ -39,6 +39,7 @@ export async function action({ request }: ActionFunctionArgs) {
       ? String((user as any).email || "admin:suitable-stock")
       : "api:suitable-stock";
     let batchId = body.batchId;
+    let reused: { status: string } | null = null;
     if (body.action === "create") {
       const note = body.note;
       if (
@@ -91,10 +92,20 @@ export async function action({ request }: ActionFunctionArgs) {
       batchId = await prisma.$transaction(
         async (tx) => {
           await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${identity}))`;
+          // Archived batches were discarded on purpose, so a new capture starts a new one.
           const existing = await tx.stockMovementImportBatch.findFirst({
-            where: { sourceSystem: "suitable", originalFileName: filename },
+            where: {
+              sourceSystem: "suitable",
+              originalFileName: filename,
+              archivedAt: null,
+              status: { not: "archived" },
+            },
+            orderBy: { createdAt: "desc" },
           });
-          if (existing) return existing.id;
+          if (existing) {
+            reused = { status: String(existing.status || "draft") };
+            return existing.id;
+          }
           const result = await createStockMovementImportBatchFromVisionPayload({
             batchName: `${note.supplierName.trim()} · NF ${note.invoiceNumber}`,
             sourceSystem: "suitable",
@@ -210,6 +221,8 @@ export async function action({ request }: ActionFunctionArgs) {
       {
         ok: true,
         batchId,
+        existing: reused !== null,
+        batchStatus: (reused as { status: string } | null)?.status,
         path: `/admin/import-stock-movements/${batchId}`,
         embedPath: `/embed/stock-batch/${batchId}?token=${createEmbedToken(batchId)}`,
         summary: view.summary,

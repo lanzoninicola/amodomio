@@ -83,10 +83,10 @@
 }
 
 @layer components {
-  nav button {
+  nav button[type="button"] {
     @apply h-auto w-full justify-between bg-background p-4 text-left;
   }
-  nav button span:last-child {
+  nav button[type="button"] span:last-child {
     @apply text-xl text-muted-foreground;
   }
   .back {

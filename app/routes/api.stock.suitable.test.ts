@@ -109,11 +109,25 @@ it("preserves invoice quantities, costs, supplier and source without importing",
   expect(m.step).not.toHaveBeenCalled();
 });
 it("returns existing batch on retry without creating another", async () => {
-  m.batch.mockResolvedValue({ id: "existing" });
-  expect((await (await send({ action: "create", note })).json()).batchId).toBe(
-    "existing"
-  );
+  m.batch.mockResolvedValue({ id: "existing", status: "imported" });
+  const body = await (await send({ action: "create", note })).json();
+  expect(body.batchId).toBe("existing");
+  expect(body.existing).toBe(true);
+  expect(body.batchStatus).toBe("imported");
   expect(m.create).not.toHaveBeenCalled();
+});
+it("looks up only non archived batches and reports new ones as created", async () => {
+  m.batch.mockResolvedValue(null);
+  const body = await (await send({ action: "create", note })).json();
+  expect(body.existing).toBe(false);
+  expect(m.batch).toHaveBeenCalledWith(
+    expect.objectContaining({
+      where: expect.objectContaining({
+        archivedAt: null,
+        status: { not: "archived" },
+      }),
+    })
+  );
 });
 it.each([
   { ...note, date: "2026-02-30" },
