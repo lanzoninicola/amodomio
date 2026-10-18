@@ -3,6 +3,7 @@ const server = document.querySelector("#server");
 const key = document.querySelector("#key");
 const enabled = document.querySelector("#kds-enabled");
 const stockEnabled = document.querySelector("#stock-enabled");
+const stockBlockAccounts = document.querySelector("#stock-block-accounts");
 const stockCheckTotal = document.querySelector("#stock-check-total");
 const status = document.querySelector("#status");
 const save = document.querySelector("#save");
@@ -56,6 +57,7 @@ save.disabled = activate.disabled = true;
       key.value = saved.apiKey || "";
       enabled.checked = saved.modules?.kds?.enabled !== false;
       stockEnabled.checked = saved.modules?.stock?.enabled !== false;
+      stockBlockAccounts.checked = saved.modules?.stock?.blockAccounts !== false;
       stockCheckTotal.checked = saved.modules?.stock?.checkTotal === true;
     }
     suitableOrigin = saved.suitableOrigin || null;
@@ -94,6 +96,7 @@ function configuration() {
       stock: {
         enabled: stockEnabled.checked,
         checkTotal: stockCheckTotal.checked,
+        blockAccounts: stockBlockAccounts.checked,
       },
     },
   };

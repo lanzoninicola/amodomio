@@ -1,3 +1,4 @@
+import { readStatusCache, writeStatusCache } from "./status-cache.js";
 import "./parser.js";
 import "./activation.js";
 chrome.storage.local.setAccessLevel({ accessLevel: "TRUSTED_CONTEXTS" });
@@ -10,6 +11,7 @@ chrome.runtime.onMessage.addListener((message, sender, respond) => {
       "suitable:create",
       "suitable:zones",
       "suitable:check",
+      "suitable:statuses",
       "suitable:customer",
       "suitable:open-day",
     ].includes(message?.type)
@@ -30,12 +32,11 @@ chrome.runtime.onMessage.addListener((message, sender, respond) => {
         ok: true,
         kdsEnabled: modules?.kds?.enabled !== false,
         stockEnabled: modules?.stock?.enabled !== false,
+        stockBlockAccounts: modules?.stock?.blockAccounts !== false,
         stockCheckTotal: modules?.stock?.checkTotal === true,
       };
     if (message.type === "suitable:stock" && modules?.stock?.enabled === false)
-      throw new Error(
-        "A entrada de NFs está desativada nas configurações."
-      );
+      throw new Error("A entrada de NFs está desativada nas configurações.");
     if (message.type !== "suitable:stock" && modules?.kds?.enabled === false)
       throw new Error(
         "A integração com o KDS está desativada nas configurações."
@@ -124,6 +125,41 @@ chrome.runtime.onMessage.addListener((message, sender, respond) => {
         );
       return { ok: true, zones: result.zones };
     }
+    if (message.type === "suitable:statuses") {
+      const startedAt = Date.now();
+      const cached =
+        message.force === true
+          ? message.orders.map(() => null)
+          : await readStatusCache(serverUrl, message.date, message.orders);
+      const missing = message.orders.filter((_, index) => !cached[index]);
+      if (!missing.length)
+        return { ok: true, date: message.date, statuses: cached };
+      const response = await fetch(`${serverUrl}/api/kds/orders/status`, {
+        method: "POST",
+        credentials: "omit",
+        redirect: "error",
+        headers: { "Content-Type": "application/json", "x-api-key": apiKey },
+        body: JSON.stringify({ date: message.date, orders: missing }),
+        signal: AbortSignal.timeout(20000),
+      });
+      const result = await response.json().catch(() => null);
+      if (!response.ok || !result?.ok || !Array.isArray(result.statuses))
+        throw new Error(
+          result?.error ||
+            "Não foi possível consultar os pedidos. Confira se o servidor está atualizado."
+        );
+      await writeStatusCache(
+        serverUrl,
+        result.date,
+        result.statuses,
+        startedAt
+      ).catch(() => {});
+      return {
+        ok: true,
+        date: result.date,
+        statuses: [...cached.filter(Boolean), ...result.statuses],
+      };
+    }
     if (message.type === "suitable:check") {
       const input = message.order;
       const response = await fetch(`${serverUrl}/api/kds/orders/check`, {
@@ -155,6 +191,12 @@ chrome.runtime.onMessage.addListener((message, sender, respond) => {
         throw new Error(
           result.error || "Não foi possível consultar pedido e estoque."
         );
+      // The preflight matches by command number only; only a confirmed absence
+      // can safely populate the phone-specific cache here.
+      if (!result.check.exists)
+        await writeStatusCache(serverUrl, input.date, [
+          { ...input, exists: false },
+        ]).catch(() => {});
       return { ok: true, check: result.check };
     }
     const input = message.order;
@@ -247,6 +289,9 @@ chrome.runtime.onMessage.addListener((message, sender, respond) => {
             `Servidor recusou o pedido (${response.status}).`
         );
       }
+      await writeStatusCache(serverUrl, input.date, [
+        { ...input, exists: true },
+      ]).catch(() => {});
       return {
         ok: true,
         id: result.id,

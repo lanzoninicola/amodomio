@@ -10,6 +10,7 @@ for (const [width, delivery, blocked] of [
   [360, false],
   [820, true],
   [360, true],
+  [820, true, "aiqfome"],
   [820, false, "exists"],
   [360, true, "shortage"],
   [820, false, "missing-day"],
@@ -20,7 +21,7 @@ for (const [width, delivery, blocked] of [
   }: React review, isolated CSS, sizes, fixed footer and send`, () => {
     const directory = mkdtempSync(join(tmpdir(), "suitable-modal-test-"));
     try {
-      const fixture = readFileSync(
+      let fixture = readFileSync(
         join(
           __dirname,
           delivery
@@ -29,6 +30,8 @@ for (const [width, delivery, blocked] of [
         ),
         "utf8"
       );
+      if (blocked === "aiqfome")
+        fixture = fixture.replace("Suitable → Terminal", "Aiqfome → aiqfome");
       const parser = readFileSync(join(__dirname, "parser.js"), "utf8");
       const content = readFileSync(join(__dirname, "content.js"), "utf8");
       const html = `<!doctype html><html><head><style>
@@ -37,11 +40,12 @@ for (const [width, delivery, blocked] of [
       [role=dialog] {width:${width}px;font-family:serif;color:magenta}
       .MuiDialog-paper {display:flex;flex-direction:column;max-height:calc(100vh - 64px);overflow-y:auto}
       .MuiDialog-paper > div {flex-shrink:0}
-    </style></head><body><div id="kanban"><h6>#1</h6><span title="Nicola Lanzoni"><h6>Nicola Lanzoni</h6></span></div>${fixture}<script>
+    </style></head><body><div id="kanban"><div class="MuiPaper-root"><div class="MuiPaper-root"><div><h6>#1</h6><span>Há &lt;1m</span></div><div><div><span>Ações</span></div></div></div><span title="Nicola"><h6>Nicola</h6></span><span>+55 (46) 99105-2049</span></div></div>${fixture}<script>
+      const ActualDate=Date; window.Date=class extends ActualDate { constructor(...args) { if(args.length) super(...args); else super('2026-10-11T12:00:00-03:00'); } static now(){return ActualDate.now();} };
       window.jsErrors=[];window.addEventListener("error",event=>window.jsErrors.push(event.message));const originalAttach = Element.prototype.attachShadow;
       Element.prototype.attachShadow = function(options) { return originalAttach.call(this, {...options, mode: 'open'}); };
       window.dayOpened=false;window.openCalls=0;window.checkCalls=0;
-      window.chrome = { runtime: { async sendMessage(message) { if(message.type==='suitable:preferences-read') return {ok:true,kdsEnabled:true}; if(message.type==='suitable:customer') return {ok:true,purchaseSummary:{last:'2026-10-10T00:00:00-03:00',weekly:1.5,monthly:6}}; if(message.type==='suitable:open-day'){ window.openCalls++; await new Promise(resolve=>setTimeout(resolve,60)); if(${
+      window.chrome = { runtime: { async sendMessage(message) { if(message.type==='suitable:preferences-read') return {ok:true,kdsEnabled:true}; if(message.type==='suitable:statuses') return {ok:true,date:message.date,statuses:message.orders.map(order=>({...order,exists:false}))}; if(message.type==='suitable:customer') return {ok:true,purchaseSummary:{last:'2026-10-10T00:00:00-03:00',weekly:1.5,monthly:6}}; if(message.type==='suitable:open-day'){ window.openCalls++; await new Promise(resolve=>setTimeout(resolve,60)); if(${
         blocked === "open-error"
       }) return {ok:false,error:'Falha ao abrir dia'}; window.dayOpened=true; return {ok:true,dayStatus:'OPENED'}; } if(message.type==='suitable:check') {window.checkCalls++; return {ok:true,check:{exists:${
         blocked === "exists"
@@ -70,6 +74,11 @@ for (const [width, delivery, blocked] of [
           if(headerButton.textContent.includes('Comanda enviada')!==${
             blocked === "exists"
           }) throw new Error('Header must reflect the existing KDS command before clicking');
+          const badge = document.querySelector('[data-amodomio-card-status]');
+          if(!badge || badge.dataset.state !== (${
+            blocked === "exists"
+          } ? 'sent' : 'missing')) throw new Error('Card badge must reflect server confirmation');
+          if(!badge.title || !badge.getAttribute('aria-label')) throw new Error('Card status needs accessible description');
           const extracted = SuitableKds.extractModal(dialog);
           const cardButtons = document.querySelector('#kanban').querySelectorAll('[data-amodomio-kds]').length;
           const buttonCount = dialog.querySelectorAll('[data-amodomio-kds]').length;
@@ -94,7 +103,9 @@ for (const [width, delivery, blocked] of [
           if(${delivery}) for(let attempt=0;attempt<30 && !neighborhood?.textContent.includes('Morro da Cruz');attempt++) await new Promise(resolve=>setTimeout(resolve,10));
           if(${delivery} ? !neighborhood?.textContent.includes('Morro da Cruz') : !!neighborhood) throw new Error('Header must show the neighborhood only for delivery');
           const channelTrigger=review.querySelector('[aria-labelledby=channel-label]');
-          if(!channelTrigger?.textContent.includes('CARDAPIO')) throw new Error('Origin must default to CARDAPIO');
+          if(!channelTrigger?.textContent.includes('${
+            blocked === "aiqfome" ? "AIQFOME" : "CARDAPIO"
+          }')) throw new Error('Origin must follow extracted order metadata');
           if(!getComputedStyle(review.querySelector('.order-total')).fontFamily.includes('monospace')) throw new Error('Order total must use mono');
           if(getComputedStyle(review.querySelector('.customer-name')).fontSize !== getComputedStyle(review.querySelector('.customer-phone')).fontSize) throw new Error('Customer styles should match');
           if(!review.querySelector('.scroll').hidden || detail.getAttribute('aria-expanded') !== 'false') throw new Error('Clicking Add to KDS must start with details collapsed');
@@ -198,17 +209,35 @@ for (const [width, delivery, blocked] of [
           }
           const success = review.querySelector('.message').textContent;
           if(!dialog.querySelector('[data-amodomio-kds]').shadowRoot.querySelector('button').textContent.includes('Comanda enviada')) throw new Error('Successful send must update the header button');
+          if(badge.dataset.state !== 'sent') throw new Error('Successful send must turn the card green');
+          document.querySelector('#kanban h6').textContent = '#999';
+          await new Promise(resolve => setTimeout(resolve,30));
+          if(badge.dataset.state !== 'unknown') throw new Error('Recycled cards must reset confirmation');
           // Read again after the extension inserts its own form: capture must stay unchanged.
           const reread = SuitableKds.extractModal(dialog);
           // A recycled/updated order must be read on the next click.
           dialog.querySelector('h6').textContent = 'Detalhes do pedido ordem 2';
+          [...dialog.querySelectorAll('p')].find(el=>el.textContent.trim()==='Pizzas INDIVIDUAL').textContent='Pizza (Aiq)';
           dialog.querySelector('[data-amodomio-kds]').shadowRoot.querySelector('button').click();
           const changedReview = dialog.querySelector('[data-amodomio-review]').shadowRoot;
           const changedNumber = changedReview.querySelector('[name=commandNumber]').value;
+          await new Promise(resolve => setTimeout(resolve, 20));
+          const detailsButton = changedReview.querySelector('[aria-controls=order-details]');
+          if(detailsButton.getAttribute('aria-expanded') === 'true') detailsButton.click();
+          await new Promise(resolve => setTimeout(resolve, 20));
+          const guidance = changedReview.querySelector('#details-guidance');
+          if(!guidance || !guidance.textContent.includes('tamanho') || detailsButton.dataset.attention !== 'true') throw new Error('Missing size must highlight details and explain what to complete');
+          if(guidance.getBoundingClientRect().bottom > detailsButton.getBoundingClientRect().top) throw new Error('Guidance must appear above details');
+          detailsButton.click();
+          await new Promise(resolve => setTimeout(resolve, 20));
+          if(changedReview.querySelector('#details-guidance')) throw new Error('Opening details must dismiss guidance');
           changedReview.querySelector('[aria-label="Tamanho do item 1"] button').click();
           await new Promise(resolve => setTimeout(resolve, 20));
           const changedSize = changedReview.querySelector('[aria-label="Tamanho do item 1"] [aria-pressed=true]').textContent;
           const summary = changedReview.querySelector('[aria-label="Resumo de tamanhos"]').textContent;
+          detailsButton.click();
+          await new Promise(resolve => setTimeout(resolve, 20));
+          if(changedReview.querySelector('#details-guidance') || detailsButton.dataset.attention) throw new Error('Corrected size must clear guidance');
           document.body.dataset.result = JSON.stringify({extracted,cardButtons,buttonCount,sent:window.sent,success,reread,changedNumber,layout,changedSize,summary,isolatedPortal,noProductField,invalid});
         } catch (error) { document.body.dataset.result = JSON.stringify({error:error.stack, jsErrors:window.jsErrors, extracted:SuitableKds.extractModal(document.querySelector('[role=dialog]')),buttonCount:document.querySelectorAll('[data-amodomio-kds]').length}); }
       })();

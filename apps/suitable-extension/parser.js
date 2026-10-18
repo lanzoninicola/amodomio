@@ -6,7 +6,9 @@
       .normalize("NFD")
       .replace(/[\u0300-\u036f]/g, "")
       .toUpperCase()
-      .replace(/^PIZZAS?\s*/, "")
+      .replace(/^\d+\s*x\s*/i, "")
+      .replace(/\s*\(TAMANHOS?\)\s*$/, "")
+      .replace(/^(?:PIZZAS?\s*|TAMANHO\s+)/, "")
       .trim();
     const sizes = {
       FAMILIA: "F",
@@ -40,9 +42,29 @@
       /^(?:\+55\s*)?\(?\d{2}\)?\s*\d{4,5}[-\s]?\d{4}$/.test(text(el))
     );
     const customerPanel = phoneElement?.closest(".MuiPaper-root");
-    const customer = customerPanel?.querySelector(
-      "h6.MuiTypography-colorPrimary"
+    const customer = [
+      ...(customerPanel?.querySelectorAll("h6.MuiTypography-colorPrimary") ||
+        []),
+    ].find((el) => !/^Nome para chamar$/i.test(text(el)));
+    const customerName = customer ? text(customer) : "";
+    const dateLine =
+      [...dialog.querySelectorAll("p")]
+        .map(text)
+        .find((value) => /^\d{2}\/\d{2}\/\d{2,4}\s+\d{2}:\d{2}/.test(value)) ||
+      "";
+    // Use origin metadata, never customer names or flavor/product descriptions.
+    const originLabel = [...dialog.querySelectorAll("p, h6, span")].find((el) =>
+      /^Origem$/i.test(text(el))
     );
+    const originRow =
+      originLabel?.closest(".MuiGrid-container") || originLabel?.parentElement;
+    const channel =
+      /\baiqfome\b/i.test(dateLine) ||
+      [...(originRow?.querySelectorAll("p, h6, span") || [])].some(
+        (el) => /^aiqfome$/i.test(text(el)),
+      )
+        ? "AIQFOME"
+        : "CARDAPIO";
     const totalHeading = [...summary.querySelectorAll("h6")].find(
       (el) => text(el) === "TOTAL"
     );
@@ -68,7 +90,14 @@
       items.push({
         name,
         quantity: Number(quantityMatch[1]),
-        size: /\bpizzas?\b/i.test(name) ? pizzaSize(name) : null,
+        size: /\bpizzas?\b/i.test(name)
+          ? pizzaSize(name) ||
+            details
+              .filter((value) => /\(Tamanhos?\)\s*$/i.test(value))
+              .map(pizzaSize)
+              .find(Boolean) ||
+            null
+          : null,
         flavors: details
           .filter((value) => /\(Sabores\)\s*$/i.test(value))
           .map((value) => value.replace(/\s*\(Sabores\)\s*$/i, "").trim()),
@@ -108,7 +137,8 @@
     return {
       commandNumber: Number(text(heading).match(/\d+$/)[0]),
       date,
-      customerName: customer ? text(customer) : "",
+      customerName,
+      channel,
       customerPhone: phoneElement ? text(phoneElement).replace(/\D/g, "") : "",
       orderAmount: totalText
         ? Number(totalText.replace(/[^\d,]/g, "").replace(",", "."))
