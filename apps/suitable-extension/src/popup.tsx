@@ -110,6 +110,14 @@ function Popup() {
             soma dos produtos diferir do total da nota (filtros, frete ou itens
             removidos).
           </p>
+          <label className="toggle">
+            <input id="stock-block-accounts" type="checkbox" defaultChecked />
+            <span>Bloquear Contas até confirmar o envio da nota</span>
+          </label>
+          <p>
+            Ligado por padrão. Desative e salve para continuar o lançamento se
+            houver uma falha na extensão ou na integração.
+          </p>
           <p>As demais configurações de conexão ficam em Globais.</p>
         </section>
         <footer hidden>

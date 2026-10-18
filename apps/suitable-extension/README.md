@@ -1,7 +1,15 @@
 # Suitable → Amodomio
 
 A extensão adiciona **Adicionar ao KDS** no cabeçalho da modal **Detalhes do pedido**
-do Suitable. Não adiciona botões aos cards do Kanban.
+do Suitable. Nos cartões do Kanban, um chip **KDS** consulta automaticamente os
+pedidos visíveis do dia (horário de São Paulo), em lotes de até 50, usando número
+e telefone. O resultado é salvo no computador pela extensão e reaproveitado após
+recarregar a página ou reiniciar o navegador. Clique no chip para consultar de novo;
+não há consulta periódica. O cache é separado por servidor, data, número e telefone,
+com limite de 1.000 registros e limpeza de registros antigos após sete dias.
+Falhas ficam em cinza e podem ser consultadas novamente pelo chip. Alterações feitas
+por outro computador só aparecem após essa consulta manual. A verificação exige
+que o servidor publique `POST /api/kds/orders/status`.
 
 Ao clicar, abre uma revisão dentro da própria modal. Captura número e data do
 pedido, nome e telefone do cliente, total e retirada, além de cada produto com
@@ -79,6 +87,13 @@ O ZIP contém a pasta `suitable-extension` com os arquivos de instalação e fon
 sem código-fonte, testes e fixtures. O envio usa a pasta
 https://drive.google.com/drive/folders/1Nj1uctv-kyEHECYeTqIKqTabKgXSEubR.
 Cada execução usa um nome novo e preserva os pacotes anteriores.
+Cada ZIP gerado incrementa automaticamente a versão de correção no `manifest.json`
+(por exemplo, `1.9.1` → `1.9.2`), inclusive com `--no-upload`. O manifest local só
+é atualizado depois que o ZIP é criado; falhas de compilação ou empacotamento
+não consomem uma versão. Se o upload falhar, a versão e o ZIP gerado são mantidos.
+Para novas funcionalidades ou mudanças incompatíveis, ajuste manualmente os
+componentes major/minor antes da entrega; o empacotamento incrementará o patch.
+O comando `build:suitable-extension`, usado no desenvolvimento, não altera a versão.
 
 Instale `zip` e [rclone](https://rclone.org/install/) na máquina que executa o comando.
 Antes do primeiro envio, execute `rclone config`, crie um remote chamado

@@ -4,8 +4,14 @@ const { readFileSync } = require("node:fs");
 const vm = require("node:vm");
 function setup(fetch, modules) {
   let listener;
+  let saved = {};
   vm.runInNewContext(
-    readFileSync(`${__dirname}/parser.js`, "utf8") +
+    readFileSync(`${__dirname}/status-cache.js`, "utf8").replace(
+      /export /g,
+      ""
+    ) +
+      "\n" +
+      readFileSync(`${__dirname}/parser.js`, "utf8") +
       "\n" +
       readFileSync(`${__dirname}/background.js`, "utf8").replace(
         /^import .*;$/gm,
@@ -16,8 +22,12 @@ function setup(fetch, modules) {
         storage: {
           local: {
             setAccessLevel() {},
+            async set(value) {
+              Object.assign(saved, value);
+            },
             async get() {
               return {
+                ...saved,
                 serverUrl: "https://kds.test",
                 apiKey: "test-key",
                 suitableOrigin: "https://suitable.test",
@@ -43,7 +53,11 @@ function setup(fetch, modules) {
   return (order, origin = "https://suitable.test", type = "suitable:create") =>
     new Promise((resolve) =>
       listener(
-        type === "suitable:stock" ? { type, payload: order } : { type, order },
+        type === "suitable:statuses"
+          ? { type, ...order }
+          : type === "suitable:stock"
+          ? { type, payload: order }
+          : { type, order },
         { tab: { id: 1 }, url: `${origin}/pedido` },
         resolve
       )
@@ -329,4 +343,52 @@ test("stock rejects an unauthorized page before any request", async () => {
   );
   assert.equal(result.ok, false);
   assert.equal(called, false);
+});
+
+test("successful form send populates local status cache and chip refresh bypasses it", async () => {
+  let calls = 0;
+  const send = setup(async (url) => {
+    calls++;
+    return {
+      ok: true,
+      status: 200,
+      async json() {
+        return url.endsWith("/status")
+          ? {
+              ok: true,
+              date: order.date,
+              statuses: [
+                {
+                  commandNumber: 1,
+                  customerPhone: "46991052049",
+                  exists: false,
+                },
+              ],
+            }
+          : { ok: true, id: "sent", status: "novoPedido" };
+      },
+    };
+  });
+  assert.equal((await send(order)).ok, true);
+  const query = {
+    date: order.date,
+    orders: [{ commandNumber: 1, customerPhone: "+55 (46) 99105-2049" }],
+  };
+  const cached = await send(
+    query,
+    "https://suitable.test",
+    "suitable:statuses"
+  );
+  assert.equal(cached.statuses[0].exists, true);
+  assert.equal(calls, 1, "reading chip after form send must not fetch again");
+  const refreshed = await send(
+    { ...query, force: true },
+    "https://suitable.test",
+    "suitable:statuses"
+  );
+  assert.equal(refreshed.statuses[0].exists, false);
+  assert.equal(calls, 2, "clicking chip must bypass persistent cache");
+  const after = await send(query, "https://suitable.test", "suitable:statuses");
+  assert.equal(after.statuses[0].exists, false);
+  assert.equal(calls, 2, "refresh result must replace local cache");
 });

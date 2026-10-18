@@ -1,4 +1,9 @@
 import {
+  configureCardStatusChecks,
+  scanCardStatuses,
+  updateCardStatus,
+} from "./card-status";
+import {
   invoiceFromButton,
   isProducts,
   supplierBar,
@@ -23,6 +28,8 @@ import {
   CircleAlert,
   ExternalLink,
   PanelTopOpen,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import {
   Select,
@@ -63,6 +70,7 @@ type Order = {
   commandNumber: number;
   date: string;
   customerName: string;
+  channel?: string;
   customerPhone: string;
   orderAmount: number;
   takeAway: boolean;
@@ -84,6 +92,7 @@ declare const chrome: {
           kdsEnabled?: boolean;
           stockEnabled?: boolean;
           stockCheckTotal?: boolean;
+          stockBlockAccounts?: boolean;
         }) => void
       ): void;
     };
@@ -93,6 +102,12 @@ declare const chrome: {
       reopenedDay?: boolean;
       error?: string;
       zones?: Zone[];
+      date?: string;
+      statuses?: {
+        commandNumber: number;
+        customerPhone: string;
+        exists: boolean;
+      }[];
       check?: Check;
       purchaseSummary?: {
         last: string | null;
@@ -102,6 +117,25 @@ declare const chrome: {
     }>;
   };
 };
+async function sendKdsMessage(message: { type: string; order: Order }) {
+  const sending = message.type === "suitable:create";
+  if (sending) updateCardStatus(message.order, "sending");
+  try {
+    const result = await chrome.runtime.sendMessage(message);
+    if (result?.ok && (sending || result.check)) {
+      updateCardStatus(
+        message.order,
+        sending || result.check?.exists ? "sent" : "missing"
+      );
+    } else {
+      updateCardStatus(message.order, sending ? "failed" : "unknown");
+    }
+    return result;
+  } catch (error) {
+    updateCardStatus(message.order, sending ? "failed" : "unknown");
+    throw error;
+  }
+}
 const sizes = ["F", "M", "P", "I", "FT"];
 const sizeNames: Record<string, string> = {
   F: "Família",
@@ -292,11 +326,14 @@ function Review({
     };
   }, [phone]);
   const [amount, setAmount] = useState(money(order.orderAmount));
-  const [channel, setChannel] = useState<string>("CARDAPIO");
+  const [channel, setChannel] = useState<string>(order.channel || "CARDAPIO");
   const [pending, setPending] = useState(false);
   const [openingDay, setOpeningDay] = useState(false);
   const [openDayError, setOpenDayError] = useState("");
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const [visibleFlavors, setVisibleFlavors] = useState<Record<number, boolean>>(
+    {}
+  );
   const [check, setCheck] = useState<Check | null>(null);
   const [checking, setChecking] = useState(true);
   const [checkError, setCheckError] = useState("");
@@ -331,17 +368,50 @@ function Review({
       ? "Selecione o tamanho das pizzas não reconhecidas antes de enviar."
       : ""
   );
+  let missingDetails = "";
+  if (!items.length) {
+    missingDetails =
+      "Não foi possível ler os itens. Reabra o pedido após carregar o resumo.";
+  } else {
+    try {
+      SuitableKds.validateItems(items);
+    } catch (cause) {
+      missingDetails =
+        cause instanceof Error ? cause.message : "Confira os itens do pedido.";
+    }
+  }
+  if (
+    !missingDetails &&
+    (!amount.trim() ||
+      !Number.isFinite(parseMoney(amount)) ||
+      parseMoney(amount) < 0)
+  ) {
+    missingDetails = "Confira o total do pedido.";
+  }
+  if (
+    !missingDetails &&
+    !order.takeAway &&
+    (!fee.trim() || !Number.isFinite(parseMoney(fee)) || parseMoney(fee) < 0)
+  ) {
+    missingDetails = "Confira a taxa de entrega.";
+  }
+  const detailsAttention =
+    Boolean(missingDetails) && !detailsOpen && !done && !pending;
   useEffect(() => {
     let active = true;
     setCheck(null);
     setChecking(true);
     setCheckError("");
     const timer = setTimeout(() => {
-      chrome.runtime
-        .sendMessage({
-          type: "suitable:check",
-          order: { date, commandNumber: Number(command), orderItems: items },
-        })
+      sendKdsMessage({
+        type: "suitable:check",
+        order: {
+          ...order,
+          date,
+          commandNumber: Number(command),
+          orderItems: items,
+        },
+      })
         .then((result) => {
           if (!active) return;
           if (!result?.ok || !result.check)
@@ -403,7 +473,7 @@ function Review({
         throw new Error(
           "Confira a taxa e selecione um bairro cadastrado no KDS."
         );
-      const result = await chrome.runtime.sendMessage({
+      const result = await sendKdsMessage({
         type: "suitable:create",
         order: {
           ...order,
@@ -558,7 +628,11 @@ function Review({
                 </Select>{" "}
               </div>
             )}
-            <div className="flex items-center gap-1">
+            <div
+              className={`details-actions flex items-center gap-1 ${
+                detailsAttention ? "needs-details" : ""
+              }`}
+            >
               <Button
                 type="button"
                 variant="outline"
@@ -592,6 +666,10 @@ function Review({
                 }
                 title={detailsOpen ? "Ocultar detalhes" : "Mostrar detalhes"}
                 aria-expanded={detailsOpen}
+                aria-describedby={
+                  detailsAttention ? "details-guidance" : undefined
+                }
+                data-attention={detailsAttention || undefined}
                 aria-controls="order-details"
                 onClick={() => setDetailsOpen((value) => !value)}
               >
@@ -610,6 +688,16 @@ function Review({
                   <path d="m6 9 6 6 6-6" />
                 </svg>
               </Button>
+              {detailsAttention && (
+                <div
+                  id="details-guidance"
+                  className="details-guidance"
+                  role="tooltip"
+                >
+                  <strong>Complete os dados em detalhes</strong>
+                  <span>{missingDetails}</span>
+                </div>
+              )}
             </div>
           </div>
           <div className="customer-inline">
@@ -989,18 +1077,51 @@ function Review({
                         )}
                       </div>
                     </div>
-                  </div>
-                  <label className="field mt-3">
-                    Sabores
-                    <Textarea
-                      className="flavors min-h-0 resize-y text-sm"
-                      rows={Math.max(1, Math.min(3, item.flavors.length))}
-                      value={item.flavors.join("\n")}
-                      onChange={(e) =>
-                        update(index, { flavors: e.target.value.split("\n") })
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="flavors-toggle h-9 w-9"
+                      aria-label={`${
+                        visibleFlavors[index] ? "Ocultar" : "Mostrar"
+                      } sabores do item ${index + 1}`}
+                      title={
+                        visibleFlavors[index]
+                          ? "Ocultar sabores"
+                          : "Mostrar sabores"
                       }
-                    />
-                  </label>
+                      aria-expanded={Boolean(visibleFlavors[index])}
+                      aria-controls={`item-flavors-${index}`}
+                      onClick={() =>
+                        setVisibleFlavors((current) => ({
+                          ...current,
+                          [index]: !current[index],
+                        }))
+                      }
+                    >
+                      {visibleFlavors[index] ? (
+                        <EyeOff size={16} />
+                      ) : (
+                        <Eye size={16} />
+                      )}
+                    </Button>
+                  </div>
+                  <div
+                    id={`item-flavors-${index}`}
+                    hidden={!visibleFlavors[index]}
+                  >
+                    <label className="field mt-2">
+                      Sabores
+                      <Textarea
+                        className="flavors min-h-0 resize-y text-sm"
+                        rows={Math.max(1, Math.min(3, item.flavors.length))}
+                        value={item.flavors.join("\n")}
+                        onChange={(e) =>
+                          update(index, { flavors: e.target.value.split("\n") })
+                        }
+                      />
+                    </label>
+                  </div>
                   <details open={item.notes.length > 0 || undefined}>
                     <summary>
                       Observações / adicionais
@@ -1026,15 +1147,52 @@ function Review({
           </fieldset>
         </div>
         <footer className="footer">
-          <p
-            className={`message mb-2 text-sm ${
-              error ? "text-red-700" : "text-blue-800"
-            }`}
+          <div
+            className="message"
+            data-tone={
+              error
+                ? "error"
+                : pending
+                ? "sending"
+                : done && check?.status !== "pendente"
+                ? "success"
+                : "warning"
+            }
             role={error ? "alert" : "status"}
             aria-live="polite"
+            aria-atomic="true"
           >
-            {message}
-          </p>
+            {message && (
+              <>
+                {pending ? (
+                  <Loader2
+                    className="message-icon animate-spin"
+                    aria-hidden="true"
+                  />
+                ) : error ? (
+                  <CircleAlert className="message-icon" aria-hidden="true" />
+                ) : done && check?.status !== "pendente" ? (
+                  <CircleCheck className="message-icon" aria-hidden="true" />
+                ) : (
+                  <AlertTriangle className="message-icon" aria-hidden="true" />
+                )}
+                <div className="message-copy">
+                  <strong>
+                    {error
+                      ? "Não foi possível enviar"
+                      : pending
+                      ? "Enviando pedido"
+                      : done
+                      ? check?.status === "pendente"
+                        ? "Pedido criado com pendências"
+                        : "Pedido confirmado no KDS"
+                      : "Confira os dados"}
+                  </strong>
+                  <p>{message}</p>
+                </div>
+              </>
+            )}
+          </div>
           <div className="footer-row">
             <span className="text-xs text-slate-500">
               {done
@@ -1144,7 +1302,7 @@ function AddToKds({ dialog }: { dialog: Element }) {
       setChecking(true);
       setError("");
       try {
-        const result = await chrome.runtime.sendMessage({
+        const result = await sendKdsMessage({
           type: "suitable:check",
           order,
         });
@@ -1237,11 +1395,13 @@ function StockEntry({
   note,
   portalContainer,
   checkTotal,
+  blockAccounts,
 }: {
   dialog: Element;
   note: PurchaseNote | null;
   portalContainer: HTMLElement;
   checkTotal: () => boolean;
+  blockAccounts: () => boolean;
 }) {
   const [batch, setBatch] = useState<{
     url: string;
@@ -1251,25 +1411,28 @@ function StockEntry({
   } | null>(null);
   const [panel, setPanel] = useState<"none" | "open" | "closed">("none");
   const created = !!batch;
-  // Suitable only lets the user open "Contas" after products are linked, so
-  // keep that tab closed until the entry batch exists.
+  // Both the tab and the footer advance to Contas. Require a confirmed
+  // integration response even when the invoice could not be identified.
   useEffect(() => {
-    if (!note || created) return;
+    if (created) return;
     const block = (event: Event) => {
-      const button = (event.target as Element | null)?.closest?.("button");
+      if (!blockAccounts()) return;
+      const button = (event.target as Element | null)?.closest?.(
+        "button, a, [role=tab], [role=button]"
+      );
       if (
         !button ||
         !dialog.contains(button) ||
-        button.textContent?.trim() !== "Contas"
+        !["Contas", "Próximo"].includes(button.textContent?.trim() || "")
       )
         return;
       event.preventDefault();
       event.stopImmediatePropagation();
-      setError("Crie o lote de entrada antes de abrir Contas.");
+      setError("Crie o lote de entrada pela integração antes de abrir Contas.");
     };
     dialog.addEventListener("click", block, true);
     return () => dialog.removeEventListener("click", block, true);
-  }, [dialog, note, created]);
+  }, [dialog, created, blockAccounts]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   async function request(payload: Record<string, unknown>): Promise<any> {
@@ -1425,16 +1588,27 @@ function StockEntry({
 }
 
 if (!(globalThis as any).suitableKdsStarted) {
+  configureCardStatusChecks(async (date, orders, force) => {
+    const result = await chrome.runtime.sendMessage({
+      type: "suitable:statuses",
+      date,
+      orders,
+      force,
+    });
+    return result;
+  });
   (globalThis as any).suitableKdsStarted = true;
   let kdsEnabled = false;
   let stockEnabled = false;
   let stockCheckTotal = false;
+  let stockBlockAccounts = true;
   chrome.runtime
     .sendMessage({ type: "suitable:preferences-read" })
     .then((result) => {
       kdsEnabled = result?.ok === true && result.kdsEnabled !== false;
       stockEnabled = result?.ok === true && result.stockEnabled !== false;
       stockCheckTotal = result?.ok === true && result.stockCheckTotal === true;
+      stockBlockAccounts = result?.stockBlockAccounts !== false;
       scan();
     })
     .catch(() => {});
@@ -1498,10 +1672,12 @@ if (!(globalThis as any).suitableKdsStarted) {
             note={selectedNote}
             portalContainer={portalContainer}
             checkTotal={() => stockCheckTotal}
+            blockAccounts={() => stockBlockAccounts}
           />
         )
       );
     }
+    scanCardStatuses(kdsEnabled);
     if (!kdsEnabled) return;
     for (const dialog of document.querySelectorAll(
       '.MuiDialog-paper[role="dialog"]'
@@ -1525,8 +1701,10 @@ if (!(globalThis as any).suitableKdsStarted) {
     kdsEnabled = message.kdsEnabled !== false;
     stockEnabled = message.stockEnabled !== false;
     stockCheckTotal = message.stockCheckTotal === true;
+    stockBlockAccounts = message.stockBlockAccounts !== false;
     if (!stockEnabled) removeStock();
     if (!kdsEnabled) {
+      scanCardStatuses(false);
       for (const host of document.querySelectorAll(
         "[data-amodomio-kds], [data-amodomio-review]"
       )) {
@@ -1540,7 +1718,7 @@ if (!(globalThis as any).suitableKdsStarted) {
   new MutationObserver(() => {
     if (pending) return;
     pending = true;
-    requestAnimationFrame(() => {
+    queueMicrotask(() => {
       pending = false;
       scan();
     });

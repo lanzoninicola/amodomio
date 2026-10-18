@@ -133,7 +133,9 @@ chrome.runtime.onMessage.addListener((message, sender, respond) => {
         message.config?.modules?.stock !== undefined &&
         (typeof message.config.modules.stock.enabled !== "boolean" ||
           (message.config.modules.stock.checkTotal !== undefined &&
-            typeof message.config.modules.stock.checkTotal !== "boolean"))
+            typeof message.config.modules.stock.checkTotal !== "boolean") ||
+          (message.config.modules.stock.blockAccounts !== undefined &&
+            typeof message.config.modules.stock.blockAccounts !== "boolean"))
       )
         throw new Error("Confira a configuração da entrada de NFs.");
       const kdsEnabled =
@@ -143,6 +145,10 @@ chrome.runtime.onMessage.addListener((message, sender, respond) => {
       const stockEnabled =
         message.config?.modules?.stock?.enabled ??
         saved.modules?.stock?.enabled ??
+        true;
+      const stockBlockAccounts =
+        message.config?.modules?.stock?.blockAccounts ??
+        saved.modules?.stock?.blockAccounts ??
         true;
       const stockCheckTotal =
         message.config?.modules?.stock?.checkTotal ??
@@ -169,6 +175,7 @@ chrome.runtime.onMessage.addListener((message, sender, respond) => {
             ...saved.modules?.stock,
             enabled: stockEnabled,
             checkTotal: stockCheckTotal,
+            blockAccounts: stockBlockAccounts,
           },
         },
         ...(Number.isInteger(message.tabId)
@@ -189,6 +196,7 @@ chrome.runtime.onMessage.addListener((message, sender, respond) => {
                 kdsEnabled,
                 stockEnabled,
                 stockCheckTotal,
+                stockBlockAccounts,
               })
               .catch(() => {});
           }

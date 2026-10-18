@@ -16,6 +16,8 @@ for (const scenario of [
   "total-mismatch-unchecked",
   "existing-batch",
   "no-note",
+  "server-error",
+  "blocking-disabled",
 ]) {
   test(`stock invoice Chrome DOM: ${scenario}`, () => {
     const directory = mkdtempSync(join(tmpdir(), "suitable-stock-"));
@@ -59,8 +61,9 @@ for (const scenario of [
           : "ready"
       }',targetUnit:'KG',mappedItemId:'item'}],items:[{id:'item',name:'Abobrinha',unit:'KG'},{id:'mushrooms',name:'Cogumelos',unit:'KG'}]};
         window.chrome={runtime:{onMessage:{addListener(){}},async sendMessage(message){
-          if(message.type==='suitable:preferences-read')return {ok:true,kdsEnabled:false,stockCheckTotal:${scenario==='total-mismatch'}};
+          if(message.type==='suitable:preferences-read')return {ok:true,kdsEnabled:false,stockBlockAccounts:${scenario!=='blocking-disabled'},stockCheckTotal:${scenario==='total-mismatch'}};
           calls.push(message.payload);
+          if('${scenario}'==='server-error')return {ok:false,error:'Falha ao enviar a nota'};
           if(message.payload.action==='map'){view.lines.find(line=>line.id===message.payload.lineId).mappedItemId=message.payload.itemId;}
           if(message.payload.action==='step'){view.summary.readyToImport=0;view.summary.imported=2;view.lines.forEach(line=>line.status='imported');return {ok:true,done:true,progress:{processedCount:2,totalCount:2,errorCount:0}};}
           return structuredClone(view);
@@ -100,14 +103,23 @@ for (const scenario of [
           const host=document.querySelector('[data-amodomio-stock]');if(!host)throw new Error('Stock panel missing');
           const root=host.shadowRoot;
           if('${scenario}'==='ready'){const bar=host.previousElementSibling;if(!bar||!bar.textContent.includes('Fornecedor')||!bar.parentElement.contains(document.querySelector('input[type=text]')))throw new Error('Card is not placed below the supplier bar');window.belowBar=true;}
+          for (const label of ['Contas', 'Próximo']) {
+            const control=[...document.querySelectorAll('button')].find(b=>b.textContent.trim()===label);
+            if(!control)throw new Error('Missing navigation control: '+label);
+            let reached=false;control.addEventListener('click',()=>{reached=true},{once:true});
+            control.click();await pause();
+            if(reached!==('${scenario}'==='blocking-disabled'))throw new Error(label+' ignored blocking preference');
+          }
           if('${scenario}'!=='no-note'){
             if('${scenario}'==='ready'){
+
               const tab=[...document.querySelectorAll('button')].find(b=>b.textContent.trim()==='Contas');let reached=false;tab.addEventListener('click',()=>{reached=true});
               tab.click();await pause();
               if(reached)throw new Error('Contas tab opened before the batch exists');
               if(!root.querySelector('[role=alert]')?.textContent.includes('Crie o lote de entrada'))throw new Error('Blocked tab gave no message');
               tab.click();await pause();window.blockedTab=true;
             }
+            window.blockedTab=true;
             [...root.querySelectorAll('button')].find(b=>b.textContent.includes('Criar lote de entrada')).click();
             for(let i=0;i<30&&!calls.length&&(window.blockedTab||!root.querySelector('[role=alert]'));i++)await pause();
             await pause();
@@ -217,15 +229,25 @@ for (const scenario of [
       }
       if (scenario === "missing-lines") {
         assert.equal(result.calls.length, 0);
+        assert.equal(result.tabAfter, false);
         assert.match(result.text, /todos os produtos/);
       }
       if (scenario === "total-mismatch") {
         assert.equal(result.calls.length, 0);
         assert.match(result.text, /soma dos produtos/);
       }
+      if (scenario === "blocking-disabled") {
+        assert.equal(result.tabAfter, true);
+      }
+      if (scenario === "server-error") {
+        assert.deepEqual(result.calls.map(c => c.action), ["create"]);
+        assert.equal(result.tabAfter, false);
+        assert.match(result.text, /Falha ao enviar a nota/);
+      }
       if (scenario === "no-note") {
         assert.equal(result.calls.length, 0);
         assert.match(result.text, /Volte à lista/);
+        assert.equal(result.tabAfter, false);
       }
     } finally {
       rmSync(directory, { recursive: true, force: true });

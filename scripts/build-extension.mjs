@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -36,9 +36,21 @@ try {
     }
   }
 
+  const manifestPath = join(extension, "manifest.json");
+  const manifestSource = readFileSync(manifestPath, "utf8");
+  const manifest = JSON.parse(manifestSource);
+  if (!/^\d+\.\d+\.\d+$/.test(manifest.version)) throw new Error("Versão inválida no manifest da extensão; use major.minor.patch.");
+  const parts = manifest.version.split(".").map(Number);
+  if (parts.some((part) => part > 65535) || parts[2] === 65535) {
+    throw new Error("Limite de versão atingido; ajuste major.minor.patch no manifest antes de empacotar.");
+  }
+  parts[2] += 1;
+  const version = parts.join(".");
+  const nextManifest = manifestSource.replace(
+    /("version"\s*:\s*")[^"]+(")/,
+    (_, prefix, suffix) => `${prefix}${version}${suffix}`
+  );
   run(process.execPath, [join(extension, "build.mjs")]);
-  const { version } = JSON.parse(readFileSync(join(extension, "manifest.json"), "utf8"));
-  if (!/^[\d.]+$/.test(version)) throw new Error("Versão inválida no manifest da extensão.");
   const stamp = new Date().toISOString().replace(/[:.]/g, "-");
   const name = `suitable-amodomio-${version}-${stamp}.zip`;
   const output = join(root, "build/extensions", name);
@@ -48,13 +60,16 @@ try {
     const staging = join(temporary, "suitable-extension");
     mkdirSync(staging);
     // Allowlist: never include sources, tests, fixtures or local credentials.
-    for (const file of ["manifest.json", "background.js", "activation.js", "parser.js", "content.js", "popup.html", "popup.css", "popup.js", "fonts"]) {
+    for (const file of ["manifest.json", "background.js", "status-cache.js", "activation.js", "parser.js", "content.js", "popup.html", "popup.css", "popup.js", "fonts"]) {
       cpSync(join(extension, file), join(staging, file), { recursive: true });
     }
+    writeFileSync(join(staging, "manifest.json"), nextManifest);
     run("zip", ["-q", "-r", output, "suitable-extension"], { cwd: temporary });
   } finally {
     rmSync(temporary, { recursive: true, force: true });
   }
+  writeFileSync(manifestPath, nextManifest);
+  console.log(`Versão da extensão: ${manifest.version} → ${version}`);
   console.log(`ZIP gerado: ${output}`);
   if (!packageOnly) {
     run("rclone", ["copyto", output, `${remote}:${name}`, "--drive-root-folder-id", folderId, "--immutable", "--progress"]);
