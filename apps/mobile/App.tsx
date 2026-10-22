@@ -46,6 +46,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import {
   ApiError,
   getMe,
+  getDoughStock,
   getWhatsappConfig,
   sendOrderWhatsapp,
   getServerPresets,
@@ -69,7 +70,7 @@ import {
 import { newlyAwaitingOven } from "./src/kds/awaiting-oven";
 import { sessionStorage } from "./src/storage/session";
 import { AppHeader } from "./src/ui/AppHeader";
-import { PhoneBoard, StatusFilters } from "./src/kds/PhoneBoard";
+import { PhoneBoard } from "./src/kds/PhoneBoard";
 import {
   DEFAULT_SERVER_PRESETS,
   PUBLIC_SERVER_URL,
@@ -84,7 +85,9 @@ import { Card } from "./src/ui/Card";
 import { Input } from "./src/ui/Input";
 import { Screen } from "./src/ui/Screen";
 import { theme } from "./src/ui/theme";
+import type { DoughStockData } from "./src/dough-stock/types";
 import { DoughStockScreen } from "./src/dough-stock/DoughStockScreen";
+import { PurchaseListsScreen } from "./src/purchase/PurchaseListsScreen";
 import { RecipesScreen } from "./src/recipes/RecipesScreen";
 
 const DEFAULT_API_URL = desktop
@@ -94,16 +97,6 @@ const POLLING_MS = 4_000;
 
 function localDate() {
   const date = new Date();
-  return [
-    date.getFullYear(),
-    String(date.getMonth() + 1).padStart(2, "0"),
-    String(date.getDate()).padStart(2, "0"),
-  ].join("-");
-}
-function shiftDate(value: string, days: number) {
-  const [year, month, day] = value.split("-").map(Number);
-  const date = new Date(year, month - 1, day);
-  date.setDate(date.getDate() + days);
   return [
     date.getFullYear(),
     String(date.getMonth() + 1).padStart(2, "0"),
@@ -432,6 +425,7 @@ function HomeScreen({
   onOpenKds,
   onOpenDoughStock,
   onOpenRecipes,
+  onOpenPurchases,
   onSignedOut,
 }: {
   token: string;
@@ -440,12 +434,19 @@ function HomeScreen({
   onOpenKds: () => void;
   onOpenDoughStock: () => void;
   onOpenRecipes: () => void;
+  onOpenPurchases: () => void;
   onSignedOut: () => void;
 }) {
   const [gridWidth, setGridWidth] = useState(0);
   const featureWidth = desktop
     ? undefined
-    : { width: Math.max(0, (gridWidth - 24) / 3) };
+    : {
+        width: Math.max(
+          0,
+          (gridWidth - (gridWidth >= 600 ? 24 : 12)) /
+            (gridWidth >= 600 ? 3 : 2)
+        ),
+      };
   const signOut = () =>
     Alert.alert(
       "Sair do Amodomio?",
@@ -540,6 +541,27 @@ function HomeScreen({
                 featureWidth,
                 pressed && styles.pressed,
               ]}
+              onPress={onOpenPurchases}
+            >
+              <View style={styles.featureIcon}>
+                <Text style={styles.featureEmoji}>C</Text>
+              </View>
+              <View style={styles.featureCopy}>
+                <Text style={styles.featureTitle}>Lista de compras</Text>
+                <Text style={styles.featureDescription}>
+                  Selecione produtos e compartilhe pelo WhatsApp.
+                </Text>
+              </View>
+            </Pressable>
+          ) : null}
+          {!desktop ? (
+            <Pressable
+              accessibilityRole="button"
+              style={({ pressed }) => [
+                styles.featureCard,
+                featureWidth,
+                pressed && styles.pressed,
+              ]}
               onPress={onOpenRecipes}
             >
               <View style={styles.featureIcon}>
@@ -564,11 +586,13 @@ function KanbanScreen({
   token,
   apiUrl,
   onBack,
+  onOpenDoughStock,
   onUnauthorized,
 }: {
   token: string;
   apiUrl: string;
   onBack: () => void;
+  onOpenDoughStock: (date: string) => void;
   onUnauthorized: () => void;
 }) {
   const { width, height } = useWindowDimensions();
@@ -584,7 +608,11 @@ function KanbanScreen({
   );
   const reduced = boardMode === "reduced";
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
-  const compactHeader = !desktop && reduced && width > height && width >= 800;
+  const [statusFiltersOpen, setStatusFiltersOpen] = useState(false);
+  const activeStatusFilter = KDS_STATUSES.find(
+    (status) => status.id === statusFilter
+  );
+  const compactHeader = !desktop && reduced;
   const [date, setDate] = useState(localDate());
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [contactOrder, setContactOrder] = useState<KdsOrder | null>(null);
@@ -773,6 +801,82 @@ function KanbanScreen({
   };
   const [now, setNow] = useState(Date.now());
   const [lastSync, setLastSync] = useState<Date | null>(null);
+  const [doughStockData, setDoughStockData] = useState<DoughStockData | null>(
+    null
+  );
+  const [doughStockState, setDoughStockState] = useState<
+    "loading" | "ready" | "error"
+  >("loading");
+  useEffect(() => {
+    if (desktop) return;
+    const controller = new AbortController();
+    setDoughStockData((current) => (current?.date === date ? current : null));
+    setDoughStockState("loading");
+    getDoughStock(apiUrl, token, date, controller.signal)
+      .then((data) => {
+        if (controller.signal.aborted) return;
+        setDoughStockData(data);
+        setDoughStockState("ready");
+      })
+      .catch(() => {
+        if (controller.signal.aborted) return;
+        setDoughStockData(null);
+        setDoughStockState("error");
+      });
+    return () => controller.abort();
+  }, [apiUrl, token, date, lastSync]);
+  const doughStockSummary = (
+    <View style={styles.doughStockSummary}>
+      {doughStockData?.date === date ? (
+        <View style={styles.doughStockCounters}>
+          {doughStockData.sizes
+            .filter(({ key }) => key !== "FT")
+            .map(({ key, label, abbr }) => {
+              const initial = doughStockData.stock?.effective[key] ?? 0;
+              const used = orders.reduce(
+                (total, order) => total + (order.sizes?.[key] ?? 0),
+                0
+              );
+              const remaining = Math.max(0, initial - used);
+              const backgroundColor =
+                initial <= 0
+                  ? "#ffffff"
+                  : remaining === 0
+                  ? "#f43f5e"
+                  : remaining <= 2
+                  ? "#fbbf24"
+                  : "#10b981";
+              const color =
+                initial <= 0
+                  ? "#64748b"
+                  : remaining > 0 && remaining <= 2
+                  ? "#0f172a"
+                  : "#ffffff";
+              return (
+                <View
+                  key={key}
+                  style={[styles.doughStockCounter, { backgroundColor }]}
+                  accessibilityLabel={`${label}: ${remaining} disponíveis`}
+                >
+                  <Text style={[styles.doughStockCounterText, { color }]}>
+                    {abbr || key} {remaining}
+                  </Text>
+                </View>
+              );
+            })}
+        </View>
+      ) : (
+        <Text style={styles.completionLabel}>
+          {doughStockState === "error" ? "Indisponível" : "Carregando…"}
+        </Text>
+      )}
+      <IconButton
+        icon="stock"
+        label="Abrir estoque de massa"
+        onPress={() => onOpenDoughStock(date)}
+      />
+    </View>
+  );
   const knownIds = useRef<Set<string> | null>(null);
   const knownStatuses = useRef<Map<string, string> | null>(null);
   const netInfo = useNetInfo();
@@ -947,55 +1051,40 @@ function KanbanScreen({
             compactHeader && styles.toolbarControlsCompact,
           ]}
         >
-          {!desktop && width >= 600 ? (
-            <IconButton
-              icon="previous"
-              label="Dia anterior"
-              disabled={Boolean(mutatingId)}
-              onPress={() => setDate((value) => shiftDate(value, -1))}
-            />
-          ) : null}
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel={`Selecionar data: ${formatDate(date)}`}
+            accessibilityLabel="Ir para hoje"
             disabled={Boolean(mutatingId)}
-            onPress={() => setCalendarOpen(true)}
-            style={{
-              flex: compactHeader ? undefined : 1,
-              width: compactHeader ? 116 : undefined,
-              minWidth: 0,
+            onPress={() => setDate(localDate())}
+            style={({ pressed }) => ({
               minHeight: 48,
-              justifyContent: "center",
+              paddingHorizontal: 14,
               alignItems: "center",
+              justifyContent: "center",
               borderRadius: theme.radius.md,
               backgroundColor: theme.colors.secondary,
-              paddingHorizontal: 10,
-            }}
+              opacity: pressed || mutatingId ? 0.5 : 1,
+            })}
           >
             <Text
-              numberOfLines={1}
               style={{
+                color: theme.colors.primary,
                 fontSize: 14,
                 fontFamily: theme.typography.semibold,
-                color: desktop ? theme.colors.foreground : theme.colors.primary,
               }}
             >
-              {date
-                .split("-")
-                .reverse()
-                .map((part, index) => (index === 2 ? part.slice(-2) : part))
-                .join("/")}{" "}
-              ⌄
+              Hoje
+            </Text>
+            <Text style={{ color: theme.colors.primary, fontSize: 10 }}>
+              {localDate().split("-").reverse().join("/")}
             </Text>
           </Pressable>
-          {!desktop && width >= 600 ? (
-            <IconButton
-              icon="next"
-              label="Próximo dia"
-              disabled={Boolean(mutatingId)}
-              onPress={() => setDate((value) => shiftDate(value, 1))}
-            />
-          ) : null}
+          <IconButton
+            icon="calendar"
+            label={`Selecionar data: ${formatDate(date)}`}
+            disabled={Boolean(mutatingId)}
+            onPress={() => setCalendarOpen(true)}
+          />
           {!desktop ? (
             <>
               <IconButton
@@ -1052,30 +1141,49 @@ function KanbanScreen({
                 }}
               />
             </>
-          ) : (
+          ) : !reduced ? (
             <IconButton icon="home" label="Voltar ao início" onPress={onBack} />
-          )}
+          ) : null}
         </View>
         {compactHeader ? (
           <>
-            {completionSummary}
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              style={styles.toolbarFilters}
-              contentContainerStyle={styles.toolbarFiltersContent}
-            >
-              <StatusFilters
-                orders={orders}
-                filter={statusFilter}
-                onFilterChange={setStatusFilter}
-                compact
+            <View style={styles.toolbarSummaries}>
+              {completionSummary}
+              {doughStockSummary}
+            </View>
+            <View style={styles.toolbarFilterActions}>
+              <IconButton
+                icon={activeStatusFilter ? "filter-off" : "filter"}
+                caption={activeStatusFilter?.label}
+                label={
+                  activeStatusFilter
+                    ? `Remover filtro: ${activeStatusFilter.label}`
+                    : "Filtrar por status"
+                }
+                active={Boolean(activeStatusFilter)}
+                onPress={() =>
+                  activeStatusFilter
+                    ? setStatusFilter(null)
+                    : setStatusFiltersOpen(true)
+                }
               />
-            </ScrollView>
+              <View style={styles.toolbarHome}>
+                <IconButton
+                  icon="home"
+                  label="Voltar ao início"
+                  onPress={onBack}
+                />
+              </View>
+            </View>
           </>
         ) : null}
       </ToolbarLayout>
-      {!desktop && !compactHeader ? completionSummary : null}
+      {!desktop && !compactHeader ? (
+        <View style={styles.toolbarSummaries}>
+          {completionSummary}
+          {doughStockSummary}
+        </View>
+      ) : null}
       {!desktop ? (
         <OvenRequestsBar
           orders={orders}
@@ -1103,7 +1211,7 @@ function KanbanScreen({
         <PhoneBoard
           filter={statusFilter}
           onFilterChange={setStatusFilter}
-          hideFilters={compactHeader}
+          hideFilters
           orders={orders}
           now={now}
           busy={Boolean(mutatingId)}
@@ -1171,6 +1279,7 @@ function KanbanScreen({
       {calendarOpen ? (
         <DateCalendar
           value={date}
+          onNavigateDay={setDate}
           onSelect={(next) => {
             setDate(next);
             setCalendarOpen(false);
@@ -1178,6 +1287,84 @@ function KanbanScreen({
           onClose={() => setCalendarOpen(false)}
         />
       ) : null}
+      <Modal
+        visible={statusFiltersOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setStatusFiltersOpen(false)}
+      >
+        <Pressable
+          style={styles.modalBackdrop}
+          onPress={() => setStatusFiltersOpen(false)}
+        >
+          <Pressable
+            style={[
+              styles.modalCard,
+              { maxHeight: "90%", padding: 20, gap: 12 },
+            ]}
+            onPress={(event) => event.stopPropagation()}
+          >
+            <View style={styles.statusFilterHeader}>
+              <Text style={styles.modalTitle}>Filtrar por status</Text>
+              <IconButton
+                icon="cancel"
+                label="Fechar filtros"
+                onPress={() => setStatusFiltersOpen(false)}
+              />
+            </View>
+            <ScrollView contentContainerStyle={{ gap: 8 }}>
+              <Button
+                variant={statusFilter === null ? "primary" : "secondary"}
+                onPress={() => {
+                  setStatusFilter(null);
+                  setStatusFiltersOpen(false);
+                }}
+              >
+                Sem filtro · pedidos em andamento
+              </Button>
+              {KDS_STATUSES.filter((status) => status.id !== "emProducao").map(
+                (status) => (
+                  <Pressable
+                    key={status.id}
+                    accessibilityRole="button"
+                    accessibilityLabel={status.label}
+                    accessibilityState={{
+                      selected: statusFilter === status.id,
+                    }}
+                    onPress={() => {
+                      setStatusFilter(status.id);
+                      setStatusFiltersOpen(false);
+                    }}
+                    style={[
+                      styles.statusFilterOption,
+                      {
+                        borderColor: status.color,
+                        backgroundColor:
+                          statusFilter === status.id ? status.tint : "#ffffff",
+                      },
+                    ]}
+                  >
+                    <Text
+                      style={{
+                        color: "#171717",
+                        fontFamily: theme.typography.bold,
+                      }}
+                    >
+                      {statusFilter === status.id ? "✓ " : ""}
+                      {status.label} (
+                      {
+                        orders.filter((order) => order.status === status.id)
+                          .length
+                      }
+                      )
+                    </Text>
+                  </Pressable>
+                )
+              )}
+            </ScrollView>
+          </Pressable>
+        </Pressable>
+      </Modal>
       <Modal
         visible={Boolean(contactOrder)}
         transparent
@@ -1562,8 +1749,11 @@ function AppContent() {
     apiUrl: string;
   } | null>(null);
   const [activeFeature, setActiveFeature] = useState<
-    "kds" | "dough-stock" | "recipes" | null
+    "kds" | "dough-stock" | "recipes" | "purchases" | null
   >(null);
+  const [stockShortcutDate, setStockShortcutDate] = useState<string | null>(
+    null
+  );
   useEffect(() => desktop?.onOpenKds(() => setActiveFeature("kds")), []);
   const [booting, setBooting] = useState(true);
 
@@ -1614,6 +1804,18 @@ function AppContent() {
           }}
         />
       );
+    if (activeFeature === "purchases")
+      return (
+        <PurchaseListsScreen
+          {...session}
+          onBack={() => setActiveFeature(null)}
+          onUnauthorized={() => {
+            void sessionStorage.clearToken();
+            setActiveFeature(null);
+            setSession(null);
+          }}
+        />
+      );
     if (activeFeature === "recipes") {
       return (
         <RecipesScreen
@@ -1631,7 +1833,8 @@ function AppContent() {
       return (
         <DoughStockScreen
           {...session}
-          onBack={() => setActiveFeature(null)}
+          initialDate={stockShortcutDate ?? undefined}
+          onBack={() => setActiveFeature(stockShortcutDate ? "kds" : null)}
           onUnauthorized={() => {
             void sessionStorage.clearToken();
             setActiveFeature(null);
@@ -1646,6 +1849,10 @@ function AppContent() {
           <KanbanScreen
             token={session.token}
             apiUrl={session.apiUrl}
+            onOpenDoughStock={(date) => {
+              setStockShortcutDate(date);
+              setActiveFeature("dough-stock");
+            }}
             onBack={() => setActiveFeature(null)}
             onUnauthorized={() => {
               setActiveFeature(null);
@@ -1659,8 +1866,12 @@ function AppContent() {
       <HomeScreen
         {...session}
         onOpenKds={() => setActiveFeature("kds")}
-        onOpenDoughStock={() => setActiveFeature("dough-stock")}
+        onOpenDoughStock={() => {
+          setStockShortcutDate(null);
+          setActiveFeature("dough-stock");
+        }}
         onOpenRecipes={() => setActiveFeature("recipes")}
+        onOpenPurchases={() => setActiveFeature("purchases")}
         onSignedOut={() => {
           setActiveFeature(null);
           setSession(null);
@@ -1816,7 +2027,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  homeContent: { padding: 22, gap: 8 },
+  homeContent: {
+    padding: 20,
+    gap: 8,
+    maxWidth: 1000,
+    width: "100%",
+    alignSelf: "center",
+  },
   homeTitle: {
     color: theme.colors.foreground,
     fontSize: 26,
@@ -1831,9 +2048,9 @@ const styles = StyleSheet.create({
   featureGrid: { flexDirection: "row", flexWrap: "wrap", gap: 12 },
   featureCard: {
     width: desktop ? "100%" : undefined,
-    minHeight: 180,
-    padding: 12,
-    borderRadius: 18,
+    minHeight: 190,
+    padding: 18,
+    borderRadius: 22,
     backgroundColor: theme.colors.card,
     borderWidth: 1,
     borderColor: theme.colors.border,
@@ -1920,6 +2137,32 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   toolbarControlsCompact: { flexGrow: 0, flexShrink: 0, flexBasis: "auto" },
+  toolbarSummaries: {
+    flexDirection: "row",
+    alignItems: "center",
+    flexShrink: 0,
+  },
+  doughStockSummary: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 12,
+    gap: 6,
+  },
+  doughStockCounters: { flexDirection: "row", alignItems: "center", gap: 6 },
+  doughStockCounter: {
+    minWidth: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 6,
+  },
+  doughStockCounterText: {
+    fontSize: 16,
+    fontFamily: theme.typography.bold,
+    fontVariant: ["tabular-nums"],
+  },
   completionSummary: {
     alignItems: "center",
     justifyContent: "center",
@@ -1941,8 +2184,34 @@ const styles = StyleSheet.create({
     fontFamily: theme.typography.bold,
     fontVariant: ["tabular-nums"],
   },
-  toolbarFilters: { flex: 1, minWidth: 0 },
-  toolbarFiltersContent: { flexGrow: 1, justifyContent: "flex-end" },
+  toolbarFilterActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "flex-end",
+    flex: 1,
+    minWidth: 0,
+    gap: 8,
+  },
+  statusFilterHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  statusFilterOption: {
+    minHeight: 48,
+    borderWidth: 2,
+    borderRadius: 10,
+    padding: 12,
+    justifyContent: "center",
+  },
+  toolbarHome: {
+    flexShrink: 0,
+    borderLeftWidth: 1,
+    borderLeftColor: "#444444",
+    paddingLeft: 10,
+    justifyContent: "center",
+  },
   toolbar: {
     minHeight: 68,
     flexWrap: "wrap",

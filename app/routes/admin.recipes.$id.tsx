@@ -2593,11 +2593,6 @@ const recipeNavigation: Array<{
     to: (recipeId) => buildRecipeSectionHref(recipeId, "composicao"),
   },
   {
-    name: "Variações",
-    key: "variacoes",
-    to: (recipeId) => buildRecipeSectionHref(recipeId, "variacoes"),
-  },
-  {
     name: "Fichas técnicas",
     key: "fichas",
     to: (recipeId) => buildRecipeSectionHref(recipeId, "fichas"),
@@ -3253,7 +3248,9 @@ export default function AdminRecipeDetailLayout() {
       <nav className="overflow-x-auto border-b border-slate-100">
         <div className="flex min-w-max items-center gap-6 text-sm">
           {recipeNavigation.map((navItem) => {
-            const isActive = activeTab === navItem.key;
+            const isActive =
+              activeTab === navItem.key ||
+              (activeTab === "variacoes" && navItem.key === "composicao");
             const count =
               navItem.key === "fichas"
                 ? recipeCostSheetCount

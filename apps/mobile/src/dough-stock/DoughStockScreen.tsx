@@ -32,6 +32,7 @@ function localDate() {
 const formatDate = (date: string) => date.split("-").reverse().join("/");
 
 export function DoughStockScreen({
+  initialDate,
   apiUrl,
   token,
   onBack,
@@ -39,12 +40,14 @@ export function DoughStockScreen({
 }: {
   apiUrl: string;
   token: string;
+  initialDate?: string;
   onBack: () => void;
   onUnauthorized: () => void;
 }) {
-  const { width } = useWindowDimensions();
+  const { width, height } = useWindowDimensions();
   const wide = width >= 700;
-  const [date, setDate] = useState(localDate);
+  const tabletLandscape = wide && width > height;
+  const [date, setDate] = useState(() => initialDate ?? localDate());
   const [data, setData] = useState<DoughStockData | null>(null);
   const [counts, setCounts] = useState<DoughCounts>(emptyCounts);
   const [loading, setLoading] = useState(true);
@@ -363,22 +366,37 @@ export function DoughStockScreen({
                       </Button>
                     </View>
                     <View style={styles.row}>
-                      <Button
-                        variant="secondary"
-                        style={styles.flex}
-                        disabled={disabled}
-                        onPress={() => adjust(size.key, -10)}
-                      >
-                        −10
-                      </Button>
-                      <Button
-                        variant="secondary"
-                        style={styles.flex}
-                        disabled={disabled}
-                        onPress={() => adjust(size.key, 10)}
-                      >
-                        +10
-                      </Button>
+                      {(tabletLandscape ? [-10, -5, 5, 10] : [-10, 10]).map(
+                        (delta) => (
+                          <Button
+                            key={delta}
+                            variant="secondary"
+                            style={{
+                              ...styles.quickStep,
+                              backgroundColor:
+                                delta === -10
+                                  ? "#fecaca"
+                                  : delta === -5
+                                  ? "#fee2e2"
+                                  : delta === 5
+                                  ? "#dcfce7"
+                                  : "#bbf7d0",
+                            }}
+                            disabled={disabled}
+                            onPress={() => adjust(size.key, delta)}
+                          >
+                            <Text
+                              style={{
+                                color: delta < 0 ? "#991b1b" : "#166534",
+                                fontFamily: theme.typography.semibold,
+                                fontSize: 14,
+                              }}
+                            >
+                              {delta > 0 ? `+${delta}` : `−${Math.abs(delta)}`}
+                            </Text>
+                          </Button>
+                        )
+                      )}
                     </View>
                   </View>
                 ))}
@@ -465,6 +483,7 @@ const styles = StyleSheet.create({
   },
   step: { width: 48, minHeight: 60, paddingHorizontal: 0, borderRadius: 8 },
   stepText: { fontSize: 26, color: theme.colors.foreground },
+  quickStep: { flex: 1, paddingHorizontal: 4 },
   actions: { gap: 10, paddingVertical: 8 },
   sideActions: { paddingVertical: 0 },
   sidebar: {

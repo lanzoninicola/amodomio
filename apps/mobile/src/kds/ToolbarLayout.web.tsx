@@ -12,7 +12,7 @@ export function ToolbarLayout({
       style={{
         display: compact ? "grid" : "flex",
         gridTemplateColumns: compact
-          ? "max-content 150px minmax(0, 1fr)"
+          ? "max-content max-content minmax(0, 1fr)"
           : undefined,
         alignItems: "center",
         gap: compact ? 12 : 8,

@@ -3,6 +3,9 @@ import { theme } from "./theme";
 import { desktop } from "../platform/desktop";
 import { useState } from "react";
 const paths: Record<string, string> = {
+  calendar:
+    "M4 5h16v16H4z M8 3v4 M16 3v4 M4 10h16 M8 14h.01 M12 14h.01 M16 14h.01 M8 18h.01 M12 18h.01",
+  stock: "M3 7l9-4 9 4v12l-9 3-9-3z M3 7l9 4 9-4 M12 11v11 M7 5l9 4",
   previous: "m15 6-6 6 6 6",
   next: "m9 6 6 6-6 6",
   kanban:
@@ -10,6 +13,8 @@ const paths: Record<string, string> = {
   reduced: "M3 3h7v7H3z M14 3h7v7h-7z M3 14h7v7H3z M14 14h7v7h-7z",
   refresh:
     "M20 7v5h-5 M4 17v-5h5 M6 7a7 7 0 0 1 12-1l2 6 M4 12l2 6a7 7 0 0 0 12-1",
+  filter: "M3 4h18l-7 8v7l-4 2v-9z",
+  "filter-off": "M3 4h18l-7 8v7l-4 2v-9z M2 2l20 20",
   home: "m3 10 9-7 9 7 M5 9v12h14V9 M9 21v-8h6v8",
   oven: "M4 3h16v18H4z M7 9h10v8H7z M7 6h.01 M12 6h.01 M17 6h.01",
   cancel: "m6 6 12 12 M18 6 6 18",
@@ -82,7 +87,9 @@ export function IconButton({
           minHeight: appearance === "card" && caption ? 72 : 48,
           padding: appearance === "card" ? "10px 6px" : 6,
           border: `1px solid ${
-            appearance === "card"
+            icon === "filter-off"
+              ? "#2563eb"
+              : appearance === "card"
               ? active
                 ? theme.colors.brandYellow
                 : "#ffffff"
@@ -98,7 +105,9 @@ export function IconButton({
           }`,
           borderRadius: theme.radius.md,
           background:
-            appearance === "card"
+            icon === "filter-off"
+              ? "#2563eb"
+              : appearance === "card"
               ? active
                 ? "#282828"
                 : "#ffffff"
@@ -110,7 +119,9 @@ export function IconButton({
               ? theme.colors.secondary
               : theme.colors.card,
           color:
-            appearance === "card"
+            icon === "filter-off"
+              ? "#ffffff"
+              : appearance === "card"
               ? active
                 ? theme.colors.brandYellow
                 : "#282828"

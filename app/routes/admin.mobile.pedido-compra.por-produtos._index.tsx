@@ -22,6 +22,12 @@ export default function AdminMobilePedidoCompraPorProdutosIndex() {
         Nova lista de compras
       </Link>
 
+      <Link
+        to="/admin/mobile/pedido-compra/pedidos-abertos"
+        className="block text-sm underline"
+      >
+        Pedidos a fornecedores em aberto
+      </Link>
       <section className="space-y-2">
         <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
           Listas em aberto
