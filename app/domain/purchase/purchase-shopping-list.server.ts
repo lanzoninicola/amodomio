@@ -26,6 +26,15 @@ export async function listMobilePurchaseCatalog() {
         purchaseUm: true,
         consumptionUm: true,
         ItemUnit: { select: { unitCode: true } },
+        StockMovement: {
+          where: {
+            direction: "entry",
+            deletedAt: null,
+            supplierId: { not: null },
+          },
+          distinct: ["supplierId"],
+          select: { Supplier: { select: { id: true, name: true } } },
+        },
       },
     }),
     getAvailableItemUnits(),
@@ -52,6 +61,9 @@ export async function listMobilePurchaseCatalog() {
     return {
       id: item.id,
       name: item.name,
+      suppliers: item.StockMovement.map(
+        (movement: any) => movement.Supplier
+      ).filter(Boolean),
       unitOptions,
       defaultUnit: String(
         item.purchaseUm || item.consumptionUm || unitOptions[0] || "UN"
@@ -67,6 +79,25 @@ export async function createMobilePurchaseList(
   items: Array<{ itemId: string; quantity: number; unit: string }>
 ) {
   const db = itemPrismaEntity.client as any;
+  const catalog = await listMobilePurchaseCatalog();
+  const available = new Map(catalog.map((item: any) => [item.id, item]));
+  if (
+    !name.trim() ||
+    name.length > 200 ||
+    !items.length ||
+    items.length > 500 ||
+    new Set(items.map((item) => item.itemId)).size !== items.length ||
+    items.some((item) => {
+      const product = available.get(item.itemId) as any;
+      return (
+        !product ||
+        !Number.isFinite(item.quantity) ||
+        item.quantity <= 0 ||
+        !product.unitOptions.includes(item.unit)
+      );
+    })
+  )
+    throw new Error("Informe nome, produtos, quantidades e unidades válidos.");
   return db.purchaseShoppingList.create({
     data: {
       name,

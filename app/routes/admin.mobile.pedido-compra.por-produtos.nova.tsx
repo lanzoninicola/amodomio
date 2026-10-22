@@ -45,11 +45,36 @@ export async function action({ request }: ActionFunctionArgs) {
     );
   }
 
-  const list = await createMobilePurchaseList(name, items);
+  if (items.length !== itemIds.length)
+    return json(
+      { error: "Revise as quantidades e unidades dos produtos." },
+      { status: 400 }
+    );
+  let list;
+  try {
+    list = await createMobilePurchaseList(name, items);
+  } catch {
+    return json(
+      {
+        error:
+          "Não foi possível criar a lista. Revise os produtos e tente novamente.",
+      },
+      { status: 400 }
+    );
+  }
   return redirect(`/admin/mobile/pedido-compra/por-produtos/${list.id}`);
 }
 
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "~/components/ui/select";
+
 type CatalogItem = {
+  suppliers: { id: string; name: string }[];
   id: string;
   name: string;
   unitOptions: string[];
@@ -86,16 +111,30 @@ export default function AdminMobilePedidoCompraPorProdutosNova() {
 function NewPurchaseListForm({ catalog }: { catalog: CatalogItem[] }) {
   const actionData = useActionData<typeof action>();
   const navigation = useNavigation();
+  const [supplierId, setSupplierId] = useState("all");
+  const [selectedOnly, setSelectedOnly] = useState(false);
+  const suppliers = Array.from(
+    new Map(
+      catalog
+        .flatMap((item) => item.suppliers)
+        .map((supplier) => [supplier.id, supplier])
+    ).values()
+  ).sort((a, b) => a.name.localeCompare(b.name));
   const [query, setQuery] = useState("");
   const [selection, setSelection] = useState<Selection>({});
 
   const visibleCatalog = useMemo(() => {
     const normalizedQuery = normalizeSearch(query);
-    if (!normalizedQuery) return catalog;
-    return catalog.filter((item) =>
-      normalizeSearch(item.name).includes(normalizedQuery)
+    return catalog.filter(
+      (item) =>
+        normalizeSearch(item.name).includes(normalizedQuery) &&
+        (supplierId === "all" ||
+          (supplierId === "none"
+            ? !item.suppliers.length
+            : item.suppliers.some((supplier) => supplier.id === supplierId))) &&
+        (!selectedOnly || selection[item.id])
     );
-  }, [catalog, query]);
+  }, [catalog, query, supplierId, selectedOnly, selection]);
 
   function toggleItem(item: CatalogItem) {
     setSelection((current) => {
@@ -162,6 +201,41 @@ function NewPurchaseListForm({ catalog }: { catalog: CatalogItem[] }) {
         </div>
       </label>
 
+      <Select value={supplierId} onValueChange={setSupplierId}>
+        <SelectTrigger aria-label="Filtrar por fornecedor">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="all">Todos os fornecedores</SelectItem>
+          <SelectItem value="none">Sem fornecedor no histórico</SelectItem>
+          {suppliers.map((supplier) => (
+            <SelectItem key={supplier.id} value={supplier.id}>
+              {supplier.name}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      <p className="text-xs text-slate-500">
+        Fornecedores identificados nas entradas de estoque. O filtro não altera
+        os produtos selecionados.
+      </p>
+      <button
+        type="button"
+        className="text-sm underline"
+        onClick={() => setSelectedOnly((value) => !value)}
+      >
+        {selectedOnly
+          ? "Mostrar todos"
+          : `Revisar selecionados (${Object.keys(selection).length})`}
+      </button>
+      {Object.entries(selection).map(([id, value]) => (
+        <span key={id}>
+          <input type="hidden" name="itemId" value={id} />
+          <input type="hidden" name="quantity" value={value.quantity} />
+          <input type="hidden" name="unit" value={value.unit} />
+        </span>
+      ))}
+      {!visibleCatalog.length ? <p>Nenhum produto encontrado.</p> : null}
       {actionData?.error ? (
         <p className="rounded-xl bg-red-50 px-3 py-2 text-sm font-medium text-red-700">
           {actionData.error}
@@ -199,24 +273,24 @@ function NewPurchaseListForm({ catalog }: { catalog: CatalogItem[] }) {
 
               {selected ? (
                 <div className="mt-3 grid grid-cols-[104px_minmax(0,1fr)] gap-2 border-t border-blue-200 pt-3">
-                  <input type="hidden" name="itemId" value={item.id} />
-                  <select
-                    name="unit"
+                  <Select
                     value={selected.unit}
-                    onChange={(event) =>
-                      updateItem(item.id, { unit: event.target.value })
-                    }
-                    className="h-12 rounded-xl border border-slate-300 bg-white px-3 text-sm font-semibold"
+                    onValueChange={(unit) => updateItem(item.id, { unit })}
                   >
-                    {item.unitOptions.map((unit) => (
-                      <option key={unit} value={unit}>
-                        {unit}
-                      </option>
-                    ))}
-                  </select>
+                    <SelectTrigger aria-label={`Unidade de ${item.name}`}>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {item.unitOptions.map((unit) => (
+                        <SelectItem key={unit} value={unit}>
+                          {unit}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                   <div className="flex h-12 min-w-0 items-center overflow-hidden rounded-xl border border-slate-300 bg-white">
                     <input
-                      name="quantity"
+                      aria-label={`Quantidade de ${item.name}`}
                       value={selected.quantity}
                       onChange={(event) =>
                         updateItem(item.id, { quantity: event.target.value })

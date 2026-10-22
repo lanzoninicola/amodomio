@@ -16,10 +16,12 @@ export function DateCalendar({
   value,
   onSelect,
   onClose,
+  onNavigateDay,
 }: {
   value: string;
   onSelect: (date: string) => void;
   onClose: () => void;
+  onNavigateDay?: (date: string) => void;
 }) {
   const [month, setMonth] = useState(
     () => new Date(`${value.slice(0, 7)}-01T12:00:00`)
@@ -41,6 +43,48 @@ export function DateCalendar({
         <View style={styles.card} accessibilityViewIsModal>
           <ScrollView contentContainerStyle={styles.content}>
             <Text style={styles.title}>Selecionar dia</Text>
+            {onNavigateDay ? (
+              <View style={styles.navigation}>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Dia anterior"
+                  style={styles.arrow}
+                  onPress={() => {
+                    const previous = new Date(`${value}T12:00:00`);
+                    previous.setDate(previous.getDate() - 1);
+                    setMonth(
+                      new Date(
+                        previous.getFullYear(),
+                        previous.getMonth(),
+                        1,
+                        12
+                      )
+                    );
+                    onNavigateDay(dateKey(previous));
+                  }}
+                >
+                  <Text style={styles.title}>‹</Text>
+                </Pressable>
+                <Text style={styles.month}>
+                  {value.split("-").reverse().join("/")}
+                </Text>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Próximo dia"
+                  style={styles.arrow}
+                  onPress={() => {
+                    const next = new Date(`${value}T12:00:00`);
+                    next.setDate(next.getDate() + 1);
+                    setMonth(
+                      new Date(next.getFullYear(), next.getMonth(), 1, 12)
+                    );
+                    onNavigateDay(dateKey(next));
+                  }}
+                >
+                  <Text style={styles.title}>›</Text>
+                </Pressable>
+              </View>
+            ) : null}
             <View style={styles.navigation}>
               <Pressable
                 accessibilityRole="button"

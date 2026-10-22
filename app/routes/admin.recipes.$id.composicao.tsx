@@ -1,9 +1,24 @@
+import RecipeVariationMatrix from "~/domain/recipe/components/recipe-variation-matrix";
 import { CopyCompositionButton } from "~/domain/recipe/components/copy-composition-button";
 import { Form, Link, useFetcher, useOutletContext } from "@remix-run/react";
 import { closestCenter, DndContext, type DragEndEvent } from "@dnd-kit/core";
-import { arrayMove, SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import {
+  arrayMove,
+  SortableContext,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { ArrowDown, ArrowUp, GripVertical, Plus, Sparkles, Trash2 } from "lucide-react";
+import {
+  ArrowDown,
+  ArrowUp,
+  GripVertical,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Plus,
+  Sparkles,
+  Trash2,
+} from "lucide-react";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Button } from "~/components/ui/button";
 import { Badge } from "~/components/ui/badge";
@@ -12,483 +27,789 @@ import type { ItemClassification } from "~/domain/item/item.prisma.entity.server
 import type { AdminRecipeOutletContext } from "./admin.recipes.$id";
 import { ALPHABET_FILTERS, normalizeInitialLetter } from "./admin.recipes.$id";
 
-function SortableCompositionRow({ id, displayOrder, disabled, children }: {
-    id: string
-    displayOrder: number
-    disabled: boolean
-    children: ReactNode
+function SortableCompositionRow({
+  id,
+  displayOrder,
+  disabled,
+  children,
+}: {
+  id: string;
+  displayOrder: number;
+  disabled: boolean;
+  children: ReactNode;
 }) {
-    const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id, disabled })
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id, disabled });
 
-    return (
-        <tr
-            ref={setNodeRef}
-            style={{ transform: CSS.Transform.toString(transform), transition }}
-            className={cn("border-t border-slate-100 bg-white", isDragging && "relative z-10 shadow-lg")}
-        >
-            <td className="px-4 py-3 text-slate-500">
-                <div className="flex items-center gap-2">
-                    <button
-                        type="button"
-                        className="inline-flex h-8 w-8 touch-none cursor-grab items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-700 active:cursor-grabbing disabled:cursor-wait disabled:opacity-40"
-                        disabled={disabled}
-                        aria-label={`Arrastar ingrediente da posição ${displayOrder}`}
-                        title="Arraste para reordenar"
-                        {...attributes}
-                        {...listeners}
-                    >
-                        <GripVertical size={16} />
-                    </button>
-                    <span>{displayOrder}</span>
-                </div>
-            </td>
-            {children}
-        </tr>
-    )
+  return (
+    <tr
+      ref={setNodeRef}
+      style={{ transform: CSS.Transform.toString(transform), transition }}
+      className={cn(
+        "border-t border-slate-100 bg-white",
+        isDragging && "relative z-10 shadow-lg"
+      )}
+    >
+      <td className="px-4 py-3 text-slate-500">
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            className="inline-flex h-8 w-8 touch-none cursor-grab items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-700 active:cursor-grabbing disabled:cursor-wait disabled:opacity-40"
+            disabled={disabled}
+            aria-label={`Arrastar ingrediente da posição ${displayOrder}`}
+            title="Arraste para reordenar"
+            {...attributes}
+            {...listeners}
+          >
+            <GripVertical size={16} />
+          </button>
+          <span>{displayOrder}</span>
+        </div>
+      </td>
+      {children}
+    </tr>
+  );
 }
 
 const ITEM_CLASSIFICATION_ORDER: ItemClassification[] = [
-    "insumo",
-    "semi_acabado",
-    "produto_final",
-    "embalagem",
-    "servico",
-    "outro",
-]
+  "insumo",
+  "semi_acabado",
+  "produto_final",
+  "embalagem",
+  "servico",
+  "outro",
+];
 
 function formatClassificationLabel(value?: string | null) {
-    if (!value) return "sem classificação"
-    return value.replaceAll("_", " ")
+  if (!value) return "sem classificação";
+  return value.replaceAll("_", " ");
 }
 
 function getClassificationBadgeClass(value?: string | null) {
-    switch (value) {
-        case "insumo":
-            return "border-sky-200 bg-sky-50 text-sky-700"
-        case "semi_acabado":
-            return "border-amber-200 bg-amber-50 text-amber-700"
-        case "produto_final":
-            return "border-emerald-200 bg-emerald-50 text-emerald-700"
-        case "embalagem":
-            return "border-violet-200 bg-violet-50 text-violet-700"
-        case "servico":
-            return "border-rose-200 bg-rose-50 text-rose-700"
-        default:
-            return "border-slate-200 bg-slate-50 text-slate-700"
-    }
+  switch (value) {
+    case "insumo":
+      return "border-sky-200 bg-sky-50 text-sky-700";
+    case "semi_acabado":
+      return "border-amber-200 bg-amber-50 text-amber-700";
+    case "produto_final":
+      return "border-emerald-200 bg-emerald-50 text-emerald-700";
+    case "embalagem":
+      return "border-violet-200 bg-violet-50 text-violet-700";
+    case "servico":
+      return "border-rose-200 bg-rose-50 text-rose-700";
+    default:
+      return "border-slate-200 bg-slate-50 text-slate-700";
+  }
 }
 
 export default function AdminRecipeComposicaoTab() {
-    const { recipe, items, recipeLines } = useOutletContext<AdminRecipeOutletContext>()
-    const reorderFetcher = useFetcher()
-    const [builderSearch, setBuilderSearch] = useState("")
-    const [builderLetter, setBuilderLetter] = useState<string>("")
-    const [builderSelectedItemIds, setBuilderSelectedItemIds] = useState<string[]>([])
+  const { recipe, items, recipeLines } =
+    useOutletContext<AdminRecipeOutletContext>();
+  const reorderFetcher = useFetcher();
+  const [builderVisible, setBuilderVisible] = useState(false);
+  const [builderSearch, setBuilderSearch] = useState("");
+  const [builderLetter, setBuilderLetter] = useState<string>("");
+  const [builderSelectedItemIds, setBuilderSelectedItemIds] = useState<
+    string[]
+  >([]);
 
-    const groupedLines = recipeLines.reduce((acc, line) => {
-        const key = String(line.recipeIngredientId || line.id)
-        const current = acc.get(key) || {
-            key,
-            recipeIngredientId: line.recipeIngredientId || null,
-            itemName: line.Item?.name || "-",
-            itemId: line.itemId,
-            recipeLineId: line.id,
-            sortOrderIndex: Number(line.sortOrderIndex || 0),
-        }
-        acc.set(key, current)
-        return acc
-    }, new Map<string, {
-        key: string
-        recipeIngredientId: string | null
-        itemName: string
-        itemId: string
-        recipeLineId: string
-        sortOrderIndex: number
-    }>())
+  const groupedLines = recipeLines.reduce(
+    (acc, line) => {
+      const key = String(line.recipeIngredientId || line.id);
+      const current = acc.get(key) || {
+        key,
+        recipeIngredientId: line.recipeIngredientId || null,
+        itemName: line.Item?.name || "-",
+        itemId: line.itemId,
+        recipeLineId: line.id,
+        sortOrderIndex: Number(line.sortOrderIndex || 0),
+      };
+      acc.set(key, current);
+      return acc;
+    },
+    new Map<
+      string,
+      {
+        key: string;
+        recipeIngredientId: string | null;
+        itemName: string;
+        itemId: string;
+        recipeLineId: string;
+        sortOrderIndex: number;
+      }
+    >()
+  );
 
-    const baseIngredients = Array.from(groupedLines.values())
-        .sort((a, b) => a.sortOrderIndex - b.sortOrderIndex || a.itemName.localeCompare(b.itemName, "pt-BR"))
-        .map((row: {
-        key: string
-        recipeIngredientId: string | null
-        itemName: string
-        itemId: string
-        recipeLineId: string
-        sortOrderIndex: number
-    }, idx) => ({
+  const baseIngredients = Array.from(groupedLines.values())
+    .sort(
+      (a, b) =>
+        a.sortOrderIndex - b.sortOrderIndex ||
+        a.itemName.localeCompare(b.itemName, "pt-BR")
+    )
+    .map(
+      (
+        row: {
+          key: string;
+          recipeIngredientId: string | null;
+          itemName: string;
+          itemId: string;
+          recipeLineId: string;
+          sortOrderIndex: number;
+        },
+        idx
+      ) => ({
         displayOrder: idx + 1,
         sortOrderIndex: row.sortOrderIndex,
         recipeIngredientId: row.recipeIngredientId,
         itemId: row.itemId,
         itemName: row.itemName,
         recipeLineId: row.recipeLineId,
-    }))
+      })
+    );
 
-    const baseIngredientOrderKey = baseIngredients
-        .map((ingredient) => ingredient.recipeIngredientId || ingredient.recipeLineId)
-        .join("|")
-    const [orderedIngredientIds, setOrderedIngredientIds] = useState<string[]>(() =>
-        baseIngredients.map((ingredient) => ingredient.recipeIngredientId || ingredient.recipeLineId)
+  const baseIngredientOrderKey = baseIngredients
+    .map(
+      (ingredient) => ingredient.recipeIngredientId || ingredient.recipeLineId
     )
+    .join("|");
+  const [orderedIngredientIds, setOrderedIngredientIds] = useState<string[]>(
+    () =>
+      baseIngredients.map(
+        (ingredient) => ingredient.recipeIngredientId || ingredient.recipeLineId
+      )
+  );
 
-    useEffect(() => {
-        setOrderedIngredientIds(baseIngredients.map((ingredient) => ingredient.recipeIngredientId || ingredient.recipeLineId))
-    }, [baseIngredientOrderKey])
+  useEffect(() => {
+    setOrderedIngredientIds(
+      baseIngredients.map(
+        (ingredient) => ingredient.recipeIngredientId || ingredient.recipeLineId
+      )
+    );
+  }, [baseIngredientOrderKey]);
 
-    useEffect(() => {
-        if (Number((reorderFetcher.data as { status?: number } | undefined)?.status || 0) >= 400) {
-            setOrderedIngredientIds(baseIngredients.map((ingredient) => ingredient.recipeIngredientId || ingredient.recipeLineId))
-        }
-    }, [reorderFetcher.data])
-
-    const orderedBaseIngredients = orderedIngredientIds
-        .map((id) => baseIngredients.find((ingredient) => (ingredient.recipeIngredientId || ingredient.recipeLineId) === id))
-        .filter((ingredient): ingredient is (typeof baseIngredients)[number] => Boolean(ingredient))
-
-    const handleIngredientDragEnd = (event: DragEndEvent) => {
-        if (reorderFetcher.state !== "idle") return
-        const { active, over } = event
-        if (!over || active.id === over.id) return
-
-        const oldIndex = orderedIngredientIds.indexOf(String(active.id))
-        const newIndex = orderedIngredientIds.indexOf(String(over.id))
-        if (oldIndex < 0 || newIndex < 0) return
-
-        const nextOrder = arrayMove(orderedIngredientIds, oldIndex, newIndex)
-        setOrderedIngredientIds(nextOrder)
-        reorderFetcher.submit(
-            {
-                _action: "recipe-ingredient-reorder",
-                recipeId: recipe.id,
-                tab: "composicao",
-                orderedIds: JSON.stringify(nextOrder),
-            },
-            { method: "post", action: "..", preventScrollReset: true }
+  useEffect(() => {
+    if (
+      Number(
+        (reorderFetcher.data as { status?: number } | undefined)?.status || 0
+      ) >= 400
+    ) {
+      setOrderedIngredientIds(
+        baseIngredients.map(
+          (ingredient) =>
+            ingredient.recipeIngredientId || ingredient.recipeLineId
         )
+      );
+    }
+  }, [reorderFetcher.data]);
+
+  const orderedBaseIngredients = orderedIngredientIds
+    .map((id) =>
+      baseIngredients.find(
+        (ingredient) =>
+          (ingredient.recipeIngredientId || ingredient.recipeLineId) === id
+      )
+    )
+    .filter((ingredient): ingredient is (typeof baseIngredients)[number] =>
+      Boolean(ingredient)
+    );
+
+  const handleIngredientDragEnd = (event: DragEndEvent) => {
+    if (reorderFetcher.state !== "idle") return;
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+
+    const oldIndex = orderedIngredientIds.indexOf(String(active.id));
+    const newIndex = orderedIngredientIds.indexOf(String(over.id));
+    if (oldIndex < 0 || newIndex < 0) return;
+
+    const nextOrder = arrayMove(orderedIngredientIds, oldIndex, newIndex);
+    setOrderedIngredientIds(nextOrder);
+    reorderFetcher.submit(
+      {
+        _action: "recipe-ingredient-reorder",
+        recipeId: recipe.id,
+        tab: "composicao",
+        orderedIds: JSON.stringify(nextOrder),
+      },
+      { method: "post", action: "..", preventScrollReset: true }
+    );
+  };
+
+  const selectedBaseIngredientIds = new Set(
+    baseIngredients.map((ingredient) => ingredient.itemId)
+  );
+  const selectedBaseIngredientKey = baseIngredients
+    .map((ingredient) => ingredient.itemId)
+    .join("|");
+
+  const builderItems = items
+    .filter((item) => {
+      const q = builderSearch.trim().toLowerCase();
+      const matchesSearch =
+        !q ||
+        `${item.name} ${item.classification || ""}`.toLowerCase().includes(q);
+      const matchesLetter =
+        !builderLetter || normalizeInitialLetter(item.name) === builderLetter;
+      return matchesSearch && matchesLetter;
+    })
+    .slice(0, 120);
+
+  const groupedBuilderItems = useMemo(() => {
+    const grouped = new Map<string, typeof builderItems>();
+
+    for (const classification of ITEM_CLASSIFICATION_ORDER) {
+      grouped.set(classification, []);
     }
 
-    const selectedBaseIngredientIds = new Set(baseIngredients.map((ingredient) => ingredient.itemId))
-    const selectedBaseIngredientKey = baseIngredients.map((ingredient) => ingredient.itemId).join("|")
+    grouped.set("__unclassified__", []);
 
-    const builderItems = items
-        .filter((item) => {
-            const q = builderSearch.trim().toLowerCase()
-            const matchesSearch = !q || `${item.name} ${item.classification || ""}`.toLowerCase().includes(q)
-            const matchesLetter = !builderLetter || normalizeInitialLetter(item.name) === builderLetter
-            return matchesSearch && matchesLetter
-        })
-        .slice(0, 120)
-
-    const groupedBuilderItems = useMemo(() => {
-        const grouped = new Map<string, typeof builderItems>()
-
-        for (const classification of ITEM_CLASSIFICATION_ORDER) {
-            grouped.set(classification, [])
-        }
-
-        grouped.set("__unclassified__", [])
-
-        for (const item of builderItems) {
-            const key = item.classification && grouped.has(item.classification)
-                ? item.classification
-                : "__unclassified__"
-            grouped.get(key)?.push(item)
-        }
-
-        return [
-            ...ITEM_CLASSIFICATION_ORDER.map((classification) => ({
-                key: classification,
-                label: formatClassificationLabel(classification),
-                items: grouped.get(classification) || [],
-            })),
-            {
-                key: "__unclassified__",
-                label: "sem classificação",
-                items: grouped.get("__unclassified__") || [],
-            },
-        ].filter((group) => group.items.length > 0)
-    }, [builderItems])
-
-    const availableBuilderLetters = new Set(
-        items
-            .map((item) => normalizeInitialLetter(item.name))
-            .filter(Boolean)
-    )
-
-    useEffect(() => {
-        setBuilderSelectedItemIds((current) => current.filter((id) => !selectedBaseIngredientIds.has(id)))
-    }, [selectedBaseIngredientKey])
-
-    const toggleBuilderItem = (itemId: string) => {
-        setBuilderSelectedItemIds((current) =>
-            current.includes(itemId)
-                ? current.filter((id) => id !== itemId)
-                : [...current, itemId]
-        )
+    for (const item of builderItems) {
+      const key =
+        item.classification && grouped.has(item.classification)
+          ? item.classification
+          : "__unclassified__";
+      grouped.get(key)?.push(item);
     }
 
-    return (
-        <div className="grid gap-8 xl:grid-cols-2">
-            <div className="xl:sticky xl:top-4 xl:self-start">
-                <div className="flex min-h-[calc(100vh-14rem)] flex-col">
-                    <div className="flex items-start justify-between gap-3">
-                        <div>
-                            <h2 className="text-base font-semibold text-slate-900">Montador rápido</h2>
-                            <p className="mt-0.5 text-sm text-slate-500">Selecione ingredientes e vincule na receita sem quantidade/custo.</p>
-                        </div>
-                        <div className="flex items-center gap-2">
-                            <Button type="button" variant="outline" size="sm" asChild>
-                                <Link to={`/admin/recipes/${recipe.id}/composition-builder`} className="gap-1.5">
-                                    <Sparkles size={14} />
-                                    Assistente
-                                </Link>
-                            </Button>
-                            <Button type="button" variant="outline" size="sm" asChild>
-                                <Link to="/admin/items/new">Criar item</Link>
-                            </Button>
-                        </div>
+    return [
+      ...ITEM_CLASSIFICATION_ORDER.map((classification) => ({
+        key: classification,
+        label: formatClassificationLabel(classification),
+        items: grouped.get(classification) || [],
+      })),
+      {
+        key: "__unclassified__",
+        label: "sem classificação",
+        items: grouped.get("__unclassified__") || [],
+      },
+    ].filter((group) => group.items.length > 0);
+  }, [builderItems]);
+
+  const availableBuilderLetters = new Set(
+    items.map((item) => normalizeInitialLetter(item.name)).filter(Boolean)
+  );
+
+  useEffect(() => {
+    setBuilderSelectedItemIds((current) =>
+      current.filter((id) => !selectedBaseIngredientIds.has(id))
+    );
+  }, [selectedBaseIngredientKey]);
+
+  const toggleBuilderItem = (itemId: string) => {
+    setBuilderSelectedItemIds((current) =>
+      current.includes(itemId)
+        ? current.filter((id) => id !== itemId)
+        : [...current, itemId]
+    );
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h2 className="text-base font-semibold text-slate-900">Composição</h2>
+        <Button
+          type="button"
+          variant="default"
+          size="sm"
+          aria-expanded={builderVisible}
+          aria-controls="recipe-quick-builder"
+          onClick={() => setBuilderVisible((visible) => !visible)}
+          className="gap-2"
+        >
+          {builderVisible ? (
+            <PanelLeftClose size={16} />
+          ) : (
+            <PanelLeftOpen size={16} />
+          )}
+          {builderVisible
+            ? "Esconder montador rápido"
+            : "Mostrar montador rápido"}
+        </Button>
+      </div>
+      <div
+        className={cn(
+          "grid grid-cols-1 transition-[grid-template-columns,gap] duration-300 ease-in-out motion-reduce:transition-none",
+          builderVisible
+            ? "gap-5 xl:grid-cols-[minmax(0,21rem)_minmax(0,1fr)]"
+            : "gap-0 xl:grid-cols-[minmax(0,0fr)_minmax(0,1fr)]"
+        )}
+      >
+        <div
+          id="recipe-quick-builder"
+          inert={builderVisible ? undefined : ""}
+          aria-hidden={!builderVisible}
+          className={cn(
+            "min-w-0 overflow-hidden transition-[opacity,visibility] duration-300 motion-reduce:transition-none",
+            builderVisible
+              ? "visible opacity-100"
+              : "invisible max-xl:hidden opacity-0"
+          )}
+        >
+          <div className="xl:sticky xl:top-4 xl:self-start">
+            <div className="flex flex-col rounded-xl bg-slate-50/50 p-3">
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <h2 className="whitespace-nowrap text-sm font-semibold text-slate-900">
+                    Montador rápido
+                  </h2>
+                </div>
+                <div className="flex shrink-0 items-center gap-1.5">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-8 px-2 text-xs"
+                    asChild
+                  >
+                    <Link
+                      to={`/admin/recipes/${recipe.id}/composition-builder`}
+                      className="gap-1"
+                    >
+                      <Sparkles size={12} />
+                      Assistente
+                    </Link>
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-8 px-2 text-xs"
+                    asChild
+                  >
+                    <Link to="/admin/items/new">Criar item</Link>
+                  </Button>
+                </div>
+              </div>
+              <div className="mt-4 space-y-3">
+                <div className="flex flex-col gap-3">
+                  <input
+                    value={builderSearch}
+                    onChange={(event) => setBuilderSearch(event.target.value)}
+                    placeholder="Buscar item..."
+                    className="h-10 w-full rounded-md border border-slate-200 px-3 text-sm"
+                  />
+                  <Form
+                    method="post"
+                    action=".."
+                    preventScrollReset
+                    className="flex flex-wrap items-center justify-between gap-2"
+                  >
+                    <input type="hidden" name="recipeId" value={recipe.id} />
+                    <input type="hidden" name="tab" value="composicao" />
+                    <input
+                      type="hidden"
+                      name="targetItemIds"
+                      value={builderSelectedItemIds.join(",")}
+                    />
+                    <span className="text-xs text-slate-400">
+                      {builderSelectedItemIds.length} selecionado(s)
+                    </span>
+                    <Button
+                      type="submit"
+                      name="_action"
+                      value="recipe-ingredient-batch-add"
+                      size="sm"
+                      disabled={builderSelectedItemIds.length === 0}
+                    >
+                      Adicionar selecionados
+                    </Button>
+                  </Form>
+                </div>
+                <div className="border-b border-slate-200 pb-3">
+                  <div className="flex flex-wrap items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => setBuilderLetter("")}
+                      className={cn(
+                        "rounded-md px-2.5 py-1 text-xs font-semibold transition-colors",
+                        builderLetter === ""
+                          ? "bg-slate-900 text-white"
+                          : "text-slate-900 hover:bg-slate-100"
+                      )}
+                    >
+                      Todos
+                    </button>
+                    {ALPHABET_FILTERS.map((letter) =>
+                      availableBuilderLetters.has(letter) ? (
+                        <button
+                          key={letter}
+                          type="button"
+                          onClick={() =>
+                            setBuilderLetter((current) =>
+                              current === letter ? "" : letter
+                            )
+                          }
+                          className={cn(
+                            "rounded px-1.5 py-1 text-xs font-semibold uppercase transition-colors",
+                            builderLetter === letter
+                              ? "bg-slate-900 text-white"
+                              : "text-slate-900 hover:bg-slate-100"
+                          )}
+                        >
+                          {letter}
+                        </button>
+                      ) : (
+                        <span
+                          key={letter}
+                          className="px-1.5 py-1 text-xs font-semibold uppercase text-slate-300"
+                        >
+                          {letter}
+                        </span>
+                      )
+                    )}
+                  </div>
+                </div>
+              </div>
+              <div className="mt-3 min-h-0 overflow-hidden">
+                <div className="max-h-[65vh] overflow-y-auto bg-white">
+                  {groupedBuilderItems.length === 0 ? (
+                    <div className="px-4 py-10 text-center text-sm text-slate-400">
+                      Nenhum item encontrado para os filtros atuais.
                     </div>
-                    <div className="mt-4 space-y-3">
-                        <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
-                            <input
-                                value={builderSearch}
-                                onChange={(event) => setBuilderSearch(event.target.value)}
-                                placeholder="Buscar item..."
-                                className="h-10 w-full rounded-md border border-slate-200 px-3 text-sm lg:flex-1"
-                            />
-                            <Form method="post" action=".." preventScrollReset className="flex items-center gap-3">
-                                <input type="hidden" name="recipeId" value={recipe.id} />
-                                <input type="hidden" name="tab" value="composicao" />
-                                <input type="hidden" name="targetItemIds" value={builderSelectedItemIds.join(",")} />
-                                <span className="text-xs text-slate-400">{builderSelectedItemIds.length} selecionado(s)</span>
-                                <Button type="submit" name="_action" value="recipe-ingredient-batch-add" size="sm" disabled={builderSelectedItemIds.length === 0}>
-                                    Adicionar selecionados
-                                </Button>
-                            </Form>
+                  ) : (
+                    groupedBuilderItems.map((group) => (
+                      <div
+                        key={group.key}
+                        className="border-b border-slate-200 last:border-b-0"
+                      >
+                        <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-slate-100 bg-slate-50 py-2">
+                          <Badge
+                            variant="outline"
+                            className={cn(
+                              "font-medium",
+                              getClassificationBadgeClass(
+                                group.key === "__unclassified__"
+                                  ? null
+                                  : group.key
+                              )
+                            )}
+                          >
+                            {group.label}
+                          </Badge>
+                          <span className="text-xs text-slate-500">
+                            {group.items.length} item(ns)
+                          </span>
                         </div>
-                        <div className="overflow-x-auto border-b border-slate-200 pb-3">
-                            <div className="flex min-w-max items-center gap-2">
-                                <button
-                                    type="button"
-                                    onClick={() => setBuilderLetter("")}
-                                    className={cn(
-                                        "rounded-md px-2.5 py-1 text-xs font-semibold transition-colors",
-                                        builderLetter === ""
-                                            ? "bg-slate-900 text-white"
-                                            : "text-slate-900 hover:bg-slate-100"
-                                    )}
+                        {group.items.map((item) => {
+                          const checked = builderSelectedItemIds.includes(
+                            item.id
+                          );
+                          const alreadyAdded = selectedBaseIngredientIds.has(
+                            item.id
+                          );
+                          return (
+                            <div
+                              key={item.id}
+                              className={cn(
+                                "flex items-center gap-2 border-b border-slate-100 px-2 py-2.5 text-xs transition-colors hover:bg-slate-100 last:border-b-0",
+                                alreadyAdded
+                                  ? "bg-slate-50 text-slate-400"
+                                  : "text-slate-700"
+                              )}
+                            >
+                              <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-2">
+                                <input
+                                  type="checkbox"
+                                  checked={checked || alreadyAdded}
+                                  onChange={() =>
+                                    !alreadyAdded && toggleBuilderItem(item.id)
+                                  }
+                                  disabled={alreadyAdded}
+                                  className="h-3.5 w-3.5 rounded border-slate-300"
+                                />
+                                <span className="min-w-0 flex-1 break-words leading-snug">
+                                  {item.name}
+                                </span>
+                              </label>
+                              {alreadyAdded ? (
+                                <Badge
+                                  variant="outline"
+                                  className="border-emerald-200 bg-emerald-50 text-emerald-700"
                                 >
-                                    Todos
-                                </button>
-                                {ALPHABET_FILTERS.map((letter) => (
-                                    availableBuilderLetters.has(letter) ? (
-                                        <button
-                                            key={letter}
-                                            type="button"
-                                            onClick={() => setBuilderLetter((current) => current === letter ? "" : letter)}
-                                            className={cn(
-                                                "rounded px-1.5 py-1 text-xs font-semibold uppercase transition-colors",
-                                                builderLetter === letter
-                                                    ? "bg-slate-900 text-white"
-                                                    : "text-slate-900 hover:bg-slate-100"
-                                            )}
-                                        >
-                                            {letter}
-                                        </button>
-                                    ) : (
-                                        <span key={letter} className="px-1.5 py-1 text-xs font-semibold uppercase text-slate-300">
-                                            {letter}
-                                        </span>
-                                    )
-                                ))}
+                                  na receita
+                                </Badge>
+                              ) : (
+                                <Form
+                                  method="post"
+                                  action=".."
+                                  preventScrollReset
+                                  className="shrink-0"
+                                >
+                                  <input
+                                    type="hidden"
+                                    name="recipeId"
+                                    value={recipe.id}
+                                  />
+                                  <input
+                                    type="hidden"
+                                    name="tab"
+                                    value="composicao"
+                                  />
+                                  <input
+                                    type="hidden"
+                                    name="targetItemIds"
+                                    value={item.id}
+                                  />
+                                  <button
+                                    type="submit"
+                                    name="_action"
+                                    value="recipe-ingredient-batch-add"
+                                    aria-label={`Adicionar ${item.name}`}
+                                    title={`Adicionar ${item.name}`}
+                                    className="inline-flex h-7 w-7 items-center justify-center rounded-md bg-slate-200 text-slate-700 transition-colors hover:bg-slate-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2"
+                                  >
+                                    <Plus size={14} />
+                                  </button>
+                                </Form>
+                              )}
                             </div>
-                        </div>
-                    </div>
-                    <div className="mt-4 min-h-0 flex-1 overflow-hidden border border-slate-200">
-                        <div className="h-[min(58vh,44rem)] overflow-y-auto bg-white">
-                            {groupedBuilderItems.length === 0 ? (
-                                <div className="px-4 py-10 text-center text-sm text-slate-400">
-                                    Nenhum item encontrado para os filtros atuais.
-                                </div>
-                            ) : (
-                                groupedBuilderItems.map((group) => (
-                                    <div key={group.key} className="border-b border-slate-200 last:border-b-0">
-                                        <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-slate-100 bg-slate-50 px-3 py-2">
-                                            <Badge variant="outline" className={cn("font-medium", getClassificationBadgeClass(group.key === "__unclassified__" ? null : group.key))}>
-                                                {group.label}
-                                            </Badge>
-                                            <span className="text-xs text-slate-500">{group.items.length} item(ns)</span>
-                                        </div>
-                                        {group.items.map((item) => {
-                                            const checked = builderSelectedItemIds.includes(item.id)
-                                            const alreadyAdded = selectedBaseIngredientIds.has(item.id)
-                                            return (
-                                                <div
-                                                    key={item.id}
-                                                    className={cn(
-                                                        "flex items-center gap-2 border-b border-slate-100 px-3 py-2.5 text-sm last:border-b-0",
-                                                        alreadyAdded ? "bg-slate-50 text-slate-400" : "text-slate-700"
-                                                    )}
-                                                >
-                                                    <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-2">
-                                                        <input
-                                                            type="checkbox"
-                                                            checked={checked || alreadyAdded}
-                                                            onChange={() => !alreadyAdded && toggleBuilderItem(item.id)}
-                                                            disabled={alreadyAdded}
-                                                            className="h-3.5 w-3.5 rounded border-slate-300"
-                                                        />
-                                                        <span className="min-w-0 flex-1 truncate">{item.name}</span>
-                                                    </label>
-                                                    {alreadyAdded ? (
-                                                        <Badge variant="outline" className="border-emerald-200 bg-emerald-50 text-emerald-700">
-                                                            na receita
-                                                        </Badge>
-                                                    ) : (
-                                                        <Form method="post" action=".." preventScrollReset className="shrink-0">
-                                                            <input type="hidden" name="recipeId" value={recipe.id} />
-                                                            <input type="hidden" name="tab" value="composicao" />
-                                                            <input type="hidden" name="targetItemIds" value={item.id} />
-                                                            <button
-                                                                type="submit"
-                                                                name="_action"
-                                                                value="recipe-ingredient-batch-add"
-                                                                className="inline-flex h-7 items-center gap-1 rounded-md border border-slate-200 px-2 text-xs font-medium text-slate-700 hover:bg-slate-100"
-                                                            >
-                                                                <Plus size={12} />
-                                                                Adicionar
-                                                            </button>
-                                                        </Form>
-                                                    )}
-                                                    <Badge variant="outline" className={cn("font-medium", getClassificationBadgeClass(item.classification))}>
-                                                        {formatClassificationLabel(item.classification)}
-                                                    </Badge>
-                                                </div>
-                                            )
-                                        })}
-                                    </div>
-                                ))
-                            )}
-                        </div>
-                    </div>
+                          );
+                        })}
+                      </div>
+                    ))
+                  )}
                 </div>
+              </div>
             </div>
-
-            <div>
-                <div className="pb-4">
-                    <div className="flex flex-wrap items-center justify-between gap-2"><h2 className="text-base font-semibold text-slate-900">Composição base</h2><CopyCompositionButton recipeId={recipe.id} /></div>
-                    <p className="mt-0.5 text-sm text-slate-500">Organize os ingredientes principais da receita antes de detalhar as variações.</p>
-                    {reorderFetcher.state !== "idle" ? (
-                        <p className="mt-1 text-xs text-slate-400">Salvando nova ordem...</p>
-                    ) : Number((reorderFetcher.data as { status?: number } | undefined)?.status || 0) >= 400 ? (
-                        <p className="mt-1 text-xs text-red-600">
-                            {(reorderFetcher.data as { message?: string })?.message || "Não foi possível salvar a nova ordem."}
-                        </p>
-                    ) : null}
-                </div>
-                <div className="overflow-x-auto border-t border-slate-200">
-                    <table className="min-w-full text-sm">
-                        <thead className="bg-slate-50">
-                            <tr>
-                                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Ordem</th>
-                                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Ingrediente</th>
-                                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Observação</th>
-                                <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">Ação</th>
-                            </tr>
-                        </thead>
-                        <DndContext collisionDetection={closestCenter} onDragEnd={handleIngredientDragEnd}>
-                        <SortableContext items={orderedIngredientIds} strategy={verticalListSortingStrategy}>
-                        <tbody>
-                            {baseIngredients.length === 0 ? (
-                                <tr>
-                                    <td colSpan={4} className="px-4 py-10 text-center text-sm text-slate-500">
-                                        Nenhum ingrediente base. Adicione no montador ao lado.
-                                    </td>
-                                </tr>
-                            ) : (
-                                orderedBaseIngredients.map((ingredient, index) => (
-                                    <SortableCompositionRow
-                                        key={ingredient.recipeIngredientId || ingredient.recipeLineId}
-                                        id={ingredient.recipeIngredientId || ingredient.recipeLineId}
-                                        displayOrder={index + 1}
-                                        disabled={reorderFetcher.state !== "idle"}
-                                    >
-                                        <td className="px-4 py-3 font-medium text-slate-900">
-                                            <Link
-                                                to={`/admin/items/${ingredient.itemId}/main`}
-                                                target="_blank"
-                                                rel="noreferrer"
-                                                className="cursor-pointer underline-offset-2 hover:underline"
-                                                title={ingredient.itemName}
-                                            >
-                                                {ingredient.itemName}
-                                            </Link>
-                                        </td>
-                                        <td className="px-4 py-3 text-xs text-slate-500">Nota / obrigatório / substituível (em breve)</td>
-                                        <td className="px-4 py-3 text-right">
-                                            <div className="flex items-center justify-end gap-1">
-                                                <Form method="post" action=".." preventScrollReset className="inline">
-                                                    <input type="hidden" name="recipeId" value={recipe.id} />
-                                                    <input type="hidden" name="tab" value="composicao" />
-                                                    <input type="hidden" name="recipeIngredientId" value={ingredient.recipeIngredientId || ""} />
-                                                    <input type="hidden" name="recipeLineId" value={ingredient.recipeLineId} />
-                                                    <input type="hidden" name="direction" value="up" />
-                                                    <button
-                                                        type="submit"
-                                                        name="_action"
-                                                        value="recipe-ingredient-move"
-                                                        className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 text-slate-600 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
-                                                        title="Mover para cima"
-                                                        aria-label="Mover para cima"
-                                                        disabled={index === 0}
-                                                    >
-                                                        <ArrowUp size={13} />
-                                                    </button>
-                                                </Form>
-                                                <Form method="post" action=".." preventScrollReset className="inline">
-                                                    <input type="hidden" name="recipeId" value={recipe.id} />
-                                                    <input type="hidden" name="tab" value="composicao" />
-                                                    <input type="hidden" name="recipeIngredientId" value={ingredient.recipeIngredientId || ""} />
-                                                    <input type="hidden" name="recipeLineId" value={ingredient.recipeLineId} />
-                                                    <input type="hidden" name="direction" value="down" />
-                                                    <button
-                                                        type="submit"
-                                                        name="_action"
-                                                        value="recipe-ingredient-move"
-                                                        className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 text-slate-600 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
-                                                        title="Mover para baixo"
-                                                        aria-label="Mover para baixo"
-                                                        disabled={index === orderedBaseIngredients.length - 1}
-                                                    >
-                                                        <ArrowDown size={13} />
-                                                    </button>
-                                                </Form>
-                                                <Form method="post" action=".." preventScrollReset className="inline">
-                                                    <input type="hidden" name="recipeId" value={recipe.id} />
-                                                    <input type="hidden" name="tab" value="composicao" />
-                                                    <input type="hidden" name="recipeIngredientId" value={ingredient.recipeIngredientId || ""} />
-                                                    <button
-                                                        type="submit"
-                                                        name="_action"
-                                                        value="recipe-ingredient-delete"
-                                                        className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 text-slate-600 hover:bg-slate-100"
-                                                        title="Remover ingrediente"
-                                                        aria-label="Remover ingrediente"
-                                                    >
-                                                        <Trash2 size={13} />
-                                                    </button>
-                                                </Form>
-                                            </div>
-                                        </td>
-                                    </SortableCompositionRow>
-                                ))
-                            )}
-                        </tbody>
-                        </SortableContext>
-                        </DndContext>
-                    </table>
-                </div>
-            </div>
+          </div>
         </div>
-    )
+        <div className="min-w-0 space-y-6">
+          <RecipeVariationMatrix />
+          <details className="border-t border-slate-200 pt-4">
+            <summary className="mb-4 cursor-pointer text-sm font-medium text-slate-700">
+              Organizar composição base
+            </summary>
+            <div className="pb-4">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h2 className="text-base font-semibold text-slate-900">
+                  Composição base
+                </h2>
+                <CopyCompositionButton recipeId={recipe.id} />
+              </div>
+              <p className="mt-0.5 text-sm text-slate-500">
+                Organize a ordem dos ingredientes da receita.
+              </p>
+              {reorderFetcher.state !== "idle" ? (
+                <p className="mt-1 text-xs text-slate-400">
+                  Salvando nova ordem...
+                </p>
+              ) : Number(
+                  (reorderFetcher.data as { status?: number } | undefined)
+                    ?.status || 0
+                ) >= 400 ? (
+                <p className="mt-1 text-xs text-red-600">
+                  {(reorderFetcher.data as { message?: string })?.message ||
+                    "Não foi possível salvar a nova ordem."}
+                </p>
+              ) : null}
+            </div>
+            <div className="overflow-x-auto border-t border-slate-200">
+              <table className="min-w-full text-sm">
+                <thead className="bg-slate-50">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      Ordem
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      Ingrediente
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      Observação
+                    </th>
+                    <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      Ação
+                    </th>
+                  </tr>
+                </thead>
+                <DndContext
+                  collisionDetection={closestCenter}
+                  onDragEnd={handleIngredientDragEnd}
+                >
+                  <SortableContext
+                    items={orderedIngredientIds}
+                    strategy={verticalListSortingStrategy}
+                  >
+                    <tbody>
+                      {baseIngredients.length === 0 ? (
+                        <tr>
+                          <td
+                            colSpan={4}
+                            className="px-4 py-10 text-center text-sm text-slate-500"
+                          >
+                            Nenhum ingrediente base. Adicione no montador ao
+                            lado.
+                          </td>
+                        </tr>
+                      ) : (
+                        orderedBaseIngredients.map((ingredient, index) => (
+                          <SortableCompositionRow
+                            key={
+                              ingredient.recipeIngredientId ||
+                              ingredient.recipeLineId
+                            }
+                            id={
+                              ingredient.recipeIngredientId ||
+                              ingredient.recipeLineId
+                            }
+                            displayOrder={index + 1}
+                            disabled={reorderFetcher.state !== "idle"}
+                          >
+                            <td className="px-4 py-3 font-medium text-slate-900">
+                              <Link
+                                to={`/admin/items/${ingredient.itemId}/main`}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="cursor-pointer underline-offset-2 hover:underline"
+                                title={ingredient.itemName}
+                              >
+                                {ingredient.itemName}
+                              </Link>
+                            </td>
+                            <td className="px-4 py-3 text-xs text-slate-500">
+                              Nota / obrigatório / substituível (em breve)
+                            </td>
+                            <td className="px-4 py-3 text-right">
+                              <div className="flex items-center justify-end gap-1">
+                                <Form
+                                  method="post"
+                                  action=".."
+                                  preventScrollReset
+                                  className="inline"
+                                >
+                                  <input
+                                    type="hidden"
+                                    name="recipeId"
+                                    value={recipe.id}
+                                  />
+                                  <input
+                                    type="hidden"
+                                    name="tab"
+                                    value="composicao"
+                                  />
+                                  <input
+                                    type="hidden"
+                                    name="recipeIngredientId"
+                                    value={ingredient.recipeIngredientId || ""}
+                                  />
+                                  <input
+                                    type="hidden"
+                                    name="recipeLineId"
+                                    value={ingredient.recipeLineId}
+                                  />
+                                  <input
+                                    type="hidden"
+                                    name="direction"
+                                    value="up"
+                                  />
+                                  <button
+                                    type="submit"
+                                    name="_action"
+                                    value="recipe-ingredient-move"
+                                    className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 text-slate-600 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
+                                    title="Mover para cima"
+                                    aria-label="Mover para cima"
+                                    disabled={index === 0}
+                                  >
+                                    <ArrowUp size={13} />
+                                  </button>
+                                </Form>
+                                <Form
+                                  method="post"
+                                  action=".."
+                                  preventScrollReset
+                                  className="inline"
+                                >
+                                  <input
+                                    type="hidden"
+                                    name="recipeId"
+                                    value={recipe.id}
+                                  />
+                                  <input
+                                    type="hidden"
+                                    name="tab"
+                                    value="composicao"
+                                  />
+                                  <input
+                                    type="hidden"
+                                    name="recipeIngredientId"
+                                    value={ingredient.recipeIngredientId || ""}
+                                  />
+                                  <input
+                                    type="hidden"
+                                    name="recipeLineId"
+                                    value={ingredient.recipeLineId}
+                                  />
+                                  <input
+                                    type="hidden"
+                                    name="direction"
+                                    value="down"
+                                  />
+                                  <button
+                                    type="submit"
+                                    name="_action"
+                                    value="recipe-ingredient-move"
+                                    className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 text-slate-600 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
+                                    title="Mover para baixo"
+                                    aria-label="Mover para baixo"
+                                    disabled={
+                                      index ===
+                                      orderedBaseIngredients.length - 1
+                                    }
+                                  >
+                                    <ArrowDown size={13} />
+                                  </button>
+                                </Form>
+                                <Form
+                                  method="post"
+                                  action=".."
+                                  preventScrollReset
+                                  className="inline"
+                                >
+                                  <input
+                                    type="hidden"
+                                    name="recipeId"
+                                    value={recipe.id}
+                                  />
+                                  <input
+                                    type="hidden"
+                                    name="tab"
+                                    value="composicao"
+                                  />
+                                  <input
+                                    type="hidden"
+                                    name="recipeIngredientId"
+                                    value={ingredient.recipeIngredientId || ""}
+                                  />
+                                  <button
+                                    type="submit"
+                                    name="_action"
+                                    value="recipe-ingredient-delete"
+                                    className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 text-slate-600 hover:bg-slate-100"
+                                    title="Remover ingrediente"
+                                    aria-label="Remover ingrediente"
+                                  >
+                                    <Trash2 size={13} />
+                                  </button>
+                                </Form>
+                              </div>
+                            </td>
+                          </SortableCompositionRow>
+                        ))
+                      )}
+                    </tbody>
+                  </SortableContext>
+                </DndContext>
+              </table>
+            </div>
+          </details>
+        </div>
+      </div>
+    </div>
+  );
 }

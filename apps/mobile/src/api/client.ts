@@ -248,3 +248,30 @@ export function updateOvenRequest(
     token
   );
 }
+
+export function getPurchaseLists(
+  baseUrl: string,
+  token: string,
+  listId?: string
+) {
+  return request<any>(
+    baseUrl,
+    `/api/mobile/purchase-lists${
+      listId ? `?listId=${encodeURIComponent(listId)}` : ""
+    }`,
+    {},
+    token
+  );
+}
+export function submitPurchaseList(
+  baseUrl: string,
+  token: string,
+  body: unknown
+) {
+  return request<any>(
+    baseUrl,
+    "/api/mobile/purchase-lists",
+    { method: "POST", body: JSON.stringify(body) },
+    token
+  );
+}

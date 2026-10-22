@@ -91,6 +91,24 @@ function PurchaseList({ list, suppliers }: { list: any; suppliers: any[] }) {
         </div>
       </div>
 
+      <a
+        className="block rounded-xl bg-green-700 p-3 text-center font-semibold text-white"
+        target="_blank"
+        rel="noreferrer"
+        href={`https://wa.me/?text=${encodeURIComponent(
+          [
+            list.name,
+            ...list.Items.filter((item: any) => !item.purchased).map(
+              (item: any) =>
+                `• ${item.quantity} ${item.unit} — ${
+                  item.Item?.name || item.name
+                }`
+            ),
+          ].join("\n")
+        )}`}
+      >
+        Enviar pendentes pelo WhatsApp
+      </a>
       <div className="space-y-2">
         {list.Items.map((item: any) => (
           <Form
