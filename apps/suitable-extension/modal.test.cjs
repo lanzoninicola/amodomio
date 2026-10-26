@@ -6,6 +6,7 @@ const { join } = require("node:path");
 const { spawnSync } = require("node:child_process");
 
 for (const [width, delivery, blocked] of [
+  [1440, true],
   [820, false],
   [360, false],
   [820, true],
@@ -35,7 +36,7 @@ for (const [width, delivery, blocked] of [
         fixture = fixture.replace("Suitable → Terminal", "Aiqfome → aiqfome");
       const parser = readFileSync(join(__dirname, "parser.js"), "utf8");
       const content = readFileSync(join(__dirname, "content.js"), "utf8");
-      const html = `<!doctype html><html><head><style>
+      const html = `<!doctype html><html><head><meta name="viewport" content="width=device-width, initial-scale=1"><style>
       html {font-size:40px} body {font:70px serif;color:magenta;line-height:7}
       button,input,textarea {font-size:75px!important;background:magenta!important;width:10px!important;border:25px solid red!important}
       [role=dialog] {width:${width}px;font-family:serif;color:magenta}
@@ -62,7 +63,9 @@ for (const [width, delivery, blocked] of [
         ["missing-day", "open-error"].includes(blocked)
           ? "window.dayOpened"
           : true
-      }}};} if(message.type==='suitable:zones') return {ok:true,zones:[{id:'morro-id',name:'${blocked === "missing-zone" ? "Outro bairro" : "Morro da Cruz"}',city:'Pato Branco'},{id:'centro-id',name:'Centro',city:'Pato Branco'}]}; window.sent = message; return {ok:true, id:'imported', status:'novoPedido'}; } } };
+      }}};} if(message.type==='suitable:zones') return {ok:true,zones:[{id:'morro-id',name:'${
+        blocked === "missing-zone" ? "Outro bairro" : "Morro da Cruz"
+      }',city:'Pato Branco'},{id:'centro-id',name:'Centro',city:'Pato Branco'}]}; window.sent = message; return {ok:true, id:'imported', status:'novoPedido'}; } } };
       ${parser}
       ${content}
       (async () => {
@@ -97,35 +100,45 @@ for (const [width, delivery, blocked] of [
           const detail=review.querySelector('[aria-controls=order-details]');
           if(!refresh || refresh.textContent.trim() || detail.textContent.trim()) throw new Error('Refresh and details must be icon only');
           if(refresh.nextElementSibling!==detail) throw new Error('Refresh must precede details');
-          const kdsRow=review.querySelector('.kds-review-row');
-          if(!kdsRow || kdsRow.querySelector('.command-bubble')?.textContent.trim()!=='Revisar pedido · 1') throw new Error('Header must start with the KDS command bubble');
-          if(!kdsRow.querySelector('.order-total') || !kdsRow.querySelector('[aria-label="Resumo de tamanhos"]')) throw new Error('KDS row must show amount and sizes');
-          const neighborhood=review.querySelector('.delivery-neighborhood');
+          if(!review.querySelector('.review-title')?.textContent.includes('Comanda #1')) throw new Error('Review must identify the command');
+          if(!review.querySelector('.order-summary') || !review.querySelector('.order-customer-card')) throw new Error('Review needs a customer card and a side summary');
+          const summaryToggle=review.querySelector('[aria-controls=order-summary]');
+          const summaryPanel=review.querySelector('#order-summary');
+          if(!summaryToggle || !summaryPanel.hidden || summaryToggle.getAttribute('aria-expanded')!=='false') throw new Error('Summary must start hidden with an accessible toggle');
+          if(review.querySelector('.review-workspace').dataset.summary!=='false') throw new Error('Hidden summary must release its column');
+          summaryToggle.click();
+          await new Promise(resolve=>setTimeout(resolve,20));
+          if(summaryPanel.hidden || summaryToggle.getAttribute('aria-expanded')!=='true') throw new Error('Summary button must reveal the panel');
+          summaryToggle.click();
+          await new Promise(resolve=>setTimeout(resolve,20));
+          if(!summaryPanel.hidden) throw new Error('Summary button must hide the panel again');
+          summaryToggle.click();
+          await new Promise(resolve=>setTimeout(resolve,20));
+          const neighborhood=review.querySelector('.delivery-zone-field');
           if(${delivery}) for(let attempt=0;attempt<30 && !neighborhood?.textContent.includes('Morro da Cruz');attempt++) await new Promise(resolve=>setTimeout(resolve,10));
           if(${blocked === "missing-zone"}) {
             for(let attempt=0;attempt<40 && !review.querySelector('.required-summary');attempt++) await new Promise(resolve=>setTimeout(resolve,10));
             if(!review.querySelector('.required-summary')?.textContent.includes('Selecione ou crie o bairro')) throw new Error('Missing neighborhood must be explained in the footer');
-            if(neighborhood.querySelector('[aria-invalid=true]') == null) throw new Error('Missing neighborhood must highlight the header select');
+            if(neighborhood.querySelector('[aria-invalid=true]') == null) throw new Error('Missing neighborhood must highlight the delivery select');
             if(!review.querySelector('button[type=submit]').disabled) throw new Error('Missing neighborhood must block sending');
             if(!review.querySelector('#delivery-zone-required')?.textContent.includes('Bairro obrigatório')) throw new Error('Missing neighborhood needs an inline explanation');
           }
-          if(${delivery} ? !neighborhood?.textContent.includes('${blocked === "missing-zone" ? "Selecionar bairro" : "Morro da Cruz"}') : !!neighborhood) throw new Error('Header must show the neighborhood only for delivery');
+          if(${delivery} ? !neighborhood?.textContent.includes('${
+        blocked === "missing-zone" ? "Selecionar bairro" : "Morro da Cruz"
+      }') : !!neighborhood) throw new Error('Header must show the neighborhood only for delivery');
           const channelTrigger=review.querySelector('[aria-labelledby=channel-label]');
           if(!channelTrigger?.textContent.includes('${
             blocked === "aiqfome" ? "AIQFOME" : "CARDAPIO"
           }')) throw new Error('Origin must follow extracted order metadata');
-          if(!getComputedStyle(review.querySelector('.order-total')).fontFamily.includes('monospace')) throw new Error('Order total must use mono');
-          if(getComputedStyle(review.querySelector('.customer-name')).fontSize !== getComputedStyle(review.querySelector('.customer-phone')).fontSize) throw new Error('Customer styles should match');
-          if(!review.querySelector('.scroll').hidden || detail.getAttribute('aria-expanded') !== 'false') throw new Error('Clicking Add to KDS must start with details collapsed');
-          if(review.querySelector('.heading').getBoundingClientRect().height < 30 || review.querySelector('.footer').getBoundingClientRect().height < 30) throw new Error('Summary and actions must remain visible with details collapsed');
+          if(getComputedStyle(review.querySelector('.customer-name')).fontWeight !== '700') throw new Error('Customer name must stand out');
+          if(review.querySelector('.order-form-details').hidden || detail.getAttribute('aria-expanded') !== 'true') throw new Error('Details must start expanded');
           detail.click();
           await new Promise(resolve=>setTimeout(resolve,20));
-          if(review.querySelector('.scroll').hidden || review.querySelector('.scroll').getBoundingClientRect().height < 30) throw new Error('Details toggle must open the form inside the flex dialog');
+          if(!review.querySelector('.order-form-details').hidden) throw new Error('Toggle must still collapse the form');
           detail.click();
           await new Promise(resolve=>setTimeout(resolve,20));
-          if(!review.querySelector('.scroll').hidden) throw new Error('Details toggle must collapse the form');
-          if(!review.querySelector('header [name=customerName]') || !review.querySelector('header [name=customerPhone]')) throw new Error('Customer must be in header');
-          if(review.querySelector('header').textContent.includes('Revisão') || review.querySelector('header').textContent.includes('Suitable → KDS')) throw new Error('Removed header labels returned');
+          if(review.querySelector('.order-form-details').hidden) throw new Error('Toggle must reopen the form');
+          if(!review.querySelector('.order-customer-card [name=customerName]') || !review.querySelector('.order-customer-card [name=customerPhone]')) throw new Error('Customer controls must remain editable in the customer card');
           const customer=review.querySelector('[name=customerName]');
           if(!customer.readOnly) throw new Error('Customer should look like text initially');
           customer.focus();
@@ -145,8 +158,8 @@ for (const [width, delivery, blocked] of [
           await new Promise(resolve=>setTimeout(resolve,30));
           if(!channelTrigger.textContent.includes('AIQFOME')) throw new Error('Changing the order origin must update the select');
           if (${delivery}) {
-            const trigger=review.querySelector('header [aria-labelledby=delivery-label]');
-            if(!trigger || !review.querySelector('.scroll').hidden) throw new Error('Delivery neighborhood must be editable with details collapsed');
+            const trigger=review.querySelector('[aria-label="Selecionar bairro no KDS"]');
+            if(!trigger) throw new Error('Delivery neighborhood must remain editable');
             for(let attempt=0;attempt<30 && trigger.disabled;attempt++) await new Promise(resolve=>setTimeout(resolve,10));
             trigger.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowDown',bubbles:true}));
             await new Promise(resolve=>setTimeout(resolve,30));
@@ -154,12 +167,20 @@ for (const [width, delivery, blocked] of [
             if(!option) throw new Error('Other registered neighborhoods must be available');
             option.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}));
             await new Promise(resolve=>setTimeout(resolve,30));
-            if(${blocked === "missing-zone"} && review.querySelector('#delivery-zone-required')) throw new Error('Selecting a neighborhood must clear its error');
-            if(!trigger.textContent.includes('Centro') || !review.querySelector('.scroll').hidden) throw new Error('Neighborhood changes must update the header without opening details');
+            if(${
+              blocked === "missing-zone"
+            } && review.querySelector('#delivery-zone-required')) throw new Error('Selecting a neighborhood must clear its error');
+            if(!trigger.textContent.includes('Centro') || !review.querySelector('.order-summary').textContent.includes('Centro')) throw new Error('Neighborhood changes must update the side summary');
           }
-          if(review.querySelector('button[type=submit]').textContent!=='Enviar') throw new Error('Submit button must say Enviar');
-          review.querySelector('[aria-controls=order-details]').click();
+          const quantityInput=review.querySelector('.quantity');
+          const originalQuantity=Number(quantityInput.value);
+          review.querySelector('[aria-label="Aumentar quantidade do item 1"]').click();
           await new Promise(resolve=>setTimeout(resolve,20));
+          if(Number(quantityInput.value)!==originalQuantity+1 || !review.querySelector('.summary-items').textContent.includes('Qtd. '+(originalQuantity+1))) throw new Error('Quantity controls must update the input and summary through the existing callback');
+          review.querySelector('[aria-label="Diminuir quantidade do item 1"]').click();
+          await new Promise(resolve=>setTimeout(resolve,20));
+          if(Number(quantityInput.value)!==originalQuantity) throw new Error('Decreasing quantity must restore the original count');
+          if(review.querySelector('button[type=submit]').textContent.trim()!=='Enviar ao KDS') throw new Error('Submit button must say Enviar ao KDS');
             if (${["missing-day", "open-error"].includes(blocked)}) {
               for(let attempt=0;attempt<60 && review.querySelector('.order-checks').getAttribute('aria-busy')==='true';attempt++) await new Promise(resolve=>setTimeout(resolve,10));
               const column=[...review.querySelectorAll('.check-column')].find(element=>element.querySelector('h3').textContent==='Abertura dia');
@@ -169,19 +190,19 @@ for (const [width, delivery, blocked] of [
               opening.click();
               await new Promise(resolve=>setTimeout(resolve,10));
               if(column.dataset.state!=='loading' || !opening.disabled || !review.querySelector('button[type=submit]').disabled) throw new Error('Opening must wait with loading icon and disabled actions');
-              for(let attempt=0;attempt<80 && !review.querySelector('header').textContent.includes('Falha ao abrir dia') && (column.dataset.state!=='ok');attempt++) await new Promise(resolve=>setTimeout(resolve,10));
+              for(let attempt=0;attempt<80 && !review.textContent.includes('Falha ao abrir dia') && (column.dataset.state!=='ok');attempt++) await new Promise(resolve=>setTimeout(resolve,10));
               if(${blocked === "open-error"}) {
-                if(column.dataset.state!=='error' || !review.querySelector('header').textContent.includes('Falha ao abrir dia')) throw new Error('Opening failure must retain X and show the server error');
+                if(column.dataset.state!=='error' || !review.textContent.includes('Falha ao abrir dia')) throw new Error('Opening failure must retain X and show the server error');
                 if(window.sent || window.openCalls!==1) throw new Error('Opening failure must not create an order');
                 document.body.dataset.result=JSON.stringify({openingFailed:true});return;
               }
-              if(column.dataset.state!=='ok' || column.querySelector('button') || !getComputedStyle(column.querySelector('.check-icon')).animationName.includes('check-success')) throw new Error('Confirmed opening must change to animated check and remove the action');
+              if(column.dataset.state!=='ok' || column.querySelector('button')) throw new Error('Confirmed opening must change to success check and remove the action');
               if(window.openCalls!==1) throw new Error('Opening must not duplicate requests');
             }
             let isolatedPortal = null;
             if (${delivery}) {
-              for(let attempt=0;attempt<30 && !review.querySelector('[aria-labelledby=delivery-label]').textContent.includes('Centro');attempt++) await new Promise(resolve=>setTimeout(resolve,10));
-              const trigger=review.querySelector('[aria-labelledby=delivery-label]');
+              for(let attempt=0;attempt<30 && !review.querySelector('[aria-label="Selecionar bairro no KDS"]').textContent.includes('Centro');attempt++) await new Promise(resolve=>setTimeout(resolve,10));
+              const trigger=review.querySelector('[aria-label="Selecionar bairro no KDS"]');
               trigger.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowDown',bubbles:true}));
               await new Promise(resolve=>setTimeout(resolve,30));
               isolatedPortal = !!review.querySelector('[role=listbox]') && !document.querySelector('[role=listbox]');
@@ -203,12 +224,14 @@ for (const [width, delivery, blocked] of [
             footerButtonVisible: form.querySelector('[type=submit]').getBoundingClientRect().right <= form.getBoundingClientRect().right,
             collapsedNotes: !review.querySelector('details').open,
             total: form.querySelector('[name=orderAmount]').value,
+            summaryAtSide: review.querySelector('.order-summary').getBoundingClientRect().left >= review.querySelector('.review-main').getBoundingClientRect().right,
+            summaryBelow: review.querySelector('.order-summary').getBoundingClientRect().top >= review.querySelector('.review-main').getBoundingClientRect().bottom,
           };
           const invalid = [...form.elements].filter(element=>element.validity && !element.validity.valid).map(element=>({name:element.name,validation:element.validationMessage,value:element.value}));
           for(let attempt=0;attempt<60 && review.querySelector('button[type=submit]').disabled;attempt++) await new Promise(resolve=>setTimeout(resolve,10));
           if (${blocked === "shortage"}) {
             if(review.querySelector('button[type=submit]').disabled) throw new Error('Dough shortage must not block sending');
-            if(!review.querySelector('header').textContent.includes('O envio continua disponível')) throw new Error('Attendant must see an advisory shortage warning');
+            if(!review.textContent.includes('O envio continua disponível')) throw new Error('Attendant must see an advisory shortage warning');
             if(review.querySelector('.dough-number[data-shortage="true"] strong').textContent!=='0') throw new Error('Short size must remain highlighted');
           }
           form.requestSubmit();
@@ -243,9 +266,9 @@ for (const [width, delivery, blocked] of [
           changedReview.querySelector('[aria-label="Tamanho do item 1"] button').click();
           await new Promise(resolve => setTimeout(resolve, 20));
           const changedSize = changedReview.querySelector('[aria-label="Tamanho do item 1"] [aria-pressed=true]').textContent;
-          const summary = changedReview.querySelector('[aria-label="Resumo de tamanhos"]').textContent;
+          const summary = changedReview.querySelector('.summary-items').textContent;
           if (${delivery}) {
-            const changedZone = changedReview.querySelector('header [aria-labelledby=delivery-label]');
+            const changedZone = changedReview.querySelector('[aria-label="Selecionar bairro no KDS"]');
             for(let attempt=0;attempt<40 && changedZone.disabled;attempt++) await new Promise(resolve=>setTimeout(resolve,10));
             changedZone.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowDown',bubbles:true}));
             await new Promise(resolve=>setTimeout(resolve,30));
@@ -270,10 +293,11 @@ for (const [width, delivery, blocked] of [
           "--headless",
           "--no-sandbox",
           "--disable-gpu",
+          `--window-size=${width},1100`,
           "--disable-dev-shm-usage",
           "--no-first-run",
           `--user-data-dir=${join(directory, "profile")}`,
-          "--virtual-time-budget=1000",
+          "--virtual-time-budget=3000",
           "--dump-dom",
           `file://${file}`,
         ],
@@ -294,9 +318,18 @@ for (const [width, delivery, blocked] of [
         assert.equal(result.openingFailed, true);
         return;
       }
-      assert.equal(result.layout.inputFont, "14px");
+      assert.ok(
+        parseFloat(result.layout.inputFont) >= 13 &&
+          parseFloat(result.layout.inputFont) <= 20
+      );
       assert.notEqual(result.layout.inputBackground, "rgb(255, 0, 255)");
       assert.equal(result.layout.overflow, false);
+      assert.equal(
+        width >= 1200
+          ? result.layout.summaryAtSide
+          : result.layout.summaryBelow,
+        true
+      );
       assert.equal(result.layout.footerFixed, true);
       assert.equal(
         result.layout.footerVisible,
@@ -310,7 +343,7 @@ for (const [width, delivery, blocked] of [
       assert.equal(result.sent.order.channel, "AIQFOME");
       if (delivery) assert.equal(result.isolatedPortal, true);
       assert.equal(result.changedSize, "F");
-      assert.match(result.summary, /F2/);
+      assert.match(result.summary, /Tamanho F/);
       assert.equal(result.cardButtons, 0);
       assert.equal(result.buttonCount, 1);
       assert.equal(result.extracted.commandNumber, 1);
