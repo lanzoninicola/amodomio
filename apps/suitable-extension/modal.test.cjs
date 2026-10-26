@@ -11,6 +11,7 @@ for (const [width, delivery, blocked] of [
   [820, true],
   [360, true],
   [820, true, "aiqfome"],
+  [820, true, "missing-zone"],
   [820, false, "exists"],
   [360, true, "shortage"],
   [820, false, "missing-day"],
@@ -61,7 +62,7 @@ for (const [width, delivery, blocked] of [
         ["missing-day", "open-error"].includes(blocked)
           ? "window.dayOpened"
           : true
-      }}};} if(message.type==='suitable:zones') return {ok:true,zones:[{id:'morro-id',name:'Morro da Cruz',city:'Pato Branco'},{id:'centro-id',name:'Centro',city:'Pato Branco'}]}; window.sent = message; return {ok:true, id:'imported', status:'novoPedido'}; } } };
+      }}};} if(message.type==='suitable:zones') return {ok:true,zones:[{id:'morro-id',name:'${blocked === "missing-zone" ? "Outro bairro" : "Morro da Cruz"}',city:'Pato Branco'},{id:'centro-id',name:'Centro',city:'Pato Branco'}]}; window.sent = message; return {ok:true, id:'imported', status:'novoPedido'}; } } };
       ${parser}
       ${content}
       (async () => {
@@ -101,7 +102,14 @@ for (const [width, delivery, blocked] of [
           if(!kdsRow.querySelector('.order-total') || !kdsRow.querySelector('[aria-label="Resumo de tamanhos"]')) throw new Error('KDS row must show amount and sizes');
           const neighborhood=review.querySelector('.delivery-neighborhood');
           if(${delivery}) for(let attempt=0;attempt<30 && !neighborhood?.textContent.includes('Morro da Cruz');attempt++) await new Promise(resolve=>setTimeout(resolve,10));
-          if(${delivery} ? !neighborhood?.textContent.includes('Morro da Cruz') : !!neighborhood) throw new Error('Header must show the neighborhood only for delivery');
+          if(${blocked === "missing-zone"}) {
+            for(let attempt=0;attempt<40 && !review.querySelector('.required-summary');attempt++) await new Promise(resolve=>setTimeout(resolve,10));
+            if(!review.querySelector('.required-summary')?.textContent.includes('Selecione ou crie o bairro')) throw new Error('Missing neighborhood must be explained in the footer');
+            if(neighborhood.querySelector('[aria-invalid=true]') == null) throw new Error('Missing neighborhood must highlight the header select');
+            if(!review.querySelector('button[type=submit]').disabled) throw new Error('Missing neighborhood must block sending');
+            if(!review.querySelector('#delivery-zone-required')?.textContent.includes('Bairro obrigatório')) throw new Error('Missing neighborhood needs an inline explanation');
+          }
+          if(${delivery} ? !neighborhood?.textContent.includes('${blocked === "missing-zone" ? "Selecionar bairro" : "Morro da Cruz"}') : !!neighborhood) throw new Error('Header must show the neighborhood only for delivery');
           const channelTrigger=review.querySelector('[aria-labelledby=channel-label]');
           if(!channelTrigger?.textContent.includes('${
             blocked === "aiqfome" ? "AIQFOME" : "CARDAPIO"
@@ -146,6 +154,7 @@ for (const [width, delivery, blocked] of [
             if(!option) throw new Error('Other registered neighborhoods must be available');
             option.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}));
             await new Promise(resolve=>setTimeout(resolve,30));
+            if(${blocked === "missing-zone"} && review.querySelector('#delivery-zone-required')) throw new Error('Selecting a neighborhood must clear its error');
             if(!trigger.textContent.includes('Centro') || !review.querySelector('.scroll').hidden) throw new Error('Neighborhood changes must update the header without opening details');
           }
           if(review.querySelector('button[type=submit]').textContent!=='Enviar') throw new Error('Submit button must say Enviar');
@@ -235,9 +244,19 @@ for (const [width, delivery, blocked] of [
           await new Promise(resolve => setTimeout(resolve, 20));
           const changedSize = changedReview.querySelector('[aria-label="Tamanho do item 1"] [aria-pressed=true]').textContent;
           const summary = changedReview.querySelector('[aria-label="Resumo de tamanhos"]').textContent;
+          if (${delivery}) {
+            const changedZone = changedReview.querySelector('header [aria-labelledby=delivery-label]');
+            for(let attempt=0;attempt<40 && changedZone.disabled;attempt++) await new Promise(resolve=>setTimeout(resolve,10));
+            changedZone.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowDown',bubbles:true}));
+            await new Promise(resolve=>setTimeout(resolve,30));
+            const correctedZone = [...changedReview.querySelectorAll('[role=option]')].find(element=>element.textContent.includes('Centro'));
+            if(!correctedZone) throw new Error('Reopened delivery must offer registered neighborhoods');
+            correctedZone.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}));
+            await new Promise(resolve=>setTimeout(resolve,30));
+          }
           detailsButton.click();
           await new Promise(resolve => setTimeout(resolve, 20));
-          if(changedReview.querySelector('#details-guidance') || detailsButton.dataset.attention) throw new Error('Corrected size must clear guidance');
+          if(changedReview.querySelector('#details-guidance') || detailsButton.dataset.attention) throw new Error('Corrected required data must clear guidance: '+changedReview.querySelector('#details-guidance')?.textContent);
           document.body.dataset.result = JSON.stringify({extracted,cardButtons,buttonCount,sent:window.sent,success,reread,changedNumber,layout,changedSize,summary,isolatedPortal,noProductField,invalid});
         } catch (error) { document.body.dataset.result = JSON.stringify({error:error.stack, jsErrors:window.jsErrors, extracted:SuitableKds.extractModal(document.querySelector('[role=dialog]')),buttonCount:document.querySelectorAll('[data-amodomio-kds]').length}); }
       })();

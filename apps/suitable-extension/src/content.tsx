@@ -419,21 +419,33 @@ function Review({
         cause instanceof Error ? cause.message : "Confira os itens do pedido.";
     }
   }
-  if (
-    !missingDetails &&
-    (!amount.trim() ||
-      !Number.isFinite(parseMoney(amount)) ||
-      parseMoney(amount) < 0)
-  ) {
-    missingDetails = "Confira o total do pedido.";
-  }
-  if (
-    !missingDetails &&
+  const invalidAmount =
+    !amount.trim() ||
+    !Number.isFinite(parseMoney(amount)) ||
+    parseMoney(amount) < 0;
+  const invalidFee =
     !order.takeAway &&
-    (!fee.trim() || !Number.isFinite(parseMoney(fee)) || parseMoney(fee) < 0)
-  ) {
-    missingDetails = "Confira a taxa de entrega.";
-  }
+    (!fee.trim() ||
+      !Number.isFinite(parseMoney(fee)) ||
+      parseMoney(fee) < 0 ||
+      (!invalidAmount && parseMoney(fee) > parseMoney(amount)));
+  const missingZone = !order.takeAway && !loadingZones && !zoneId;
+  const invalidCommand =
+    !command.trim() ||
+    !Number.isInteger(Number(command)) ||
+    Number(command) < 1;
+  const missingDate = !date;
+  const requiredIssues = [
+    missingDetails,
+    invalidCommand ? "Informe uma comanda inteira e positiva." : "",
+    missingDate ? "Informe a data do pedido." : "",
+    invalidAmount ? "Confira o total do pedido." : "",
+    missingZone ? "Selecione ou crie o bairro de entrega." : "",
+    invalidFee
+      ? "Confira a taxa de entrega: informe um valor entre zero e o total do pedido."
+      : "",
+  ].filter(Boolean);
+  missingDetails = requiredIssues.join(" ");
   const detailsAttention =
     Boolean(missingDetails) && !detailsOpen && !done && !pending;
   useEffect(() => {
@@ -487,7 +499,15 @@ function Review({
   );
   async function send(event: React.FormEvent) {
     event.preventDefault();
-    if (!check?.canSend || checking || openingDay || savingZone || creatingZone)
+    if (
+      !check?.canSend ||
+      checking ||
+      openingDay ||
+      savingZone ||
+      creatingZone ||
+      missingDetails ||
+      loadingZones
+    )
       return;
     setPending(true);
     setError(false);
@@ -634,7 +654,7 @@ function Review({
             </div>
             {!order.takeAway && (
               <div className="delivery-neighborhood">
-                <span id="delivery-label" className="text-xs text-slate-500">
+                <span id="delivery-label" className="sr-only">
                   Bairro de entrega no KDS
                 </span>
                 <Select
@@ -646,6 +666,10 @@ function Review({
                 >
                   <SelectTrigger
                     aria-labelledby="delivery-label"
+                    aria-invalid={missingZone || undefined}
+                    aria-describedby={
+                      missingZone ? "delivery-zone-required" : undefined
+                    }
                     className="h-9 text-xs"
                     title="Alterar bairro de entrega"
                   >
@@ -655,7 +679,14 @@ function Review({
                           ? order.deliveryNeighborhood || "Carregando bairros…"
                           : "Selecionar bairro"
                       }
-                    />
+                    >
+                      <span>
+                        {zones.find((zone) => zone.id === zoneId)?.name ||
+                          (loadingZones
+                            ? "Carregando bairros…"
+                            : "Selecionar bairro")}
+                      </span>
+                    </SelectValue>
                   </SelectTrigger>
                   <SelectContent portalContainer={portalContainer}>
                     {zones.map((zone) => (
@@ -791,25 +822,33 @@ function Review({
                         { timeZone: "America/Sao_Paulo" }
                       )
                     : null,
+                  "",
                 ],
                 [
                   "Média semanal",
                   purchaseSummary
-                    ? `${purchaseSummary.weekly.toLocaleString("pt-BR", {
+                    ? purchaseSummary.weekly.toLocaleString("pt-BR", {
                         maximumFractionDigits: 1,
-                      })} compras`
+                      })
                     : null,
+                  purchaseSummary?.weekly === 1 ? "compra" : "compras",
                 ],
                 [
                   "Média mensal",
                   purchaseSummary
-                    ? `${purchaseSummary.monthly.toLocaleString("pt-BR", {
+                    ? purchaseSummary.monthly.toLocaleString("pt-BR", {
                         maximumFractionDigits: 1,
-                      })} compras`
+                      })
                     : null,
+                  purchaseSummary?.monthly === 1 ? "compra" : "compras",
                 ],
-              ].map(([label, value]) => (
-                <div className="customer-kpi" key={label}>
+              ].map(([label, value, unit]) => (
+                <div
+                  className={`customer-kpi ${
+                    unit ? "customer-kpi-frequency" : ""
+                  }`}
+                  key={label}
+                >
                   <span>{label}</span>
                   <strong>
                     {crmState === "loading"
@@ -817,6 +856,10 @@ function Review({
                       : crmState === "error"
                       ? "Indisponível"
                       : value || "—"}
+                    {crmState !== "loading" &&
+                      crmState !== "error" &&
+                      value &&
+                      unit && <small> {unit}</small>}
                   </strong>
                 </div>
               ))}
@@ -959,68 +1002,116 @@ function Review({
             disabled={pending || done || openingDay}
             className="review-details min-w-0"
           >
-            <section aria-label="Dados do pedido">
-              <h3 className="section-title">Dados do pedido</h3>
-              <div className="fields">
-                <label className="field">
-                  Comanda
-                  <Input
-                    name="commandNumber"
-                    type="number"
-                    min="1"
-                    step="1"
-                    required
-                    value={command}
-                    onChange={(e) => setCommand(e.target.value)}
-                    className="h-9 font-mono"
-                  />
-                </label>
-                <label className="field">
-                  Data
-                  <Input
-                    name="date"
-                    type="date"
-                    required
-                    value={date}
-                    onChange={(e) => setDate(e.target.value)}
-                    className="h-9 text-xs"
-                  />
-                </label>
-                <label className="field total">
-                  Total do pedido (R$)
-                  <Input
-                    name="orderAmount"
-                    inputMode="decimal"
-                    required
-                    value={amount}
-                    onChange={(e) => setAmount(e.target.value)}
-                    onBlur={() => {
-                      if (amount.trim() && Number.isFinite(parseMoney(amount)))
-                        setAmount(money(parseMoney(amount)));
-                    }}
-                    className="h-9 font-mono"
-                  />
-                </label>
-              </div>
+            <div
+              className={`order-delivery-layout ${
+                order.takeAway ? "pickup" : ""
+              }`}
+            >
+              <section aria-label="Dados do pedido">
+                <h3 className="section-title">Dados do pedido</h3>
+                <div className="fields">
+                  <label className="field">
+                    Comanda
+                    <Input
+                      name="commandNumber"
+                      aria-invalid={invalidCommand || undefined}
+                      type="number"
+                      min="1"
+                      step="1"
+                      required
+                      value={command}
+                      onChange={(e) => setCommand(e.target.value)}
+                      className="h-9 font-mono"
+                    />
+                  </label>
+                  <label className="field">
+                    Data
+                    <Input
+                      name="date"
+                      aria-invalid={missingDate || undefined}
+                      type="date"
+                      required
+                      value={date}
+                      onChange={(e) => setDate(e.target.value)}
+                      className="h-9 text-xs"
+                    />
+                  </label>
+                  <label className="field total">
+                    Total do pedido
+                    {!order.takeAway && " (inclui a taxa de entrega)"}
+                    <Input
+                      name="orderAmount"
+                      aria-invalid={invalidAmount || undefined}
+                      inputMode="decimal"
+                      required
+                      value={amount}
+                      onChange={(e) => setAmount(e.target.value)}
+                      onBlur={() => {
+                        if (
+                          amount.trim() &&
+                          Number.isFinite(parseMoney(amount))
+                        )
+                          setAmount(money(parseMoney(amount)));
+                      }}
+                      className="h-9 font-mono"
+                    />
+                  </label>
+                </div>
+              </section>
               {!order.takeAway && (
                 <section className="delivery-section" aria-label="Entrega">
                   <h3 className="section-title">Entrega</h3>
                   <div className="delivery">
-                    <div className="field">
-                      <span>Bairro no KDS</span>
+                    <div className="field delivery-zone-field">
+                      <div className="delivery-zone-heading">
+                        <span>Bairro no KDS</span>
+                        {!creatingZone && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="delivery-create-action"
+                            disabled={
+                              pending ||
+                              done ||
+                              loadingZones ||
+                              Boolean(zoneError)
+                            }
+                            onClick={() => setCreatingZone(true)}
+                          >
+                            + Criar bairro
+                            {order.deliveryNeighborhood
+                              ? ` (${order.deliveryNeighborhood})`
+                              : ""}
+                          </Button>
+                        )}
+                      </div>
                       <Select
                         value={zoneId}
                         onValueChange={setZoneId}
                         disabled={loadingZones || pending || done || savingZone}
                       >
-                        <SelectTrigger aria-label="Selecionar bairro no KDS">
+                        <SelectTrigger
+                          aria-label="Selecionar bairro no KDS"
+                          aria-invalid={missingZone || undefined}
+                          aria-describedby={
+                            missingZone ? "delivery-zone-required" : undefined
+                          }
+                        >
                           <SelectValue
                             placeholder={
                               loadingZones
                                 ? "Carregando bairros…"
-                                : "Selecione o bairro aqui"
+                                : "Selecionar bairro"
                             }
-                          />
+                          >
+                            <span>
+                              {zones.find((zone) => zone.id === zoneId)?.name ||
+                                (loadingZones
+                                  ? "Carregando bairros…"
+                                  : "Selecionar bairro")}
+                            </span>
+                          </SelectValue>
                         </SelectTrigger>
                         <SelectContent portalContainer={portalContainer}>
                           {zones.map((zone) => (
@@ -1031,11 +1122,15 @@ function Review({
                           ))}
                         </SelectContent>
                       </Select>
-                      <span className="text-xs text-slate-500">
-                        Suitable:{" "}
-                        {order.deliveryNeighborhood || "bairro não informado"}
-                        {order.deliveryCity ? ` · ${order.deliveryCity}` : ""}
-                      </span>
+                      {missingZone && (
+                        <p
+                          id="delivery-zone-required"
+                          className="required-field-message"
+                        >
+                          Bairro obrigatório. Selecione na lista ou crie o
+                          bairro.
+                        </p>
+                      )}
                       {zoneError && (
                         <div role="alert" className="text-xs text-red-700">
                           {zoneError}{" "}
@@ -1049,30 +1144,8 @@ function Review({
                           </Button>
                         </div>
                       )}
-                      {!loadingZones && !zoneError && !zoneId && (
-                        <span className="text-xs text-amber-700">
-                          Selecione o bairro acima ou clique em “Criar bairro”
-                          se ele ainda não estiver cadastrado.
-                        </span>
-                      )}
-                      {!creatingZone && (
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          disabled={
-                            pending ||
-                            done ||
-                            loadingZones ||
-                            Boolean(zoneError)
-                          }
-                          onClick={() => setCreatingZone(true)}
-                        >
-                          Criar bairro
-                        </Button>
-                      )}
                       {creatingZone && (
-                        <div className="grid gap-2 rounded-md border p-3">
+                        <div className="delivery-zone-create">
                           <label className="field">
                             Nome do bairro
                             <Input
@@ -1138,9 +1211,12 @@ function Review({
                       )}
                     </div>
                     <label className="field">
-                      Taxa de entrega (R$)
+                      <span className="delivery-fee-label">
+                        Taxa de entrega (R$)
+                      </span>
                       <Input
                         name="deliveryFee"
+                        aria-invalid={invalidFee || undefined}
                         inputMode="decimal"
                         required
                         value={fee}
@@ -1152,13 +1228,10 @@ function Review({
                         className="h-9 font-mono"
                       />
                     </label>
-                    <p className="delivery-hint text-xs text-slate-500">
-                      O total do pedido já inclui a taxa de entrega.
-                    </p>
                   </div>
                 </section>
               )}
-            </section>
+            </div>
             <section className="items-section" aria-label="Pizzas e itens">
               <h3 className="section-title items-title">
                 Pizzas e itens{" "}
@@ -1334,11 +1407,40 @@ function Review({
             )}
           </div>
           <div className="footer-row">
-            <span className="text-xs text-slate-500">
-              {done
-                ? "Disponível no KDS"
-                : "Confira os dados antes de adicionar."}
-            </span>
+            <div
+              className={
+                missingDetails && !done && !pending
+                  ? "required-summary"
+                  : "text-xs text-slate-500"
+              }
+              role="status"
+            >
+              {done ? (
+                "Disponível no KDS"
+              ) : pending ? (
+                "Enviando pedido…"
+              ) : missingDetails ? (
+                <>
+                  <strong>
+                    <AlertTriangle size={14} aria-hidden="true" /> Dados
+                    obrigatórios pendentes
+                  </strong>
+                  <span>{missingDetails}</span>
+                  {!detailsOpen && (
+                    <Button
+                      type="button"
+                      variant="link"
+                      size="sm"
+                      onClick={() => setDetailsOpen(true)}
+                    >
+                      Preencher dados
+                    </Button>
+                  )}
+                </>
+              ) : (
+                "Confira os dados antes de adicionar."
+              )}
+            </div>
             <div className="footer-actions flex shrink-0 gap-2">
               <Button
                 type="button"
@@ -1359,6 +1461,8 @@ function Review({
                     savingZone ||
                     openingDay ||
                     !items.length ||
+                    Boolean(missingDetails) ||
+                    loadingZones ||
                     checking ||
                     !check?.canSend
                   }
