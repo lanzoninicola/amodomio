@@ -102,6 +102,7 @@ declare const chrome: {
       reopenedDay?: boolean;
       error?: string;
       zones?: Zone[];
+      zone?: Zone;
       date?: string;
       statuses?: {
         commandNumber: number;
@@ -244,6 +245,44 @@ function Review({
   const [zoneId, setZoneId] = useState("");
   const [zoneError, setZoneError] = useState("");
   const [loadingZones, setLoadingZones] = useState(!order.takeAway);
+  const [creatingZone, setCreatingZone] = useState(false);
+  const [savingZone, setSavingZone] = useState(false);
+  const [createZoneError, setCreateZoneError] = useState("");
+  const [zoneName, setZoneName] = useState(order.deliveryNeighborhood || "");
+  const [zoneCity, setZoneCity] = useState(order.deliveryCity || "");
+  const [zoneState, setZoneState] = useState("");
+  async function createZone() {
+    setSavingZone(true);
+    setCreateZoneError("");
+    try {
+      const result = await chrome.runtime.sendMessage({
+        type: "suitable:create-zone",
+        zone: {
+          name: zoneName.trim(),
+          city: zoneCity.trim(),
+          state: zoneState.trim(),
+        },
+      });
+      if (!result?.ok || !result.zone?.id)
+        throw new Error(result?.error || "Não foi possível criar o bairro.");
+      const saved = result.zone;
+      setZones((current) =>
+        [...current.filter((zone) => zone.id !== saved.id), saved].sort(
+          (a, b) => a.name.localeCompare(b.name)
+        )
+      );
+      setZoneId(saved.id);
+      setCreatingZone(false);
+    } catch (cause) {
+      setCreateZoneError(
+        cause instanceof Error
+          ? cause.message
+          : "Não foi possível criar o bairro."
+      );
+    } finally {
+      setSavingZone(false);
+    }
+  }
   const [zoneAttempt, setZoneAttempt] = useState(0);
   const [fee, setFee] = useState(
     order.deliveryFee == null ? "" : money(order.deliveryFee)
@@ -448,7 +487,8 @@ function Review({
   );
   async function send(event: React.FormEvent) {
     event.preventDefault();
-    if (!check?.canSend || checking || openingDay) return;
+    if (!check?.canSend || checking || openingDay || savingZone || creatingZone)
+      return;
     setPending(true);
     setError(false);
     setMessage("Enviando pedido…");
@@ -594,7 +634,7 @@ function Review({
             </div>
             {!order.takeAway && (
               <div className="delivery-neighborhood">
-                <span id="delivery-label" className="sr-only">
+                <span id="delivery-label" className="text-xs text-slate-500">
                   Bairro de entrega no KDS
                 </span>
                 <Select
@@ -602,7 +642,7 @@ function Review({
                   onValueChange={(value) => {
                     if (value) setZoneId(value);
                   }}
-                  disabled={loadingZones || pending || done}
+                  disabled={loadingZones || pending || done || savingZone}
                 >
                   <SelectTrigger
                     aria-labelledby="delivery-label"
@@ -968,10 +1008,29 @@ function Review({
                   <div className="delivery">
                     <div className="field">
                       <span>Bairro no KDS</span>
-                      <span className="text-sm text-slate-900">
-                        {zones.find((zone) => zone.id === zoneId)?.name ||
-                          "Selecionar bairro no cabeçalho"}
-                      </span>
+                      <Select
+                        value={zoneId}
+                        onValueChange={setZoneId}
+                        disabled={loadingZones || pending || done || savingZone}
+                      >
+                        <SelectTrigger aria-label="Selecionar bairro no KDS">
+                          <SelectValue
+                            placeholder={
+                              loadingZones
+                                ? "Carregando bairros…"
+                                : "Selecione o bairro aqui"
+                            }
+                          />
+                        </SelectTrigger>
+                        <SelectContent portalContainer={portalContainer}>
+                          {zones.map((zone) => (
+                            <SelectItem key={zone.id} value={zone.id}>
+                              {zone.name}
+                              {zone.city ? ` · ${zone.city}` : ""}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                       <span className="text-xs text-slate-500">
                         Suitable:{" "}
                         {order.deliveryNeighborhood || "bairro não informado"}
@@ -992,9 +1051,90 @@ function Review({
                       )}
                       {!loadingZones && !zoneError && !zoneId && (
                         <span className="text-xs text-amber-700">
-                          Selecione o bairro correspondente. Nenhum cadastro
-                          será criado automaticamente.
+                          Selecione o bairro acima ou clique em “Criar bairro”
+                          se ele ainda não estiver cadastrado.
                         </span>
+                      )}
+                      {!creatingZone && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          disabled={
+                            pending ||
+                            done ||
+                            loadingZones ||
+                            Boolean(zoneError)
+                          }
+                          onClick={() => setCreatingZone(true)}
+                        >
+                          Criar bairro
+                        </Button>
+                      )}
+                      {creatingZone && (
+                        <div className="grid gap-2 rounded-md border p-3">
+                          <label className="field">
+                            Nome do bairro
+                            <Input
+                              value={zoneName}
+                              onChange={(e) => setZoneName(e.target.value)}
+                              disabled={savingZone}
+                              maxLength={200}
+                            />
+                          </label>
+                          <label className="field">
+                            Cidade
+                            <Input
+                              value={zoneCity}
+                              onChange={(e) => setZoneCity(e.target.value)}
+                              disabled={savingZone}
+                              maxLength={200}
+                            />
+                          </label>
+                          <label className="field">
+                            UF
+                            <Input
+                              value={zoneState}
+                              onChange={(e) =>
+                                setZoneState(e.target.value.toUpperCase())
+                              }
+                              disabled={savingZone}
+                              maxLength={2}
+                              placeholder="Ex.: PR"
+                            />
+                          </label>
+                          <span className="text-xs text-slate-500">
+                            O bairro será salvo no servidor e selecionado neste
+                            pedido. A taxa informada vale para este pedido.
+                          </span>
+                          {createZoneError && (
+                            <div role="alert" className="text-xs text-red-700">
+                              {createZoneError}
+                            </div>
+                          )}
+                          <div className="flex gap-2">
+                            <Button
+                              type="button"
+                              disabled={
+                                savingZone ||
+                                !zoneName.trim() ||
+                                !zoneCity.trim() ||
+                                zoneState.trim().length !== 2
+                              }
+                              onClick={createZone}
+                            >
+                              {savingZone ? "Salvando…" : "Salvar bairro"}
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              disabled={savingZone}
+                              onClick={() => setCreatingZone(false)}
+                            >
+                              Cancelar
+                            </Button>
+                          </div>
+                        </div>
                       )}
                     </div>
                     <label className="field">
@@ -1215,6 +1355,8 @@ function Review({
                   size="sm"
                   disabled={
                     pending ||
+                    creatingZone ||
+                    savingZone ||
                     openingDay ||
                     !items.length ||
                     checking ||

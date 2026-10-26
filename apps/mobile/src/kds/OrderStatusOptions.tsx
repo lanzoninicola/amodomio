@@ -3,6 +3,14 @@ import { Text } from "../ui/Text";
 import { theme } from "../ui/theme";
 import { KDS_STATUSES, type KdsOrder, type KdsStatus } from "./types";
 
+const statusIcons = {
+  novoPedido: "＋",
+  emProducao: "⚒",
+  aguardandoForno: "◷",
+  assando: "♨",
+  finalizado: "✓",
+};
+
 export function OrderStatusOptions({
   order,
   busy,
@@ -13,7 +21,7 @@ export function OrderStatusOptions({
   onMove: (order: KdsOrder, status: KdsStatus) => void;
 }) {
   return (
-    <View>
+    <View style={styles.options}>
       {KDS_STATUSES.map((status) => {
         const current = order.status === status.id;
         return (
@@ -35,11 +43,14 @@ export function OrderStatusOptions({
             ]}
             onPress={() => onMove(order, status.id)}
           >
-            <View
-              style={[styles.statusMark, { backgroundColor: status.color }]}
-            />
-            <Text style={styles.statusOptionText}>{status.label}</Text>
-            {current ? <Text style={styles.currentText}>Atual</Text> : null}
+            <Text style={styles.statusIcon}>{statusIcons[status.id]}</Text>
+            <Text
+              style={styles.statusOptionText}
+              numberOfLines={3}
+              adjustsFontSizeToFit
+            >
+              {status.label}
+            </Text>
           </Pressable>
         );
       })}
@@ -48,31 +59,41 @@ export function OrderStatusOptions({
 }
 
 const styles = StyleSheet.create({
-  statusMark: { width: 9, height: 9, borderRadius: 5 },
+  options: { flexDirection: "row", gap: 6, paddingVertical: 8 },
+  statusIcon: {
+    color: "#000000",
+    fontSize: 24,
+    lineHeight: 32,
+    height: 32,
+    textAlign: "center",
+  },
   statusOption: {
-    minHeight: 50,
+    minHeight: 100,
+    flex: 1,
+    minWidth: 0,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: theme.colors.border,
-    paddingHorizontal: 14,
-    flexDirection: "row",
+    borderColor: "#000000",
+    backgroundColor: "#ffffff",
+    paddingHorizontal: 3,
+    flexDirection: "column",
     alignItems: "center",
-    gap: 10,
-    marginTop: 8,
+    gap: 6,
+    justifyContent: "center",
+    paddingVertical: 10,
   },
   statusOptionCurrent: {
-    borderColor: theme.colors.ring,
-    backgroundColor: theme.colors.muted,
+    borderColor: "#000000",
+    borderWidth: 2,
+    backgroundColor: theme.colors.brandYellow,
   },
   statusOptionText: {
-    color: theme.colors.foreground,
-    fontSize: 15,
+    color: "#000000",
+    fontSize: 12,
+    lineHeight: 16,
+    height: 48,
+    verticalAlign: "middle",
     fontFamily: theme.typography.semibold,
-    flex: 1,
-  },
-  currentText: {
-    color: theme.colors.mutedForeground,
-    fontSize: 11,
-    fontFamily: theme.typography.semibold,
+    textAlign: "center",
   },
 });
