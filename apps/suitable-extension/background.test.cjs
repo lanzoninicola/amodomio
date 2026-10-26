@@ -55,6 +55,8 @@ function setup(fetch, modules) {
       listener(
         type === "suitable:statuses"
           ? { type, ...order }
+          : type === "suitable:create-zone"
+          ? { type, zone: order }
           : type === "suitable:stock"
           ? { type, payload: order }
           : { type, order },
@@ -391,4 +393,41 @@ test("successful form send populates local status cache and chip refresh bypasse
   const after = await send(query, "https://suitable.test", "suitable:statuses");
   assert.equal(after.statuses[0].exists, false);
   assert.equal(calls, 2, "refresh result must replace local cache");
+});
+
+test("explicit zone creation posts to the authenticated server and rejects other origins", async () => {
+  let calls = 0;
+  const zone = { name: "Cidade Industrial", city: "Pato Branco", state: "PR" };
+  const send = setup(async (url, options) => {
+    calls++;
+    assert.equal(url, "https://kds.test/api/kds/delivery-zones");
+    assert.equal(options.method, "POST");
+    assert.equal(options.headers["x-api-key"], "test-key");
+    assert.deepEqual(JSON.parse(options.body), zone);
+    return {
+      ok: true,
+      status: 201,
+      json: async () => ({ ok: true, zone: { ...zone, id: "new-zone" } }),
+    };
+  });
+  assert.equal(
+    (await send(zone, "https://suitable.test", "suitable:create-zone")).zone.id,
+    "new-zone"
+  );
+  assert.equal(
+    (await send(zone, "https://other.test", "suitable:create-zone")).ok,
+    false
+  );
+  assert.equal(calls, 1);
+});
+
+test("zone creation explains when the deployed server does not support it", async () => {
+  const send = setup(async () => ({ status: 405 }));
+  const result = await send(
+    {},
+    "https://suitable.test",
+    "suitable:create-zone"
+  );
+  assert.equal(result.ok, false);
+  assert.match(result.error, /Atualize o servidor/);
 });

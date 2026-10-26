@@ -1,5 +1,10 @@
 import type { KdsOrder } from "./types";
 
+export function isOrderOverOneHour(order: KdsOrder, now: number) {
+  const start = new Date(order.novoPedidoAt ?? order.createdAt).getTime();
+  return order.status !== "finalizado" && now - start > 60 * 60_000;
+}
+
 export function averageCompletionMinutes(orders: KdsOrder[]) {
   let total = 0;
   let count = 0;

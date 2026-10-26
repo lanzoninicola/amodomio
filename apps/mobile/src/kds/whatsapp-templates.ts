@@ -1,5 +1,14 @@
 import type { KdsOrder } from "./types";
 
+export const ORDER_WHATSAPP_TEMPLATES = [
+  { id: "pendente", label: "Pedido registrado" },
+  { id: "novoPedido", label: "Pedido recebido" },
+  { id: "emProducao", label: "Em preparo" },
+  { id: "aguardandoForno", label: "Pedir autorização para o forno" },
+  { id: "assando", label: "Pizza no forno" },
+  { id: "finalizado", label: "Pedido pronto" },
+] as const;
+
 export function orderWhatsappTemplate(order: KdsOrder): string {
   const greeting = order.customerName?.trim()
     ? `Olá, ${order.customerName.trim()}!`

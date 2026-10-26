@@ -36,7 +36,7 @@ export function DesktopBoard({
   );
   const { widget } = useDesktopWindow();
   const [gridWidth, setGridWidth] = useState(0);
-  const cardWidth = Math.max(0, Math.floor((gridWidth - 22) / 2));
+  const cardWidth = Math.max(0, Math.floor((gridWidth - 30) / 2));
   const completion = averageCompletionMinutes(orders);
 
   useEffect(() => {
@@ -131,19 +131,22 @@ export function DesktopBoard({
       <ScrollView
         contentContainerStyle={{
           padding: widget ? 8 : 12,
-          gap: widget ? 4 : 12,
+          gap: 20,
         }}
       >
         {KDS_STATUSES.filter((status) => visible.includes(status.id)).map(
           (status) => {
             const items = orders.filter((order) => order.status === status.id);
             const expanded = !closed.includes(status.id);
+            const lighter = KDS_STATUSES.indexOf(status) % 2 === 0;
+            const headerBackground = lighter ? "#404040" : "#242424";
+            const groupBorder = lighter ? "#737373" : "#525252";
             return (
               <View
                 key={status.id}
                 style={{
-                  borderWidth: 1,
-                  borderColor: "#444444",
+                  borderWidth: 2,
+                  borderColor: groupBorder,
                   borderRadius: theme.radius.lg,
                   overflow: "hidden",
                 }}
@@ -163,27 +166,53 @@ export function DesktopBoard({
                     flexDirection: "row",
                     alignItems: "center",
                     gap: 10,
-                    backgroundColor: "#282828",
+                    backgroundColor: headerBackground,
+                    borderBottomWidth: expanded ? 1 : 0,
+                    borderBottomColor: groupBorder,
                   }}
                 >
-                  <View
-                    style={{
-                      width: 8,
-                      height: 8,
-                      borderRadius: 8,
-                      backgroundColor: status.color,
-                    }}
-                  />
-                  <Text
-                    style={{
-                      flex: 1,
-                      fontWeight: "700",
-                      fontSize: 18,
-                      color: "#ffffff",
-                    }}
-                  >
-                    {status.label}
-                  </Text>
+                  <View style={{ flex: 1, minWidth: 0, gap: 6 }}>
+                    <Text
+                      style={{
+                        fontWeight: "700",
+                        fontSize: 18,
+                        color: "#ffffff",
+                      }}
+                    >
+                      {status.label}
+                    </Text>
+                    {items.length > 0 ? (
+                      <View
+                        accessibilityLabel={`Primeiros pedidos: ${items
+                          .slice(0, 2)
+                          .map((order) => `#${order.commandNumber ?? "VL"}`)
+                          .join(", ")}`}
+                        style={{
+                          flexDirection: "row",
+                          flexWrap: "wrap",
+                          gap: 4,
+                        }}
+                      >
+                        {items.slice(0, 2).map((order) => (
+                          <Text
+                            key={order.id}
+                            style={{
+                              color: "#ffffff",
+                              backgroundColor: "#383838",
+                              borderRadius: 6,
+                              paddingHorizontal: 6,
+                              paddingVertical: 4,
+                              fontSize: 14,
+                              fontWeight: "600",
+                              fontVariant: ["tabular-nums"],
+                            }}
+                          >
+                            #{order.commandNumber ?? "VL"}
+                          </Text>
+                        ))}
+                      </View>
+                    ) : null}
+                  </View>
                   <Text
                     style={{
                       backgroundColor: "#000000",
@@ -209,8 +238,9 @@ export function DesktopBoard({
                       setGridWidth(event.nativeEvent.layout.width)
                     }
                     style={{
-                      padding: 8,
-                      gap: 6,
+                      padding: 10,
+                      gap: 10,
+                      backgroundColor: lighter ? "#202020" : "#111111",
                       flexDirection: "row",
                       flexWrap: "wrap",
                       alignItems: "stretch",

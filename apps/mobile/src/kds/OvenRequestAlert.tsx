@@ -20,7 +20,7 @@ import {
 import { listOrders, updateStatus } from "../api/client";
 import { Button } from "../ui/Button";
 import type { KdsOrder } from "./types";
-import { pendingOvenAlerts } from "./oven-alerts";
+import { OVEN_ALERT_REMINDER_MS, pendingOvenAlerts } from "./oven-alerts";
 import { useKdsSoundPreferences } from "../platform/useKdsSoundPreferences";
 export function OvenRequestAlert({
   token,
@@ -40,7 +40,9 @@ export function OvenRequestAlert({
   const pulse = useRef(new Animated.Value(0)).current;
   const savingRef = useRef(false);
   const [saving, setSaving] = useState(false);
-  const acknowledged = useRef(new Set<string>());
+  const acknowledged = useRef(new Map<string, number>());
+  const refresh = useRef<() => Promise<void>>(async () => {});
+  const reminders = useRef(new Set<ReturnType<typeof setTimeout>>());
   const [pending, setPending] = useState<KdsOrder[]>([]);
   useEffect(() => {
     let alive = true;
@@ -63,6 +65,7 @@ export function OvenRequestAlert({
         loading = false;
       }
     };
+    refresh.current = load;
     void load();
     const timer = setInterval(load, 4000);
     const subscription = AppState.addEventListener("change", (state) => {
@@ -71,6 +74,9 @@ export function OvenRequestAlert({
     return () => {
       alive = false;
       clearInterval(timer);
+      for (const reminder of reminders.current) clearTimeout(reminder);
+      reminders.current.clear();
+      acknowledged.current.clear();
       subscription.remove();
     };
   }, [token, apiUrl]);
@@ -127,7 +133,12 @@ export function OvenRequestAlert({
   }, [current?.id, isLoaded, player, pulse, sound.enabled, sound.volume]);
   const dismiss = () => {
     if (!current || savingRef.current) return;
-    acknowledged.current.add(current.id);
+    acknowledged.current.set(current.id, Date.now() + OVEN_ALERT_REMINDER_MS);
+    const reminder = setTimeout(() => {
+      reminders.current.delete(reminder);
+      void refresh.current();
+    }, OVEN_ALERT_REMINDER_MS);
+    reminders.current.add(reminder);
     setPending((values) => values.filter((order) => order.id !== current.id));
   };
   const bake = async () => {
@@ -136,7 +147,7 @@ export function OvenRequestAlert({
     setSaving(true);
     try {
       await updateStatus(apiUrl, token, current.id, "assando", true);
-      acknowledged.current.add(current.id);
+      acknowledged.current.set(current.id, Infinity);
       setPending((values) => values.filter((order) => order.id !== current.id));
     } catch (reason) {
       Alert.alert(

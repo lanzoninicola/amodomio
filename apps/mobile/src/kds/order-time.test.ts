@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { averageCompletionMinutes } from "./order-time";
+import { averageCompletionMinutes, isOrderOverOneHour } from "./order-time";
 import type { KdsOrder } from "./types";
 
 const finished = (overrides: Partial<KdsOrder> = {}) =>
@@ -10,6 +10,22 @@ const finished = (overrides: Partial<KdsOrder> = {}) =>
     finalizadoAt: "2026-10-10T12:30:00Z",
     ...overrides,
   } as KdsOrder);
+
+it("highlights only active orders strictly over one hour from entry", () => {
+  const order = finished({ status: "assando" });
+  const oneHour = Date.parse("2026-10-10T13:10:00Z");
+  expect(isOrderOverOneHour(order, oneHour - 1)).toBe(false);
+  expect(isOrderOverOneHour(order, oneHour)).toBe(false);
+  expect(isOrderOverOneHour(order, oneHour + 1)).toBe(true);
+  expect(isOrderOverOneHour(finished(), oneHour + 1)).toBe(false);
+  expect(isOrderOverOneHour({ ...order, novoPedidoAt: null }, oneHour)).toBe(
+    true
+  );
+  expect(
+    isOrderOverOneHour({ ...order, novoPedidoAt: "invalid" }, oneHour)
+  ).toBe(false);
+  expect(isOrderOverOneHour(order, NaN)).toBe(false);
+});
 
 it("averages completion from entry time, falling back to creation for older orders", () => {
   expect(

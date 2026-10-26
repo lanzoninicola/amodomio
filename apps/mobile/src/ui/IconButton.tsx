@@ -3,6 +3,7 @@ import { Text } from "./Text";
 import { theme } from "./theme";
 
 const symbols: Record<string, string> = {
+  details: "☰",
   kanban: "▥",
   reduced: "▦",
   home: "⌂",

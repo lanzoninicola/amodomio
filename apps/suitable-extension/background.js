@@ -10,6 +10,7 @@ chrome.runtime.onMessage.addListener((message, sender, respond) => {
       "suitable:stock",
       "suitable:create",
       "suitable:zones",
+      "suitable:create-zone",
       "suitable:check",
       "suitable:statuses",
       "suitable:customer",
@@ -110,6 +111,24 @@ chrome.runtime.onMessage.addListener((message, sender, respond) => {
       if (!response.ok)
         throw new Error("Não foi possível consultar o histórico do CRM.");
       return { ok: true, purchaseSummary: result.purchaseSummary ?? null };
+    }
+    if (message.type === "suitable:create-zone") {
+      const response = await fetch(`${serverUrl}/api/kds/delivery-zones`, {
+        method: "POST",
+        credentials: "omit",
+        redirect: "error",
+        headers: { "Content-Type": "application/json", "x-api-key": apiKey },
+        body: JSON.stringify(message.zone),
+        signal: AbortSignal.timeout(20000),
+      });
+      if ([404, 405].includes(response.status))
+        throw new Error(
+          "Atualize o servidor Amodomio para permitir criar bairros."
+        );
+      const result = await response.json();
+      if (!response.ok || !result.ok || !result.zone?.id)
+        throw new Error(result.error || "Não foi possível criar o bairro.");
+      return { ok: true, zone: result.zone };
     }
     if (message.type === "suitable:zones") {
       const response = await fetch(`${serverUrl}/api/kds/delivery-zones`, {

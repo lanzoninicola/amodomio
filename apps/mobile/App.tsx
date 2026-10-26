@@ -1,5 +1,8 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { orderWhatsappTemplate } from "./src/kds/whatsapp-templates";
+import {
+  ORDER_WHATSAPP_TEMPLATES,
+  orderWhatsappTemplate,
+} from "./src/kds/whatsapp-templates";
 import { OrderContact } from "./src/kds/OrderContact";
 import { OvenRequestsBar } from "./src/kds/OvenRequestsBar";
 import { VoiceCommandButton } from "./src/kds/VoiceCommandButton";
@@ -618,6 +621,7 @@ function KanbanScreen({
   const [contactOrder, setContactOrder] = useState<KdsOrder | null>(null);
   const [contactMessage, setContactMessage] = useState("");
   const [useContactTemplate, setUseContactTemplate] = useState(true);
+  const [contactTemplateId, setContactTemplateId] = useState("");
   const [contactSuccess, setContactSuccess] = useState("");
   const [contactTab, setContactTab] = useState<"send" | "logs">("send");
   const [sentMessages, setSentMessages] = useState<
@@ -669,6 +673,7 @@ function KanbanScreen({
     setContactTab("send");
     setContactOrder(order);
     setContactMessage(orderWhatsappTemplate(order));
+    setContactTemplateId(order.status);
     setUseContactTemplate(true);
     setContactSuccess("");
     setContactError("");
@@ -691,10 +696,18 @@ function KanbanScreen({
       setContactBusy(false);
     }
   };
+  const contactTemplates = contactOrder
+    ? [
+        { id: contactOrder.status },
+        ...ORDER_WHATSAPP_TEMPLATES.filter(
+          (template) => template.id !== contactOrder.status
+        ),
+      ]
+    : [];
   const contactText = contactMessage;
-  const lastContactSentAt = contactOrder
-    ? sentMessages[contactOrder.id]?.[0]?.sentAt
-    : undefined;
+  const contactSentCount = contactOrder
+    ? sentMessages[contactOrder.id]?.length ?? 0
+    : 0;
   const sendContact = async () => {
     if (
       !contactOrder ||
@@ -1220,7 +1233,6 @@ function KanbanScreen({
           onMove={move}
           onContact={openContact}
           onChooseStatus={openOrderStatus}
-          onOpenDetails={openOrderDetails}
         />
       ) : (
         <ScrollView
@@ -1377,33 +1389,66 @@ function KanbanScreen({
         ]}
       >
         <View style={styles.modalBackdrop}>
-          <View style={[styles.modalCard, { maxHeight: "90%" }]}>
+          <View style={[styles.modalCard, { maxHeight: "75%" }]}>
             <ScrollView
               keyboardShouldPersistTaps="handled"
               showsVerticalScrollIndicator={!desktop}
               contentContainerStyle={{
-                gap: desktop ? 8 : 14,
-                padding: desktop ? 12 : 20,
+                gap: 8,
+                padding: desktop ? 12 : 16,
               }}
             >
-              <Text
-                style={[
-                  styles.modalTitle,
-                  desktop && { fontSize: 18, paddingRight: 44 },
-                ]}
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: 8,
+                }}
               >
-                WhatsApp · Pedido #{contactOrder?.commandNumber ?? "VL"}
-              </Text>
+                <Text
+                  style={[
+                    styles.modalTitle,
+                    { flex: 1 },
+                    desktop && { fontSize: 18 },
+                  ]}
+                >
+                  WhatsApp · Pedido #{contactOrder?.commandNumber ?? "VL"}
+                </Text>
+                {contactTab === "send" ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Editar mensagem selecionada"
+                    accessibilityState={{
+                      disabled:
+                        !contactEnabled ||
+                        contactBusy ||
+                        Boolean(contactSuccess),
+                    }}
+                    disabled={
+                      !contactEnabled || contactBusy || Boolean(contactSuccess)
+                    }
+                    onPress={() => setUseContactTemplate(false)}
+                    style={{
+                      minWidth: 44,
+                      minHeight: 44,
+                      alignItems: "center",
+                      justifyContent: "center",
+                      opacity:
+                        !contactEnabled || contactBusy || contactSuccess
+                          ? 0.3
+                          : 1,
+                    }}
+                  >
+                    <Text style={[styles.detailValue, { fontSize: 24 }]}>
+                      ✎
+                    </Text>
+                  </Pressable>
+                ) : null}
+              </View>
               <Text style={styles.detailValue}>
                 {contactOrder?.customerName || "Cliente"} ·{" "}
                 {contactOrder?.customerPhone}
-              </Text>
-              <Text style={styles.detailValue}>
-                {lastContactSentAt
-                  ? `Último envio: ${new Date(lastContactSentAt).toLocaleString(
-                      "pt-BR"
-                    )}`
-                  : "Nenhum envio registrado neste dispositivo"}
               </Text>
               <View style={{ flexDirection: "row", gap: 8 }}>
                 {(
@@ -1431,74 +1476,91 @@ function KanbanScreen({
                   >
                     <Text style={[styles.detailValue, { textAlign: "center" }]}>
                       {label}
+                      {tab === "logs" ? ` (${contactSentCount})` : ""}
                     </Text>
                   </Pressable>
                 ))}
               </View>
               {contactTab === "send" ? (
                 <>
-                  <View
-                    style={{
-                      ...(desktop
-                        ? { position: "absolute" as const, top: 4, right: 8 }
-                        : {}),
-                      flexDirection: "row",
-                      alignItems: "center",
-                      justifyContent: "flex-end",
-                      gap: 12,
-                    }}
-                  >
-                    <Pressable
-                      accessibilityRole="button"
-                      accessibilityLabel="Editar mensagem"
-                      accessibilityState={{
-                        disabled:
-                          !contactEnabled ||
-                          contactBusy ||
-                          Boolean(contactSuccess),
-                      }}
-                      disabled={
-                        !contactEnabled ||
-                        contactBusy ||
-                        Boolean(contactSuccess)
-                      }
-                      onPress={() => setUseContactTemplate(false)}
-                      style={{
-                        minWidth: 44,
-                        minHeight: 44,
-                        alignItems: "center",
-                        justifyContent: "center",
-                        opacity:
-                          !contactEnabled || contactBusy || contactSuccess
-                            ? 0.3
-                            : 1,
-                      }}
-                    >
-                      <Text style={[styles.detailValue, { fontSize: 24 }]}>
-                        ✎
-                      </Text>
-                    </Pressable>
+                  <View style={{ gap: 8 }}>
+                    {contactTemplates.map((template, index) => {
+                      const message = contactOrder
+                        ? orderWhatsappTemplate({
+                            ...contactOrder,
+                            status: template.id,
+                          })
+                        : "";
+                      const selected = contactTemplateId === template.id;
+                      const disabled = contactBusy || Boolean(contactSuccess);
+                      const choose = () => {
+                        setContactMessage(message);
+                        setContactTemplateId(template.id);
+                        setUseContactTemplate(true);
+                      };
+                      return (
+                        <View key={template.id} style={{ gap: 8 }}>
+                          {index === 1 ? (
+                            <View
+                              style={{
+                                height: 1,
+                                backgroundColor: theme.colors.border,
+                                marginVertical: 4,
+                              }}
+                            />
+                          ) : null}
+                          <Pressable
+                            accessibilityRole="button"
+                            accessibilityState={{ selected, disabled }}
+                            disabled={disabled}
+                            onPress={choose}
+                            style={{
+                              flex: 1,
+                              minHeight: 44,
+                              padding: 12,
+                              borderWidth: selected ? 2 : 1,
+                              borderRadius: 8,
+                              borderColor: selected
+                                ? theme.colors.primary
+                                : theme.colors.border,
+                              opacity: disabled ? 0.4 : 1,
+                            }}
+                          >
+                            <Text
+                              style={[
+                                styles.detailValue,
+                                index > 0 && {
+                                  color: theme.colors.mutedForeground,
+                                  opacity: 0.5,
+                                },
+                              ]}
+                              numberOfLines={2}
+                              ellipsizeMode="tail"
+                            >
+                              {selected && !useContactTemplate
+                                ? contactMessage
+                                : message}
+                            </Text>
+                          </Pressable>
+                        </View>
+                      );
+                    })}
                   </View>
-                  <Input
-                    accessibilityLabel="Mensagem de WhatsApp"
-                    multiline
-                    maxLength={4096}
-                    value={contactMessage}
-                    onChangeText={setContactMessage}
-                    editable={
-                      !useContactTemplate &&
-                      contactEnabled &&
-                      !contactBusy &&
-                      !contactSuccess
-                    }
-                    placeholder="Digite a mensagem para o cliente"
-                    style={{
-                      height: desktop
-                        ? Math.max(80, Math.min(180, height - 350))
-                        : 140,
-                      textAlignVertical: "top",
-                    }}
-                  />
+                  {!useContactTemplate ? (
+                    <Input
+                      accessibilityLabel="Mensagem de WhatsApp"
+                      autoFocus
+                      multiline
+                      maxLength={4096}
+                      value={contactMessage}
+                      onChangeText={setContactMessage}
+                      editable={
+                        contactEnabled && !contactBusy && !contactSuccess
+                      }
+                      placeholder="Digite a mensagem para o cliente"
+                      style={{ height: 140, textAlignVertical: "top" }}
+                    />
+                  ) : null}
                   {contactSuccess ? (
                     <Text
                       accessibilityLiveRegion="polite"
@@ -1554,7 +1616,7 @@ function KanbanScreen({
               style={{
                 flexDirection: "row",
                 gap: 8,
-                padding: desktop ? 12 : 20,
+                padding: desktop ? 12 : 16,
                 paddingTop: 0,
               }}
             >
@@ -1577,7 +1639,7 @@ function KanbanScreen({
                     Boolean(contactSuccess)
                   }
                 >
-                  {useContactTemplate ? "Enviar template" : "Enviar mensagem"}
+                  Enviar
                 </Button>
               ) : null}
             </View>
@@ -1627,6 +1689,44 @@ function KanbanScreen({
                   </Text>
                 </View>
               </View>
+              {selected && statusOnly ? (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Ver todos os detalhes do pedido"
+                  onPress={() => openOrderDetails(selected)}
+                  style={({ pressed }) => [
+                    styles.detailClose,
+                    {
+                      backgroundColor: "#ffffff",
+                      borderWidth: 1,
+                      borderColor: "#000000",
+                    },
+                    pressed && styles.pressed,
+                  ]}
+                >
+                  <View
+                    pointerEvents="none"
+                    style={{
+                      width: 25,
+                      height: 17,
+                      borderWidth: 2,
+                      borderColor: "#000000",
+                      borderRadius: 14,
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <View
+                      style={{
+                        width: 7,
+                        height: 7,
+                        borderRadius: 4,
+                        backgroundColor: "#000000",
+                      }}
+                    />
+                  </View>
+                </Pressable>
+              ) : null}
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel={
