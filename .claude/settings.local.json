@@ -1,11 +1,11 @@
 {
   "permissions": {
     "allow": [
-    "Write(app/domain/auth/**)",
-  "Edit(app/domain/auth/**)",
-  "Write(app/routes/embed.*)",
-  "Edit(app/routes/api.stock.suitable.tsx)",
-  "Bash(python3:*)",
+      "Write(app/domain/auth/**)",
+      "Edit(app/domain/auth/**)",
+      "Write(app/routes/embed.*)",
+      "Edit(app/routes/api.stock.suitable.tsx)",
+      "Bash(python3:*)",
       "Bash(node scripts/create-recipes-from-menu-items.mjs:*)",
       "Bash(node -e:*)",
       "Bash(npx tsc:*)",
@@ -96,10 +96,29 @@
       "Bash(rm -f ../../build/extensions/suitable-amodomio-1.5.0.zip)",
       "Bash(zip -qr ../../build/extensions/suitable-amodomio-1.5.0.zip manifest.json content.js background.js popup.html popup.js popup.css fonts parser.js activation.js)",
       "Read(//home/lanzo/Documents/build/**)",
-      "Bash(unzip -l ../../build/extensions/suitable-amodomio-1.4.2.zip)"
+      "Bash(unzip -l ../../build/extensions/suitable-amodomio-1.4.2.zip)",
+      "Bash(python3 -)",
+      "Bash(sed -i 's/\\(\\\\[\\\\\\\\u0300-\\\\\\\\u036f\\\\]\\\\/g/&/' app/routes/webhooks.zapi.received.tsx)",
+      "Bash(npx vitest *)",
+      "Bash(curl -s -m 8 -o /dev/null -w \"%{http_code}\\\\n\" https://media-api.amodomio.com.br/healthcheck)",
+      "Bash(curl -s -m 15 -w \"\\\\n%{http_code}\\\\n\" https://media-api.amodomio.com.br/healthcheck)",
+      "Bash(cp /tmp/claude-1000/-home-lanzo-Documents-Coding-amodomio/e0e435aa-f1ee-4a4c-b0ae-a066180a13a4/scratchpad/q.mjs ./q.tmp.mjs)",
+      "Bash(node q.tmp.mjs)",
+      "Bash(cd /home/lanzo/Documents/Coding/amodomio; npx prisma generate 2>&1 | head -15; node -v; ls ~/.nvm/versions/node 2>/dev/null; cat .nvmrc)",
+      "Read(//home/lanzo/.nvm/versions/node/**)",
+      "Bash(sed -i 's/                {\\(\\\\n//' app/routes/admin.atendimento.horarios.ausencia.tsx)",
+      "Bash(grep -n \"{\\($\" -A3 app/routes/admin.atendimento.horarios.ausencia.tsx)",
+      "Skill(fewer-permission-prompts)",
+      "Skill(fewer-permission-prompts:*)",
+      "Read(//home/lanzo/.claude/projects/**)",
+      "Bash(xargs cat)",
+      "Bash(awk -F'\\\\t' '{ if\\($1==\"Bash\"\\){split\\($2,a,\" \"\\); k=\"Bash \"a[1]\" \"a[2]} else k=$1; c[k]++} END{for\\(k in c\\) if\\(c[k]>=3\\) print c[k], k}')",
+      "Bash(awk '$1>=3')",
+      "Bash(cd /home/lanzo/Documents/Coding/amodomio/app; ls routes | grep -i \"api.zapi.conn\\\\|api.media\"; sed -n 1,40p routes/api.zapi.connection*.tsx 2>/dev/null | head -50; grep -n \"admin.assets\\\\|mediaApiHealth\" routes/admin.assets.tsx | head)"
     ],
     "additionalDirectories": [
-      "/home/lanzo/Documents/Coding/amodomio/app/routes"
+      "/home/lanzo/Documents/Coding/amodomio/app/routes",
+      "/home/lanzo/Documents/Coding/amodomio"
     ]
   }
 }

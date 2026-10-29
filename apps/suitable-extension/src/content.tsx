@@ -10,6 +10,17 @@ import {
   collectProducts,
   type PurchaseNote,
 } from "./stock-parser";
+import {
+  OrderDetailsHeader,
+  OrderCustomerCard,
+  OrderStatusAlerts,
+  OrderInformation,
+  OrderDeliverySection,
+  OrderItemsSection,
+  OrderItemRow,
+  OrderSummaryPanel,
+  OrderDetailsFooter,
+} from "./order-details-ui";
 import { FloatingStockReview } from "./floating-stock-review";
 import React, { useState, useEffect } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -30,6 +41,11 @@ import {
   PanelTopOpen,
   Eye,
   EyeOff,
+  Minus,
+  Plus,
+  Send,
+  PanelRightOpen,
+  PanelRightClose,
 } from "lucide-react";
 import {
   Select,
@@ -249,8 +265,8 @@ function Review({
   const [savingZone, setSavingZone] = useState(false);
   const [createZoneError, setCreateZoneError] = useState("");
   const [zoneName, setZoneName] = useState(order.deliveryNeighborhood || "");
-  const [zoneCity, setZoneCity] = useState(order.deliveryCity || "");
-  const [zoneState, setZoneState] = useState("");
+  const [zoneCity, setZoneCity] = useState("Pato Branco");
+  const [zoneState, setZoneState] = useState("PB");
   async function createZone() {
     setSavingZone(true);
     setCreateZoneError("");
@@ -369,7 +385,8 @@ function Review({
   const [pending, setPending] = useState(false);
   const [openingDay, setOpeningDay] = useState(false);
   const [openDayError, setOpenDayError] = useState("");
-  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(true);
+  const [summaryOpen, setSummaryOpen] = useState(false);
   const [visibleFlavors, setVisibleFlavors] = useState<Record<number, boolean>>(
     {}
   );
@@ -419,21 +436,33 @@ function Review({
         cause instanceof Error ? cause.message : "Confira os itens do pedido.";
     }
   }
-  if (
-    !missingDetails &&
-    (!amount.trim() ||
-      !Number.isFinite(parseMoney(amount)) ||
-      parseMoney(amount) < 0)
-  ) {
-    missingDetails = "Confira o total do pedido.";
-  }
-  if (
-    !missingDetails &&
+  const invalidAmount =
+    !amount.trim() ||
+    !Number.isFinite(parseMoney(amount)) ||
+    parseMoney(amount) < 0;
+  const invalidFee =
     !order.takeAway &&
-    (!fee.trim() || !Number.isFinite(parseMoney(fee)) || parseMoney(fee) < 0)
-  ) {
-    missingDetails = "Confira a taxa de entrega.";
-  }
+    (!fee.trim() ||
+      !Number.isFinite(parseMoney(fee)) ||
+      parseMoney(fee) < 0 ||
+      (!invalidAmount && parseMoney(fee) > parseMoney(amount)));
+  const missingZone = !order.takeAway && !loadingZones && !zoneId;
+  const invalidCommand =
+    !command.trim() ||
+    !Number.isInteger(Number(command)) ||
+    Number(command) < 1;
+  const missingDate = !date;
+  const requiredIssues = [
+    missingDetails,
+    invalidCommand ? "Informe uma comanda inteira e positiva." : "",
+    missingDate ? "Informe a data do pedido." : "",
+    invalidAmount ? "Confira o total do pedido." : "",
+    missingZone ? "Selecione ou crie o bairro de entrega." : "",
+    invalidFee
+      ? "Confira a taxa de entrega: informe um valor entre zero e o total do pedido."
+      : "",
+  ].filter(Boolean);
+  missingDetails = requiredIssues.join(" ");
   const detailsAttention =
     Boolean(missingDetails) && !detailsOpen && !done && !pending;
   useEffect(() => {
@@ -487,7 +516,15 @@ function Review({
   );
   async function send(event: React.FormEvent) {
     event.preventDefault();
-    if (!check?.canSend || checking || openingDay || savingZone || creatingZone)
+    if (
+      !check?.canSend ||
+      checking ||
+      openingDay ||
+      savingZone ||
+      creatingZone ||
+      missingDetails ||
+      loadingZones
+    )
       return;
     setPending(true);
     setError(false);
@@ -578,715 +615,825 @@ function Review({
           requestAnimationFrame(() => target.focus());
         }}
       >
-        <header className="heading">
-          <div className="kds-review-row">
-            <h2 className="command-bubble" title={`Comanda ${command}`}>
-              <span className="sr-only">Revisar pedido · </span>
-              {command || "—"}
-            </h2>
-            <span className="order-total font-mono text-sm font-semibold text-slate-900">
-              R${" "}
-              {Number.isFinite(parseMoney(amount))
-                ? money(parseMoney(amount))
-                : "—"}
-            </span>
-            <div className="sizes" aria-label="Resumo de tamanhos">
-              {sizes.map((size) => (
-                <span
-                  key={size}
-                  className={`bubble ${counts[size] > 0 ? "active" : ""}`}
-                  aria-label={`${sizeNames[size]}: ${counts[size]}`}
-                >
-                  {size}
-                  {counts[size] > 0 && (
-                    <strong className="font-mono">{counts[size]}</strong>
-                  )}
-                </span>
-              ))}
-            </div>
-            <div className="w-[180px] max-w-full">
-              <span id="channel-label" className="sr-only">
-                Origem do pedido
-              </span>
-              <Select
-                name="channel"
-                value={channel}
-                onValueChange={setChannel}
-                disabled={pending || done}
-              >
-                <SelectTrigger
-                  aria-labelledby="channel-label"
-                  title="Origem do pedido"
-                  className="h-9 text-xs"
-                >
-                  <SelectValue placeholder="Origem do pedido" />
-                </SelectTrigger>
-                <SelectContent portalContainer={portalContainer}>
-                  {CHANNELS.filter((value) => value !== "Suitable").map(
-                    (value) => (
-                      <SelectItem key={value} value={value}>
-                        {value}
-                      </SelectItem>
-                    )
-                  )}
-                </SelectContent>
-              </Select>
-            </div>
-            {!order.takeAway && (
-              <div className="delivery-neighborhood">
-                <span id="delivery-label" className="text-xs text-slate-500">
-                  Bairro de entrega no KDS
-                </span>
-                <Select
-                  value={zoneId}
-                  onValueChange={(value) => {
-                    if (value) setZoneId(value);
-                  }}
-                  disabled={loadingZones || pending || done || savingZone}
-                >
-                  <SelectTrigger
-                    aria-labelledby="delivery-label"
-                    className="h-9 text-xs"
-                    title="Alterar bairro de entrega"
-                  >
-                    <SelectValue
-                      placeholder={
-                        loadingZones
-                          ? order.deliveryNeighborhood || "Carregando bairros…"
-                          : "Selecionar bairro"
-                      }
-                    />
-                  </SelectTrigger>
-                  <SelectContent portalContainer={portalContainer}>
-                    {zones.map((zone) => (
-                      <SelectItem key={zone.id} value={zone.id}>
-                        {zone.name}
-                        {zone.city ? ` · ${zone.city}` : ""}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>{" "}
+        <div className="review-workspace scroll" data-summary={summaryOpen}>
+          <div className="review-main">
+            <OrderDetailsHeader>
+              <div className="review-title">
+                <h2>Detalhes do pedido</h2>
+                <span>Comanda #{command || "—"}</span>
               </div>
-            )}
-            <div
-              className={`details-actions flex items-center gap-1 ${
-                detailsAttention ? "needs-details" : ""
-              }`}
-            >
-              <Button
-                type="button"
-                variant="outline"
-                size="icon"
-                className="h-9 w-9"
-                disabled={checking || pending || openingDay}
-                aria-label="Atualizar comanda e estoque"
-                title="Atualizar comanda e estoque"
-                onClick={() => setCheckAttempt((value) => value + 1)}
+              <div
+                className={`details-actions flex items-center gap-1 ${
+                  detailsAttention ? "needs-details" : ""
+                }`}
               >
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  aria-hidden="true"
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="h-9 w-9"
+                  disabled={checking || pending || openingDay}
+                  aria-label="Atualizar comanda e estoque"
+                  title="Atualizar comanda e estoque"
+                  onClick={() => setCheckAttempt((value) => value + 1)}
                 >
-                  <path d="M20 7v5h-5M4 17v-5h5" />
-                  <path d="M6.1 7a7 7 0 0 1 11.6-2L20 8M4 16l2.3 3A7 7 0 0 0 17.9 17" />
-                </svg>
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="icon"
-                className="h-9 w-9"
-                aria-label={
-                  detailsOpen ? "Ocultar detalhes" : "Mostrar detalhes"
-                }
-                title={detailsOpen ? "Ocultar detalhes" : "Mostrar detalhes"}
-                aria-expanded={detailsOpen}
-                aria-describedby={
-                  detailsAttention ? "details-guidance" : undefined
-                }
-                data-attention={detailsAttention || undefined}
-                aria-controls="order-details"
-                onClick={() => setDetailsOpen((value) => !value)}
-              >
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  aria-hidden="true"
-                  style={{
-                    transform: detailsOpen ? "rotate(180deg)" : undefined,
-                  }}
-                >
-                  <path d="m6 9 6 6 6-6" />
-                </svg>
-              </Button>
-              {detailsAttention && (
-                <div
-                  id="details-guidance"
-                  className="details-guidance"
-                  role="tooltip"
-                >
-                  <strong>Complete os dados em detalhes</strong>
-                  <span>{missingDetails}</span>
-                </div>
-              )}
-            </div>
-          </div>
-          <div className="customer-inline">
-            <Input
-              aria-label="Cliente"
-              title="Clique para alterar o cliente"
-              name="customerName"
-              maxLength={200}
-              required
-              disabled={pending || done}
-              readOnly={editingCustomer !== "name"}
-              value={name}
-              placeholder="Nome do cliente"
-              onFocus={(e) => {
-                setEditingCustomer("name");
-                e.target.select();
-              }}
-              onBlur={() => setEditingCustomer(null)}
-              onChange={(e) => setName(e.target.value)}
-              className="inline-value customer-name"
-            />
-            <Input
-              aria-label="Telefone"
-              title="Clique para alterar o telefone"
-              name="customerPhone"
-              type="tel"
-              disabled={pending || done}
-              readOnly={editingCustomer !== "phone"}
-              value={phone}
-              placeholder="Adicionar telefone"
-              onFocus={(e) => {
-                setEditingCustomer("phone");
-                e.target.select();
-              }}
-              onBlur={() => setEditingCustomer(null)}
-              onChange={(e) => setPhone(e.target.value)}
-              className="inline-value customer-phone font-mono"
-            />
-            <div
-              className="customer-kpis"
-              aria-label="Histórico de compras do cliente"
-              aria-busy={crmState === "loading"}
-              title="Média de compras desde a primeira compra registrada no CRM. Pedidos cancelados ou pendentes não entram na média."
-            >
-              {[
-                [
-                  "Última compra",
-                  purchaseSummary?.last
-                    ? new Date(purchaseSummary.last).toLocaleDateString(
-                        "pt-BR",
-                        { timeZone: "America/Sao_Paulo" }
-                      )
-                    : null,
-                ],
-                [
-                  "Média semanal",
-                  purchaseSummary
-                    ? `${purchaseSummary.weekly.toLocaleString("pt-BR", {
-                        maximumFractionDigits: 1,
-                      })} compras`
-                    : null,
-                ],
-                [
-                  "Média mensal",
-                  purchaseSummary
-                    ? `${purchaseSummary.monthly.toLocaleString("pt-BR", {
-                        maximumFractionDigits: 1,
-                      })} compras`
-                    : null,
-                ],
-              ].map(([label, value]) => (
-                <div className="customer-kpi" key={label}>
-                  <span>{label}</span>
-                  <strong>
-                    {crmState === "loading"
-                      ? "…"
-                      : crmState === "error"
-                      ? "Indisponível"
-                      : value || "—"}
-                  </strong>
-                </div>
-              ))}
-            </div>
-          </div>
-          <div
-            className="order-checks"
-            aria-label="Verificações do pedido"
-            aria-busy={checking}
-          >
-            <CheckColumn
-              title="Comanda existente"
-              state={
-                checking ? "loading" : checkError || !check ? "error" : "ok"
-              }
-              detail={
-                checking
-                  ? "Consultando…"
-                  : checkError || !check
-                  ? "Consulta indisponível"
-                  : check.exists
-                  ? `Esta comanda será atualizada no servidor (${
-                      check.status || "confira no Atendimento"
-                    }).`
-                  : "Comanda ainda não adicionada."
-              }
-            />
-            <CheckColumn
-              title="Estoque massa"
-              state={
-                checking
-                  ? "loading"
-                  : checkError || !check
-                  ? "error"
-                  : check.shortages.length
-                  ? "error"
-                  : !check.available
-                  ? "warning"
-                  : "ok"
-              }
-              detail={
-                checking
-                  ? "Consultando…"
-                  : checkError || !check
-                  ? "Consulta indisponível"
-                  : !check.available
-                  ? "Estoque de massas não cadastrado; saldo não verificado."
-                  : check.shortages.length
-                  ? `Massa insuficiente: ${check.shortages.join(", ")}.`
-                  : "Saldo disponível por tamanho."
-              }
-            >
-              {!checking && !checkError && check?.available && (
-                <>
-                  {check.shortages.length > 0 && (
-                    <p className="check-detail">
-                      Massa insuficiente: {check.shortages.join(", ")}. Avise o
-                      cliente para avaliar outro tamanho ou cancelar o pedido. O
-                      envio continua disponível.
-                    </p>
-                  )}
-                  <div className="dough-numbers">
-                    {sizes.map((size) => (
-                      <div
-                        className="dough-number"
-                        key={size}
-                        data-shortage={check.shortages.includes(size)}
-                        title={`${sizeNames[size]}: ${
-                          check.available![size]
-                        } disponíveis / ${counts[size]} necessárias`}
-                        aria-label={`${sizeNames[size]}: ${
-                          check.available![size]
-                        } disponíveis / ${counts[size]} necessárias`}
-                      >
-                        <span>{size}</span>
-                        <strong>{check.available![size]}</strong>
-                      </div>
-                    ))}
-                  </div>
-                </>
-              )}
-            </CheckColumn>
-            <CheckColumn
-              title="Abertura dia"
-              state={
-                checking || openingDay
-                  ? "loading"
-                  : checkError || !check
-                  ? "error"
-                  : ["OPENED", "REOPENED"].includes(check.dayStatus)
-                  ? "ok"
-                  : "error"
-              }
-              detail={
-                openingDay
-                  ? "Abrindo dia…"
-                  : checking
-                  ? "Consultando…"
-                  : checkError || !check
-                  ? "Consulta indisponível"
-                  : check.dayStatus === "OPENED"
-                  ? "Dia aberto."
-                  : check.dayStatus === "REOPENED"
-                  ? "Dia reaberto."
-                  : check.dayStatus === "CLOSED"
-                  ? "Dia fechado."
-                  : "Dia ainda não aberto."
-              }
-              action={
-                check &&
-                !checkError &&
-                !["OPENED", "REOPENED"].includes(check.dayStatus) && (
-                  <Button
-                    type="button"
-                    variant="link"
-                    size="sm"
-                    className="open-day-action"
-                    disabled={openingDay || checking || pending || done}
-                    onClick={openDay}
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    aria-hidden="true"
                   >
-                    {openingDay ? "Abrindo…" : "Abrir o dia"}
-                  </Button>
-                )
-              }
-            />
-          </div>
-          {openDayError && (
-            <p role="alert" className="mt-2 text-xs text-red-700">
-              {openDayError}
-            </p>
-          )}
-          {!checking && checkError && (
-            <p role="alert" className="mt-2 text-xs text-red-700">
-              {checkError}
-            </p>
-          )}
-        </header>
-        <div className="scroll" id="order-details" hidden={!detailsOpen}>
-          <fieldset
-            disabled={pending || done || openingDay}
-            className="review-details min-w-0"
-          >
-            <section aria-label="Dados do pedido">
-              <h3 className="section-title">Dados do pedido</h3>
-              <div className="fields">
-                <label className="field">
-                  Comanda
-                  <Input
-                    name="commandNumber"
-                    type="number"
-                    min="1"
-                    step="1"
-                    required
-                    value={command}
-                    onChange={(e) => setCommand(e.target.value)}
-                    className="h-9 font-mono"
-                  />
-                </label>
-                <label className="field">
-                  Data
-                  <Input
-                    name="date"
-                    type="date"
-                    required
-                    value={date}
-                    onChange={(e) => setDate(e.target.value)}
-                    className="h-9 text-xs"
-                  />
-                </label>
-                <label className="field total">
-                  Total do pedido (R$)
-                  <Input
-                    name="orderAmount"
-                    inputMode="decimal"
-                    required
-                    value={amount}
-                    onChange={(e) => setAmount(e.target.value)}
-                    onBlur={() => {
-                      if (amount.trim() && Number.isFinite(parseMoney(amount)))
-                        setAmount(money(parseMoney(amount)));
+                    <path d="M20 7v5h-5M4 17v-5h5" />
+                    <path d="M6.1 7a7 7 0 0 1 11.6-2L20 8M4 16l2.3 3A7 7 0 0 0 17.9 17" />
+                  </svg>
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="h-9 w-9"
+                  aria-label={
+                    detailsOpen ? "Ocultar detalhes" : "Mostrar detalhes"
+                  }
+                  title={detailsOpen ? "Ocultar detalhes" : "Mostrar detalhes"}
+                  aria-expanded={detailsOpen}
+                  aria-describedby={
+                    detailsAttention ? "details-guidance" : undefined
+                  }
+                  data-attention={detailsAttention || undefined}
+                  aria-controls="order-details"
+                  onClick={() => setDetailsOpen((value) => !value)}
+                >
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    aria-hidden="true"
+                    style={{
+                      transform: detailsOpen ? "rotate(180deg)" : undefined,
                     }}
-                    className="h-9 font-mono"
-                  />
-                </label>
-              </div>
-              {!order.takeAway && (
-                <section className="delivery-section" aria-label="Entrega">
-                  <h3 className="section-title">Entrega</h3>
-                  <div className="delivery">
-                    <div className="field">
-                      <span>Bairro no KDS</span>
-                      <Select
-                        value={zoneId}
-                        onValueChange={setZoneId}
-                        disabled={loadingZones || pending || done || savingZone}
-                      >
-                        <SelectTrigger aria-label="Selecionar bairro no KDS">
-                          <SelectValue
-                            placeholder={
-                              loadingZones
-                                ? "Carregando bairros…"
-                                : "Selecione o bairro aqui"
-                            }
-                          />
-                        </SelectTrigger>
-                        <SelectContent portalContainer={portalContainer}>
-                          {zones.map((zone) => (
-                            <SelectItem key={zone.id} value={zone.id}>
-                              {zone.name}
-                              {zone.city ? ` · ${zone.city}` : ""}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <span className="text-xs text-slate-500">
-                        Suitable:{" "}
-                        {order.deliveryNeighborhood || "bairro não informado"}
-                        {order.deliveryCity ? ` · ${order.deliveryCity}` : ""}
-                      </span>
-                      {zoneError && (
-                        <div role="alert" className="text-xs text-red-700">
-                          {zoneError}{" "}
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setZoneAttempt((value) => value + 1)}
-                          >
-                            Tentar novamente
-                          </Button>
-                        </div>
-                      )}
-                      {!loadingZones && !zoneError && !zoneId && (
-                        <span className="text-xs text-amber-700">
-                          Selecione o bairro acima ou clique em “Criar bairro”
-                          se ele ainda não estiver cadastrado.
-                        </span>
-                      )}
-                      {!creatingZone && (
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          disabled={
-                            pending ||
-                            done ||
-                            loadingZones ||
-                            Boolean(zoneError)
-                          }
-                          onClick={() => setCreatingZone(true)}
-                        >
-                          Criar bairro
-                        </Button>
-                      )}
-                      {creatingZone && (
-                        <div className="grid gap-2 rounded-md border p-3">
-                          <label className="field">
-                            Nome do bairro
-                            <Input
-                              value={zoneName}
-                              onChange={(e) => setZoneName(e.target.value)}
-                              disabled={savingZone}
-                              maxLength={200}
-                            />
-                          </label>
-                          <label className="field">
-                            Cidade
-                            <Input
-                              value={zoneCity}
-                              onChange={(e) => setZoneCity(e.target.value)}
-                              disabled={savingZone}
-                              maxLength={200}
-                            />
-                          </label>
-                          <label className="field">
-                            UF
-                            <Input
-                              value={zoneState}
-                              onChange={(e) =>
-                                setZoneState(e.target.value.toUpperCase())
-                              }
-                              disabled={savingZone}
-                              maxLength={2}
-                              placeholder="Ex.: PR"
-                            />
-                          </label>
-                          <span className="text-xs text-slate-500">
-                            O bairro será salvo no servidor e selecionado neste
-                            pedido. A taxa informada vale para este pedido.
-                          </span>
-                          {createZoneError && (
-                            <div role="alert" className="text-xs text-red-700">
-                              {createZoneError}
-                            </div>
-                          )}
-                          <div className="flex gap-2">
-                            <Button
-                              type="button"
-                              disabled={
-                                savingZone ||
-                                !zoneName.trim() ||
-                                !zoneCity.trim() ||
-                                zoneState.trim().length !== 2
-                              }
-                              onClick={createZone}
-                            >
-                              {savingZone ? "Salvando…" : "Salvar bairro"}
-                            </Button>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              disabled={savingZone}
-                              onClick={() => setCreatingZone(false)}
-                            >
-                              Cancelar
-                            </Button>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                    <label className="field">
-                      Taxa de entrega (R$)
-                      <Input
-                        name="deliveryFee"
-                        inputMode="decimal"
-                        required
-                        value={fee}
-                        onChange={(e) => setFee(e.target.value)}
-                        onBlur={() => {
-                          if (fee.trim() && Number.isFinite(parseMoney(fee)))
-                            setFee(money(parseMoney(fee)));
-                        }}
-                        className="h-9 font-mono"
-                      />
-                    </label>
-                    <p className="delivery-hint text-xs text-slate-500">
-                      O total do pedido já inclui a taxa de entrega.
-                    </p>
+                  >
+                    <path d="m6 9 6 6 6-6" />
+                  </svg>
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="h-9 w-9"
+                  aria-label={summaryOpen ? "Ocultar resumo" : "Mostrar resumo"}
+                  title={summaryOpen ? "Ocultar resumo" : "Mostrar resumo"}
+                  aria-expanded={summaryOpen}
+                  aria-controls="order-summary"
+                  onClick={() => setSummaryOpen((value) => !value)}
+                >
+                  {summaryOpen ? (
+                    <PanelRightClose size={16} aria-hidden="true" />
+                  ) : (
+                    <PanelRightOpen size={16} aria-hidden="true" />
+                  )}
+                </Button>
+                {detailsAttention && (
+                  <div
+                    id="details-guidance"
+                    className="details-guidance"
+                    role="tooltip"
+                  >
+                    <strong>Complete os dados em detalhes</strong>
+                    <span>{missingDetails}</span>
                   </div>
-                </section>
-              )}
-            </section>
-            <section className="items-section" aria-label="Pizzas e itens">
-              <h3 className="section-title items-title">
-                Pizzas e itens{" "}
-                <span className="section-count">{items.length}</span>
-              </h3>
-              {items.map((item, index) => (
-                <article className="item" key={index}>
-                  <div className="item-row">
-                    <span className="item-label">Item {index + 1}</span>
-                    <label className="field">
-                      Qtd.
-                      <Input
-                        className="quantity h-9 text-center font-mono"
-                        type="number"
-                        min="1"
-                        max="1000"
-                        step="1"
-                        required
-                        value={item.quantity || ""}
-                        onChange={(e) =>
-                          update(index, { quantity: Number(e.target.value) })
-                        }
-                      />
-                    </label>
-                    <div className="field item-size">
-                      <span>Tamanho</span>
-                      <div
-                        className="sizes"
-                        role="group"
-                        aria-label={`Tamanho do item ${index + 1}`}
-                      >
-                        {sizes.map((size) => (
-                          <button
-                            key={size}
-                            type="button"
-                            className={`bubble ${
-                              item.size === size ? "active" : ""
-                            }`}
-                            aria-label={sizeNames[size]}
-                            aria-pressed={item.size === size}
-                            title={sizeNames[size]}
-                            onClick={() => update(index, { size })}
-                          >
-                            {size}
-                          </button>
-                        ))}
-                        {!/\bpizzas?\b/i.test(item.name) && (
-                          <button
-                            type="button"
-                            className="rounded-md border px-2 text-xs"
-                            aria-pressed={!item.size}
-                            onClick={() => update(index, { size: null })}
-                          >
-                            Outro
-                          </button>
-                        )}
-                      </div>
+                )}
+              </div>
+            </OrderDetailsHeader>
+            <OrderCustomerCard>
+              <div className="customer-inline">
+                <Input
+                  aria-label="Cliente"
+                  title="Clique para alterar o cliente"
+                  name="customerName"
+                  maxLength={200}
+                  required
+                  disabled={pending || done}
+                  readOnly={editingCustomer !== "name"}
+                  value={name}
+                  placeholder="Nome do cliente"
+                  onFocus={(e) => {
+                    setEditingCustomer("name");
+                    e.target.select();
+                  }}
+                  onBlur={() => setEditingCustomer(null)}
+                  onChange={(e) => setName(e.target.value)}
+                  className="inline-value customer-name"
+                />
+                <Input
+                  aria-label="Telefone"
+                  title="Clique para alterar o telefone"
+                  name="customerPhone"
+                  type="tel"
+                  disabled={pending || done}
+                  readOnly={editingCustomer !== "phone"}
+                  value={phone}
+                  placeholder="Adicionar telefone"
+                  onFocus={(e) => {
+                    setEditingCustomer("phone");
+                    e.target.select();
+                  }}
+                  onBlur={() => setEditingCustomer(null)}
+                  onChange={(e) => setPhone(e.target.value)}
+                  className="inline-value customer-phone font-mono"
+                />
+                <div
+                  className="customer-kpis"
+                  aria-label="Histórico de compras do cliente"
+                  aria-busy={crmState === "loading"}
+                  title="Média de compras desde a primeira compra registrada no CRM. Pedidos cancelados ou pendentes não entram na média."
+                >
+                  {[
+                    [
+                      "Última compra",
+                      purchaseSummary?.last
+                        ? new Date(purchaseSummary.last).toLocaleDateString(
+                            "pt-BR",
+                            { timeZone: "America/Sao_Paulo" }
+                          )
+                        : null,
+                      "",
+                    ],
+                    [
+                      "Média semanal",
+                      purchaseSummary
+                        ? purchaseSummary.weekly.toLocaleString("pt-BR", {
+                            maximumFractionDigits: 1,
+                          })
+                        : null,
+                      purchaseSummary?.weekly === 1 ? "compra" : "compras",
+                    ],
+                    [
+                      "Média mensal",
+                      purchaseSummary
+                        ? purchaseSummary.monthly.toLocaleString("pt-BR", {
+                            maximumFractionDigits: 1,
+                          })
+                        : null,
+                      purchaseSummary?.monthly === 1 ? "compra" : "compras",
+                    ],
+                  ].map(([label, value, unit]) => (
+                    <div
+                      className={`customer-kpi ${
+                        unit ? "customer-kpi-frequency" : ""
+                      }`}
+                      key={label}
+                    >
+                      <span>{label}</span>
+                      <strong>
+                        {crmState === "loading"
+                          ? "…"
+                          : crmState === "error"
+                          ? "Indisponível"
+                          : value || "—"}
+                        {crmState !== "loading" &&
+                          crmState !== "error" &&
+                          value &&
+                          unit && <small> {unit}</small>}
+                      </strong>
                     </div>
+                  ))}
+                </div>
+              </div>
+            </OrderCustomerCard>
+            <OrderStatusAlerts checking={checking}>
+              <CheckColumn
+                title="Comanda existente"
+                state={
+                  checking ? "loading" : checkError || !check ? "error" : "ok"
+                }
+                detail={
+                  checking
+                    ? "Consultando…"
+                    : checkError || !check
+                    ? "Consulta indisponível"
+                    : check.exists
+                    ? `Esta comanda será atualizada no servidor (${
+                        check.status || "confira no Atendimento"
+                      }).`
+                    : "Comanda ainda não adicionada."
+                }
+              />
+              <CheckColumn
+                title="Estoque massa"
+                state={
+                  checking
+                    ? "loading"
+                    : checkError || !check
+                    ? "error"
+                    : check.shortages.length
+                    ? "error"
+                    : !check.available
+                    ? "warning"
+                    : "ok"
+                }
+                detail={
+                  checking
+                    ? "Consultando…"
+                    : checkError || !check
+                    ? "Consulta indisponível"
+                    : !check.available
+                    ? "Estoque de massas não cadastrado; saldo não verificado."
+                    : check.shortages.length
+                    ? `Massa insuficiente: ${check.shortages.join(", ")}.`
+                    : "Saldo disponível por tamanho."
+                }
+              >
+                {!checking && !checkError && check?.available && (
+                  <>
+                    {check.shortages.length > 0 && (
+                      <p className="check-detail">
+                        Massa insuficiente: {check.shortages.join(", ")}. Avise
+                        o cliente para avaliar outro tamanho ou cancelar o
+                        pedido. O envio continua disponível.
+                      </p>
+                    )}
+                    <div className="dough-numbers">
+                      {sizes.map((size) => (
+                        <div
+                          className="dough-number"
+                          key={size}
+                          data-shortage={check.shortages.includes(size)}
+                          title={`${sizeNames[size]}: ${
+                            check.available![size]
+                          } disponíveis / ${counts[size]} necessárias`}
+                          aria-label={`${sizeNames[size]}: ${
+                            check.available![size]
+                          } disponíveis / ${counts[size]} necessárias`}
+                        >
+                          <span>{size}</span>
+                          <strong>{check.available![size]}</strong>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </CheckColumn>
+              <CheckColumn
+                title="Abertura dia"
+                state={
+                  checking || openingDay
+                    ? "loading"
+                    : checkError || !check
+                    ? "error"
+                    : ["OPENED", "REOPENED"].includes(check.dayStatus)
+                    ? "ok"
+                    : "error"
+                }
+                detail={
+                  openingDay
+                    ? "Abrindo dia…"
+                    : checking
+                    ? "Consultando…"
+                    : checkError || !check
+                    ? "Consulta indisponível"
+                    : check.dayStatus === "OPENED"
+                    ? "Dia aberto."
+                    : check.dayStatus === "REOPENED"
+                    ? "Dia reaberto."
+                    : check.dayStatus === "CLOSED"
+                    ? "Dia fechado."
+                    : "Dia ainda não aberto."
+                }
+                action={
+                  check &&
+                  !checkError &&
+                  !["OPENED", "REOPENED"].includes(check.dayStatus) && (
                     <Button
                       type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="flavors-toggle h-9 w-9"
-                      aria-label={`${
-                        visibleFlavors[index] ? "Ocultar" : "Mostrar"
-                      } sabores do item ${index + 1}`}
-                      title={
-                        visibleFlavors[index]
-                          ? "Ocultar sabores"
-                          : "Mostrar sabores"
-                      }
-                      aria-expanded={Boolean(visibleFlavors[index])}
-                      aria-controls={`item-flavors-${index}`}
-                      onClick={() =>
-                        setVisibleFlavors((current) => ({
-                          ...current,
-                          [index]: !current[index],
-                        }))
-                      }
+                      variant="link"
+                      size="sm"
+                      className="open-day-action"
+                      disabled={openingDay || checking || pending || done}
+                      onClick={openDay}
                     >
-                      {visibleFlavors[index] ? (
-                        <EyeOff size={16} />
-                      ) : (
-                        <Eye size={16} />
-                      )}
+                      {openingDay ? "Abrindo…" : "Abrir o dia"}
                     </Button>
-                  </div>
-                  <div
-                    id={`item-flavors-${index}`}
-                    hidden={!visibleFlavors[index]}
-                  >
-                    <label className="field mt-2">
-                      Sabores
-                      <Textarea
-                        className="flavors min-h-0 resize-y text-sm"
-                        rows={Math.max(1, Math.min(3, item.flavors.length))}
-                        value={item.flavors.join("\n")}
-                        onChange={(e) =>
-                          update(index, { flavors: e.target.value.split("\n") })
-                        }
-                      />
-                    </label>
-                  </div>
-                  <details open={item.notes.length > 0 || undefined}>
-                    <summary>
-                      Observações / adicionais
-                      {item.notes.length > 0 ? ` · ${item.notes.length}` : ""}
-                    </summary>
-                    <label className="field mt-2">
-                      <span className="sr-only">
-                        Observações do item {index + 1}
-                      </span>
-                      <Textarea
-                        className="notes min-h-0 resize-y text-sm"
-                        rows={2}
-                        value={item.notes.join("\n")}
-                        onChange={(e) =>
-                          update(index, { notes: e.target.value.split("\n") })
-                        }
-                      />
-                    </label>
-                  </details>
-                </article>
-              ))}
-            </section>
-          </fieldset>
+                  )
+                }
+              />
+            </OrderStatusAlerts>
+
+            {openDayError && (
+              <p role="alert" className="mt-2 text-xs text-red-700">
+                {openDayError}
+              </p>
+            )}
+            {!checking && checkError && (
+              <p role="alert" className="mt-2 text-xs text-red-700">
+                {checkError}
+              </p>
+            )}
+            <div
+              className="order-form-details"
+              id="order-details"
+              hidden={!detailsOpen}
+            >
+              <fieldset
+                disabled={pending || done || openingDay}
+                className="review-details min-w-0"
+              >
+                <div
+                  className={`order-delivery-layout ${
+                    order.takeAway ? "pickup" : ""
+                  }`}
+                >
+                  <OrderInformation>
+                    <div className="fields">
+                      <label className="field">
+                        Comanda
+                        <Input
+                          name="commandNumber"
+                          aria-invalid={invalidCommand || undefined}
+                          type="number"
+                          min="1"
+                          step="1"
+                          required
+                          value={command}
+                          onChange={(e) => setCommand(e.target.value)}
+                          className="h-9 font-mono"
+                        />
+                      </label>
+                      <label className="field">
+                        Data
+                        <Input
+                          name="date"
+                          aria-invalid={missingDate || undefined}
+                          type="date"
+                          required
+                          value={date}
+                          onChange={(e) => setDate(e.target.value)}
+                          className="h-9 text-xs"
+                        />
+                      </label>
+                      <div className="field">
+                        <span>Canal</span>{" "}
+                        <div className="w-[180px] max-w-full">
+                          <span id="channel-label" className="sr-only">
+                            Origem do pedido
+                          </span>
+                          <Select
+                            name="channel"
+                            value={channel}
+                            onValueChange={setChannel}
+                            disabled={pending || done}
+                          >
+                            <SelectTrigger
+                              aria-labelledby="channel-label"
+                              title="Origem do pedido"
+                              className="h-9 text-xs"
+                            >
+                              <SelectValue placeholder="Origem do pedido" />
+                            </SelectTrigger>
+                            <SelectContent portalContainer={portalContainer}>
+                              {CHANNELS.filter(
+                                (value) => value !== "Suitable"
+                              ).map((value) => (
+                                <SelectItem key={value} value={value}>
+                                  {value}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                      <label className="field total">
+                        Total do pedido
+                        {!order.takeAway && " (inclui a taxa de entrega)"}
+                        <Input
+                          name="orderAmount"
+                          aria-invalid={invalidAmount || undefined}
+                          inputMode="decimal"
+                          required
+                          value={amount}
+                          onChange={(e) => setAmount(e.target.value)}
+                          onBlur={() => {
+                            if (
+                              amount.trim() &&
+                              Number.isFinite(parseMoney(amount))
+                            )
+                              setAmount(money(parseMoney(amount)));
+                          }}
+                          className="h-9 font-mono"
+                        />
+                      </label>
+                    </div>
+                  </OrderInformation>
+                  {!order.takeAway && (
+                    <OrderDeliverySection>
+                      <div className="delivery">
+                        <div className="field delivery-zone-field">
+                          <div className="delivery-zone-heading">
+                            <span>Bairro no KDS</span>
+                            {!creatingZone && (
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="delivery-create-action"
+                                disabled={
+                                  pending ||
+                                  done ||
+                                  loadingZones ||
+                                  Boolean(zoneError)
+                                }
+                                onClick={() => setCreatingZone(true)}
+                              >
+                                + Criar bairro
+                                {order.deliveryNeighborhood
+                                  ? ` (${order.deliveryNeighborhood})`
+                                  : ""}
+                              </Button>
+                            )}
+                          </div>
+                          <Select
+                            value={zoneId}
+                            onValueChange={setZoneId}
+                            disabled={
+                              loadingZones || pending || done || savingZone
+                            }
+                          >
+                            <SelectTrigger
+                              aria-label="Selecionar bairro no KDS"
+                              aria-invalid={missingZone || undefined}
+                              aria-describedby={
+                                missingZone
+                                  ? "delivery-zone-required"
+                                  : undefined
+                              }
+                            >
+                              <SelectValue
+                                placeholder={
+                                  loadingZones
+                                    ? "Carregando bairros…"
+                                    : "Selecionar bairro"
+                                }
+                              >
+                                <span>
+                                  {zones.find((zone) => zone.id === zoneId)
+                                    ?.name ||
+                                    (loadingZones
+                                      ? "Carregando bairros…"
+                                      : "Selecionar bairro")}
+                                </span>
+                              </SelectValue>
+                            </SelectTrigger>
+                            <SelectContent portalContainer={portalContainer}>
+                              {zones.map((zone) => (
+                                <SelectItem key={zone.id} value={zone.id}>
+                                  {zone.name}
+                                  {zone.city ? ` · ${zone.city}` : ""}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          {missingZone && (
+                            <p
+                              id="delivery-zone-required"
+                              className="required-field-message"
+                            >
+                              Bairro obrigatório. Selecione na lista ou crie o
+                              bairro.
+                            </p>
+                          )}
+                          {zoneError && (
+                            <div role="alert" className="text-xs text-red-700">
+                              {zoneError}{" "}
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() =>
+                                  setZoneAttempt((value) => value + 1)
+                                }
+                              >
+                                Tentar novamente
+                              </Button>
+                            </div>
+                          )}
+                        </div>
+                        <label className="field">
+                          <span className="delivery-fee-label">
+                            Taxa de entrega (R$)
+                          </span>
+                          <Input
+                            name="deliveryFee"
+                            aria-invalid={invalidFee || undefined}
+                            inputMode="decimal"
+                            required
+                            value={fee}
+                            onChange={(e) => setFee(e.target.value)}
+                            onBlur={() => {
+                              if (
+                                fee.trim() &&
+                                Number.isFinite(parseMoney(fee))
+                              )
+                                setFee(money(parseMoney(fee)));
+                            }}
+                            className="h-9 font-mono"
+                          />
+                        </label>
+                        {creatingZone && (
+                          <div className="delivery-zone-create">
+                            <label className="field">
+                              Nome do bairro
+                              <Input
+                                value={zoneName}
+                                onChange={(e) => setZoneName(e.target.value)}
+                                disabled={savingZone}
+                                maxLength={200}
+                              />
+                            </label>
+                            <label className="field">
+                              Cidade
+                              <Input
+                                value={zoneCity}
+                                onChange={(e) => setZoneCity(e.target.value)}
+                                disabled={savingZone}
+                                maxLength={200}
+                              />
+                            </label>
+                            <label className="field">
+                              UF
+                              <Input
+                                value={zoneState}
+                                onChange={(e) =>
+                                  setZoneState(e.target.value.toUpperCase())
+                                }
+                                disabled={savingZone}
+                                maxLength={2}
+                                placeholder="Ex.: PR"
+                              />
+                            </label>
+                            <span className="text-xs text-slate-500">
+                              O bairro será salvo no servidor e selecionado
+                              neste pedido. A taxa informada vale para este
+                              pedido.
+                            </span>
+                            {createZoneError && (
+                              <div
+                                role="alert"
+                                className="text-xs text-red-700"
+                              >
+                                {createZoneError}
+                              </div>
+                            )}
+                            <div className="delivery-zone-create-actions flex gap-2">
+                              <Button
+                                type="button"
+                                disabled={
+                                  savingZone ||
+                                  !zoneName.trim() ||
+                                  !zoneCity.trim() ||
+                                  zoneState.trim().length !== 2
+                                }
+                                onClick={createZone}
+                              >
+                                {savingZone ? "Salvando…" : "Salvar bairro"}
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                disabled={savingZone}
+                                onClick={() => setCreatingZone(false)}
+                              >
+                                Cancelar
+                              </Button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </OrderDeliverySection>
+                  )}
+                </div>
+                <OrderItemsSection count={items.length}>
+                  {items.map((item, index) => (
+                    <OrderItemRow key={index} index={index}>
+                      <div className="item-row">
+                        <span className="item-label">
+                          <span className="item-number">{index + 1}</span>
+                          {item.name || `Item ${index + 1}`}
+                        </span>
+                        <label className="field">
+                          Qtd.
+                          <div className="quantity-stepper">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              aria-label={`Diminuir quantidade do item ${
+                                index + 1
+                              }`}
+                              disabled={item.quantity <= 1}
+                              onClick={() =>
+                                update(index, {
+                                  quantity: Math.max(1, item.quantity - 1),
+                                })
+                              }
+                            >
+                              <Minus size={14} />
+                            </Button>
+                            <Input
+                              className="quantity h-9 text-center font-mono"
+                              type="number"
+                              min="1"
+                              max="1000"
+                              step="1"
+                              required
+                              value={item.quantity || ""}
+                              onChange={(e) =>
+                                update(index, {
+                                  quantity: Number(e.target.value),
+                                })
+                              }
+                            />
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              aria-label={`Aumentar quantidade do item ${
+                                index + 1
+                              }`}
+                              disabled={item.quantity >= 1000}
+                              onClick={() =>
+                                update(index, {
+                                  quantity: Math.min(1000, item.quantity + 1),
+                                })
+                              }
+                            >
+                              <Plus size={14} />
+                            </Button>
+                          </div>
+                        </label>
+                        <div className="field item-size">
+                          <span>Tamanho</span>
+                          <div
+                            className="sizes"
+                            role="group"
+                            aria-label={`Tamanho do item ${index + 1}`}
+                          >
+                            {sizes.map((size) => (
+                              <button
+                                key={size}
+                                type="button"
+                                className={`bubble ${
+                                  item.size === size ? "active" : ""
+                                }`}
+                                aria-label={sizeNames[size]}
+                                aria-pressed={item.size === size}
+                                title={sizeNames[size]}
+                                onClick={() => update(index, { size })}
+                              >
+                                {size}
+                              </button>
+                            ))}
+                            {!/\bpizzas?\b/i.test(item.name) && (
+                              <button
+                                type="button"
+                                className="rounded-md border px-2 text-xs"
+                                aria-pressed={!item.size}
+                                onClick={() => update(index, { size: null })}
+                              >
+                                Outro
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="flavors-toggle h-9 w-9"
+                          aria-label={`${
+                            visibleFlavors[index] ? "Ocultar" : "Mostrar"
+                          } sabores do item ${index + 1}`}
+                          title={
+                            visibleFlavors[index]
+                              ? "Ocultar sabores"
+                              : "Mostrar sabores"
+                          }
+                          aria-expanded={Boolean(visibleFlavors[index])}
+                          aria-controls={`item-flavors-${index}`}
+                          onClick={() =>
+                            setVisibleFlavors((current) => ({
+                              ...current,
+                              [index]: !current[index],
+                            }))
+                          }
+                        >
+                          {visibleFlavors[index] ? (
+                            <EyeOff size={16} />
+                          ) : (
+                            <Eye size={16} />
+                          )}
+                        </Button>
+                      </div>
+                      <div
+                        id={`item-flavors-${index}`}
+                        hidden={!visibleFlavors[index]}
+                      >
+                        <label className="field mt-2">
+                          Sabores
+                          <Textarea
+                            className="flavors min-h-0 resize-y text-sm"
+                            rows={Math.max(1, Math.min(3, item.flavors.length))}
+                            value={item.flavors.join("\n")}
+                            onChange={(e) =>
+                              update(index, {
+                                flavors: e.target.value.split("\n"),
+                              })
+                            }
+                          />
+                        </label>
+                      </div>
+                      <details open={item.notes.length > 0 || undefined}>
+                        <summary>
+                          Observações / adicionais
+                          {item.notes.length > 0
+                            ? ` · ${item.notes.length}`
+                            : ""}
+                        </summary>
+                        <label className="field mt-2">
+                          <span className="sr-only">
+                            Observações do item {index + 1}
+                          </span>
+                          <Textarea
+                            className="notes min-h-0 resize-y text-sm"
+                            rows={2}
+                            value={item.notes.join("\n")}
+                            onChange={(e) =>
+                              update(index, {
+                                notes: e.target.value.split("\n"),
+                              })
+                            }
+                          />
+                        </label>
+                      </details>
+                    </OrderItemRow>
+                  ))}
+                </OrderItemsSection>
+              </fieldset>
+            </div>
+          </div>
+          <OrderSummaryPanel
+            hidden={!summaryOpen}
+            total={
+              amount.trim() && Number.isFinite(parseMoney(amount))
+                ? `R$ ${money(parseMoney(amount))}`
+                : "—"
+            }
+            subtotal={
+              amount.trim() &&
+              Number.isFinite(parseMoney(amount)) &&
+              (order.takeAway ||
+                (fee.trim() && Number.isFinite(parseMoney(fee))))
+                ? `R$ ${money(
+                    parseMoney(amount) - (order.takeAway ? 0 : parseMoney(fee))
+                  )}`
+                : "—"
+            }
+            fee={
+              fee.trim() && Number.isFinite(parseMoney(fee))
+                ? `R$ ${money(parseMoney(fee))}`
+                : "—"
+            }
+            status={
+              done
+                ? "Enviado ao KDS"
+                : check?.exists
+                ? "Comanda existente"
+                : "Não enviado"
+            }
+            items={items}
+            name={name}
+            phone={phone}
+            takeAway={order.takeAway}
+            neighborhood={zones.find((zone) => zone.id === zoneId)?.name}
+            city={zones.find((zone) => zone.id === zoneId)?.city}
+            onEdit={(section) => {
+              setDetailsOpen(true);
+              requestAnimationFrame(() =>
+                (portalContainer.getRootNode() as ShadowRoot)
+                  .querySelector(
+                    section === "items" ? ".items-section" : ".delivery-section"
+                  )
+                  ?.scrollIntoView({ block: "nearest", behavior: "smooth" })
+              );
+            }}
+          />
         </div>
-        <footer className="footer">
+        <OrderDetailsFooter>
           <div
             className="message"
             data-tone={
@@ -1334,11 +1481,40 @@ function Review({
             )}
           </div>
           <div className="footer-row">
-            <span className="text-xs text-slate-500">
-              {done
-                ? "Disponível no KDS"
-                : "Confira os dados antes de adicionar."}
-            </span>
+            <div
+              className={
+                missingDetails && !done && !pending
+                  ? "required-summary"
+                  : "text-xs text-slate-500"
+              }
+              role="status"
+            >
+              {done ? (
+                "Disponível no KDS"
+              ) : pending ? (
+                "Enviando pedido…"
+              ) : missingDetails ? (
+                <>
+                  <strong>
+                    <AlertTriangle size={14} aria-hidden="true" /> Dados
+                    obrigatórios pendentes
+                  </strong>
+                  <span>{missingDetails}</span>
+                  {!detailsOpen && (
+                    <Button
+                      type="button"
+                      variant="link"
+                      size="sm"
+                      onClick={() => setDetailsOpen(true)}
+                    >
+                      Preencher dados
+                    </Button>
+                  )}
+                </>
+              ) : (
+                "Confira os dados antes de adicionar."
+              )}
+            </div>
             <div className="footer-actions flex shrink-0 gap-2">
               <Button
                 type="button"
@@ -1359,20 +1535,26 @@ function Review({
                     savingZone ||
                     openingDay ||
                     !items.length ||
+                    Boolean(missingDetails) ||
+                    loadingZones ||
                     checking ||
                     !check?.canSend
                   }
                 >
-                  {pending
-                    ? "Enviando…"
-                    : check?.exists
-                    ? "Atualizar"
-                    : "Enviar"}
+                  {pending ? (
+                    "Enviando…"
+                  ) : check?.exists ? (
+                    "Atualizar no KDS"
+                  ) : (
+                    <>
+                      <Send size={17} aria-hidden="true" /> Enviar ao KDS
+                    </>
+                  )}
                 </Button>
               )}
             </div>
           </div>
-        </footer>
+        </OrderDetailsFooter>
       </form>
     </div>
   );
@@ -1383,6 +1565,9 @@ function attach(host: HTMLElement) {
   const style = document.createElement("style");
   style.textContent = css;
   const mount = document.createElement("div");
+  if (host.hasAttribute("data-amodomio-review")) {
+    mount.style.cssText = "height:100%;min-height:0";
+  }
   const portalContainer = document.createElement("div");
   portalContainer.className = "extension";
   shadow.append(style, mount, portalContainer);
@@ -1404,9 +1589,40 @@ function review(
   }
   const host = document.createElement("div");
   host.dataset.amodomioReview = "true";
-  // The Suitable paper is a flex column. Keep the review from shrinking
-  // behind the original order content when the dialog reaches its height limit.
-  host.style.cssText = "flex:0 0 auto;min-width:0;width:100%";
+  // Keep the native header and its callbacks; the review owns the scrollable
+  // content and footer while mounted. Removing the host restores Suitable's layout.
+  host.style.cssText = "flex:1 1 auto;min-height:0;min-width:0;width:100%";
+  const nativeStyle = document.createElement("style");
+  nativeStyle.textContent = `
+    .MuiDialog-paper[role="dialog"]:has([data-amodomio-review]) {
+      width:94vw!important;max-width:1120px!important;height:94dvh!important;max-height:94dvh!important;
+      margin:3vh auto!important;border-radius:14px;overflow:hidden!important;
+      background:#f6f9fc;display:flex;flex-direction:column;
+    }
+    .MuiDialog-paper[role="dialog"]:has([data-amodomio-review]) > :first-child {
+      flex-shrink:0;padding:20px 28px!important;background:white;
+      border-bottom:1px solid #e2e8f0;display:flex;gap:16px;align-items:center;justify-content:space-between;flex-wrap:wrap;
+    }
+    .MuiDialog-paper[role="dialog"]:has([data-amodomio-review]) > :first-child {position:relative;font-family:"SuitableInter",Inter,sans-serif;}
+    .MuiDialog-paper[role="dialog"]:has([data-amodomio-review]) > :first-child > :first-child {flex:1 1 270px;width:auto;min-width:0;padding-right:24px;}
+    .MuiDialog-paper[role="dialog"]:has([data-amodomio-review]) > :first-child > :last-child {display:flex;flex:0 1 auto;flex-wrap:wrap;width:auto;max-width:100%;min-width:0;margin:0;padding:0;gap:10px;align-items:center;}
+    .MuiDialog-paper[role="dialog"]:has([data-amodomio-review]) > :first-child > :last-child > .MuiGrid-item {padding:0;}
+    .MuiDialog-paper[role="dialog"]:has([data-amodomio-review]) > :first-child > :last-child > [data-amodomio-kds] {order:1;margin:0!important;}
+    .MuiDialog-paper[role="dialog"]:has([data-amodomio-review]) > :first-child > :last-child > .MuiGrid-item:nth-last-child(2) {order:2;}
+    .MuiDialog-paper[role="dialog"]:has([data-amodomio-review]) > :first-child .MuiButtonGroup-root {display:flex;flex-wrap:nowrap;}
+    .MuiDialog-paper[role="dialog"]:has([data-amodomio-review]) > :first-child button {font-size:13px!important;line-height:1.4!important;min-height:36px;width:auto!important;border-width:1px!important;white-space:nowrap;padding:8px 12px;}
+    .MuiDialog-paper[role="dialog"]:has([data-amodomio-review]) > :first-child button[aria-haspopup] {width:28px!important;min-width:28px;padding:4px;}
+    .MuiDialog-paper[role="dialog"]:has([data-amodomio-review]) > :first-child button[aria-label="close"] {position:absolute;top:8px;right:8px;width:28px!important;min-width:28px;min-height:28px;height:28px;padding:4px;background:transparent!important;color:#64748b;border:0!important;}
+    .MuiDialog-paper[role="dialog"]:has([data-amodomio-review]) > :first-child svg {width:18px;height:18px;fill:currentColor;}
+    .MuiDialog-paper[role="dialog"]:has([data-amodomio-review]) > :first-child h6 {font-size:23px!important;line-height:1.3!important;margin:0!important;}
+    .MuiDialog-paper[role="dialog"]:has([data-amodomio-review]) > :first-child p {font-size:14px!important;line-height:1.5!important;margin:4px 0 0!important;color:#64748b!important;}
+    .MuiDialog-paper[role="dialog"]:has([data-amodomio-review]) > :not(:first-child):not([data-amodomio-review]) {display:none!important;}
+    @media(max-width:640px) {
+      .MuiDialog-paper[role="dialog"]:has([data-amodomio-review]) {width:100vw!important;height:100dvh!important;max-height:100dvh!important;margin:0!important;border-radius:0;}
+      .MuiDialog-paper[role="dialog"]:has([data-amodomio-review]) > :first-child {padding:12px!important;}
+    }
+  `;
+  host.append(nativeStyle);
   const { root, portalContainer } = attach(host);
   dialog.firstElementChild!.after(host);
   flushSync(() =>
