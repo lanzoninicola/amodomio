@@ -1,56 +1,71 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import { json, redirect } from "@remix-run/node";
-import { Form, useLoaderData, useNavigation } from "@remix-run/react";
+import { Form, Link, useLoaderData, useNavigation } from "@remix-run/react";
 import { useMemo, useState } from "react";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import AssetLibraryPickerDialog from "~/domain/media/components/asset-library-picker-dialog";
 import { settingPrismaEntity } from "~/domain/setting/setting.prisma.entity.server";
 import { STORE_OPENING_CONTEXT } from "~/domain/store-opening/store-opening-settings";
+import {
+  activateOffHoursMessage,
+  createOffHoursMessage,
+  deleteOffHoursMessage,
+  listOffHoursMessages,
+  parseOffHoursResponseType,
+  updateOffHoursMessage,
+  type OffHoursMessageInput,
+  type OffHoursResponseType,
+} from "~/domain/store-opening/off-hours-message.server";
 
-type LoaderData = {
-  enabled: boolean;
-  message: string;
-  responseType: "text" | "video";
-  video: string;
-  caption: string;
-  cooldownMinutes: number;
-  aggregationSeconds: number;
+const ROUTE_PATH = "/admin/atendimento/horarios/ausencia";
+const TYPE_LABEL: Record<OffHoursResponseType, string> = {
+  text: "Texto",
+  image: "Imagem",
+  video: "Vídeo",
 };
 
-export async function loader({ }: LoaderFunctionArgs) {
-  const settings = await settingPrismaEntity.findAllByContext(STORE_OPENING_CONTEXT);
+export async function loader({ request }: LoaderFunctionArgs) {
+  const url = new URL(request.url);
+  const editId = url.searchParams.get("edit");
+  const [settings, messages] = await Promise.all([
+    settingPrismaEntity.findAllByContext(STORE_OPENING_CONTEXT),
+    listOffHoursMessages(),
+  ]);
   const byName = new Map(settings.map((setting) => [setting.name, setting.value]));
-  const responseTypeRaw = (byName.get("off-hours-response-type") || "text").toLowerCase();
-  const responseType = responseTypeRaw === "video" ? "video" : "text";
   const cooldownRaw = Number(byName.get("off-hours-cooldown-minutes") || 15);
-  const cooldownMinutes = Number.isFinite(cooldownRaw) && cooldownRaw > 0
-    ? Math.floor(cooldownRaw)
-    : 15;
   const aggregationRaw = Number(byName.get("off-hours-aggregation-seconds") || 20);
-  const aggregationSeconds = Number.isFinite(aggregationRaw) && aggregationRaw >= 0
-    ? Math.floor(aggregationRaw)
-    : 20;
 
-  return json<LoaderData>({
+  return json({
     enabled: (byName.get("off-hours-enabled") ?? "true") === "true",
-    message: byName.get("off-hours-message") || "Estamos fora do horário. Voltamos em breve! 🍕",
-    responseType,
-    video: byName.get("off-hours-video") || "",
-    caption: byName.get("off-hours-video-caption") || "",
-    cooldownMinutes,
-    aggregationSeconds,
+    cooldownMinutes: Number.isFinite(cooldownRaw) && cooldownRaw > 0 ? Math.floor(cooldownRaw) : 15,
+    aggregationSeconds:
+      Number.isFinite(aggregationRaw) && aggregationRaw >= 0 ? Math.floor(aggregationRaw) : 20,
+    menuKeywords: byName.get("off-hours-menu-keywords") ?? "cardapio,cardápio,menu,sabores,preço,preco,valores",
+    menuUrl: byName.get("off-hours-menu-url") || "https://amodomio.com.br/cardapio",
+    menuMessage: byName.get("off-hours-menu-message") || "Nosso cardápio completo: {{link}}",
+    messages: messages.map((message) => ({
+      id: message.id,
+      label: message.label,
+      responseType: parseOffHoursResponseType(message.responseType),
+      message: message.message,
+      video: message.video,
+      videoCaption: message.videoCaption,
+      image: message.image,
+      imageCaption: message.imageCaption,
+      isActive: message.isActive,
+    })),
+    editId,
   });
 }
 
 async function upsertSetting(name: string, value: string, type: string) {
-  const existing = await settingPrismaEntity.findByContextAndName(
-    STORE_OPENING_CONTEXT,
-    name
-  );
+  const existing = await settingPrismaEntity.findByContextAndName(STORE_OPENING_CONTEXT, name);
 
   if (existing?.id) {
     await settingPrismaEntity.update(existing.id, { value, type });
@@ -66,32 +81,64 @@ async function upsertSetting(name: string, value: string, type: string) {
   });
 }
 
+function readMessageInput(form: FormData): OffHoursMessageInput {
+  return {
+    label: String(form.get("label") || "").trim() || "Mensagem sem nome",
+    responseType: parseOffHoursResponseType(form.get("responseType")),
+    message: String(form.get("message") || ""),
+    video: String(form.get("video") || ""),
+    videoCaption: String(form.get("videoCaption") || ""),
+    image: String(form.get("image") || ""),
+    imageCaption: String(form.get("imageCaption") || ""),
+  };
+}
+
 export async function action({ request }: ActionFunctionArgs) {
   const form = await request.formData();
-  const enabled = form.get("off-hours-enabled") === "on";
-  const responseTypeRaw = String(form.get("off-hours-response-type") || "text").toLowerCase();
-  const responseType = responseTypeRaw === "video" ? "video" : "text";
-  const message = String(form.get("off-hours-message") || "");
-  const video = String(form.get("off-hours-video") || "");
-  const caption = String(form.get("off-hours-video-caption") || "");
-  const cooldownRaw = Number(form.get("off-hours-cooldown-minutes") || 15);
-  const cooldownMinutes = Number.isFinite(cooldownRaw) && cooldownRaw > 0
-    ? Math.floor(cooldownRaw)
-    : 15;
-  const aggregationRaw = Number(form.get("off-hours-aggregation-seconds") || 20);
-  const aggregationSeconds = Number.isFinite(aggregationRaw) && aggregationRaw >= 0
-    ? Math.floor(aggregationRaw)
-    : 20;
+  const intent = String(form.get("intent") || "");
+  const id = String(form.get("id") || "");
 
-  await upsertSetting("off-hours-enabled", String(enabled), "boolean");
-  await upsertSetting("off-hours-response-type", responseType, "string");
-  await upsertSetting("off-hours-message", message, "string");
-  await upsertSetting("off-hours-video", video, "string");
-  await upsertSetting("off-hours-video-caption", caption, "string");
-  await upsertSetting("off-hours-cooldown-minutes", String(cooldownMinutes), "number");
-  await upsertSetting("off-hours-aggregation-seconds", String(aggregationSeconds), "number");
+  if (intent === "save-global") {
+    const cooldownRaw = Number(form.get("cooldownMinutes") || 15);
+    const aggregationRaw = Number(form.get("aggregationSeconds") || 20);
+    await upsertSetting("off-hours-enabled", String(form.get("enabled") === "on"), "boolean");
+    await upsertSetting(
+      "off-hours-cooldown-minutes",
+      String(Number.isFinite(cooldownRaw) && cooldownRaw > 0 ? Math.floor(cooldownRaw) : 15),
+      "number"
+    );
+    await upsertSetting(
+      "off-hours-aggregation-seconds",
+      String(Number.isFinite(aggregationRaw) && aggregationRaw >= 0 ? Math.floor(aggregationRaw) : 20),
+      "number"
+    );
+    await upsertSetting("off-hours-menu-keywords", String(form.get("menuKeywords") || ""), "string");
+    await upsertSetting("off-hours-menu-url", String(form.get("menuUrl") || ""), "string");
+    await upsertSetting("off-hours-menu-message", String(form.get("menuMessage") || ""), "string");
+    return redirect(ROUTE_PATH);
+  }
 
-  return redirect("/admin/atendimento/horarios/ausencia");
+  if (intent === "create") {
+    const created = await createOffHoursMessage(readMessageInput(form));
+    return redirect(`${ROUTE_PATH}?edit=${created.id}`);
+  }
+
+  if (intent === "update" && id) {
+    await updateOffHoursMessage(id, readMessageInput(form));
+    return redirect(`${ROUTE_PATH}?edit=${id}`);
+  }
+
+  if (intent === "activate" && id) {
+    await activateOffHoursMessage(id);
+    return redirect(ROUTE_PATH);
+  }
+
+  if (intent === "delete" && id) {
+    await deleteOffHoursMessage(id);
+    return redirect(ROUTE_PATH);
+  }
+
+  return redirect(ROUTE_PATH);
 }
 
 function toWhatsappFormatting(value: string) {
@@ -105,255 +152,397 @@ function toWhatsappFormatting(value: string) {
   return text;
 }
 
-export default function AtendimentoHorariosAusencia() {
-  const { enabled, message, responseType, video, caption, cooldownMinutes, aggregationSeconds } = useLoaderData<typeof loader>();
-  const nav = useNavigation();
-  const isSubmitting = nav.state !== "idle";
-
-  const [enabledValue, setEnabledValue] = useState(enabled);
-  const [responseTypeValue, setResponseTypeValue] = useState<"text" | "video">(responseType);
-  const [messageValue, setMessageValue] = useState(message);
-  const [videoValue, setVideoValue] = useState(video);
-  const [captionValue, setCaptionValue] = useState(caption);
-  const [cooldownValue, setCooldownValue] = useState(cooldownMinutes);
-  const [aggregationValue, setAggregationValue] = useState(aggregationSeconds);
-
-  const renderWhatsappPreview = useMemo(() => {
-    const escape = (str: string) =>
-      str
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;");
-
-    const wa = toWhatsappFormatting(messageValue || "");
-    return { __html: escape(wa).replace(/\n/g, "<br />") };
-  }, [messageValue]);
-
-  const renderCaptionPreview = useMemo(() => {
-    const escape = (str: string) =>
-      str
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;");
-
-    const wa = toWhatsappFormatting(captionValue || "");
-    return { __html: escape(wa).replace(/\n/g, "<br />") };
-  }, [captionValue]);
+function WhatsappPreview({ value }: { value: string }) {
+  const html = useMemo(() => {
+    const escaped = toWhatsappFormatting(value || "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+    return { __html: escaped.replace(/\n/g, "<br />") };
+  }, [value]);
 
   return (
-    <Form method="post" className="rounded-xl border bg-background/70 p-4 shadow-sm">
-      <input type="hidden" name="off-hours-enabled" value={enabledValue ? "on" : "off"} />
-      <input type="hidden" name="off-hours-response-type" value={responseTypeValue} />
-      <input type="hidden" name="off-hours-message" value={messageValue} />
-      <input type="hidden" name="off-hours-video" value={videoValue} />
-      <input type="hidden" name="off-hours-video-caption" value={captionValue} />
-      <input type="hidden" name="off-hours-cooldown-minutes" value={cooldownValue} />
-      <input type="hidden" name="off-hours-aggregation-seconds" value={aggregationValue} />
+    <div className="rounded-md border bg-muted/40 p-2 text-xs leading-relaxed">
+      <p className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground mb-1">Preview</p>
+      <div className="whitespace-pre-wrap break-words" dangerouslySetInnerHTML={html} />
+    </div>
+  );
+}
 
-      <div className="mb-4 flex items-center justify-between">
+type LoaderData = ReturnType<typeof useLoaderData<typeof loader>>;
+type MessageRow = LoaderData["messages"][number];
+
+const EMPTY_MESSAGE: Omit<MessageRow, "id" | "isActive"> = {
+  label: "",
+  responseType: "text",
+  message: "Estamos fora do horário. Voltamos em breve! 🍕",
+  video: "",
+  videoCaption: "",
+  image: "",
+  imageCaption: "",
+};
+
+function MessageEditor({ message }: { message: MessageRow | null }) {
+  const nav = useNavigation();
+  const isSubmitting = nav.state !== "idle";
+  const initial = message ?? EMPTY_MESSAGE;
+
+  const [label, setLabel] = useState(initial.label);
+  const [responseType, setResponseType] = useState<OffHoursResponseType>(initial.responseType);
+  const [text, setText] = useState(initial.message);
+  const [video, setVideo] = useState(initial.video);
+  const [videoCaption, setVideoCaption] = useState(initial.videoCaption);
+  const [image, setImage] = useState(initial.image);
+  const [imageCaption, setImageCaption] = useState(initial.imageCaption);
+
+  return (
+    <Form method="post" className="rounded-xl border bg-background/70 p-4 shadow-sm flex flex-col gap-4">
+      <input type="hidden" name="intent" value={message ? "update" : "create"} />
+      <input type="hidden" name="id" value={message?.id ?? ""} />
+      <input type="hidden" name="responseType" value={responseType} />
+      <input type="hidden" name="message" value={text} />
+      <input type="hidden" name="video" value={video} />
+      <input type="hidden" name="videoCaption" value={videoCaption} />
+      <input type="hidden" name="image" value={image} />
+      <input type="hidden" name="imageCaption" value={imageCaption} />
+
+      <div className="flex items-center justify-between gap-3">
         <div>
-          <Label htmlFor="off-hours-enabled">Mensagem de ausência</Label>
-          <p className="text-xs text-muted-foreground">Configure o comportamento quando a loja estiver fechada.</p>
+          <Label>{message ? "Editar mensagem" : "Nova mensagem"}</Label>
+          <p className="text-xs text-muted-foreground">
+            {message ? "Salve para aplicar as alterações." : "Salve para criar. Depois, ative na lista."}
+          </p>
         </div>
-        <Button type="submit" disabled={isSubmitting} className="px-5">
+        <div className="flex gap-2">
+          <Button asChild variant="outline" type="button">
+            <Link to={ROUTE_PATH}>Fechar</Link>
+          </Button>
+          <Button type="submit" disabled={isSubmitting}>
+            {isSubmitting ? "Salvando..." : "Salvar"}
+          </Button>
+        </div>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2">
+        <div>
+          <Label htmlFor="label">Nome</Label>
+          <Input
+            id="label"
+            name="label"
+            placeholder="Ex.: Mudança 2026"
+            value={label}
+            onChange={(e) => setLabel(e.target.value)}
+          />
+        </div>
+        <div>
+          <Label htmlFor="response-type">Tipo de mensagem</Label>
+          <Select value={responseType} onValueChange={(value) => setResponseType(value as OffHoursResponseType)}>
+            <SelectTrigger id="response-type">
+              <SelectValue placeholder="Escolha o tipo" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="text">Texto</SelectItem>
+              <SelectItem value="image">Imagem</SelectItem>
+              <SelectItem value="video">Vídeo</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      {responseType === "text" && (
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="space-y-2">
+            <Label htmlFor="text-message">Mensagem de ausência</Label>
+            <Textarea
+              id="text-message"
+              className="min-h-[220px] font-mono"
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              placeholder="Mensagem enviada fora do horário"
+            />
+            <p className="text-xs text-muted-foreground">Suporta *negrito* e _itálico_.</p>
+          </div>
+          <WhatsappPreview value={text} />
+        </div>
+      )}
+
+      {responseType === "image" && (
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="flex flex-col gap-3">
+            <AssetLibraryPickerDialog
+              allowedKinds={["image"]}
+              defaultUploadPath="whatsapp/ausencia"
+              triggerLabel="Escolher / enviar imagem"
+              onSelect={(asset) => setImage(asset.url)}
+            />
+            <Input placeholder="https://..." value={image} onChange={(e) => setImage(e.target.value)} />
+            <Textarea
+              placeholder="Legenda (opcional)"
+              className="min-h-[96px]"
+              value={imageCaption}
+              onChange={(e) => setImageCaption(e.target.value)}
+            />
+            {(image || imageCaption) && (
+              <Button
+                type="button"
+                variant="outline"
+                className="w-fit"
+                onClick={() => {
+                  setImage("");
+                  setImageCaption("");
+                }}
+              >
+                Remover imagem
+              </Button>
+            )}
+          </div>
+          <div className="rounded-lg border bg-muted/30 p-3 flex flex-col gap-2">
+            <p className="text-[11px] uppercase tracking-[0.12em] text-muted-foreground">Preview</p>
+            {image.trim() ? (
+              <img src={image} alt="Imagem de ausência" className="w-full max-h-60 rounded-md object-contain bg-black/5" />
+            ) : (
+              <p className="text-xs text-muted-foreground">Nenhuma imagem selecionada.</p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {responseType === "video" && (
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="flex flex-col gap-3">
+            <Input
+              placeholder="https://... ou data:video/mp4;base64,..."
+              value={video}
+              onChange={(e) => setVideo(e.target.value)}
+            />
+            <Textarea
+              placeholder="Legenda do vídeo"
+              className="min-h-[96px]"
+              value={videoCaption}
+              onChange={(e) => setVideoCaption(e.target.value)}
+            />
+            <WhatsappPreview value={videoCaption} />
+            {(video || videoCaption) && (
+              <Button
+                type="button"
+                variant="outline"
+                className="w-fit"
+                onClick={() => {
+                  setVideo("");
+                  setVideoCaption("");
+                }}
+              >
+                Remover vídeo
+              </Button>
+            )}
+          </div>
+          <div className="rounded-lg border bg-muted/30 p-3 flex flex-col gap-2">
+            <p className="text-[11px] uppercase tracking-[0.12em] text-muted-foreground">Preview</p>
+            {video.trim() ? (
+              <video controls className="w-full h-40 rounded-md object-contain bg-black/5" src={video} />
+            ) : (
+              <p className="text-xs text-muted-foreground">Informe o link/base64 para visualizar.</p>
+            )}
+          </div>
+        </div>
+      )}
+    </Form>
+  );
+}
+
+function GlobalSettingsForm({ data }: { data: LoaderData }) {
+  const nav = useNavigation();
+  const isSubmitting = nav.state !== "idle";
+  const [enabled, setEnabled] = useState(data.enabled);
+  const [cooldown, setCooldown] = useState(data.cooldownMinutes);
+  const [aggregation, setAggregation] = useState(data.aggregationSeconds);
+  const [menuKeywords, setMenuKeywords] = useState(data.menuKeywords);
+  const [menuUrl, setMenuUrl] = useState(data.menuUrl);
+  const [menuMessage, setMenuMessage] = useState(data.menuMessage);
+
+  return (
+    <Form method="post" className="rounded-xl border bg-background/70 p-4 shadow-sm flex flex-col gap-4">
+      <input type="hidden" name="intent" value="save-global" />
+      <input type="hidden" name="enabled" value={enabled ? "on" : "off"} />
+
+      <div className="flex items-center justify-between">
+        <div>
+          <Label>Configurações gerais</Label>
+          <p className="text-xs text-muted-foreground">Valem para a mensagem ativa.</p>
+        </div>
+        <Button type="submit" disabled={isSubmitting}>
           {isSubmitting ? "Salvando..." : "Salvar"}
         </Button>
       </div>
 
-      <div className="mb-6 grid gap-4 md:grid-cols-3">
-        <div className="md:col-span-1 rounded-lg border bg-background/60 px-4 py-3">
-          <Label htmlFor="off-hours-enabled-toggle">Ativação</Label>
-          <p className="text-xs text-muted-foreground">Habilita o envio fora do horário.</p>
-          <div className="mt-3 flex items-center justify-between">
-            <span className="text-sm">Status</span>
-            <Switch
-              id="off-hours-enabled-toggle"
-              checked={enabledValue}
-              onCheckedChange={setEnabledValue}
-            />
-          </div>
+      <div className="flex items-center justify-between rounded-lg border bg-background/60 px-4 py-3">
+        <div>
+          <Label htmlFor="enabled-toggle">Resposta automática</Label>
+          <p className="text-xs text-muted-foreground">Envia a mensagem ativa quando a loja estiver fechada.</p>
         </div>
-        <div className="md:col-span-2 rounded-lg border bg-background/60 px-4 py-3">
-          <Label htmlFor="off-hours-response-type">Tipo de mensagem</Label>
-          <p className="text-xs text-muted-foreground">Escolha texto ou vídeo para a resposta.</p>
-          <div className="mt-3">
-            <Select
-              value={responseTypeValue}
-              onValueChange={(value) => setResponseTypeValue(value as "text" | "video")}
-            >
-              <SelectTrigger id="off-hours-response-type">
-                <SelectValue placeholder="Escolha o tipo" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="text">Texto</SelectItem>
-                <SelectItem value="video">Vídeo</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+        <Switch id="enabled-toggle" checked={enabled} onCheckedChange={setEnabled} />
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2">
+        <div>
+          <Label htmlFor="cooldownMinutes">Cooldown (min)</Label>
+          <Input
+            id="cooldownMinutes"
+            name="cooldownMinutes"
+            type="number"
+            min={1}
+            value={cooldown}
+            onChange={(e) => setCooldown(Number(e.target.value))}
+          />
+          <p className="text-xs text-muted-foreground mt-1">Intervalo mínimo para reenviar ao mesmo número.</p>
+        </div>
+        <div>
+          <Label htmlFor="aggregationSeconds">Janela de agregação (s)</Label>
+          <Input
+            id="aggregationSeconds"
+            name="aggregationSeconds"
+            type="number"
+            min={0}
+            value={aggregation}
+            onChange={(e) => setAggregation(Number(e.target.value))}
+          />
+          <p className="text-xs text-muted-foreground mt-1">Aguarda novas mensagens antes de responder (0 = imediato).</p>
         </div>
       </div>
 
-      {responseTypeValue === "video" && (
-        <div className="mb-6 grid gap-6 lg:grid-cols-2">
-          <div className="rounded-lg border bg-background/60 px-4 py-3 flex flex-col gap-3">
-            <Label htmlFor="off-hours-video">Conteúdo do vídeo</Label>
-            <p className="text-xs text-muted-foreground">
-              Informe a URL pública ou base64 do vídeo, e uma legenda opcional.
-            </p>
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="flex flex-col gap-3">
-                <Input
-                  id="off-hours-video"
-                  placeholder="https://... ou data:video/mp4;base64,..."
-                  value={videoValue}
-                  onChange={(e) => setVideoValue(e.target.value)}
-                />
-                <div className="space-y-2">
-                  <Textarea
-                    id="off-hours-video-caption"
-                    placeholder="Legenda do vídeo"
-                    className="min-h-[96px]"
-                    value={captionValue}
-                    onChange={(e) => setCaptionValue(e.target.value)}
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Suporta formatação WhatsApp: *negrito*, _itálico_, monospace sem formatação.
-                  </p>
-                  <div className="rounded-md border bg-muted/40 p-2 text-xs leading-relaxed">
-                    <p className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground mb-1">Preview</p>
-                    <div
-                      className="whitespace-pre-wrap break-words"
-                      dangerouslySetInnerHTML={renderCaptionPreview}
-                    />
-                  </div>
-                </div>
-              </div>
-              <div className="rounded-lg border bg-muted/30 p-3 flex flex-col gap-2">
-                <p className="text-[11px] uppercase tracking-[0.12em] text-muted-foreground">Preview</p>
-                {videoValue.trim() ? (
-                  <video
-                    controls
-                    className="w-full h-40 rounded-md object-contain bg-black/5"
-                    src={videoValue}
-                  />
-                ) : (
-                  <p className="text-xs text-muted-foreground">
-                    Informe o link/base64 para visualizar o preview.
-                  </p>
-                )}
-              </div>
-            </div>
-          </div>
-          <div className="rounded-lg border bg-background/60 px-4 py-3 flex flex-col gap-3">
-            <Label>Controle de frequência</Label>
-            <p className="text-xs text-muted-foreground">Evita repetição e agrupa mensagens em sequência.</p>
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="flex flex-col gap-4">
-                <div>
-                  <Label htmlFor="off-hours-cooldown-minutes">Cooldown (min)</Label>
-                  <Input
-                    id="off-hours-cooldown-minutes"
-                    type="number"
-                    min={1}
-                    value={cooldownValue}
-                    onChange={(e) => setCooldownValue(Number(e.target.value))}
-                  />
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Intervalo mínimo para reenviar a mensagem ao mesmo número.
-                  </p>
-                </div>
-                <div>
-                  <Label htmlFor="off-hours-aggregation-seconds">Janela de agregação (s)</Label>
-                  <Input
-                    id="off-hours-aggregation-seconds"
-                    type="number"
-                    min={0}
-                    value={aggregationValue}
-                    onChange={(e) => setAggregationValue(Number(e.target.value))}
-                  />
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Aguarda novas mensagens antes de responder (0 = imediato).
-                  </p>
-                </div>
-              </div>
-              <div className="rounded-lg border bg-muted/50 px-4 py-3 text-lg text-foreground flex items-center">
-                {`Com cooldown de ${cooldownValue} min e janela de ${aggregationValue} s, o sistema espera ${aggregationValue}s após a última mensagem e só reenviará a ausência ao mesmo número após ${cooldownValue} min.`}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {responseTypeValue === "text" && (
-        <div className="mb-6 rounded-lg border bg-background/60 p-4">
-          <div className="mb-3 flex items-center justify-between text-xs text-muted-foreground">
-            <span>Suporta formatação estilo WhatsApp: *negrito*, _itálico_.</span>
-            <span className="text-[11px]">Preview</span>
-          </div>
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="off-hours-message">Mensagem de ausência</Label>
-              <Textarea
-                id="off-hours-message"
-                className="min-h-[220px] font-mono"
-                value={messageValue}
-                onChange={(e) => setMessageValue(e.target.value)}
-                placeholder="Mensagem enviada fora do horário"
+      <div className="rounded-lg border bg-background/60 px-4 py-3 flex flex-col gap-3">
+        <Label>Pedido de cardápio</Label>
+        <p className="text-xs text-muted-foreground">
+          Se o cliente pedir o cardápio com a loja fechada, envia a imagem da mensagem ativa (se houver) com o link.
+        </p>
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="flex flex-col gap-3">
+            <div>
+              <Label htmlFor="menuKeywords">Palavras-chave (separadas por vírgula)</Label>
+              <Input
+                id="menuKeywords"
+                name="menuKeywords"
+                value={menuKeywords}
+                onChange={(e) => setMenuKeywords(e.target.value)}
               />
             </div>
-            <div className="rounded-lg border bg-muted/40 p-3 text-sm leading-relaxed h-full">
-              <p className="text-[11px] uppercase tracking-[0.12em] text-muted-foreground mb-2">Preview</p>
-              <div
-                className="whitespace-pre-wrap break-words"
-                dangerouslySetInnerHTML={renderWhatsappPreview}
-              />
+            <div>
+              <Label htmlFor="menuUrl">Link do cardápio</Label>
+              <Input id="menuUrl" name="menuUrl" value={menuUrl} onChange={(e) => setMenuUrl(e.target.value)} />
             </div>
           </div>
-        </div>
-      )}
-
-      {responseTypeValue === "text" && (
-        <div className="rounded-lg border bg-background/60 px-4 py-3">
-          <Label>Controle de frequência</Label>
-          <p className="text-xs text-muted-foreground">Evita repetição e agrupa mensagens em sequência.</p>
-          <div className="mt-3 grid gap-4 md:grid-cols-2">
-            <div className="flex flex-col gap-4">
-              <div>
-                <Label htmlFor="off-hours-cooldown-minutes">Cooldown (min)</Label>
-                <Input
-                  id="off-hours-cooldown-minutes"
-                  type="number"
-                  min={1}
-                  value={cooldownValue}
-                  onChange={(e) => setCooldownValue(Number(e.target.value))}
-                />
-                <p className="text-xs text-muted-foreground mt-1">
-                  Intervalo mínimo para reenviar a mensagem ao mesmo número.
-                </p>
-              </div>
-              <div>
-                <Label htmlFor="off-hours-aggregation-seconds">Janela de agregação (s)</Label>
-                <Input
-                  id="off-hours-aggregation-seconds"
-                  type="number"
-                  min={0}
-                  value={aggregationValue}
-                  onChange={(e) => setAggregationValue(Number(e.target.value))}
-                />
-                <p className="text-xs text-muted-foreground mt-1">
-                  Aguarda novas mensagens antes de responder (0 = imediato).
-                </p>
-              </div>
-            </div>
-            <div className="rounded-lg border bg-muted/50 px-4 py-3 text-lg text-foreground flex items-center">
-              {`Com cooldown de ${cooldownValue} min e janela de ${aggregationValue} s, o sistema espera ${aggregationValue}s após a última mensagem e só reenviará a ausência ao mesmo número após ${cooldownValue} min.`}
-            </div>
+          <div>
+            <Label htmlFor="menuMessage">Mensagem (use {"{{link}}"} para o link)</Label>
+            <Textarea
+              id="menuMessage"
+              name="menuMessage"
+              className="min-h-[96px]"
+              value={menuMessage}
+              onChange={(e) => setMenuMessage(e.target.value)}
+            />
           </div>
         </div>
-      )}
-
+      </div>
     </Form>
+  );
+}
+
+function summarize(message: MessageRow) {
+  if (message.responseType === "image") return message.image || "Sem imagem";
+  if (message.responseType === "video") return message.video || "Sem vídeo";
+  return message.message || "Sem texto";
+}
+
+export default function AtendimentoHorariosAusencia() {
+  const data = useLoaderData<typeof loader>();
+  const nav = useNavigation();
+  const isSubmitting = nav.state !== "idle";
+  const isNew = data.editId === "new";
+  const editing = isNew ? null : data.messages.find((message) => message.id === data.editId) ?? null;
+  const showEditor = isNew || Boolean(editing);
+  const hasActive = data.messages.some((message) => message.isActive);
+
+  return (
+    <div className="flex flex-col gap-6">
+      <div className="rounded-xl border bg-background/70 p-4 shadow-sm flex flex-col gap-3">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <Label>Mensagens de ausência</Label>
+            <p className="text-xs text-muted-foreground">Apenas uma fica ativa. Ela é a usada quando a loja está fechada.</p>
+          </div>
+          <Button asChild variant="outline">
+            <Link to={`${ROUTE_PATH}?edit=new`}>Nova mensagem</Link>
+          </Button>
+        </div>
+
+        {!data.enabled && (
+          <p className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs">
+            Resposta automática desligada. Ligue em “Configurações gerais” (abaixo) e salve.
+          </p>
+        )}
+
+        {!hasActive && (
+          <p className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs">
+            Nenhuma mensagem ativa. Nada será enviado fora do horário.
+          </p>
+        )}
+
+        {data.messages.length === 0 && (
+          <p className="text-xs text-muted-foreground">Nenhuma mensagem cadastrada.</p>
+        )}
+
+        <ul className="flex flex-col gap-2">
+          {data.messages.map((message) => (
+            <li
+              key={message.id}
+              className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-background/60 px-4 py-3"
+            >
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium">{message.label}</span>
+                  <Badge variant="outline">{TYPE_LABEL[message.responseType]}</Badge>
+                  {message.isActive && <Badge>Ativa</Badge>}
+                </div>
+                <p className="truncate text-xs text-muted-foreground">{summarize(message)}</p>
+              </div>
+              <div className="flex gap-2">
+                {!message.isActive && (
+                  <Form method="post">
+                    <input type="hidden" name="intent" value="activate" />
+                    <input type="hidden" name="id" value={message.id} />
+                    <Button type="submit" size="sm" disabled={isSubmitting}>
+                      Ativar
+                    </Button>
+                  </Form>
+                )}
+                <Button asChild size="sm" variant="outline">
+                  <Link to={`${ROUTE_PATH}?edit=${message.id}`}>Editar</Link>
+                </Button>
+                <Form
+                    method="post"
+                    onSubmit={(event) => {
+                      const warning = message.isActive
+                        ? `Excluir "${message.label}"? Ela está ativa, nenhuma ficará ativa.`
+                        : `Excluir "${message.label}"?`;
+                      if (!window.confirm(warning)) event.preventDefault();
+                    }}
+                  >
+                    <input type="hidden" name="intent" value="delete" />
+                    <input type="hidden" name="id" value={message.id} />
+                    <Button type="submit" size="sm" variant="outline" disabled={isSubmitting}>
+                      Excluir
+                    </Button>
+                  </Form>
+              </div>
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      {showEditor && <MessageEditor key={data.editId} message={editing} />}
+
+      <GlobalSettingsForm data={data} />
+    </div>
   );
 }

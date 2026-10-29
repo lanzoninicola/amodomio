@@ -16,6 +16,14 @@ export type SendVideoStatusRequest = {
   caption?: string;
 };
 
+export type SendImageRequest = {
+  phone: string;
+  image: string;
+  delayMessage?: number;
+  caption?: string;
+  viewOnce?: boolean;
+};
+
 export type SendImageStatusRequest = {
   image: string;
   caption?: string;

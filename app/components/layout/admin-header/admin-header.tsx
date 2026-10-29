@@ -20,6 +20,7 @@ import { toast } from "~/components/ui/use-toast";
 
 import { UserNav } from "~/domain/auth/components/user-nav";
 import type { LoggedUser } from "~/domain/auth/types.server";
+import { MediaHeaderStatus, useMediaHeaderStatus } from "~/components/media/media-header-status";
 import { WhatsappHeaderStatus, useWhatsappHeaderStatus } from "~/components/z-api/whatsapp-header-status";
 
 type TopNavItem = {
@@ -169,6 +170,7 @@ export function AdminHeader({
     actionNotifications = [],
 }: AdminHeaderProps) {
     const whatsappStatus = useWhatsappHeaderStatus(Boolean(loggedUser));
+    const mediaStatus = useMediaHeaderStatus(Boolean(loggedUser));
     const canManageWhatsapp = Boolean(loggedUser && loggedUser.roles?.some((role) => role === "admin" || role === "superAdmin"));
     const [openingStatus, setOpeningStatus] = useState<StoreOpeningStatusResponse | null>(null)
     const [isLoading, setIsLoading] = useState(false)
@@ -359,6 +361,7 @@ export function AdminHeader({
                                 </DropdownMenu>
                             </div>
                             {loggedUser ? <div className="hidden md:block"><WhatsappHeaderStatus status={whatsappStatus} canManage={canManageWhatsapp} /></div> : null}
+                            {loggedUser ? <div className="hidden md:block"><MediaHeaderStatus status={mediaStatus} /></div> : null}
                             <AdminActionNotificationsMenu notifications={actionNotifications} />
                             <Link to={"/admin"}>
                                 <div className="flex flex-col items-center gap-0.5 hover:bg-slate-50 rounded-md p-2">
@@ -435,6 +438,7 @@ export function AdminHeader({
                         </DropdownMenuContent>
                     </DropdownMenu>
                     {loggedUser ? <WhatsappHeaderStatus status={whatsappStatus} canManage={canManageWhatsapp} compact /> : null}
+                    {loggedUser ? <MediaHeaderStatus status={mediaStatus} compact /> : null}
                 </div>
 
                 <CommandDialog

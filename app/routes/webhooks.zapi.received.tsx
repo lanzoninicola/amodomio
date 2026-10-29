@@ -6,7 +6,7 @@ import { enforceRateLimit, handleRouteError } from "~/domain/z-api/route-helpers
 import { PayloadTooLargeError } from "~/domain/z-api/errors";
 import { readJsonBody } from "~/domain/z-api/security.server";
 import { normalizeWebhookPayload, stringifyPayloadForLog } from "~/domain/z-api/webhook.parser";
-import { sendTextMessage, sendVideoMessage } from "~/domain/z-api/zapi.service.server";
+import { sendImageMessage, sendTextMessage, sendVideoMessage } from "~/domain/z-api/zapi.service.server";
 import { addWebhookLog } from "~/domain/z-api/webhook-log.server";
 import { maybeSendTrafficAutoReply } from "~/domain/z-api/meta-auto-responder.server";
 import prisma from "~/lib/prisma/client.server";
@@ -23,6 +23,8 @@ const ECHO_SENT_WINDOW_MS = 5 * 60 * 1000;
 const crmSyncCache = new Map<string, number>();
 const offHoursReplyCache = new Map<string, number>();
 const offHoursAggregationQueue = new Map<string, NodeJS.Timeout>();
+const offHoursMenuReplyCache = new Map<string, number>();
+const OFF_HOURS_MENU_COOLDOWN_MS = 60 * 1000;
 
 function shouldSkipCrmSync(phoneE164: string) {
   const now = Date.now();
@@ -290,13 +292,23 @@ export async function action({ request }: ActionFunctionArgs) {
     return json({ ok: true, trafficResult: { sent: false, reason: "from_me" }, offHoursResult: { sent: false, reason: "from_me" }, crmSyncResult });
   }
 
-  const trafficResult = await maybeSendTrafficAutoReply(normalized, correlationId).catch((error) => {
-    console.warn("[z-api][webhook][received] traffic auto-reply failed", {
-      correlationId,
-      error: (error as any)?.message,
-    });
-    return { sent: false, reason: "error" };
-  });
+  // Loja fechada com ausência ativa: a mensagem de ausência tem prioridade sobre a de tráfego (anúncios).
+  const [closedStoreStatus, closedOffHoursConfig] = await Promise.all([
+    getStoreOpeningStatus().catch(() => null),
+    getOffHoursAutoresponderConfig().catch(() => null),
+  ]);
+  const offHoursTakesPrecedence =
+    Boolean(closedOffHoursConfig?.enabled) && closedStoreStatus?.status.isOpen === false;
+
+  const trafficResult = offHoursTakesPrecedence
+    ? { sent: false, reason: "off_hours_precedence" }
+    : await maybeSendTrafficAutoReply(normalized, correlationId).catch((error) => {
+        console.warn("[z-api][webhook][received] traffic auto-reply failed", {
+          correlationId,
+          error: (error as any)?.message,
+        });
+        return { sent: false, reason: "error" };
+      });
   const offHoursResult = await maybeSendOffHoursAutoReply(normalized, correlationId, trafficResult.sent).catch((error) => {
     console.warn("[z-api][webhook][received] off-hours auto-reply failed", {
       correlationId,
@@ -352,6 +364,16 @@ async function maybeSendOffHoursAutoReply(
 
   if (!offHoursConfig.enabled) return { sent: false, reason: "disabled" };
   if (storeStatus.status.isOpen) return { sent: false, reason: "store_open" };
+  if (matchesMenuRequest(normalized.messageText, offHoursConfig.menuKeywords)) {
+    const pending = offHoursAggregationQueue.get(normalized.phone);
+    if (pending) {
+      clearTimeout(pending);
+      offHoursAggregationQueue.delete(normalized.phone);
+    }
+    const response = await sendOffHoursMenuReply(normalized, correlationId, offHoursConfig);
+    return { sent: Boolean(response), reason: response ? "menu_request" : "send_failed" };
+  }
+
   const aggregationSeconds = Math.max(0, offHoursConfig.aggregationSeconds ?? 0);
   if (aggregationSeconds > 0) {
     scheduleOffHoursAutoReply(normalized, correlationId, aggregationSeconds);
@@ -376,6 +398,11 @@ async function sendOffHoursAutoReply(
   }
 
   const responseType = offHoursConfig.responseType ?? "text";
+  if (responseType === "image") {
+    const image = offHoursConfig.image?.trim();
+    if (!image) return undefined;
+    return sendOffHoursImage(normalized, correlationId, image, offHoursConfig.imageCaption);
+  }
   if (responseType === "video") {
     const video = offHoursConfig.video?.trim();
     if (!video) return undefined;
@@ -475,4 +502,122 @@ function scheduleOffHoursAutoReply(
   }, aggregationSeconds * 1000);
 
   offHoursAggregationQueue.set(key, timer);
+}
+
+function normalizeForMatch(value: string) {
+  return value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
+function matchesMenuRequest(messageText: string | undefined, keywords: string | undefined) {
+  if (!messageText || !keywords) return false;
+  const text = normalizeForMatch(messageText);
+  return keywords
+    .split(",")
+    .map((keyword) => normalizeForMatch(keyword.trim()))
+    .filter(Boolean)
+    .some((keyword) => text.includes(keyword));
+}
+
+function shouldSkipOffHoursMenuReply(phone: string) {
+  const now = Date.now();
+  const cachedAt = offHoursMenuReplyCache.get(phone);
+  if (cachedAt && now - cachedAt < OFF_HOURS_MENU_COOLDOWN_MS) return true;
+  if (offHoursMenuReplyCache.size > 5000) {
+    for (const [key, timestamp] of offHoursMenuReplyCache) {
+      if (now - timestamp >= OFF_HOURS_MENU_COOLDOWN_MS) offHoursMenuReplyCache.delete(key);
+    }
+  }
+  offHoursMenuReplyCache.set(phone, now);
+  return false;
+}
+
+async function sendOffHoursImage(
+  normalized: ReturnType<typeof normalizeWebhookPayload>,
+  correlationId: string,
+  image: string,
+  caption: string | undefined
+) {
+  const formattedCaption = caption?.trim() ? toWhatsappFormatting(caption.trim()) : undefined;
+  const response = await sendImageMessage(
+    { phone: normalized.phone, image, caption: formattedCaption },
+    { timeoutMs: 10_000 }
+  ).catch((error) => {
+    console.warn("[z-api][off-hours] send image failed", {
+      correlationId,
+      error: (error as any)?.message,
+    });
+    return undefined;
+  });
+  if (response) {
+    await logCrmWhatsappSentEventByPhone({
+      phone: normalized.phone,
+      source: "zapi-auto-reply",
+      messageText: caption?.trim() ? `[IMAGE] ${caption.trim()}` : "[IMAGE]",
+      externalId: `${correlationId}:off-hours`,
+      payload: {
+        channel: "off-hours",
+        responseType: "image",
+        correlationId,
+        fromMe: true,
+        wppResponse: response,
+      },
+    }).catch((error) => {
+      console.warn("[z-api][off-hours] register sent event failed", {
+        correlationId,
+        error: (error as any)?.message,
+      });
+    });
+  }
+  return response;
+}
+
+async function sendOffHoursMenuReply(
+  normalized: ReturnType<typeof normalizeWebhookPayload>,
+  correlationId: string,
+  offHoursConfig: Awaited<ReturnType<typeof getOffHoursAutoresponderConfig>>
+) {
+  if (shouldSkipOffHoursMenuReply(normalized.phone)) return undefined;
+
+  const link = offHoursConfig.menuUrl.trim();
+  const menuText = toWhatsappFormatting(
+    offHoursConfig.menuMessage.includes("{{link}}")
+      ? offHoursConfig.menuMessage.replace(/\{\{link\}\}/g, link)
+      : `${offHoursConfig.menuMessage}\n${link}`
+  );
+  const image = offHoursConfig.image?.trim();
+
+  if (image) {
+    const caption = [offHoursConfig.imageCaption?.trim(), menuText].filter(Boolean).join("\n\n");
+    return sendOffHoursImage(normalized, correlationId, image, caption);
+  }
+
+  const response = await sendTextMessage(
+    { phone: normalized.phone, message: menuText },
+    { timeoutMs: 10_000, trackCrm: false }
+  ).catch((error) => {
+    console.warn("[z-api][off-hours] send menu failed", {
+      correlationId,
+      error: (error as any)?.message,
+    });
+    return undefined;
+  });
+  if (response) {
+    await logCrmWhatsappSentEventByPhone({
+      phone: normalized.phone,
+      source: "zapi-auto-reply",
+      messageText: menuText,
+      externalId: `${correlationId}:off-hours-menu`,
+      payload: {
+        channel: "off-hours",
+        responseType: "menu",
+        correlationId,
+        fromMe: true,
+        wppResponse: response,
+      },
+    }).catch(() => undefined);
+  }
+  return response;
 }

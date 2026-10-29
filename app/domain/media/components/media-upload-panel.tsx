@@ -20,11 +20,13 @@ import {
   type UploadKind,
 } from "~/domain/media/media.shared";
 
+const UPLOAD_TIMEOUT_MS = 60_000;
+
 type UploadProgressItem = {
   id: string;
   fileName: string;
   progress: number;
-  status: "pending" | "uploading" | "success" | "error";
+  status: "pending" | "uploading" | "processing" | "success" | "error";
   message?: string;
   debug?: string;
 };
@@ -122,7 +124,8 @@ function uploadSingleFile(
   file: File,
   kind: UploadKind,
   assetPath: string,
-  onProgress: (percent: number) => void
+  onProgress: (percent: number) => void,
+  onSent: () => void
 ) {
   return new Promise<UploadResult>((resolve) => {
     const formData = new FormData();
@@ -132,10 +135,23 @@ function uploadSingleFile(
 
     const xhr = new XMLHttpRequest();
     xhr.open("POST", "/api/media/upload");
+    xhr.timeout = UPLOAD_TIMEOUT_MS;
 
     xhr.upload.onprogress = (event) => {
       if (!event.lengthComputable) return;
       onProgress(Math.min(100, Math.round((event.loaded / event.total) * 100)));
+    };
+
+    xhr.upload.onload = () => onSent();
+
+    xhr.ontimeout = () => {
+      const message =
+        "O servidor de mídia não respondeu a tempo. Verifique se o serviço está no ar e tente de novo.";
+      resolve({
+        ok: false,
+        message,
+        debug: buildUploadDebug({ assetPath, file, kind, message }),
+      });
     };
 
     xhr.onload = () => {
@@ -271,8 +287,17 @@ export default function MediaUploadPanel({
         (percent) => {
           setUploadQueue((current) =>
             current.map((row) =>
-              row.id === item.id
+              row.id === item.id && row.status !== "processing"
                 ? { ...row, progress: percent, status: "uploading" }
+                : row
+            )
+          );
+        },
+        () => {
+          setUploadQueue((current) =>
+            current.map((row) =>
+              row.id === item.id
+                ? { ...row, progress: 100, status: "processing" }
                 : row
             )
           );
@@ -289,7 +314,7 @@ export default function MediaUploadPanel({
                   ...row,
                   status: "success",
                   progress: 100,
-                  message: "Concluído",
+                  message: "Enviado com sucesso",
                 }
               : row
           )
@@ -350,6 +375,12 @@ export default function MediaUploadPanel({
         </p>
       ) : null}
 
+      <ol className="list-inside list-decimal text-xs text-muted-foreground">
+        <li>Escolha o arquivo no seu computador.</li>
+        <li>Clique em Enviar e aguarde a confirmação verde.</li>
+        <li>Depois, vá na aba “Selecionar asset” e clique na imagem enviada.</li>
+      </ol>
+
       <div className="flex flex-wrap items-center gap-2">
         <Input
           type="file"
@@ -373,7 +404,7 @@ export default function MediaUploadPanel({
           ) : (
             <Upload className="h-4 w-4" />
           )}
-          {isUploading ? "Enviando..." : "Enviar"}
+          {isUploading ? "Aguarde..." : "Enviar"}
         </Button>
       </div>
 
@@ -394,16 +425,24 @@ export default function MediaUploadPanel({
                 <span
                   className={
                     item.status === "error"
-                      ? "text-red-600"
-                      : "text-muted-foreground"
+                      ? "shrink-0 font-medium text-red-600"
+                      : item.status === "success"
+                      ? "shrink-0 font-medium text-green-600"
+                      : "shrink-0 text-muted-foreground"
                   }
                 >
                   {item.status === "pending" && "Na fila"}
-                  {item.status === "uploading" && `${item.progress}%`}
-                  {item.status === "success" && "Concluído"}
-                  {item.status === "error" && (item.message || "Erro")}
+                  {item.status === "uploading" &&
+                    `Enviando para o servidor… ${item.progress}%`}
+                  {item.status === "processing" &&
+                    "Arquivo enviado. Salvando no servidor de mídia…"}
+                  {item.status === "success" && "✓ Enviado com sucesso"}
+                  {item.status === "error" && "✕ Falhou"}
                 </span>
               </div>
+              {item.status === "error" && item.message ? (
+                <p className="text-xs text-red-600">{item.message}</p>
+              ) : null}
               {item.status === "error" && item.debug ? (
                 <div className="space-y-2 rounded-md border border-red-200 bg-red-50 p-2 text-xs text-red-700">
                   <div className="flex items-center justify-between gap-2">
@@ -436,6 +475,7 @@ export default function MediaUploadPanel({
                 <div
                   className={cn(
                     "h-full",
+                    item.status === "processing" && "animate-pulse",
                     item.status === "error"
                       ? "bg-red-500"
                       : item.status === "success"

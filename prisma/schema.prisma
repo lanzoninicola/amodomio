@@ -1745,6 +1745,23 @@ model Setting {
   @@map("settings")
 }
 
+/// Mensagens de ausência (fora do horário). Apenas uma pode estar ativa.
+model OffHoursMessage {
+  id           String   @id @default(uuid()) @map("id")
+  label        String   @map("label")
+  responseType String   @default("text") @map("response_type")
+  message      String   @default("") @map("message")
+  video        String   @default("") @map("video")
+  videoCaption String   @default("") @map("video_caption")
+  image        String   @default("") @map("image")
+  imageCaption String   @default("") @map("image_caption")
+  isActive     Boolean  @default(false) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@map("off_hours_messages")
+}
+
 model WhatsappAgentJob {
   id            String    @id @default(uuid())
   externalId    String    @unique @map("external_id") @db.VarChar(150)

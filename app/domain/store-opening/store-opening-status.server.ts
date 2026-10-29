@@ -1,4 +1,5 @@
 import { settingPrismaEntity } from "~/domain/setting/setting.prisma.entity.server";
+import { getActiveOffHoursMessage, parseOffHoursResponseType } from "./off-hours-message.server";
 import {
   buildStoreOpeningSchedule,
   computeStoreOpeningStatus,
@@ -12,6 +13,9 @@ const OVERRIDE_VALUES = ["auto", "open", "closed"] as const;
 export type StoreOpeningOverride = (typeof OVERRIDE_VALUES)[number];
 const OFF_HOURS_MESSAGE_DEFAULT = "Estamos fora do horário. Voltamos em breve! 🍕";
 const OFF_HOURS_RESPONSE_TYPE_DEFAULT = "text";
+const OFF_HOURS_MENU_KEYWORDS_DEFAULT = "cardapio,cardápio,menu,sabores,preço,preco,valores";
+const OFF_HOURS_MENU_URL_DEFAULT = "https://amodomio.com.br/cardapio";
+const OFF_HOURS_MENU_MESSAGE_DEFAULT = "Nosso cardápio completo: {{link}}";
 const OFF_HOURS_COOLDOWN_MINUTES_DEFAULT = 15;
 const OFF_HOURS_AGGREGATION_SECONDS_DEFAULT = 20;
 
@@ -73,10 +77,11 @@ export async function setStoreOpeningOverride(override: StoreOpeningOverride) {
 }
 
 export async function getOffHoursAutoresponderConfig() {
-  const settings = await settingPrismaEntity.findAllByContext(STORE_OPENING_CONTEXT);
+  const [settings, activeMessage] = await Promise.all([
+    settingPrismaEntity.findAllByContext(STORE_OPENING_CONTEXT),
+    getActiveOffHoursMessage().catch(() => null),
+  ]);
   const byName = new Map(settings.map((setting) => [setting.name, setting.value]));
-  const responseTypeRaw = (byName.get("off-hours-response-type") || OFF_HOURS_RESPONSE_TYPE_DEFAULT).toLowerCase();
-  const responseType = responseTypeRaw === "video" ? "video" : "text";
   const cooldownRaw = Number(byName.get("off-hours-cooldown-minutes") || OFF_HOURS_COOLDOWN_MINUTES_DEFAULT);
   const cooldownMinutes = Number.isFinite(cooldownRaw) && cooldownRaw > 0
     ? Math.floor(cooldownRaw)
@@ -87,11 +92,17 @@ export async function getOffHoursAutoresponderConfig() {
     : OFF_HOURS_AGGREGATION_SECONDS_DEFAULT;
 
   return {
-    enabled: (byName.get("off-hours-enabled") ?? "true") === "true",
-    message: byName.get("off-hours-message") || OFF_HOURS_MESSAGE_DEFAULT,
-    responseType,
-    video: byName.get("off-hours-video") || "",
-    caption: byName.get("off-hours-video-caption") || "",
+    // Sem mensagem ativa, nada é enviado.
+    enabled: (byName.get("off-hours-enabled") ?? "true") === "true" && Boolean(activeMessage),
+    message: activeMessage?.message || OFF_HOURS_MESSAGE_DEFAULT,
+    responseType: parseOffHoursResponseType(activeMessage?.responseType),
+    video: activeMessage?.video || "",
+    caption: activeMessage?.videoCaption || "",
+    image: activeMessage?.image || "",
+    imageCaption: activeMessage?.imageCaption || "",
+    menuKeywords: byName.get("off-hours-menu-keywords") ?? OFF_HOURS_MENU_KEYWORDS_DEFAULT,
+    menuUrl: byName.get("off-hours-menu-url") || OFF_HOURS_MENU_URL_DEFAULT,
+    menuMessage: byName.get("off-hours-menu-message") || OFF_HOURS_MENU_MESSAGE_DEFAULT,
     cooldownMinutes,
     aggregationSeconds,
   };

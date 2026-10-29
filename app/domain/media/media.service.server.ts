@@ -56,6 +56,7 @@ async function requestMediaHealthEndpoint(input: {
 }) {
   const response = await fetch(`${input.mediaApiBaseUrl}${input.endpoint}`, {
     method: "GET",
+    signal: AbortSignal.timeout(5_000),
   });
   const payload = await response.json().catch(() => null);
   const ok = response.ok && Boolean((payload as { ok?: unknown } | null)?.ok);

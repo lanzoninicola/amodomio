@@ -3,6 +3,7 @@ import {
   ContactsResponse,
   ProfilePictureResponse,
   SendButtonActionsRequest,
+  SendImageRequest,
   SendImageStatusRequest,
   SendMessageResponse,
   SendTextStatusRequest,
@@ -166,6 +167,29 @@ export async function sendVideoMessage(
   return zapiRequest<SendMessageResponse>(
     "POST",
     `${zapiInstancePath}/send-video`,
+    body,
+    options
+  );
+}
+
+export async function sendImageMessage(
+  payload: SendImageRequest,
+  options?: { timeoutMs?: number }
+): Promise<SendMessageResponse> {
+  const phone = assertPhone(payload?.phone);
+  const image = assertImageUrl(payload?.image);
+  const delayMessage = parseDelay(payload?.delayMessage);
+  const caption = payload?.caption?.trim();
+  const viewOnce = parseBoolean(payload?.viewOnce, "viewOnce");
+
+  const body: Record<string, any> = { phone, image };
+  if (delayMessage !== undefined) body.delayMessage = delayMessage;
+  if (caption) body.caption = caption;
+  if (viewOnce !== undefined) body.viewOnce = viewOnce;
+
+  return zapiRequest<SendMessageResponse>(
+    "POST",
+    `${zapiInstancePath}/send-image`,
     body,
     options
   );
