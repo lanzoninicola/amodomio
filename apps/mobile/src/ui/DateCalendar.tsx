@@ -40,6 +40,12 @@ export function DateCalendar({
       supportedOrientations={["portrait", "landscape-left", "landscape-right"]}
     >
       <SafeAreaView style={styles.backdrop}>
+        <Pressable
+          style={StyleSheet.absoluteFill}
+          accessibilityRole="button"
+          accessibilityLabel="Fechar calendário"
+          onPress={onClose}
+        />
         <View style={styles.card} accessibilityViewIsModal>
           <ScrollView contentContainerStyle={styles.content}>
             <Text style={styles.title}>Selecionar dia</Text>

@@ -317,6 +317,17 @@ export async function action({ request }: ActionFunctionArgs) {
     return { sent: false, reason: "error" };
   });
 
+  console.info("[z-api][webhook][received] auto-reply decision", {
+    correlationId,
+    phone: normalized.phone,
+    messageTextPreview: normalized.messageText?.slice(0, 80),
+    storeOpen: closedStoreStatus?.status.isOpen,
+    offHoursEnabled: closedOffHoursConfig?.enabled,
+    offHoursType: closedOffHoursConfig?.responseType,
+    trafficResult,
+    offHoursResult,
+  });
+
   const agentQueueResult =
     trafficResult.sent || offHoursResult.sent || offHoursResult.reason === "scheduled"
       ? { queued: false, reason: "already_replied" }
@@ -394,8 +405,21 @@ async function sendOffHoursAutoReply(
 
   const ttlMs = Math.max(1, offHoursConfig.cooldownMinutes) * 60 * 1000;
   if (shouldSkipOffHoursReply(normalized.phone, ttlMs)) {
+    console.info("[z-api][off-hours] skipped by cooldown", { correlationId, phone: normalized.phone });
     return undefined;
   }
+
+  const response = await deliverOffHoursAutoReply(normalized, correlationId, offHoursConfig);
+  // Falha no envio não pode consumir o cooldown.
+  if (!response) offHoursReplyCache.delete(normalized.phone);
+  return response;
+}
+
+async function deliverOffHoursAutoReply(
+  normalized: ReturnType<typeof normalizeWebhookPayload>,
+  correlationId: string,
+  offHoursConfig: Awaited<ReturnType<typeof getOffHoursAutoresponderConfig>>
+) {
 
   const responseType = offHoursConfig.responseType ?? "text";
   if (responseType === "image") {

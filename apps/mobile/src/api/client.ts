@@ -275,3 +275,32 @@ export function submitPurchaseList(
     token
   );
 }
+
+export function getDailyProgramming(
+  baseUrl: string,
+  token: string,
+  weekday: string,
+  pct: number,
+  n: number,
+  signal?: AbortSignal
+) {
+  return request<import("../production/types").DailyProgramming>(
+    baseUrl,
+    `/api/mobile/daily-programming?weekday=${weekday}&pct=${pct}&n=${n}`,
+    { signal },
+    token
+  );
+}
+export function getWeeklyProductionHistory(
+  baseUrl: string,
+  token: string,
+  weeks: number,
+  signal?: AbortSignal
+) {
+  return request<import("../production/types").WeeklyHistory>(
+    baseUrl,
+    `/api/mobile/daily-programming?weeklyHistory=1&weeks=${weeks}`,
+    { signal },
+    token
+  );
+}

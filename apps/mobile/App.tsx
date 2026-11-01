@@ -1,3 +1,4 @@
+import { DailyProgrammingScreen } from "./src/production/DailyProgrammingScreen";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   ORDER_WHATSAPP_TEMPLATES,
@@ -89,6 +90,7 @@ import { Input } from "./src/ui/Input";
 import { Screen } from "./src/ui/Screen";
 import { theme } from "./src/ui/theme";
 import type { DoughStockData } from "./src/dough-stock/types";
+import { DoughPlanningScreen } from "./src/dough-planning/DoughPlanningScreen";
 import { DoughStockScreen } from "./src/dough-stock/DoughStockScreen";
 import { PurchaseListsScreen } from "./src/purchase/PurchaseListsScreen";
 import { RecipesScreen } from "./src/recipes/RecipesScreen";
@@ -429,6 +431,8 @@ function HomeScreen({
   onOpenDoughStock,
   onOpenRecipes,
   onOpenPurchases,
+  onOpenProgramming,
+  onOpenDoughPlanning,
   onSignedOut,
 }: {
   token: string;
@@ -438,6 +442,8 @@ function HomeScreen({
   onOpenDoughStock: () => void;
   onOpenRecipes: () => void;
   onOpenPurchases: () => void;
+  onOpenProgramming: () => void;
+  onOpenDoughPlanning: () => void;
   onSignedOut: () => void;
 }) {
   const [gridWidth, setGridWidth] = useState(0);
@@ -532,6 +538,42 @@ function HomeScreen({
                 <Text style={styles.featureTitle}>Estoque de massa</Text>
                 <Text style={styles.featureDescription}>
                   Atualize o saldo por tamanho e envie o estoque pelo WhatsApp.
+                </Text>
+              </View>
+            </Pressable>
+          ) : null}
+          {!desktop ? (
+            <Pressable
+              accessibilityRole="button"
+              style={[styles.featureCard, featureWidth]}
+              onPress={onOpenDoughPlanning}
+            >
+              <View style={styles.featureIcon}>
+                <Text style={styles.featureEmoji}>M</Text>
+              </View>
+              <View style={styles.featureCopy}>
+                <Text style={styles.featureTitle}>Planejamento de Massa</Text>
+                <Text style={styles.featureDescription}>
+                  Simule três dias de produção e confira a capacidade da
+                  amassadeira.
+                </Text>
+              </View>
+            </Pressable>
+          ) : null}
+          {!desktop ? (
+            <Pressable
+              accessibilityRole="button"
+              style={[styles.featureCard, featureWidth]}
+              onPress={onOpenProgramming}
+            >
+              <View style={styles.featureIcon}>
+                <Text style={styles.featureEmoji}>P</Text>
+              </View>
+              <View style={styles.featureCopy}>
+                <Text style={styles.featureTitle}>Programação diária</Text>
+                <Text style={styles.featureDescription}>
+                  Planeje a produção por tamanho e consulte o histórico de
+                  vendas.
                 </Text>
               </View>
             </Pressable>
@@ -1849,7 +1891,13 @@ function AppContent() {
     apiUrl: string;
   } | null>(null);
   const [activeFeature, setActiveFeature] = useState<
-    "kds" | "dough-stock" | "recipes" | "purchases" | null
+    | "kds"
+    | "dough-stock"
+    | "dough-planning"
+    | "recipes"
+    | "purchases"
+    | "programming"
+    | null
   >(null);
   const [stockShortcutDate, setStockShortcutDate] = useState<string | null>(
     null
@@ -1901,6 +1949,34 @@ function AppContent() {
           onAuthenticated={(nextSession) => {
             setActiveFeature(null);
             setSession(nextSession);
+          }}
+        />
+      );
+    if (activeFeature === "dough-planning")
+      return (
+        <KdsTypographyContext.Provider value={true}>
+          <DoughPlanningScreen
+            apiUrl={session.apiUrl}
+            token={session.token}
+            onUnauthorized={() => {
+              void sessionStorage.clearToken();
+              setActiveFeature(null);
+              setSession(null);
+            }}
+            storageScope={`${session.apiUrl}:${session.user.id}`}
+            onBack={() => setActiveFeature(null)}
+          />
+        </KdsTypographyContext.Provider>
+      );
+    if (activeFeature === "programming")
+      return (
+        <DailyProgrammingScreen
+          {...session}
+          onBack={() => setActiveFeature(null)}
+          onUnauthorized={() => {
+            void sessionStorage.clearToken();
+            setActiveFeature(null);
+            setSession(null);
           }}
         />
       );
@@ -1972,6 +2048,8 @@ function AppContent() {
         }}
         onOpenRecipes={() => setActiveFeature("recipes")}
         onOpenPurchases={() => setActiveFeature("purchases")}
+        onOpenProgramming={() => setActiveFeature("programming")}
+        onOpenDoughPlanning={() => setActiveFeature("dough-planning")}
         onSignedOut={() => {
           setActiveFeature(null);
           setSession(null);
