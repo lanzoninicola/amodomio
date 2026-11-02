@@ -15,10 +15,10 @@ import {
 import { ApiError, getRecipes, submitRecipe } from "../api/client";
 import { Alert } from "../platform/alert";
 import { Screen } from "../ui/Screen";
-import { Text } from "../ui/Text";
+import { Text as BaseText } from "../ui/Text";
 import { Button as BaseButton } from "../ui/Button";
-import { Input } from "../ui/Input";
-import { Card } from "../ui/Card";
+import { Input as BaseInput } from "../ui/Input";
+import { Card as BaseCard } from "../ui/Card";
 import { theme } from "../ui/theme";
 import {
   applyTemplateUnitPreference,
@@ -50,20 +50,120 @@ const quantity = (value: number) =>
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
-const tabs = [
-  "Ingredientes",
-  "Procedimento",
-  "Pré-aquecimento",
-  "Forno",
-  "Observações",
-];
-
-function Button({ style, ...props }: ComponentProps<typeof BaseButton>) {
+const palette = {
+  background: "#101010",
+  card: "#282828",
+  border: "#444444",
+  foreground: "#ffffff",
+  mutedForeground: "#b3b3b3",
+  muted: "#181818",
+  accent: "#fdbc12",
+};
+function Text({ style, ...props }: ComponentProps<typeof BaseText>) {
+  return <BaseText {...props} style={[{ color: palette.foreground }, style]} />;
+}
+function Card({ style, ...props }: ComponentProps<typeof BaseCard>) {
+  return (
+    <BaseCard
+      {...props}
+      style={{
+        backgroundColor: palette.card,
+        borderColor: palette.border,
+        borderRadius: 8,
+        ...style,
+      }}
+    />
+  );
+}
+function Input({ label, style, ...props }: ComponentProps<typeof BaseInput>) {
+  return (
+    <View style={{ gap: 8 }}>
+      {label && <Text>{label}</Text>}
+      <BaseInput
+        {...props}
+        placeholderTextColor={palette.mutedForeground}
+        style={[
+          {
+            backgroundColor: palette.card,
+            color: palette.foreground,
+            borderColor: palette.border,
+            fontSize: 18,
+            minHeight: 52,
+          },
+          style,
+        ]}
+      />
+    </View>
+  );
+}
+function Button({
+  style,
+  children,
+  variant,
+  ...props
+}: ComponentProps<typeof BaseButton>) {
+  const active = !variant || variant === "primary";
   return (
     <BaseButton
       {...props}
-      style={{ minHeight: 48, borderRadius: 12, ...style }}
-    />
+      variant={variant}
+      style={{
+        minHeight: 48,
+        borderRadius: 8,
+        backgroundColor: active ? palette.accent : palette.card,
+        borderColor: palette.border,
+        ...style,
+      }}
+    >
+      {typeof children === "string" ? (
+        <Text
+          style={{
+            color: active ? "#101010" : palette.foreground,
+            fontFamily: theme.typography.semibold,
+          }}
+        >
+          {children}
+        </Text>
+      ) : (
+        children
+      )}
+    </BaseButton>
+  );
+}
+
+function HeaderAction({
+  icon,
+  label,
+  onPress,
+  disabled = false,
+  expanded,
+}: {
+  icon: string;
+  label: string;
+  onPress: () => void;
+  disabled?: boolean;
+  expanded?: boolean;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{
+        disabled,
+        ...(expanded === undefined ? {} : { expanded }),
+      }}
+      disabled={disabled}
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.headerAction,
+        { opacity: disabled ? 0.4 : pressed ? 0.7 : 1 },
+      ]}
+    >
+      <Text accessible={false} style={styles.headerActionIcon}>
+        {icon}
+      </Text>
+      <Text style={styles.headerActionLabel}>{label}</Text>
+    </Pressable>
   );
 }
 
@@ -126,7 +226,23 @@ export function RecipesScreen({
 }) {
   const { width, height } = useWindowDimensions();
   const tabletLandscape = width >= 800 && width > height;
-  const twoIngredientColumns = tabletLandscape && width >= 1000;
+  const listColumns = width >= 1400 ? 3 : width >= 800 ? 2 : 1;
+  const [optionsOpen, setOptionsOpen] = useState(false);
+  const [showPreparation, setShowPreparation] = useState(false);
+  const [fontScale, setFontScale] = useState(1);
+  const [ingredientAreaWidth, setIngredientAreaWidth] = useState(0);
+  const ingredientColumns = Math.max(
+    1,
+    Math.floor((ingredientAreaWidth + 12) / (360 * fontScale + 12))
+  );
+  const ingredientCardWidth =
+    ingredientAreaWidth > 0
+      ? Math.min(
+          520,
+          (ingredientAreaWidth - (ingredientColumns - 1) * 12) /
+            ingredientColumns
+        )
+      : undefined;
   const [history, setHistory] = useState<Page[]>([{ kind: "list" }]);
   const page = history[history.length - 1];
   const [recipes, setRecipes] = useState<RecipeSummary[]>([]);
@@ -134,10 +250,8 @@ export function RecipesScreen({
   const [templates, setTemplates] = useState<TemplateSummary[]>([]);
   const [template, setTemplate] = useState<SavedTemplate | null>(null);
   const [query, setQuery] = useState("");
-  const [letter, setLetter] = useState<string | null>(null);
   const [listQuery, setListQuery] = useState("");
   const [listPage, setListPage] = useState(1);
-  const [tab, setTab] = useState(0);
   const [scale, setScale] = useState(1);
   const [yieldInput, setYieldInput] = useState<string | null>(null);
   const [units, setUnits] = useState<Record<string, string>>({});
@@ -154,11 +268,14 @@ export function RecipesScreen({
   const generation = useRef(0);
   const scroll = useRef<ScrollView>(null);
   const back = () =>
-    history.length > 1
+    optionsOpen
+      ? setOptionsOpen(false)
+      : history.length > 1
       ? setHistory((current) => current.slice(0, -1))
       : onBack();
   const open = (next: Page) => {
     setError("");
+    setOptionsOpen(false);
     setHistory((current) => [...current, next]);
   };
   useEffect(() => {
@@ -213,9 +330,9 @@ export function RecipesScreen({
     };
   }, [page, apiUrl, token, reload]);
   useEffect(() => {
+    setShowPreparation(false);
     setScale(1);
     setUnits({});
-    setTab(0);
     setYieldInput(null);
   }, [recipeId]);
   const baseYield =
@@ -349,7 +466,12 @@ export function RecipesScreen({
     return (
       <>
         {!rows.length && <Text>Sem ingredientes cadastrados.</Text>}
-        <View style={styles.grid}>
+        <View
+          style={styles.ingredientGrid}
+          onLayout={(event) =>
+            setIngredientAreaWidth(event.nativeEvent.layout.width)
+          }
+        >
           {rows.map((row) => {
             const source = recipe.ingredients.find(
               (item) => item.id === row.id
@@ -367,81 +489,116 @@ export function RecipesScreen({
                 key={row.id}
                 style={{
                   opacity: !preview && marked.includes(row.id) ? 0.45 : 1,
-                  gap: 10,
+                  gap: 16,
                   padding: 16,
-                  width: twoIngredientColumns ? "48.8%" : "100%",
+                  width: ingredientCardWidth ?? "100%",
+                  maxWidth: 520,
                 }}
               >
-                <Text style={styles.ingredientName}>{row.name}</Text>
-                <Button
-                  variant="ghost"
-                  disabled={
-                    preview || !!template || !source || source.quantity <= 0
-                  }
-                  onPress={() => {
-                    setRecalculate(source!);
-                    setAvailable(String(row.quantity));
-                    setAvailableUnit(row.unit);
-                  }}
-                >
-                  <View style={{ alignItems: "center", gap: 3 }}>
-                    <Text style={styles.quantity}>{`${quantity(row.quantity)} ${
-                      row.unit
-                    }`}</Text>
-                    {!template && !preview && (
-                      <Text style={styles.quantityHint}>
-                        Recalcular quantidade
+                <View style={styles.ingredientRow}>
+                  {!preview && (
+                    <Pressable
+                      accessibilityRole="checkbox"
+                      accessibilityLabel={`${row.name}: ${
+                        marked.includes(row.id) ? "adicionado" : "pendente"
+                      }`}
+                      accessibilityState={{ checked: marked.includes(row.id) }}
+                      onPress={() => toggle(row.id)}
+                      style={styles.check}
+                    >
+                      <Text style={{ fontSize: 26, color: palette.accent }}>
+                        {marked.includes(row.id) ? "☑" : "□"}
+                      </Text>
+                    </Pressable>
+                  )}
+                  <View style={{ flex: 1, minWidth: 0, gap: 8 }}>
+                    <Text
+                      style={[
+                        styles.ingredientName,
+                        {
+                          fontSize: 18 * fontScale,
+                          lineHeight: 25 * fontScale,
+                          textDecorationLine: marked.includes(row.id)
+                            ? "line-through"
+                            : "none",
+                        },
+                      ]}
+                    >
+                      {row.name}
+                    </Text>
+                    {row.notes && (
+                      <Text
+                        style={{ color: palette.mutedForeground, fontSize: 16 }}
+                      >
+                        {row.notes}
                       </Text>
                     )}
-                  </View>
-                </Button>
-                {row.notes && (
-                  <Button
-                    variant="outline"
-                    onPress={() => Alert.alert(row.name, row.notes!)}
-                  >
-                    Observação
-                  </Button>
-                )}
-                {source?.subRecipe && (
-                  <Button
-                    variant="outline"
-                    onPress={() =>
-                      open({ kind: "recipe", recipeId: source.subRecipe!.id })
-                    }
-                  >{`Sub-receita: ${source.subRecipe.name}`}</Button>
-                )}
-                {!preview && (
-                  <View style={styles.ingredientFooter}>
-                    <View style={[styles.wrap, { flex: 1 }]}>
-                      {options.map((unit) => (
-                        <Button
-                          key={unit}
-                          disabled={saving || !source}
-                          variant={row.unit === unit ? "primary" : "outline"}
-                          onPress={() => source && changeUnit(source, unit)}
-                        >
-                          {unit}
-                        </Button>
-                      ))}
-                    </View>
-                    <View style={{ alignItems: "flex-end" }}>
-                      <Pressable
-                        accessibilityRole="checkbox"
-                        accessibilityLabel={`Marcar ${row.name} como adicionado`}
-                        accessibilityState={{
-                          checked: marked.includes(row.id),
-                        }}
-                        onPress={() => toggle(row.id)}
-                        style={styles.check}
+                    {source?.subRecipe && (
+                      <Button
+                        variant="ghost"
+                        onPress={() =>
+                          open({
+                            kind: "recipe",
+                            recipeId: source.subRecipe!.id,
+                          })
+                        }
                       >
-                        <Text style={{ fontSize: 28 }}>
-                          {marked.includes(row.id) ? "☑" : "□"}
-                        </Text>
-                      </Pressable>
-                    </View>
+                        Ver sub-receita
+                      </Button>
+                    )}
                   </View>
-                )}
+                </View>
+                <View style={styles.ingredientAmounts}>
+                  <View style={{ flexShrink: 1 }}>
+                    <Text style={styles.quantityHint}>Quantidade</Text>
+                    <Button
+                      variant="ghost"
+                      style={{
+                        paddingHorizontal: 0,
+                        paddingVertical: 0,
+                        justifyContent: "flex-start",
+                      }}
+                      disabled={
+                        preview || !!template || !source || source.quantity <= 0
+                      }
+                      onPress={() => {
+                        setRecalculate(source!);
+                        setAvailable(String(row.quantity));
+                        setAvailableUnit(row.unit);
+                      }}
+                    >
+                      <Text
+                        style={[
+                          styles.quantity,
+                          {
+                            fontSize: (width < 500 ? 24 : 32) * fontScale,
+                            color: palette.accent,
+                          },
+                        ]}
+                      >
+                        {quantity(row.quantity)}
+                      </Text>
+                    </Button>
+                  </View>
+                  <View
+                    style={[
+                      styles.wrap,
+                      { justifyContent: "flex-end", maxWidth: "48%" },
+                    ]}
+                  >
+                    {options.map((unit) => (
+                      <Button
+                        key={unit}
+                        style={{ width: 56, paddingHorizontal: 0 }}
+                        disabled={preview || saving || !source}
+                        variant={row.unit === unit ? "primary" : "outline"}
+                        onPress={() => source && changeUnit(source, unit)}
+                      >
+                        {unit}
+                      </Button>
+                    ))}
+                  </View>
+                </View>
               </Card>
             );
           })}
@@ -463,13 +620,10 @@ export function RecipesScreen({
       )}
     </Card>
   );
-  const filtered = recipes.filter(
-    (entry) =>
-      (!letter ||
-        normalize(entry.name.trim()).charAt(0).toUpperCase() === letter) &&
-      normalize(
-        [entry.name, entry.description, entry.Item?.name].join(" ")
-      ).includes(normalize(query.trim()))
+  const filtered = recipes.filter((entry) =>
+    normalize(
+      [entry.name, entry.description, entry.Item?.name].join(" ")
+    ).includes(normalize(query.trim()))
   );
   const filteredTemplates = templates.filter((entry) =>
     normalize(`${entry.name} ${entry.description || ""}`).includes(
@@ -479,12 +633,45 @@ export function RecipesScreen({
   const totalPages = Math.max(1, Math.ceil(filteredTemplates.length / 10));
   const currentPage = Math.min(listPage, totalPages);
   return (
-    <Screen>
+    <Screen style={{ backgroundColor: palette.background }}>
       <View style={styles.header}>
-        <Button variant="ghost" onPress={back}>
-          ‹ Voltar
-        </Button>
-        <Text style={styles.title}>Receitas</Text>
+        <HeaderAction icon="‹" label="Voltar" onPress={back} />
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text style={styles.headerCaption}>RECEITAS · PRODUÇÃO</Text>
+          <Text numberOfLines={2} style={styles.title}>
+            {recipe?.name || "Receitas"}
+          </Text>
+        </View>
+        {page.kind === "recipe" && recipe && (
+          <View style={styles.headerActions}>
+            <HeaderAction
+              icon={showPreparation ? "▣" : "▤"}
+              label={showPreparation ? "Esconder preparo" : "Mostrar preparo"}
+              expanded={showPreparation}
+              onPress={() => setShowPreparation((value) => !value)}
+            />
+            <HeaderAction
+              icon="▥"
+              label="Templates"
+              onPress={() => open({ kind: "templates", recipeId })}
+            />
+            <HeaderAction
+              icon="+"
+              label="Criar template"
+              disabled={!validScale || !recipe.ingredients.length}
+              onPress={() => {
+                setName("");
+                setDescription("");
+                open({ kind: "create", recipeId });
+              }}
+            />
+            <HeaderAction
+              icon="⚙"
+              label="Ajustes"
+              onPress={() => setOptionsOpen(true)}
+            />
+          </View>
+        )}
       </View>
       {error ? (
         <View style={styles.content}>
@@ -501,62 +688,131 @@ export function RecipesScreen({
         <ActivityIndicator style={{ margin: 24 }} />
       ) : (
         <RecipeViewport
-          split={tabletLandscape && page.kind === "recipe"}
+          split={
+            tabletLandscape && (page.kind === "recipe" || page.kind === "list")
+          }
           scrollRef={scroll}
         >
           {page.kind === "list" ? (
-            <>
-              <Input
-                label="Pesquisar receita"
-                placeholder="Digite o nome da receita"
-                value={query}
-                onChangeText={setQuery}
-              />
-              <View style={styles.wrap}>
-                <Button
-                  variant={!letter ? "primary" : "outline"}
-                  onPress={() => setLetter(null)}
-                >
-                  Todos
-                </Button>
-                {"ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("").map((value) => (
+            <View style={tabletLandscape ? styles.listLayout : styles.stacked}>
+              <RecipePane landscape={tabletLandscape} sidebar>
+                <Input
+                  label="Pesquisar receita"
+                  placeholder="Nome da receita"
+                  value={query}
+                  onChangeText={setQuery}
+                  showSoftInputOnFocus={false}
+                  autoCorrect={false}
+                  autoCapitalize="characters"
+                />
+                <View style={styles.wrap}>
                   <Button
-                    key={value}
-                    disabled={
-                      !recipes.some(
-                        (entry) =>
-                          normalize(entry.name.trim())
-                            .charAt(0)
-                            .toUpperCase() === value
+                    variant="outline"
+                    style={{ flex: 1 }}
+                    disabled={!query}
+                    onPress={() =>
+                      setQuery((value) =>
+                        Array.from(value).slice(0, -1).join("")
                       )
                     }
-                    variant={letter === value ? "primary" : "outline"}
-                    onPress={() => setLetter(letter === value ? null : value)}
                   >
-                    {value}
+                    ⌫ Apagar
                   </Button>
-                ))}
-              </View>
-              <Text>{filtered.length} receitas</Text>
-              <View style={styles.grid}>
-                {filtered.map((entry) => (
                   <Button
-                    key={entry.id}
-                    style={{
-                      width: tabletLandscape ? "48.8%" : "100%",
-                      minHeight: 64,
-                      borderRadius: 12,
-                      alignItems: "flex-start",
-                    }}
                     variant="outline"
-                    onPress={() => open({ kind: "recipe", recipeId: entry.id })}
+                    style={{ flex: 1 }}
+                    disabled={!query}
+                    onPress={() => setQuery("")}
                   >
-                    {entry.name}
+                    Limpar
                   </Button>
-                ))}
-              </View>
-              {!filtered.length && <Text>Nenhuma receita encontrada.</Text>}
-            </>
+                </View>
+                <View style={styles.alphabet}>
+                  {"ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+                    .split("")
+                    .map((value) => (
+                      <Button
+                        key={value}
+                        style={{ width: "17%", paddingHorizontal: 0 }}
+                        variant="outline"
+                        onPress={() => setQuery((current) => current + value)}
+                      >
+                        {value}
+                      </Button>
+                    ))}
+                  <Button
+                    variant="outline"
+                    style={{ width: "100%" }}
+                    onPress={() => setQuery((current) => current + " ")}
+                  >
+                    Espaço
+                  </Button>
+                </View>
+              </RecipePane>
+              <RecipePane landscape={tabletLandscape} scrollRef={scroll}>
+                <Text accessibilityLiveRegion="polite">
+                  {filtered.length} receitas
+                </Text>
+                <View style={styles.grid}>
+                  {filtered.map((entry) => (
+                    <Pressable
+                      key={entry.id}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Abrir receita ${entry.name}`}
+                      onPress={() =>
+                        open({ kind: "recipe", recipeId: entry.id })
+                      }
+                      style={({ pressed }) => [
+                        styles.recipeCard,
+                        {
+                          width:
+                            listColumns === 3
+                              ? "31.8%"
+                              : listColumns === 2
+                              ? "48.5%"
+                              : "100%",
+                          opacity: pressed ? 0.7 : 1,
+                        },
+                      ]}
+                    >
+                      <View
+                        style={{
+                          flexDirection: "row",
+                          gap: 12,
+                          alignItems: "flex-start",
+                        }}
+                      >
+                        <Text style={styles.recipeCardTitle}>{entry.name}</Text>
+                        <Text style={{ fontSize: 26, color: palette.accent }}>
+                          ›
+                        </Text>
+                      </View>
+                      {entry.Item && (
+                        <Text style={styles.recipeCardItem}>
+                          {entry.Item.name}
+                        </Text>
+                      )}
+                      {entry.description && (
+                        <Text
+                          numberOfLines={3}
+                          style={{
+                            color: palette.mutedForeground,
+                            fontSize: 16,
+                          }}
+                        >
+                          {entry.description}
+                        </Text>
+                      )}
+                    </Pressable>
+                  ))}
+                </View>
+                {!filtered.length && (
+                  <Text>
+                    Nenhuma receita encontrada. Tente outro nome ou letra.
+                  </Text>
+                )}
+              </RecipePane>
+            </View>
           ) : recipe ? (
             <>
               {page.kind !== "recipe" && (
@@ -567,90 +823,198 @@ export function RecipesScreen({
               {page.kind === "recipe" ? (
                 <>
                   <View style={tabletLandscape ? styles.split : styles.stacked}>
-                    <RecipePane landscape={tabletLandscape} sidebar>
-                      <Text style={styles.heading}>{recipe.name}</Text>
-                      {recipe.description && <Text>{recipe.description}</Text>}
-                      <View style={styles.wrap}>
-                        <Button
-                          onPress={() => open({ kind: "templates", recipeId })}
-                        >
-                          Templates
-                        </Button>
-                        <Button
-                          disabled={!validScale || !recipe.ingredients.length}
-                          onPress={() => {
-                            setName("");
-                            setDescription("");
-                            open({ kind: "create", recipeId });
-                          }}
-                        >
-                          Criar template
-                        </Button>
-                      </View>
-                      {baseYield && (
-                        <Input
-                          label={`Rendimento desejado (${
-                            recipe.yieldUnit || "UN"
-                          })`}
-                          keyboardType="decimal-pad"
-                          value={yieldInput ?? String(baseYield * scale)}
-                          onChangeText={(value) => {
-                            setYieldInput(value);
-                            if (numeric(value) > 0)
-                              setScale(numeric(value) / baseYield);
-                          }}
-                        />
-                      )}
-                      <Button
-                        variant="outline"
-                        onPress={() => {
-                          setScale(1);
-                          setYieldInput(null);
-                        }}
+                    <Modal
+                      visible={optionsOpen}
+                      transparent
+                      animationType="fade"
+                      onRequestClose={() => setOptionsOpen(false)}
+                    >
+                      <KeyboardAvoidingView
+                        style={styles.overlay}
+                        behavior={Platform.OS === "ios" ? "padding" : "height"}
                       >
-                        Restaurar quantidades
-                      </Button>
-                      <View>
-                        <View
-                          style={
-                            tabletLandscape ? styles.sideTabs : styles.wrap
+                        <View style={[styles.dialogFrame, styles.optionsFrame]}>
+                          <View style={styles.optionsHeader}>
+                            <Text style={styles.heading}>
+                              Ajustes da receita
+                            </Text>
+                            <Text style={styles.optionsRecipeName}>
+                              {recipe.name}
+                            </Text>
+                          </View>
+                          <ScrollView
+                            keyboardShouldPersistTaps="handled"
+                            contentContainerStyle={styles.optionsBody}
+                          >
+                            <View style={styles.optionsSection}>
+                              <Text style={styles.optionsSectionTitle}>
+                                Rendimento e quantidades
+                              </Text>
+                              <Text style={styles.optionsHint}>
+                                Ajuste o rendimento para recalcular todos os
+                                ingredientes.
+                              </Text>
+                              {baseYield && (
+                                <Input
+                                  label={`Rendimento desejado (${
+                                    recipe.yieldUnit || "UN"
+                                  })`}
+                                  keyboardType="decimal-pad"
+                                  value={
+                                    yieldInput ?? String(baseYield * scale)
+                                  }
+                                  onChangeText={(value) => {
+                                    setYieldInput(value);
+                                    if (numeric(value) > 0)
+                                      setScale(numeric(value) / baseYield);
+                                  }}
+                                />
+                              )}
+                              <Button
+                                variant="outline"
+                                onPress={() => {
+                                  setScale(1);
+                                  setYieldInput(null);
+                                }}
+                              >
+                                Restaurar quantidades
+                              </Button>
+                            </View>
+                            <View style={styles.optionsSection}>
+                              <View style={styles.optionsSectionHeading}>
+                                <View style={{ flex: 1, gap: 4 }}>
+                                  <Text style={styles.optionsSectionTitle}>
+                                    Tamanho do texto
+                                  </Text>
+                                  <Text style={styles.optionsHint}>
+                                    Ajuste a leitura da receita.
+                                  </Text>
+                                </View>
+                                <View style={styles.wrap}>
+                                  <Button
+                                    variant="outline"
+                                    style={{ width: 56 }}
+                                    disabled={fontScale <= 0.8}
+                                    onPress={() =>
+                                      setFontScale((value) =>
+                                        Math.max(0.8, +(value - 0.1).toFixed(1))
+                                      )
+                                    }
+                                  >
+                                    A−
+                                  </Button>
+                                  <Text style={styles.fontValue}>
+                                    {Math.round(fontScale * 100)}%
+                                  </Text>
+                                  <Button
+                                    variant="outline"
+                                    style={{ width: 56 }}
+                                    disabled={fontScale >= 1.5}
+                                    onPress={() =>
+                                      setFontScale((value) =>
+                                        Math.min(1.5, +(value + 0.1).toFixed(1))
+                                      )
+                                    }
+                                  >
+                                    A+
+                                  </Button>
+                                </View>
+                              </View>
+                            </View>
+                          </ScrollView>
+                          <View style={styles.optionsFooter}>
+                            <Button onPress={() => setOptionsOpen(false)}>
+                              Concluir
+                            </Button>
+                          </View>
+                        </View>
+                      </KeyboardAvoidingView>
+                    </Modal>
+                    <RecipePane landscape={tabletLandscape} scrollRef={scroll}>
+                      <View style={styles.sectionHeader}>
+                        <Text style={styles.sectionTitle}>Ingredientes</Text>
+                        <Text>
+                          {
+                            recipe.ingredients.filter((item) =>
+                              marked.includes(item.id)
+                            ).length
+                          }
+                          /{recipe.ingredients.length} adicionados
+                        </Text>
+                      </View>
+                      {marked.length > 0 && (
+                        <Button
+                          variant="outline"
+                          onPress={() =>
+                            setChecks((current) => ({
+                              ...current,
+                              [checklistKey]: [],
+                            }))
                           }
                         >
-                          {tabs.map((label, index) => (
-                            <Button
-                              key={label}
-                              variant={tab === index ? "primary" : "outline"}
-                              onPress={() => setTab(index)}
+                          Reiniciar marcações
+                        </Button>
+                      )}
+                      {ingredients()}
+                      {recipe.ingredients.filter(
+                        (item) => !marked.includes(item.id)
+                      ).length > 0 &&
+                        recipe.ingredients.filter(
+                          (item) => !marked.includes(item.id)
+                        ).length <= 2 && (
+                          <View
+                            accessibilityLiveRegion="polite"
+                            style={styles.pending}
+                          >
+                            <Text
+                              style={{
+                                color: "#93451c",
+                                fontFamily: theme.typography.bold,
+                              }}
                             >
-                              {label}
-                            </Button>
-                          ))}
-                        </View>
-                      </View>
+                              Falta adicionar:{" "}
+                              {recipe.ingredients
+                                .filter((item) => !marked.includes(item.id))
+                                .map((item) => item.name)
+                                .join(" e ")}
+                            </Text>
+                          </View>
+                        )}
                     </RecipePane>
-                    <RecipePane landscape={tabletLandscape} scrollRef={scroll}>
-                      {tab === 0 ? (
-                        ingredients()
-                      ) : tab === 1 ? (
-                        <Card>
-                          <Text>
+                    {showPreparation && (
+                      <RecipePane landscape={tabletLandscape}>
+                        <Card style={{ gap: 16 }}>
+                          <Text style={styles.sectionTitle}>
+                            Modo de preparo
+                          </Text>
+                          <Text
+                            style={{
+                              fontSize: 20 * fontScale,
+                              lineHeight: 30 * fontScale,
+                            }}
+                          >
                             {recipe.productionProcedure ||
-                              "Sem procedimento cadastrado."}
+                              "Modo de preparo ainda não cadastrado."}
                           </Text>
                         </Card>
-                      ) : tab === 2 ? (
-                        thermal(recipe.preheating)
-                      ) : tab === 3 ? (
-                        thermal(recipe.baking)
-                      ) : (
-                        <Card>
-                          <Text>
+                        <Text style={styles.sectionTitle}>Pré-aquecimento</Text>
+                        {thermal(recipe.preheating)}
+                        <Text style={styles.sectionTitle}>Aquecimento</Text>
+                        {thermal(recipe.baking)}
+                        <Card style={{ gap: 16 }}>
+                          <Text style={styles.sectionTitle}>Observações</Text>
+                          <Text
+                            style={{
+                              fontSize: 18 * fontScale,
+                              lineHeight: 28 * fontScale,
+                            }}
+                          >
                             {recipe.productionNotes ||
                               "Sem observações cadastradas."}
                           </Text>
                         </Card>
-                      )}
-                    </RecipePane>
+                      </RecipePane>
+                    )}
                   </View>
                 </>
               ) : page.kind === "templates" ? (
@@ -906,25 +1270,158 @@ export function RecipesScreen({
   );
 }
 const styles = StyleSheet.create({
-  header: {
+  headerActions: { flexDirection: "row", gap: 6, flexWrap: "wrap" },
+  headerAction: {
+    width: 72,
+    minHeight: 64,
+    paddingHorizontal: 4,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: palette.card,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 4,
+  },
+  headerActionIcon: { fontSize: 24, lineHeight: 28, color: palette.foreground },
+  headerActionLabel: {
+    fontSize: 10,
+    lineHeight: 13,
+    textAlign: "center",
+    color: palette.foreground,
+    fontFamily: theme.typography.medium,
+  },
+  optionsFrame: {
+    backgroundColor: palette.background,
+    borderWidth: 1,
+    borderColor: palette.border,
+  },
+  optionsHeader: {
+    padding: 20,
+    gap: 6,
+    borderBottomWidth: 1,
+    borderColor: palette.border,
+  },
+  optionsRecipeName: { fontSize: 16, color: palette.mutedForeground },
+  optionsBody: { padding: 20, gap: 16 },
+  optionsSection: {
+    backgroundColor: palette.muted,
+    borderWidth: 1,
+    borderColor: palette.border,
+    borderRadius: 10,
+    padding: 16,
+    gap: 12,
+  },
+  optionsSectionTitle: { fontSize: 16, fontFamily: theme.typography.semibold },
+  optionsHint: { fontSize: 13, lineHeight: 19, color: palette.mutedForeground },
+  optionsSectionHeading: {
     flexDirection: "row",
+    flexWrap: "wrap",
+    alignItems: "center",
+    gap: 12,
+  },
+  fontValue: {
+    minWidth: 48,
+    textAlign: "center",
+    fontFamily: theme.typography.semibold,
+  },
+  optionsFooter: {
+    padding: 16,
+    borderTopWidth: 1,
+    borderColor: palette.border,
+  },
+  listLayout: { flex: 1, flexDirection: "row", minHeight: 0 },
+  alphabet: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "space-between",
+    gap: 6,
+  },
+  recipeCard: {
+    minHeight: 180,
+    padding: 20,
+    borderRadius: 8,
+    backgroundColor: palette.card,
+    borderWidth: 1,
+    borderColor: palette.border,
+    gap: 16,
+  },
+  recipeCardTitle: {
+    flex: 1,
+    fontSize: 24,
+    lineHeight: 32,
+    fontFamily: theme.typography.bold,
+  },
+  recipeCardItem: {
+    fontSize: 18,
+    color: palette.mutedForeground,
+    borderTopWidth: 1,
+    borderColor: palette.border,
+    paddingTop: 12,
+  },
+  ingredientGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 12,
+    alignItems: "flex-start",
+  },
+  ingredientAmounts: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+    borderTopWidth: 1,
+    borderColor: palette.border,
+    paddingTop: 12,
+  },
+  ingredientRow: {
+    flexDirection: "row",
+    gap: 12,
+    alignItems: "center",
+    minHeight: 52,
+  },
+  headerText: { color: "#ffffff", fontFamily: theme.typography.semibold },
+  headerCaption: { color: "#b3b3b3", fontSize: 10, letterSpacing: 1 },
+  sectionHeader: {
+    paddingBottom: 12,
+    borderBottomWidth: 2,
+    borderColor: "#444444",
+    gap: 6,
+  },
+  sectionTitle: { fontSize: 20, fontFamily: theme.typography.bold },
+  pending: {
+    padding: 16,
+    borderRadius: 8,
+    backgroundColor: "#fff1e7",
+    borderWidth: 1,
+    borderColor: "#ee8043",
+  },
+  header: {
+    backgroundColor: "#101010",
+    flexDirection: "row",
+    flexWrap: "wrap",
     alignItems: "center",
     gap: 12,
     padding: 12,
     borderBottomWidth: 1,
-    borderColor: theme.colors.border,
+    borderColor: palette.border,
   },
   content: { padding: 16, gap: 16, paddingBottom: 32 },
-  split: { flex: 1, flexDirection: "row", minHeight: 0 },
+  split: {
+    flex: 1,
+    flexDirection: "row",
+    minHeight: 0,
+    gap: 2,
+    backgroundColor: palette.border,
+  },
   stacked: { gap: 16 },
   sidebar: {
     width: 260,
     flexGrow: 0,
     borderRightWidth: 1,
-    borderColor: theme.colors.border,
-    backgroundColor: theme.colors.muted,
+    borderColor: palette.border,
+    backgroundColor: palette.muted,
   },
-  mainPanel: { flex: 1, minWidth: 0 },
+  mainPanel: { flex: 1, minWidth: 0, backgroundColor: palette.background },
   panel: { padding: 16, gap: 16, paddingBottom: 32 },
   sideTabs: { gap: 8 },
   grid: {
@@ -939,21 +1436,21 @@ const styles = StyleSheet.create({
     alignItems: "flex-end",
     gap: 8,
     borderTopWidth: 1,
-    borderColor: theme.colors.border,
+    borderColor: palette.border,
     paddingTop: 12,
   },
   ingredientName: {
     fontSize: 18,
     lineHeight: 25,
     fontFamily: theme.typography.semibold,
-    color: theme.colors.foreground,
+    color: palette.foreground,
   },
   quantity: {
     fontSize: 24,
     fontFamily: theme.typography.bold,
-    color: theme.colors.foreground,
+    color: palette.foreground,
   },
-  quantityHint: { fontSize: 12, color: theme.colors.mutedForeground },
+  quantityHint: { fontSize: 12, color: palette.mutedForeground },
   dialogFrame: {
     width: "100%",
     maxWidth: 520,
@@ -965,12 +1462,12 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 18,
     fontFamily: theme.typography.semibold,
-    color: theme.colors.foreground,
+    color: "#ffffff",
   },
   heading: {
     fontSize: 24,
     fontFamily: theme.typography.bold,
-    color: theme.colors.foreground,
+    color: palette.foreground,
   },
   wrap: {
     flexDirection: "row",
@@ -984,7 +1481,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
-    borderColor: theme.colors.border,
+    borderColor: palette.border,
     borderRadius: 8,
   },
   overlay: {
@@ -994,7 +1491,7 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   dialog: {
-    backgroundColor: theme.colors.background,
+    backgroundColor: palette.background,
     borderRadius: 16,
     padding: 20,
     gap: 16,

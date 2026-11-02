@@ -10,6 +10,7 @@ import {
   loadForecasts,
   parseForecastDocument,
   restoreAutomatic,
+  resetForecastDate,
   SALES_FIELDS,
   type ForecastDocument,
   type SalesField,
@@ -166,6 +167,11 @@ export function usePlanningForecasts({
       },
     }));
   }
+  function resetSales(field: SalesField) {
+    if (!ready) return;
+    const date = dates[SALES_FIELDS.indexOf(field)];
+    commit((previous) => resetForecastDate(previous, date));
+  }
   function clearSales() {
     if (!ready) return;
     commit((previous) => ({
@@ -199,6 +205,7 @@ export function usePlanningForecasts({
     hasError: dates.some((date) => dayErrors[date]),
     hasDay: (date: string) => ready && hasForecast(document, date),
     setManual,
+    resetSales,
     clearSales,
     useAutomatic,
     retry: () => {

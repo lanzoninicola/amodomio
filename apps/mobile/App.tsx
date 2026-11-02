@@ -1,3 +1,4 @@
+import { KitchenMessages } from "./src/kds/KitchenMessages";
 import { DailyProgrammingScreen } from "./src/production/DailyProgrammingScreen";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
@@ -73,7 +74,6 @@ import {
 } from "./src/kds/notifications";
 import { newlyAwaitingOven } from "./src/kds/awaiting-oven";
 import { sessionStorage } from "./src/storage/session";
-import { AppHeader } from "./src/ui/AppHeader";
 import { PhoneBoard } from "./src/kds/PhoneBoard";
 import {
   DEFAULT_SERVER_PRESETS,
@@ -478,152 +478,225 @@ function HomeScreen({
     );
 
   return (
-    <Screen style={styles.homeSafe}>
-      <StatusBar style="light" />
-      <AppHeader
-        title={`Olá, ${user.name || user.username}`}
-        action={
-          <Pressable onPress={signOut} style={styles.homeAvatar}>
+    <KdsTypographyContext.Provider value={true}>
+      <Screen style={styles.homeSafe}>
+        <StatusBar style="light" />
+        <View style={styles.homeHeader}>
+          <View style={styles.homeHeading}>
+            <BrandLogo light width={150} />
+            <Text numberOfLines={2} style={styles.homeGreeting}>
+              Olá, {user.name || user.username}
+            </Text>
+          </View>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Sair do aplicativo"
+            onPress={signOut}
+            style={styles.homeAvatar}
+          >
             <Text style={styles.userInitial}>
               {(user.name || user.username).charAt(0).toUpperCase()}
             </Text>
           </Pressable>
-        }
-      />
-      <ScrollView contentContainerStyle={styles.homeContent}>
-        <Text style={styles.homeTitle}>Funcionalidades</Text>
-        <Text style={styles.homeSubtitle}>
-          Escolha onde você quer trabalhar.
-        </Text>
-        <View
-          style={styles.featureGrid}
-          onLayout={(event) => setGridWidth(event.nativeEvent.layout.width)}
-        >
-          <Pressable
-            style={({ pressed }) => [
-              styles.featureCard,
-              featureWidth,
-              pressed && styles.pressed,
-            ]}
-            accessibilityRole="button"
-            onPress={onOpenKds}
-          >
-            <View style={styles.featureIcon}>
-              <Text style={styles.featureEmoji}>KDS</Text>
-            </View>
-            <View style={styles.featureCopy}>
-              <Text style={styles.featureTitle}>KDS</Text>
-              <Text style={styles.featureDescription}>
-                Acompanhe e mova os pedidos entre as etapas de produção.
-              </Text>
-            </View>
-          </Pressable>
-          {!desktop &&
-          user.roles.some((role) =>
-            ["admin", "superAdmin", "kdsOperator", "kdsAdmin"].includes(role)
-          ) ? (
-            <Pressable
-              accessibilityRole="button"
-              style={({ pressed }) => [
-                styles.featureCard,
-                featureWidth,
-                pressed && styles.pressed,
-              ]}
-              onPress={onOpenDoughStock}
-            >
-              <View style={styles.featureIcon}>
-                <Text style={styles.featureEmoji}>M</Text>
-              </View>
-              <View style={styles.featureCopy}>
-                <Text style={styles.featureTitle}>Estoque de massa</Text>
-                <Text style={styles.featureDescription}>
-                  Atualize o saldo por tamanho e envie o estoque pelo WhatsApp.
-                </Text>
-              </View>
-            </Pressable>
-          ) : null}
-          {!desktop ? (
-            <Pressable
-              accessibilityRole="button"
-              style={[styles.featureCard, featureWidth]}
-              onPress={onOpenDoughPlanning}
-            >
-              <View style={styles.featureIcon}>
-                <Text style={styles.featureEmoji}>M</Text>
-              </View>
-              <View style={styles.featureCopy}>
-                <Text style={styles.featureTitle}>Planejamento de Massa</Text>
-                <Text style={styles.featureDescription}>
-                  Simule três dias de produção e confira a capacidade da
-                  amassadeira.
-                </Text>
-              </View>
-            </Pressable>
-          ) : null}
-          {!desktop ? (
-            <Pressable
-              accessibilityRole="button"
-              style={[styles.featureCard, featureWidth]}
-              onPress={onOpenProgramming}
-            >
-              <View style={styles.featureIcon}>
-                <Text style={styles.featureEmoji}>P</Text>
-              </View>
-              <View style={styles.featureCopy}>
-                <Text style={styles.featureTitle}>Programação diária</Text>
-                <Text style={styles.featureDescription}>
-                  Planeje a produção por tamanho e consulte o histórico de
-                  vendas.
-                </Text>
-              </View>
-            </Pressable>
-          ) : null}
-          {!desktop ? (
-            <Pressable
-              accessibilityRole="button"
-              style={({ pressed }) => [
-                styles.featureCard,
-                featureWidth,
-                pressed && styles.pressed,
-              ]}
-              onPress={onOpenPurchases}
-            >
-              <View style={styles.featureIcon}>
-                <Text style={styles.featureEmoji}>C</Text>
-              </View>
-              <View style={styles.featureCopy}>
-                <Text style={styles.featureTitle}>Lista de compras</Text>
-                <Text style={styles.featureDescription}>
-                  Selecione produtos e compartilhe pelo WhatsApp.
-                </Text>
-              </View>
-            </Pressable>
-          ) : null}
-          {!desktop ? (
-            <Pressable
-              accessibilityRole="button"
-              style={({ pressed }) => [
-                styles.featureCard,
-                featureWidth,
-                pressed && styles.pressed,
-              ]}
-              onPress={onOpenRecipes}
-            >
-              <View style={styles.featureIcon}>
-                <Text style={styles.featureEmoji}>R</Text>
-              </View>
-              <View style={styles.featureCopy}>
-                <Text style={styles.featureTitle}>Receitas</Text>
-                <Text style={styles.featureDescription}>
-                  Consulte ingredientes, ajuste quantidades e salve templates de
-                  produção.
-                </Text>
-              </View>
-            </Pressable>
-          ) : null}
         </View>
-      </ScrollView>
-    </Screen>
+        <ScrollView contentContainerStyle={styles.homeContent}>
+          <Text style={styles.homeTitle}>Funcionalidades</Text>
+          <Text style={styles.homeSubtitle}>
+            Escolha onde você quer trabalhar.
+          </Text>
+          <View
+            style={styles.featureGrid}
+            onLayout={(event) => setGridWidth(event.nativeEvent.layout.width)}
+          >
+            <Pressable
+              style={({ pressed }) => [
+                styles.featureCard,
+                featureWidth,
+                pressed && styles.pressed,
+              ]}
+              accessibilityRole="button"
+              onPress={onOpenKds}
+            >
+              <View style={styles.featureCardTop}>
+                <View style={styles.featureIcon}>
+                  <Text style={styles.featureEmoji}>KDS</Text>
+                </View>
+                <Text
+                  accessibilityElementsHidden
+                  importantForAccessibility="no"
+                  style={styles.featureArrow}
+                >
+                  ›
+                </Text>
+              </View>
+              <View style={styles.featureCopy}>
+                <Text style={styles.featureTitle}>KDS</Text>
+                <Text style={styles.featureDescription}>
+                  Acompanhe e mova os pedidos entre as etapas de produção.
+                </Text>
+              </View>
+            </Pressable>
+            {!desktop &&
+            user.roles.some((role) =>
+              ["admin", "superAdmin", "kdsOperator", "kdsAdmin"].includes(role)
+            ) ? (
+              <Pressable
+                accessibilityRole="button"
+                style={({ pressed }) => [
+                  styles.featureCard,
+                  featureWidth,
+                  pressed && styles.pressed,
+                ]}
+                onPress={onOpenDoughStock}
+              >
+                <View style={styles.featureCardTop}>
+                  <View style={styles.featureIcon}>
+                    <Text style={styles.featureEmoji}>M</Text>
+                  </View>
+                  <Text
+                    accessibilityElementsHidden
+                    importantForAccessibility="no"
+                    style={styles.featureArrow}
+                  >
+                    ›
+                  </Text>
+                </View>
+                <View style={styles.featureCopy}>
+                  <Text style={styles.featureTitle}>Estoque de massa</Text>
+                  <Text style={styles.featureDescription}>
+                    Atualize o saldo por tamanho e envie o estoque pelo
+                    WhatsApp.
+                  </Text>
+                </View>
+              </Pressable>
+            ) : null}
+            {!desktop ? (
+              <Pressable
+                accessibilityRole="button"
+                style={({ pressed }) => [
+                  styles.featureCard,
+                  featureWidth,
+                  pressed && styles.pressed,
+                ]}
+                onPress={onOpenDoughPlanning}
+              >
+                <View style={styles.featureCardTop}>
+                  <View style={styles.featureIcon}>
+                    <Text style={styles.featureEmoji}>M</Text>
+                  </View>
+                  <Text
+                    accessibilityElementsHidden
+                    importantForAccessibility="no"
+                    style={styles.featureArrow}
+                  >
+                    ›
+                  </Text>
+                </View>
+                <View style={styles.featureCopy}>
+                  <Text style={styles.featureTitle}>Planejamento de Massa</Text>
+                  <Text style={styles.featureDescription}>
+                    Simule três dias de produção e confira a capacidade da
+                    amassadeira.
+                  </Text>
+                </View>
+              </Pressable>
+            ) : null}
+            {!desktop ? (
+              <Pressable
+                accessibilityRole="button"
+                style={({ pressed }) => [
+                  styles.featureCard,
+                  featureWidth,
+                  pressed && styles.pressed,
+                ]}
+                onPress={onOpenProgramming}
+              >
+                <View style={styles.featureCardTop}>
+                  <View style={styles.featureIcon}>
+                    <Text style={styles.featureEmoji}>P</Text>
+                  </View>
+                  <Text
+                    accessibilityElementsHidden
+                    importantForAccessibility="no"
+                    style={styles.featureArrow}
+                  >
+                    ›
+                  </Text>
+                </View>
+                <View style={styles.featureCopy}>
+                  <Text style={styles.featureTitle}>Programação diária</Text>
+                  <Text style={styles.featureDescription}>
+                    Planeje a produção por tamanho e consulte o histórico de
+                    vendas.
+                  </Text>
+                </View>
+              </Pressable>
+            ) : null}
+            {!desktop ? (
+              <Pressable
+                accessibilityRole="button"
+                style={({ pressed }) => [
+                  styles.featureCard,
+                  featureWidth,
+                  pressed && styles.pressed,
+                ]}
+                onPress={onOpenPurchases}
+              >
+                <View style={styles.featureCardTop}>
+                  <View style={styles.featureIcon}>
+                    <Text style={styles.featureEmoji}>C</Text>
+                  </View>
+                  <Text
+                    accessibilityElementsHidden
+                    importantForAccessibility="no"
+                    style={styles.featureArrow}
+                  >
+                    ›
+                  </Text>
+                </View>
+                <View style={styles.featureCopy}>
+                  <Text style={styles.featureTitle}>Lista de compras</Text>
+                  <Text style={styles.featureDescription}>
+                    Selecione produtos e compartilhe pelo WhatsApp.
+                  </Text>
+                </View>
+              </Pressable>
+            ) : null}
+            {!desktop ? (
+              <Pressable
+                accessibilityRole="button"
+                style={({ pressed }) => [
+                  styles.featureCard,
+                  featureWidth,
+                  pressed && styles.pressed,
+                ]}
+                onPress={onOpenRecipes}
+              >
+                <View style={styles.featureCardTop}>
+                  <View style={styles.featureIcon}>
+                    <Text style={styles.featureEmoji}>R</Text>
+                  </View>
+                  <Text
+                    accessibilityElementsHidden
+                    importantForAccessibility="no"
+                    style={styles.featureArrow}
+                  >
+                    ›
+                  </Text>
+                </View>
+                <View style={styles.featureCopy}>
+                  <Text style={styles.featureTitle}>Receitas</Text>
+                  <Text style={styles.featureDescription}>
+                    Consulte ingredientes, ajuste quantidades e salve templates
+                    de produção.
+                  </Text>
+                </View>
+              </Pressable>
+            ) : null}
+          </View>
+        </ScrollView>
+      </Screen>
+    </KdsTypographyContext.Provider>
   );
 }
 
@@ -1123,14 +1196,14 @@ function KanbanScreen({
           >
             <Text
               style={{
-                color: theme.colors.primary,
+                color: theme.colors.secondaryForeground,
                 fontSize: 14,
                 fontFamily: theme.typography.semibold,
               }}
             >
               Hoje
             </Text>
-            <Text style={{ color: theme.colors.primary, fontSize: 10 }}>
+            <Text style={{ color: theme.colors.secondaryForeground, fontSize: 10 }}>
               {localDate().split("-").reverse().join("/")}
             </Text>
           </Pressable>
@@ -2065,9 +2138,13 @@ function AppContent() {
         }
       />
       {renderScreen()}
+      {session && desktop && activeFeature === "kds" ? (
+        <KitchenMessages key={`${session.user.id}:${session.apiUrl}`} sender token={session.token} apiUrl={session.apiUrl} />
+      ) : null}
       {session ? (
         <KdsTypographyContext.Provider value={true}>
           <OvenRequestAlert
+            kitchenEnabled={activeFeature === "kds"}
             key={`${session.user.id}:${session.apiUrl}`}
             token={session.token}
             apiUrl={session.apiUrl}
@@ -2181,19 +2258,23 @@ const styles = StyleSheet.create({
     fontFamily: theme.typography.bold,
   },
   pressed: { opacity: 0.72 },
-  homeSafe: { flex: 1, backgroundColor: theme.colors.muted },
+  homeSafe: { flex: 1, backgroundColor: "#000000" },
   homeHeader: {
-    minHeight: 112,
-    backgroundColor: theme.colors.primary,
-    paddingHorizontal: 22,
-    paddingVertical: 22,
+    minHeight: 82,
+    backgroundColor: "#111111",
+    borderBottomWidth: 1,
+    borderColor: "#383838",
+    paddingHorizontal: 18,
+    paddingVertical: 14,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    gap: 12,
   },
+  homeHeading: { flex: 1, minWidth: 0, gap: 4 },
   homeGreeting: {
-    color: "#fff",
-    fontSize: 23,
+    color: "#ffffff",
+    fontSize: 20,
     fontFamily: theme.typography.bold,
     marginTop: 5,
   },
@@ -2201,7 +2282,10 @@ const styles = StyleSheet.create({
     width: 46,
     height: 46,
     borderRadius: 23,
-    backgroundColor: desktop ? theme.colors.card : "#fff",
+    backgroundColor: "#282828",
+    borderWidth: 1,
+    borderColor: "#555555",
+    flexShrink: 0,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -2213,12 +2297,12 @@ const styles = StyleSheet.create({
     alignSelf: "center",
   },
   homeTitle: {
-    color: theme.colors.foreground,
-    fontSize: 26,
+    color: "#ffffff",
+    fontSize: 24,
     fontFamily: theme.typography.bold,
   },
   homeSubtitle: {
-    color: theme.colors.mutedForeground,
+    color: "#b3b3b3",
     fontFamily: theme.typography.regular,
     fontSize: 14,
     marginBottom: 16,
@@ -2227,45 +2311,52 @@ const styles = StyleSheet.create({
   featureCard: {
     width: desktop ? "100%" : undefined,
     minHeight: 190,
-    padding: 18,
-    borderRadius: 22,
-    backgroundColor: theme.colors.card,
+    padding: 16,
+    borderRadius: 12,
+    backgroundColor: "#282828",
     borderWidth: 1,
-    borderColor: theme.colors.border,
+    borderColor: "#444444",
     flexDirection: "column",
     alignItems: "flex-start",
     gap: 14,
-    elevation: 2,
+  },
+  featureCardTop: {
+    width: "100%",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
   },
   featureIcon: {
-    width: 58,
-    height: 58,
-    borderRadius: 17,
-    backgroundColor: theme.colors.muted,
+    width: 48,
+    height: 48,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#555555",
+    backgroundColor: "#111111",
     alignItems: "center",
     justifyContent: "center",
   },
   featureEmoji: {
-    fontSize: 20,
-    color: theme.colors.foreground,
+    fontSize: 18,
+    color: "#ffffff",
     fontFamily: theme.typography.semibold,
   },
   featureCopy: { width: "100%" },
   featureTitle: {
-    color: theme.colors.foreground,
+    color: "#ffffff",
     fontSize: 15,
     fontFamily: theme.typography.semibold,
   },
   featureDescription: {
-    color: theme.colors.mutedForeground,
+    color: "#b3b3b3",
     fontFamily: theme.typography.regular,
     fontSize: 13,
     lineHeight: 19,
     marginTop: 5,
   },
   featureArrow: {
-    color: theme.colors.foreground,
-    fontSize: 32,
+    color: "#b3b3b3",
+    fontSize: 28,
     fontFamily: theme.typography.regular,
   },
   appSafe: { flex: 1, backgroundColor: "#000000" },
@@ -2301,7 +2392,7 @@ const styles = StyleSheet.create({
     fontFamily: theme.typography.bold,
   },
   userInitial: {
-    color: theme.colors.foreground,
+    color: "#ffffff",
     fontSize: 18,
     fontFamily: theme.typography.bold,
   },

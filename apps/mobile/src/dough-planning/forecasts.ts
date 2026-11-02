@@ -185,3 +185,16 @@ export async function loadForecasts(
   });
   return { cache, errors };
 }
+
+export function resetForecastDate(
+  document: ForecastDocument,
+  date: string
+): ForecastDocument {
+  return {
+    ...document,
+    manual: {
+      ...document.manual,
+      [date]: Object.fromEntries(SIZES.map(({ key }) => [key, "0"])),
+    },
+  };
+}

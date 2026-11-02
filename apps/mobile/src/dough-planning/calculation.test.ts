@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   calculatePlan,
+  resetPlanField,
   productionShortfallLevel,
   calculateRow,
   emptyPlan,
@@ -216,4 +217,24 @@ it("recalcula a produção automática com a previsão e mantém quantidades man
     balanceTomorrow: 0,
     gramsLater: 3750,
   });
+});
+
+it("zera um formulário inteiro sem alterar os demais e restaura pesos válidos", () => {
+  const plan = emptyPlan();
+  plan.family.production = "8";
+  plan.medium.production = "4";
+  plan.family.incoming = "7";
+  plan.family.grams = "1000";
+  const reset = resetPlanField(plan, "production");
+  expect(Object.values(reset).map((row) => row.production)).toEqual([
+    "0",
+    "0",
+    "0",
+    "0",
+  ]);
+  expect(reset.family.incoming).toBe("7");
+  expect(reset.family.grams).toBe("1000");
+  expect(plan.family.production).toBe("8");
+  expect(resetPlanField(plan, "grams").family.grams).toBe("1250");
+  expect(resetPlanField(plan, "grams").family.production).toBe("8");
 });

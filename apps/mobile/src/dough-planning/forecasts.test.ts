@@ -9,6 +9,7 @@ import {
   mapForecast,
   parseForecastDocument,
   restoreAutomatic,
+  resetForecastDate,
 } from "./forecasts";
 import type { DailyProgramming } from "../production/types";
 const response = (factor = 1): DailyProgramming => ({
@@ -177,4 +178,29 @@ describe("previsões automáticas de planejamento", () => {
     expect(() => parseForecastDocument("null")).toThrow();
     expect(() => forecastWeekday("2026-02-30")).toThrow();
   });
+});
+
+it("zera as previsões de todos os tamanhos somente na data escolhida", async () => {
+  const plan = emptyPlan();
+  plan.family.production = "12";
+  const doc = initialForecastDocument(plan, dates);
+  doc.cache = (
+    await loadForecasts(
+      dates,
+      async () => response(3),
+      new AbortController().signal
+    )
+  ).cache;
+  const reset = resetForecastDate(doc, dates[1]);
+  const result = applyForecasts(plan, dates, reset);
+  expect(Object.values(result).map((row) => row.tomorrowSales)).toEqual([
+    "0",
+    "0",
+    "0",
+    "0",
+  ]);
+  expect(result.family.todaySales).toBe("3");
+  expect(result.family.laterSales).toBe("3");
+  expect(result.family.production).toBe("12");
+  expect(doc.manual[dates[1]]).toBeUndefined();
 });

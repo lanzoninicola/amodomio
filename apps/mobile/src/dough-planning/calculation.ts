@@ -155,3 +155,12 @@ export function productionShortfallLevel(value: string, need: number): number {
   if (deficit <= 0.75) return 4;
   return 5;
 }
+
+export function resetPlanField(plan: Plan, field: keyof Row): Plan {
+  return Object.fromEntries(
+    SIZES.map(({ key, grams }) => [
+      key,
+      { ...plan[key], [field]: field === "grams" ? String(grams) : "0" },
+    ])
+  ) as Plan;
+}

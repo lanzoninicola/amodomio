@@ -304,3 +304,31 @@ export function getWeeklyProductionHistory(
     token
   );
 }
+
+export type KitchenMessage = {
+  id: string;
+  description: string | null;
+  createdAt: string;
+};
+export function listKitchenMessages(baseUrl: string, token: string) {
+  return request<{ messages: KitchenMessage[] }>(
+    baseUrl,
+    "/api/kds/messages",
+    {},
+    token
+  );
+}
+export function submitKitchenMessage(
+  baseUrl: string,
+  token: string,
+  body:
+    | { intent: "send"; id: string; text: string }
+    | { intent: "acknowledge"; id: string }
+) {
+  return request<{ ok: boolean }>(
+    baseUrl,
+    "/api/kds/messages",
+    { method: "POST", body: JSON.stringify(body) },
+    token
+  );
+}

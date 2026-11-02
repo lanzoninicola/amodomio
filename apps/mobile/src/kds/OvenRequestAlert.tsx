@@ -1,3 +1,4 @@
+import { KitchenMessages } from "./KitchenMessages";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { theme } from "../ui/theme";
 import { Text } from "../ui/Text";
@@ -25,9 +26,11 @@ import { useKdsSoundPreferences } from "../platform/useKdsSoundPreferences";
 export function OvenRequestAlert({
   token,
   apiUrl,
+  kitchenEnabled = true,
 }: {
   token: string;
   apiUrl: string;
+  kitchenEnabled?: boolean;
 }) {
   const { width, height } = useWindowDimensions();
   const numberSize = Math.min(
@@ -160,159 +163,172 @@ export function OvenRequestAlert({
     }
   };
   return (
-    <Modal
-      visible={Boolean(current)}
-      presentationStyle="fullScreen"
-      animationType="fade"
-      supportedOrientations={["portrait", "landscape-left", "landscape-right"]}
-      onRequestClose={dismiss}
-    >
-      <Animated.View
-        style={{
-          flex: 1,
-          backgroundColor: pulse.interpolate({
-            inputRange: [0, 1],
-            outputRange: [theme.colors.primary, "#713719"],
-          }),
-        }}
+    <>
+      {kitchenEnabled ? (
+        <KitchenMessages
+          apiUrl={apiUrl}
+          token={token}
+          blocked={Boolean(current)}
+        />
+      ) : null}
+      <Modal
+        visible={Boolean(current)}
+        presentationStyle="fullScreen"
+        animationType="fade"
+        supportedOrientations={[
+          "portrait",
+          "landscape-left",
+          "landscape-right",
+        ]}
+        onRequestClose={dismiss}
       >
-        <SafeAreaView style={{ flex: 1 }}>
-          <ScrollView
-            contentContainerStyle={{
-              flexGrow: 1,
-              padding: 24,
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <View
-              accessibilityViewIsModal
-              style={{
-                width: "100%",
-                maxWidth: 900,
+        <Animated.View
+          style={{
+            flex: 1,
+            backgroundColor: pulse.interpolate({
+              inputRange: [0, 1],
+              outputRange: [theme.colors.primary, "#713719"],
+            }),
+          }}
+        >
+          <SafeAreaView style={{ flex: 1 }}>
+            <ScrollView
+              contentContainerStyle={{
+                flexGrow: 1,
+                padding: 24,
                 alignItems: "center",
-                gap: 16,
+                justifyContent: "center",
               }}
             >
               <View
+                accessibilityViewIsModal
                 style={{
-                  backgroundColor: theme.colors.brandOrangeMuted,
-                  borderRadius: theme.radius.full,
-                  paddingHorizontal: 20,
-                  paddingVertical: 10,
-                }}
-              >
-                <Text
-                  accessibilityRole="alert"
-                  style={{
-                    fontSize: 30,
-                    fontFamily: theme.typography.bold,
-                    color: theme.colors.brandOrangeInk,
-                    textAlign: "center",
-                  }}
-                >
-                  Colocar no forno
-                </Text>
-              </View>
-              <Text
-                style={{
-                  fontSize: 18,
-                  fontFamily: theme.typography.semibold,
-                  color: theme.colors.primaryForeground,
-                }}
-              >
-                PEDIDO
-              </Text>
-              <Text
-                accessibilityLabel={`Pedido número ${
-                  current?.commandNumber ?? "VL"
-                }`}
-                style={{
-                  fontSize: numberSize,
-                  fontFamily: theme.typography.bold,
-                  color: theme.colors.primaryForeground,
-                  textAlign: "center",
-                  fontVariant: ["tabular-nums"],
                   width: "100%",
+                  maxWidth: 900,
+                  alignItems: "center",
+                  gap: 16,
                 }}
               >
-                #{current?.commandNumber ?? "VL"}
-              </Text>
-              {current?.customerName ? (
-                <Text
+                <View
                   style={{
-                    fontSize: 22,
-                    color: theme.colors.primaryForeground,
-                    textAlign: "center",
-                  }}
-                >
-                  {current.customerName}
-                </Text>
-              ) : null}
-              {pending.length > 1 ? (
-                <Text
-                  style={{
-                    fontSize: 16,
-                    color: theme.colors.primaryForeground,
-                    textAlign: "center",
-                  }}
-                >
-                  Mais {pending.length - 1} pedido(s) aguardando aviso.
-                </Text>
-              ) : null}
-              <View
-                style={{
-                  flexDirection: "row",
-                  gap: 12,
-                  width: "100%",
-                  maxWidth: 600,
-                  marginTop: 12,
-                }}
-              >
-                <Button
-                  disabled={saving}
-                  variant="secondary"
-                  style={{
-                    minHeight: 60,
-                    flex: 1,
-                  }}
-                  onPress={dismiss}
-                >
-                  <Text
-                    style={{
-                      fontSize: 20,
-                      fontFamily: theme.typography.bold,
-                      color: theme.colors.primary,
-                    }}
-                  >
-                    Entendi
-                  </Text>
-                </Button>
-                <Button
-                  variant="secondary"
-                  loading={saving}
-                  style={{
-                    flex: 1,
-                    minHeight: 60,
                     backgroundColor: theme.colors.brandOrangeMuted,
+                    borderRadius: theme.radius.full,
+                    paddingHorizontal: 20,
+                    paddingVertical: 10,
                   }}
-                  onPress={() => void bake()}
                 >
                   <Text
+                    accessibilityRole="alert"
                     style={{
-                      fontSize: 20,
+                      fontSize: 30,
                       fontFamily: theme.typography.bold,
                       color: theme.colors.brandOrangeInk,
+                      textAlign: "center",
                     }}
                   >
-                    Assando
+                    Colocar no forno
                   </Text>
-                </Button>
+                </View>
+                <Text
+                  style={{
+                    fontSize: 18,
+                    fontFamily: theme.typography.semibold,
+                    color: theme.colors.primaryForeground,
+                  }}
+                >
+                  PEDIDO
+                </Text>
+                <Text
+                  accessibilityLabel={`Pedido número ${
+                    current?.commandNumber ?? "VL"
+                  }`}
+                  style={{
+                    fontSize: numberSize,
+                    fontFamily: theme.typography.bold,
+                    color: theme.colors.primaryForeground,
+                    textAlign: "center",
+                    fontVariant: ["tabular-nums"],
+                    width: "100%",
+                  }}
+                >
+                  #{current?.commandNumber ?? "VL"}
+                </Text>
+                {current?.customerName ? (
+                  <Text
+                    style={{
+                      fontSize: 22,
+                      color: theme.colors.primaryForeground,
+                      textAlign: "center",
+                    }}
+                  >
+                    {current.customerName}
+                  </Text>
+                ) : null}
+                {pending.length > 1 ? (
+                  <Text
+                    style={{
+                      fontSize: 16,
+                      color: theme.colors.primaryForeground,
+                      textAlign: "center",
+                    }}
+                  >
+                    Mais {pending.length - 1} pedido(s) aguardando aviso.
+                  </Text>
+                ) : null}
+                <View
+                  style={{
+                    flexDirection: "row",
+                    gap: 12,
+                    width: "100%",
+                    maxWidth: 600,
+                    marginTop: 12,
+                  }}
+                >
+                  <Button
+                    disabled={saving}
+                    variant="secondary"
+                    style={{
+                      minHeight: 60,
+                      flex: 1,
+                    }}
+                    onPress={dismiss}
+                  >
+                    <Text
+                      style={{
+                        fontSize: 20,
+                        fontFamily: theme.typography.bold,
+                        color: theme.colors.primary,
+                      }}
+                    >
+                      Entendi
+                    </Text>
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    loading={saving}
+                    style={{
+                      flex: 1,
+                      minHeight: 60,
+                      backgroundColor: theme.colors.brandOrangeMuted,
+                    }}
+                    onPress={() => void bake()}
+                  >
+                    <Text
+                      style={{
+                        fontSize: 20,
+                        fontFamily: theme.typography.bold,
+                        color: theme.colors.brandOrangeInk,
+                      }}
+                    >
+                      Assando
+                    </Text>
+                  </Button>
+                </View>
               </View>
-            </View>
-          </ScrollView>
-        </SafeAreaView>
-      </Animated.View>
-    </Modal>
+            </ScrollView>
+          </SafeAreaView>
+        </Animated.View>
+      </Modal>
+    </>
   );
 }

@@ -21,6 +21,7 @@ import { usePlanningForecasts } from "./usePlanningForecasts";
 import { isSalesField, SALES_FIELDS } from "./forecasts";
 import {
   calculatePlan,
+  resetPlanField,
   productionShortfallLevel,
   emptyPlan,
   parsePlan,
@@ -128,7 +129,7 @@ const EXPLANATIONS: Record<string, Explanation> = {
     description:
       "É o peso de uma massa de cada tamanho, em gramas. O app usa esses pesos para calcular o total de massa a preparar.",
     example:
-      "Se uma massa Família pesa 1.250 g, preparar 2 precisa de 2.500 g de massa.",
+      "Se uma massa Família pesa 1.250 g, você precisa de 2.500 g de massa para preparar 2.",
     note: "Use os pesos da ficha de produção. Confira com o responsável antes de mudar, principalmente os tamanhos Individual e Pequena.",
   },
 };
@@ -590,20 +591,47 @@ export function DoughPlanningScreen({
       </View>
     );
   }
-  function helpButton(title: string, key: string, dayIndex?: number) {
+  function resetNumbers(field: keyof Row) {
+    if (isSalesField(field)) forecasts.resetSales(field);
+    else persist(resetPlanField(plan, field));
+  }
+  function helpButton(
+    title: string,
+    key: string,
+    dayIndex?: number,
+    resetField?: keyof Row
+  ) {
     return (
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={`Entender ${title}${
-          dayIndex !== undefined
-            ? ` de ${days[dayIndex].label.toLowerCase()}`
-            : ""
-        }`}
-        onPress={() => setHelp({ ...EXPLANATIONS[key], title, dayIndex })}
-        style={styles.helpButton}
-      >
-        <Text style={styles.helpSymbol}>?</Text>
-      </Pressable>
+      <View style={styles.formTitleActions}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Entender ${title}${
+            dayIndex !== undefined
+              ? ` de ${days[dayIndex].label.toLowerCase()}`
+              : ""
+          }`}
+          onPress={() => setHelp({ ...EXPLANATIONS[key], title, dayIndex })}
+          style={styles.helpButton}
+        >
+          <Text style={styles.helpSymbol}>?</Text>
+        </Pressable>
+        {resetField ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={
+              resetField === "grams"
+                ? "Restaurar os pesos padrão de todos os tamanhos"
+                : `Zerar as quantidades de todos os tamanhos: ${title}`
+            }
+            accessibilityState={{ disabled: !ready || !forecasts.ready }}
+            disabled={!ready || !forecasts.ready}
+            onPress={() => resetNumbers(resetField)}
+            style={[styles.helpButton, styles.resetButton]}
+          >
+            <Text style={styles.resetIcon}>↺</Text>
+          </Pressable>
+        ) : null}
+      </View>
     );
   }
   const result = calculatePlan(effectivePlan);
@@ -836,7 +864,12 @@ export function DoughPlanningScreen({
               <View style={styles.dayGroup}>
                 <View style={styles.dayHeader}>
                   <Text style={styles.dayTitle}>PESO DE CADA MASSA (g)</Text>
-                  {helpButton("Peso de cada massa", "grams")}
+                  {helpButton(
+                    "Peso de cada massa",
+                    "grams",
+                    undefined,
+                    "grams"
+                  )}
                 </View>
                 <View style={styles.metricGrid}>
                   {SIZES.map(({ key, label }) => (
@@ -893,7 +926,16 @@ export function DoughPlanningScreen({
                         >
                           {title}
                         </Text>
-                        {helpButton(title, key, key === "previous" ? 0 : 1)}
+                        {helpButton(
+                          title,
+                          key,
+                          key === "previous" ? 0 : 1,
+                          key === "previous"
+                            ? "previous"
+                            : key === "incoming"
+                            ? "incoming"
+                            : undefined
+                        )}
                       </View>
                     </View>
                   ))}
@@ -1040,7 +1082,8 @@ export function DoughPlanningScreen({
                             metric.balanceField
                               ? `${metric.field}AndBalance`
                               : metric.field ?? metric.resultField!,
-                            dayIndex
+                            dayIndex,
+                            metric.field
                           )}
                         </View>
                         {metric.balanceField ||
@@ -1128,7 +1171,7 @@ export function DoughPlanningScreen({
                                     }
                                     label={`${label}: produção para ${days[
                                       dayIndex
-                                    ].label.toLowerCase()}, necessidade estimada ${
+                                    ].label.toLowerCase()}, quantidade sugerida ${
                                       result.rows[index][metric.resultField!]
                                     } unidades`}
                                     stacked={false}
@@ -1455,6 +1498,21 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     gap: 8,
+  },
+  formTitleActions: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    flexShrink: 0,
+    alignItems: "center",
+    maxWidth: "100%",
+  },
+  resetIcon: { color: "#dedede", fontSize: 22 },
+  resetButton: {
+    minHeight: 36,
+    paddingHorizontal: 6,
+    borderWidth: 1,
+    borderColor: "#555555",
+    borderRadius: 8,
   },
   helpButton: {
     minHeight: 44,

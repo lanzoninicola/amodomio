@@ -18,6 +18,7 @@ function apiRequest(input) {
     "/api/kds/mobile-auth": ["GET", "POST", "DELETE"],
     "/api/kds/orders": ["GET", "PATCH"],
     "/api/kds/whatsapp": ["GET", "POST"],
+    "/api/kds/messages": ["GET", "POST"],
   };
   if (url.origin !== base.origin || !allowed[url.pathname]?.includes(method))
     throw new Error("Operação não permitida.");
