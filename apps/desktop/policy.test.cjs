@@ -69,3 +69,10 @@ test("permite consultar e enviar WhatsApp, mantendo outros métodos bloqueados",
     );
   }
 });
+
+test("permite mensagens da cozinha somente por GET e POST", () => {
+  for (const method of ["GET", "POST"])
+    assert.equal(apiRequest({ baseUrl: "https://app.example.com", path: "/api/kds/messages", method }).method, method);
+  for (const method of ["PUT", "PATCH", "DELETE"])
+    assert.throws(() => apiRequest({ baseUrl: "https://app.example.com", path: "/api/kds/messages", method }));
+});

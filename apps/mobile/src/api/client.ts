@@ -275,3 +275,60 @@ export function submitPurchaseList(
     token
   );
 }
+
+export function getDailyProgramming(
+  baseUrl: string,
+  token: string,
+  weekday: string,
+  pct: number,
+  n: number,
+  signal?: AbortSignal
+) {
+  return request<import("../production/types").DailyProgramming>(
+    baseUrl,
+    `/api/mobile/daily-programming?weekday=${weekday}&pct=${pct}&n=${n}`,
+    { signal },
+    token
+  );
+}
+export function getWeeklyProductionHistory(
+  baseUrl: string,
+  token: string,
+  weeks: number,
+  signal?: AbortSignal
+) {
+  return request<import("../production/types").WeeklyHistory>(
+    baseUrl,
+    `/api/mobile/daily-programming?weeklyHistory=1&weeks=${weeks}`,
+    { signal },
+    token
+  );
+}
+
+export type KitchenMessage = {
+  id: string;
+  description: string | null;
+  createdAt: string;
+};
+export function listKitchenMessages(baseUrl: string, token: string) {
+  return request<{ messages: KitchenMessage[] }>(
+    baseUrl,
+    "/api/kds/messages",
+    {},
+    token
+  );
+}
+export function submitKitchenMessage(
+  baseUrl: string,
+  token: string,
+  body:
+    | { intent: "send"; id: string; text: string }
+    | { intent: "acknowledge"; id: string }
+) {
+  return request<{ ok: boolean }>(
+    baseUrl,
+    "/api/kds/messages",
+    { method: "POST", body: JSON.stringify(body) },
+    token
+  );
+}
