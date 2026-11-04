@@ -553,6 +553,13 @@ const ADMIN_NAVIGATION_LINKS: WebsiteNavigationConfig = {
           tags: ["massa", "pizza", "producao", "dough", "estoque"],
         },
         {
+          title: "Ordens de Produção",
+          href: "/admin/producao/ordens",
+          items: [],
+          disabled: false,
+          tags: ["producao", "ordem", "op", "panificacao", "receita", "preparacao"],
+        },
+        {
           title: "Programação Diaria",
           href: "/admin/producao/programacao-diaria",
           items: [],

@@ -46,6 +46,7 @@ model Recipe {
   productionProcedure String?                   @map("production_procedure") @db.Text
   productionNotes     String?                   @map("production_notes") @db.Text
   hasVariations       Boolean                   @default(false) @map("has_variations")
+  productionBaseRecipeIngredientId String?      @map("production_base_recipe_ingredient_id")
   isVegetarian        Boolean                   @default(false) @map("is_vegetarian")
   isGlutenFree        Boolean                   @default(false) @map("is_gluten_free")
   createdAt           DateTime                  @default(now()) @map("created_at")
@@ -58,6 +59,8 @@ model Recipe {
   RecipePreheating    RecipePreheating?
   RecipeBaking        RecipeBaking?
   Templates           RecipeTemplate[]
+  Preparations        RecipePreparation[]
+  ProductionOrders    ProductionOrder[]
 
   @@unique([groupId, version], map: "recipes_group_id_version_unique")
   @@index([itemId], map: "recipes_item_id_idx")
@@ -486,6 +489,7 @@ model RecipeIngredient {
   Recipe                    Recipe                      @relation(fields: [recipeId], references: [id], onDelete: Cascade)
   IngredientItem            Item                        @relation(fields: [ingredientItemId], references: [id])
   RecipeVariationIngredient RecipeVariationIngredient[]
+  PreparationIngredients    RecipePreparationIngredient[]
 
   @@unique([recipeId, ingredientItemId], map: "recipe_ingredients_recipe_ingredient_unique")
   @@index([recipeId], map: "recipe_ingredients_recipe_id_idx")
@@ -3475,4 +3479,81 @@ model InstagramStoryPublicationExecution {
   @@index([source], map: "instagram_story_executions_source_idx")
   @@index([status], map: "instagram_story_executions_status_idx")
   @@map("instagram_story_publication_executions")
+}
+
+
+// Preparações intermediárias (biga, poolish, tangzhong...): consomem parte da fórmula total da receita.
+model RecipePreparation {
+  id             String   @id @default(uuid())
+  recipeId       String   @map("recipe_id")
+  name           String
+  notes          String?  @db.Text
+  sortOrderIndex Int      @default(0) @map("sort_order_index")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at")
+
+  Recipe      Recipe                        @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+  Ingredients RecipePreparationIngredient[]
+
+  @@index([recipeId], map: "recipe_preparations_recipe_id_idx")
+  @@map("recipe_preparations")
+}
+
+model RecipePreparationIngredient {
+  id                 String   @id @default(uuid())
+  preparationId      String   @map("preparation_id")
+  recipeIngredientId String   @map("recipe_ingredient_id")
+  // Na mesma unidade da linha da receita (variação de referência).
+  quantity           Float    @default(0)
+  createdAt          DateTime @default(now()) @map("created_at")
+
+  Preparation      RecipePreparation @relation(fields: [preparationId], references: [id], onDelete: Cascade)
+  RecipeIngredient RecipeIngredient  @relation(fields: [recipeIngredientId], references: [id], onDelete: Cascade)
+
+  @@unique([preparationId, recipeIngredientId], map: "recipe_prep_ingredients_prep_ingredient_unique")
+  @@index([recipeIngredientId], map: "recipe_prep_ingredients_recipe_ingredient_idx")
+  @@map("recipe_preparation_ingredients")
+}
+
+model ProductionOrder {
+  id             String    @id @default(uuid())
+  number         Int       @default(autoincrement())
+  recipeId       String?   @map("recipe_id")
+  recipeName     String    @map("recipe_name")
+  baseIngredient String    @map("base_ingredient")
+  baseQuantity   Float     @map("base_quantity")
+  baseUnit       String    @map("base_unit")
+  status         String    @default("planned") // planned | in_progress | finished | cancelled
+  productionDate DateTime  @map("production_date")
+  plan           Json
+  notes          String?   @db.Text
+  producedQuantity Float?  @map("produced_quantity")
+  producedUnit   String?   @map("produced_unit")
+  startedAt      DateTime? @map("started_at")
+  finishedAt     DateTime? @map("finished_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @default(now()) @updatedAt @map("updated_at")
+
+  Recipe Recipe?                @relation(fields: [recipeId], references: [id], onDelete: SetNull)
+  Steps  ProductionOrderStep[]
+
+  @@index([status, productionDate], map: "production_orders_status_date_idx")
+  @@index([recipeId], map: "production_orders_recipe_id_idx")
+  @@map("production_orders")
+}
+
+model ProductionOrderStep {
+  id          String    @id @default(uuid())
+  orderId     String    @map("order_id")
+  kind        String // preparation | final
+  name        String
+  preparationId String? @map("preparation_id")
+  sortOrder   Int       @default(0) @map("sort_order")
+  status      String    @default("pending") // pending | in_progress | done
+  completedAt DateTime? @map("completed_at")
+
+  Order ProductionOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId, sortOrder], map: "production_order_steps_order_idx")
+  @@map("production_order_steps")
 }

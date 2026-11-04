@@ -114,7 +114,8 @@
       "Bash(xargs cat)",
       "Bash(awk -F'\\\\t' '{ if\\($1==\"Bash\"\\){split\\($2,a,\" \"\\); k=\"Bash \"a[1]\" \"a[2]} else k=$1; c[k]++} END{for\\(k in c\\) if\\(c[k]>=3\\) print c[k], k}')",
       "Bash(awk '$1>=3')",
-      "Bash(cd /home/lanzo/Documents/Coding/amodomio/app; ls routes | grep -i \"api.zapi.conn\\\\|api.media\"; sed -n 1,40p routes/api.zapi.connection*.tsx 2>/dev/null | head -50; grep -n \"admin.assets\\\\|mediaApiHealth\" routes/admin.assets.tsx | head)"
+      "Bash(cd /home/lanzo/Documents/Coding/amodomio/app; ls routes | grep -i \"api.zapi.conn\\\\|api.media\"; sed -n 1,40p routes/api.zapi.connection*.tsx 2>/dev/null | head -50; grep -n \"admin.assets\\\\|mediaApiHealth\" routes/admin.assets.tsx | head)",
+      "Bash(sed -n 1,200p app/routes/admin_.receitas-tv.\\\\$recipeId.tsx; sed -n 80,200p app/domain/recipe/mobile-recipe.server.ts)"
     ],
     "additionalDirectories": [
       "/home/lanzo/Documents/Coding/amodomio/app/routes",
