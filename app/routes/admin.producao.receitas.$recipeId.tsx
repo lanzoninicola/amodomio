@@ -48,7 +48,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
         notes: String(p.notes || ""),
         ingredients: (p.lines || []).map((l: any) => ({
           recipeIngredientId: String(l.ingredientId),
-          quantity: Number(String(l.quantity || "0").replace(",", ".")) || 0,
+          quantity: Number(String(l.quantity || "0").replace(",", ".")),
           unit: String(l.unit),
         })),
       })),
@@ -261,7 +261,7 @@ export default function RecipeProductionConfig() {
       })}
 
       <Card className="space-y-2 p-6">
-        <h3 className="text-xl font-bold">Conferência (fórmula total × usado nas preparações)</h3>
+        <h3 className="text-xl font-bold">Conferência dos ingredientes</h3>
         <ul className="space-y-1 text-lg">
           {recipe.ingredients.map((i) => {
             const u = used.get(i.id) ?? 0;

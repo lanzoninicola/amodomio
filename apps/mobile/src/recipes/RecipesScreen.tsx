@@ -1,3 +1,4 @@
+import { RecipeSearchPanel } from "./RecipeSearchPanel";
 import { useEffect, useRef, useState } from "react";
 import type { ComponentProps, ReactNode, RefObject } from "react";
 import {
@@ -696,58 +697,7 @@ export function RecipesScreen({
           {page.kind === "list" ? (
             <View style={tabletLandscape ? styles.listLayout : styles.stacked}>
               <RecipePane landscape={tabletLandscape} sidebar>
-                <Input
-                  label="Pesquisar receita"
-                  placeholder="Nome da receita"
-                  value={query}
-                  onChangeText={setQuery}
-                  showSoftInputOnFocus={false}
-                  autoCorrect={false}
-                  autoCapitalize="characters"
-                />
-                <View style={styles.wrap}>
-                  <Button
-                    variant="outline"
-                    style={{ flex: 1 }}
-                    disabled={!query}
-                    onPress={() =>
-                      setQuery((value) =>
-                        Array.from(value).slice(0, -1).join("")
-                      )
-                    }
-                  >
-                    ⌫ Apagar
-                  </Button>
-                  <Button
-                    variant="outline"
-                    style={{ flex: 1 }}
-                    disabled={!query}
-                    onPress={() => setQuery("")}
-                  >
-                    Limpar
-                  </Button>
-                </View>
-                <View style={styles.alphabet}>
-                  {"ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-                    .split("")
-                    .map((value) => (
-                      <Button
-                        key={value}
-                        style={{ width: "17%", paddingHorizontal: 0 }}
-                        variant="outline"
-                        onPress={() => setQuery((current) => current + value)}
-                      >
-                        {value}
-                      </Button>
-                    ))}
-                  <Button
-                    variant="outline"
-                    style={{ width: "100%" }}
-                    onPress={() => setQuery((current) => current + " ")}
-                  >
-                    Espaço
-                  </Button>
-                </View>
+                <RecipeSearchPanel value={query} onChange={setQuery} />
               </RecipePane>
               <RecipePane landscape={tabletLandscape} scrollRef={scroll}>
                 <Text accessibilityLiveRegion="polite">

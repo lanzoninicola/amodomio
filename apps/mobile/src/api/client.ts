@@ -332,3 +332,17 @@ export function submitKitchenMessage(
     token
   );
 }
+
+export function getProductionOrders(baseUrl: string, token: string, params = "", signal?: AbortSignal) {
+  return request<import("../production/order-types").ProductionResponse>(
+    baseUrl, `/api/mobile/production-orders${params ? `?${params}` : ""}`, { signal }, token
+  );
+}
+export function submitProductionOrder(
+  baseUrl: string, token: string, body: import("../production/order-types").ProductionMutation,
+  signal?: AbortSignal
+) {
+  return request<import("../production/order-types").ProductionResponse>(
+    baseUrl, "/api/mobile/production-orders", { method: "POST", body: JSON.stringify(body), signal }, token
+  );
+}

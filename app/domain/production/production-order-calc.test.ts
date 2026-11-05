@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  applyPreparationsToPlan,
+  calculateProductionTotals,
   calculateProductionPlan,
   convertQuantity,
   formatProductionQuantity,
@@ -108,5 +110,55 @@ describe("units", () => {
     expect(convertQuantity(1, "UN", "KG")).toBeNull();
     expect(formatProductionQuantity(0.5, "KG")).toEqual({ value: "500", unit: "g" });
     expect(formatProductionQuantity(2.5, "KG")).toEqual({ value: "2,5", unit: "kg" });
+  });
+});
+
+
+describe("invalid production formulas", () => {
+  it.each([-1, NaN, Infinity])("rejects invalid recipe quantity %s", (quantity) => {
+    expect(() => calculateProductionPlan({
+      ingredients: [...ingredients, { id: "bad", name: "Inválido", quantity, unit: "KG" }],
+      preparations: [], baseIngredientId: "f", baseQuantity: 10,
+    })).toThrow("quantidade inválida");
+  });
+  it("rejects preparations referring to removed ingredients", () => {
+    expect(() => calculateProductionPlan({
+      ingredients, baseIngredientId: "f", baseQuantity: 10,
+      preparations: [{ id: "p", name: "Biga", ingredients: [{ recipeIngredientId: "removed", quantity: 1 }] }],
+    })).toThrow("não encontrado");
+  });
+  it("rejects overflow when scaling", () => {
+    expect(() => calculateProductionPlan({
+      ingredients: [{ id: "f", name: "Farinha", quantity: Number.MIN_VALUE, unit: "KG" }],
+      preparations: [], baseIngredientId: "f", baseQuantity: Number.MAX_VALUE,
+    })).toThrow();
+  });
+});
+
+describe("duas fases", () => {
+  it("fase 1 só calcula totais e fase 2 aplica preparações absolutas", () => {
+    const totals = calculateProductionTotals({
+      ingredients,
+      baseIngredientId: "f",
+      baseQuantity: 10,
+    });
+    expect(totals.preparationsDefined).toBe(false);
+    expect(totals.preparations).toEqual([]);
+    expect(totals.final.ingredients).toHaveLength(4);
+    const plan = applyPreparationsToPlan(totals, [
+      { id: "p1", name: "Biga", ingredients: [{ recipeIngredientId: "f", quantity: 3 }] },
+      { id: "p2", name: "Poolish", ingredients: [{ recipeIngredientId: "f", quantity: 2 }] },
+    ]);
+    expect(plan.preparationsDefined).toBe(true);
+    expect(plan.final.ingredients.find((i) => i.id === "f")!.quantity).toBeCloseTo(5);
+    expect(plan.inconsistencies).toEqual([]);
+  });
+
+  it("detecta excesso na fase 2", () => {
+    const totals = calculateProductionTotals({ ingredients, baseIngredientId: "f", baseQuantity: 10 });
+    const plan = applyPreparationsToPlan(totals, [
+      { id: "p1", name: "Biga", ingredients: [{ recipeIngredientId: "f", quantity: 11 }] },
+    ]);
+    expect(plan.inconsistencies).toHaveLength(1);
   });
 });

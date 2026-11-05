@@ -3525,6 +3525,8 @@ model ProductionOrder {
   baseUnit       String    @map("base_unit")
   status         String    @default("planned") // planned | in_progress | finished | cancelled
   productionDate DateTime  @map("production_date")
+  // Dia em que o produto desta produção será usado (ex.: biga feita hoje para a massa de amanhã).
+  usageDate      DateTime? @map("usage_date")
   plan           Json
   notes          String?   @db.Text
   producedQuantity Float?  @map("produced_quantity")

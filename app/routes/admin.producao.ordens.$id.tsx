@@ -22,9 +22,15 @@ import {
 } from "~/domain/production/components/production-ui";
 import {
   applyOrderAction,
+  definePreparations,
+  getPreparationSuggestions,
   getProductionOrder,
   type FormLike,
 } from "~/domain/production/production-order.server";
+import {
+  PreparationsEditor,
+  type PreparationSuggestion,
+} from "~/domain/production/components/preparations-editor";
 import { cn } from "~/lib/utils";
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
@@ -32,7 +38,8 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     return redirect("/login");
   // A tela inteira depende da OP para renderizar.
   const order = await getProductionOrder(String(params.id));
-  return json({ order }, { headers: { "Cache-Control": "no-store" } });
+  const suggestions = await getPreparationSuggestions(order);
+  return json({ order, suggestions }, { headers: { "Cache-Control": "no-store" } });
 }
 
 export async function action({ request, params }: ActionFunctionArgs) {
@@ -40,6 +47,22 @@ export async function action({ request, params }: ActionFunctionArgs) {
     return redirect("/login");
   const form = (await request.formData()) as unknown as FormLike;
   try {
+    if (form.get("intent") === "define-preparations") {
+      const body = JSON.parse(String(form.get("payload") || "{}"));
+      await definePreparations(
+        String(params.id),
+        (body.preparations || []).map((p: any) => ({
+          name: String(p.name || ""),
+          ingredients: (p.lines || []).map((l: any) => ({
+            recipeIngredientId: String(l.recipeIngredientId),
+            quantity: Number(l.quantity),
+            unit: String(l.unit),
+          })),
+        })),
+        { saveToRecipe: body.saveToRecipe === true }
+      );
+      return redirect(new URL(request.url).pathname);
+    }
     await applyOrderAction(String(params.id), form);
   } catch (e) {
     return json({ error: (e as Error).message }, { status: 400 });
@@ -53,12 +76,44 @@ function fmt(date: string | null) {
 }
 
 export default function ProductionOrderDetail() {
-  const { order } = useLoaderData<typeof loader>();
+  const { order, suggestions } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const navigation = useNavigation();
   const [params] = useSearchParams();
   const busy = navigation.state !== "idle";
   const { plan, Steps: steps } = order;
+
+  // Fase 2: antes de iniciar, o operador informa se há preparações intermediárias.
+  const editing = params.get("preparacoes") === "editar";
+  if (order.status === "planned" && (plan.preparationsDefined === false || editing)) {
+    return (
+      <div className="w-full space-y-6 p-4 md:p-6 2xl:p-10">
+        <div className="flex flex-wrap items-center gap-4">
+          <Button asChild variant="outline" className="h-14 w-14">
+            <Link to="/admin/producao/ordens" aria-label="Voltar"><ArrowLeft className="h-6 w-6" /></Link>
+          </Button>
+          <div className="min-w-0 flex-1">
+            <div className="text-xl font-semibold text-muted-foreground">OP #{order.number} · {editing ? "editar preparações" : "fase 2 de 2"}</div>
+            <h1 className="truncate text-3xl font-bold 2xl:text-5xl">{order.recipeName}</h1>
+          </div>
+          <Quantity quantity={order.baseQuantity} unit={order.baseUnit} className="text-4xl" />
+        </div>
+        {actionData?.error && (
+          <Alert variant="destructive">
+            <AlertTriangle className="h-5 w-5" />
+            <AlertDescription className="text-lg">{actionData.error}</AlertDescription>
+          </Alert>
+        )}
+        <PreparationsEditor
+          totals={plan.totals}
+          suggestions={suggestions as PreparationSuggestion[]}
+          busy={busy}
+          canSaveToRecipe={Boolean(order.recipeId && plan.baseIngredientId)}
+          cancelHref={editing ? "?" : undefined}
+        />
+      </div>
+    );
+  }
 
   const running = order.status === "in_progress";
   const stepIndex = (id: string) => steps.findIndex((s) => s.id === id);
@@ -222,7 +277,7 @@ export default function ProductionOrderDetail() {
             </Form>
           )}
           {!running && order.status === "planned" && (
-            <p className="text-lg text-muted-foreground">Inicie a produção para operar as etapas.</p>
+            <p className="text-lg text-muted-foreground">Toque em “Iniciar produção” para começar.</p>
           )}
           {nextStep && running && current.status === "done" && (
             <Button asChild variant="secondary" className="h-20 w-full text-xl">
@@ -237,11 +292,12 @@ export default function ProductionOrderDetail() {
         <div className="space-y-4 lg:col-span-2 xl:col-span-1">
           <Card className="space-y-4 p-6">
             <div>
-              <div className="text-lg text-muted-foreground">Base · {order.baseIngredient}</div>
+              <div className="text-lg text-muted-foreground">Ingrediente principal · {order.baseIngredient}</div>
               <Quantity quantity={order.baseQuantity} unit={order.baseUnit} className="text-6xl" />
             </div>
             <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-lg xl:grid-cols-1">
-              <div><dt className="text-muted-foreground">Data de produção</dt><dd className="font-semibold">{format(new Date(order.productionDate), "dd/MM/yyyy")}</dd></div>
+              <div><dt className="text-muted-foreground">Produzir em</dt><dd className="font-semibold">{format(new Date(order.productionDate), "dd/MM/yyyy")}</dd></div>
+              {order.usageDate && <div><dt className="text-muted-foreground">Usar em</dt><dd className="font-semibold">{format(new Date(order.usageDate), "dd/MM/yyyy")}</dd></div>}
               <div><dt className="text-muted-foreground">Criada em</dt><dd className="font-semibold">{fmt(order.createdAt)}</dd></div>
               <div><dt className="text-muted-foreground">Início</dt><dd className="font-semibold">{fmt(order.startedAt)}</dd></div>
               <div><dt className="text-muted-foreground">Finalização</dt><dd className="font-semibold">{fmt(order.finishedAt)}</dd></div>
@@ -252,6 +308,11 @@ export default function ProductionOrderDetail() {
             </dl>
           </Card>
 
+          {order.status === "planned" && (
+            <Button asChild variant="outline" className="h-16 w-full text-xl">
+              <Link to="?preparacoes=editar">Editar preparações</Link>
+            </Button>
+          )}
           {order.status === "planned" && (
             <Form method="post">
               <input type="hidden" name="intent" value="start" />
@@ -275,7 +336,7 @@ export default function ProductionOrderDetail() {
                   <Input name="producedUnit" placeholder="un / kg" className="h-16 w-28 text-xl" />
                 </div>
                 <Button disabled={busy || !allDone} className="h-24 w-full bg-emerald-600 text-2xl hover:bg-emerald-700">
-                  Finalizar OP
+                  Finalizar produção
                 </Button>
               </Form>
             </Card>
@@ -285,13 +346,13 @@ export default function ProductionOrderDetail() {
             <Form method="post">
               <input type="hidden" name="intent" value="cancel" />
               <Button variant="outline" disabled={busy} className="h-16 w-full text-lg text-destructive">
-                Cancelar OP
+                Cancelar produção
               </Button>
             </Form>
           )}
 
           <Card className="space-y-3 p-6">
-            <h3 className="text-xl font-bold">Fórmula total</h3>
+            <h3 className="text-xl font-bold">Todos os ingredientes</h3>
             <ul className="space-y-1 text-lg">
               {plan.totals.map((t) => (
                 <li key={t.id} className="flex justify-between gap-3">

@@ -1,3 +1,4 @@
+import { ProductionOrdersScreen } from "./src/production/ProductionOrdersScreen";
 import { KitchenMessages } from "./src/kds/KitchenMessages";
 import { DailyProgrammingScreen } from "./src/production/DailyProgrammingScreen";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -432,6 +433,7 @@ function HomeScreen({
   onOpenRecipes,
   onOpenPurchases,
   onOpenProgramming,
+  onOpenProduction,
   onOpenDoughPlanning,
   onSignedOut,
 }: {
@@ -443,6 +445,7 @@ function HomeScreen({
   onOpenRecipes: () => void;
   onOpenPurchases: () => void;
   onOpenProgramming: () => void;
+  onOpenProduction: () => void;
   onOpenDoughPlanning: () => void;
   onSignedOut: () => void;
 }) {
@@ -536,6 +539,19 @@ function HomeScreen({
                 </Text>
               </View>
             </Pressable>
+            {!desktop ? (
+              <Pressable accessibilityRole="button" onPress={onOpenProduction}
+                style={({ pressed }) => [styles.featureCard, featureWidth, pressed && styles.pressed]}>
+                <View style={styles.featureCardTop}>
+                  <View style={styles.featureIcon}><Text style={styles.featureEmoji}>P</Text></View>
+                  <Text style={styles.featureArrow}>›</Text>
+                </View>
+                <View style={styles.featureCopy}>
+                  <Text style={styles.featureTitle}>Produção</Text>
+                  <Text style={styles.featureDescription}>Escolha a receita e acompanhe cada etapa do preparo.</Text>
+                </View>
+              </Pressable>
+            ) : null}
             {!desktop &&
             user.roles.some((role) =>
               ["admin", "superAdmin", "kdsOperator", "kdsAdmin"].includes(role)
@@ -1970,6 +1986,7 @@ function AppContent() {
     | "recipes"
     | "purchases"
     | "programming"
+    | "production"
     | null
   >(null);
   const [stockShortcutDate, setStockShortcutDate] = useState<string | null>(
@@ -2041,6 +2058,11 @@ function AppContent() {
           />
         </KdsTypographyContext.Provider>
       );
+    if (activeFeature === "production")
+      return <ProductionOrdersScreen {...session} onBack={() => setActiveFeature(null)}
+        onUnauthorized={() => {
+          void sessionStorage.clearToken(); setActiveFeature(null); setSession(null);
+        }} />;
     if (activeFeature === "programming")
       return (
         <DailyProgrammingScreen
@@ -2122,6 +2144,7 @@ function AppContent() {
         onOpenRecipes={() => setActiveFeature("recipes")}
         onOpenPurchases={() => setActiveFeature("purchases")}
         onOpenProgramming={() => setActiveFeature("programming")}
+        onOpenProduction={() => setActiveFeature("production")}
         onOpenDoughPlanning={() => setActiveFeature("dough-planning")}
         onSignedOut={() => {
           setActiveFeature(null);

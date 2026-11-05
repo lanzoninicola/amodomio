@@ -37,10 +37,10 @@ export default function ProductionOrdersIndex() {
   return (
     <div className="w-full space-y-6 p-4 md:p-6 2xl:p-10">
       <div className="flex flex-wrap items-center justify-between gap-4">
-        <h1 className="text-3xl font-bold 2xl:text-4xl">Ordens de Produção</h1>
+        <h1 className="text-3xl font-bold 2xl:text-4xl">Produção</h1>
         <Button asChild size="lg" className="h-16 px-8 text-xl">
           <Link to="/admin/producao/ordens/new">
-            <Plus className="mr-2 h-6 w-6" /> Nova OP
+            <Plus className="mr-2 h-6 w-6" /> Nova produção
           </Link>
         </Button>
       </div>
@@ -71,7 +71,7 @@ export default function ProductionOrdersIndex() {
           {(list: Awaited<ReturnType<typeof ListFn>>) =>
             list.length === 0 ? (
               <p className="py-16 text-center text-xl text-muted-foreground">
-                Nenhuma ordem de produção.
+                Nenhuma produção por aqui ainda.
               </p>
             ) : (
               <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">
@@ -94,7 +94,7 @@ export default function ProductionOrdersIndex() {
                         <h2 className="text-3xl font-bold leading-tight">{order.recipeName}</h2>
                         <div className="rounded-lg bg-muted px-4 py-3">
                           <div className="text-sm text-muted-foreground">
-                            Base · {order.baseIngredient}
+                            Ingrediente principal · {order.baseIngredient}
                           </div>
                           <Quantity
                             quantity={order.baseQuantity}
@@ -103,7 +103,12 @@ export default function ProductionOrdersIndex() {
                           />
                         </div>
                         <div className="flex items-center justify-between text-lg text-muted-foreground">
-                          <span>{format(order.productionDate, "dd/MM/yyyy")}</span>
+                          <span>
+                            Produzir: {format(order.productionDate, "dd/MM/yyyy")}
+                            {order.usageDate && format(order.usageDate, "dd/MM/yyyy") !== format(order.productionDate, "dd/MM/yyyy") && (
+                              <> · Usar: {format(order.usageDate, "dd/MM/yyyy")}</>
+                            )}
+                          </span>
                           <span>
                             {done}/{order.Steps.length} etapas
                           </span>
