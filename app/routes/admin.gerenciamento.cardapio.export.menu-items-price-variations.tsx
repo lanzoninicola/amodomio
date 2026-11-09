@@ -2,11 +2,11 @@ import { json, type LoaderFunctionArgs } from "@remix-run/node";
 import { useLoaderData } from "@remix-run/react";
 import Papa from "papaparse";
 import { useMemo, useState } from "react";
-import type { MenuItemSellingChannel, MenuItemSize } from "@prisma/client";
+import type { ItemSellingChannel, MenuItemSize } from "@prisma/client";
 import type { MenuItemWithSellPriceVariations } from "~/domain/cardapio/menu-item.types";
 import { menuItemSellingPriceHandler } from "~/domain/cardapio/menu-item-selling-price-handler.server";
 import { menuItemSizePrismaEntity } from "~/domain/cardapio/menu-item-size.entity.server";
-import { menuItemSellingChannelPrismaEntity } from "~/domain/cardapio/menu-item-selling-channel.entity.server";
+import { itemSellingChannelPrismaEntity } from "~/domain/cardapio/menu-item-selling-channel.entity.server";
 import responseCSV from "~/domain/export-csv/functions/response-csv";
 import { badRequest } from "~/utils/http-response.server";
 import formatDecimalPlaces from "~/utils/format-decimal-places";
@@ -30,7 +30,7 @@ import {
 type LoaderData = {
   items: MenuItemWithSellPriceVariations[];
   sizes: MenuItemSize[];
-  channels: MenuItemSellingChannel[];
+  channels: ItemSellingChannel[];
 };
 
 type ExportRow = {
@@ -53,6 +53,7 @@ type ExportJsonItem = {
   categoria: string;
   canal: string;
   sortOrderIndex: number | null;
+  ingredientes: string[];
   variacoes: Array<{
     tamanho: string;
     preco: number;
@@ -63,6 +64,12 @@ type ExportJsonItem = {
     custoFichaTecnica: number;
   }>;
 };
+
+const parseIngredientsList = (ingredients?: string) =>
+  String(ingredients ?? "")
+    .split(",")
+    .map((ingredient) => ingredient.trim())
+    .filter(Boolean);
 
 const buildExportRows = (items: MenuItemWithSellPriceVariations[], channelKey: string) => {
   const rows: ExportRow[] = [];
@@ -152,6 +159,7 @@ const buildExportJson = (items: MenuItemWithSellPriceVariations[], channelKey: s
         categoria: item.category?.name ?? "",
         canal: channelName,
         sortOrderIndex: item.sortOrderIndex ?? null,
+        ingredientes: parseIngredientsList(item.ingredients),
         variacoes,
       };
     })
@@ -166,7 +174,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const [items, sizes, channels] = await Promise.all([
     menuItemSellingPriceHandler.loadMany({}),
     menuItemSizePrismaEntity.findAll(),
-    menuItemSellingChannelPrismaEntity.findAll(),
+    itemSellingChannelPrismaEntity.findAll(),
   ]);
 
   if (!channels.length) {

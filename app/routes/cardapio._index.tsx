@@ -1,1048 +1,936 @@
 // app/routes/cardapio._index.tsx
 
 import { HeadersFunction, LoaderFunctionArgs } from "@remix-run/node";
-import { Await, Link, defer, useLoaderData, useSearchParams } from "@remix-run/react";
-import React, {
-    useState,
-    useRef,
-    useCallback,
-    useEffect,
-    Suspense
-} from "react";
 import {
-    MenuItemWithAssociations,
-    menuItemPrismaEntity
-} from "~/domain/cardapio/menu-item.prisma.entity.server";
-import { prismaIt } from "~/lib/prisma/prisma-it.server";
-import { menuItemLikePrismaEntity } from "~/domain/cardapio/menu-item-like.prisma.entity.server";
-import { badRequest, ok } from "~/utils/http-response.server";
-import { menuItemSharePrismaEntity } from "~/domain/cardapio/menu-item-share.prisma.entity.server";
-import ItalyIngredientsStatement from "~/domain/cardapio/components/italy-ingredient-statement/italy-ingredient-statement";
-import {
-    CardapioItemActionBarVertical,
-    LikeIt,
-    ShareIt
-} from "~/domain/cardapio/components/cardapio-item-action-bar/cardapio-item-action-bar";
-import { tagPrismaEntity } from "~/domain/tags/tag.prisma.entity.server";
-import Loading from "~/components/loading/loading";
-import { FilterTagSelect } from "~/domain/cardapio/components/filter-tags/filter-tags";
-import { cn } from "~/lib/utils";
-import capitalize from "~/utils/capitalize";
-import AwardBadge from "~/components/award-badge/award-badge";
-import { Separator } from "~/components/ui/separator";
-import {
-    CardapioItemPrice,
-    CardapioItemPriceSelect
-} from "~/domain/cardapio/components/cardapio-item-price/cardapio-item-price";
-import {
-    Carousel,
-    CarouselApi,
-    CarouselContent,
-    CarouselItem,
-    CarouselNext,
-    CarouselPrevious
-} from "~/components/ui/carousel";
+  Await,
+  defer,
+  Link,
+  useLoaderData,
+  useRouteError,
+  useRouteLoaderData,
+} from "@remix-run/react";
+import React, { Suspense, useEffect, useRef, useState } from "react";
 import Autoplay from "embla-carousel-autoplay";
-import CardapioItemImageSingle from "~/domain/cardapio/components/cardapio-item-image-single/cardapio-item-image-single";
+import Loading from "~/components/loading/loading";
+import CardapioDatabaseUnavailable from "~/domain/cardapio/components/cardapio-database-unavailable/cardapio-database-unavailable";
 import prismaClient from "~/lib/prisma/client.server";
-import { Tag } from "@prisma/client";
-import { useSoundEffects } from "~/components/sound-effects/use-sound-effects";
+import CardapioErrorRedirect from "~/domain/cardapio/components/cardapio-error-redirect/cardapio-error-redirect";
+import WEBSITE_LINKS from "~/domain/website-navigation/links/website-links";
+import { isDatabaseConnectivityError } from "~/lib/errors/connectivity";
+import { prismaIt } from "~/lib/prisma/prisma-it.server";
+import { badRequest, ok } from "~/utils/http-response.server";
+import { loadCardapioIndexData } from "~/domain/cardapio/cardapio-index.server";
+import type { CardapioFeatured } from "~/domain/cardapio/cardapio-featured.server";
+import {
+  CardapioCatalogSection,
+  CardapioHighlightsSection,
+  LikeCelebrationOverlay,
+} from "~/domain/cardapio/components/cardapio-index/cardapio-index-sections";
+import CardapioOrderCtaButton from "~/domain/cardapio/components/cardapio-order-cta-button";
+import CardapioDesktopSidebarHeader from "~/domain/cardapio/components/cardapio-desktop-sidebar-header";
+import { trackCardapioFacebookPixelTrigger } from "~/domain/cardapio/facebook-pixel.client";
+import { trackCardapioFeatured } from "~/domain/cardapio/tracking/cardapio-tracking.client";
+import { cn } from "~/lib/utils";
+import {
+  Carousel,
+  CarouselContent,
+  CarouselItem,
+  CarouselNext,
+  CarouselPrevious,
+  type CarouselApi,
+} from "~/components/ui/carousel";
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogTitle,
+  DialogTrigger,
+} from "~/components/ui/dialog";
+import {
+  ArrowLeft,
+  LinkIcon,
+  Maximize2,
+  Volume2,
+  VolumeX,
+  X,
+} from "lucide-react";
+import type {
+  CardapioIndexItem,
+  GroupedItems,
+} from "~/domain/cardapio/cardapio-index.shared";
+import type { loader as cardapioLayoutLoader } from "./cardapio";
+import { DEFAULT_CARDAPIO_REDIRECT_TO_SAIPOS } from "~/domain/cardapio/cardapio-contingency-settings";
 
 export const headers: HeadersFunction = () => ({
-    "Cache-Control": "s-maxage=1, stale-while-revalidate=59"
+  "Cache-Control": "s-maxage=1, stale-while-revalidate=59",
 });
 
-// ======================================================
-// LOADER
-// ======================================================
 export async function loader({ request }: LoaderFunctionArgs) {
-    // itens agrupados do cardápio
-    // @ts-ignore
-    const items = menuItemPrismaEntity.findAllGroupedByGroup(
-        {
-            where: {
-                visible: true
-            },
-            option: {
-                sorted: true,
-                direction: "asc"
-            }
-        },
-        {
-            imageTransform: true,
-            imageScaleWidth: 375
-        }
-    );
-
-    // tags públicas (filtros)
-    const tags = tagPrismaEntity.findAll({
-        public: true
-    });
-
-    // post em destaque (já estava no teu arquivo)
-    const postFeatured = await prismaClient.post.findFirst({
-        where: {
-            featured: true
-        },
-        select: {
-            id: true,
-            title: true,
-            _count: {
-                select: {
-                    PostLike: true,
-                    PostShare: true
-                }
-            }
-        }
-    });
-
-    return defer({
-        items,
-        tags,
-        postFeatured
-    });
+  return defer(await loadCardapioIndexData(request));
 }
 
-// ======================================================
-// ACTION
-// (mantive igual ao teu arquivo, só organizado)
-// ======================================================
 export async function action({ request }: LoaderFunctionArgs) {
-    const formData = await request.formData();
-    const { _action, ...values } = Object.fromEntries(formData);
+  const formData = await request.formData();
+  const { _action, ...values } = Object.fromEntries(formData);
 
-    // like de item do cardápio
-    if (values?.action === "menu-item-like-it") {
-        const itemId = values?.itemId as string;
-        let amount = 0;
+  if (values?.action === "post-like-it") {
+    const postId = values?.postId as string;
+    const amount = 1;
 
-        amount = isNaN(Number(values?.likesAmount)) ? 1 : Number(values?.likesAmount);
-
-        const [err, likeAmount] = await prismaIt(
-            menuItemLikePrismaEntity.create({
-                createdAt: new Date().toISOString(),
-                amount,
-                MenuItem: {
-                    connect: {
-                        id: itemId
-                    }
-                }
-            })
-        );
-
-        if (err) {
-            return badRequest({
-                action: "menu-item-like-it",
-                likeAmount
-            });
-        }
-
-        return ok({
-            action: "menu-item-like-it",
-            likeAmount
-        });
-    }
-
-    // share de item do cardápio
-    if (values?.action === "menu-item-share-it") {
-        const itemId = values?.itemId as string;
-
-        const [err, shareAmount] = await prismaIt(
-            menuItemSharePrismaEntity.create({
-                createdAt: new Date().toISOString(),
-                MenuItem: {
-                    connect: {
-                        id: itemId
-                    }
-                }
-            })
-        );
-
-        if (err) {
-            return badRequest({
-                action: "menu-item-share-it",
-                shareAmount
-            });
-        }
-
-        return ok({
-            action: "menu-item-share-it",
-            shareAmount
-        });
-    }
-
-    // like de post
-    if (values?.action === "post-like-it") {
-        const postId = values?.postId as string;
-        let amount = 0;
-
-        amount = isNaN(Number(values?.likesAmount)) ? 1 : Number(values?.likesAmount);
-
-        const [err, likeAmount] = await prismaIt(
-            prismaClient.postLike.create({
-                data: {
-                    createdAt: new Date().toISOString(),
-                    amount,
-                    Post: {
-                        connect: {
-                            id: postId
-                        }
-                    }
-                }
-            })
-        );
-
-        if (err) {
-            return badRequest({
-                action: "post-like-it",
-                likeAmount
-            });
-        }
-
-        return ok({
-            action: "post-like-it",
-            likeAmount
-        });
-    }
-
-    // share de post
-    if (values?.action === "post-share-it") {
-        const postId = values?.postId as string;
-
-        const [err, shareAmount] = await prismaIt(
-            prismaClient.postShare.create({
-                data: {
-                    createdAt: new Date().toISOString(),
-                    Post: {
-                        connect: {
-                            id: postId
-                        }
-                    }
-                }
-            })
-        );
-
-        if (err) {
-            return badRequest({
-                action: "post-share-it",
-                shareAmount
-            });
-        }
-
-        return ok({
-            action: "post-share-it",
-            shareAmount
-        });
-    }
-
-    return null;
-}
-
-// ======================================================
-// PAGE
-// ======================================================
-export default function CardapioWebIndex() {
-    const { items, tags, postFeatured } = useLoaderData<typeof loader>();
-
-    return (
-        <section className="flex flex-col mb-24" data-element="cardapio-index">
-            <Separator className="my-6 md:hidden" />
-
-            {/* TOPO: Halloween + Destaques (igual ao teu) */}
-            <div className="flex flex-col mt-24 md:grid md:grid-cols-2 md:items-start md:mt-40 md:justify-center">
-                {/* Bloco Halloween */}
-                {/* <Suspense fallback={<Loading />}>
-                    <Await resolve={items}>
-                        {(items) => {
-                            const imageUrls = Array.from(
-                                { length: 4 },
-                                (_, i) => `/images/halloween/halloween_25_${i + 1}.png`
-                            );
-                            return (
-                                <section id="halloween" className="flex flex-col mx-2 md:flex-1 mt-24 md:mt-0">
-                                    <h3 className="font-neue text-base md:text-xl font-semibold tracking-wide p-2">
-                                        Sabores da semana de Halloween 🎃
-                                    </h3>
-                                    <ImagesCarousel imageUrls={imageUrls} autoplay intervalMs={3500} />
-                                </section>
-                            );
-                        }}
-                    </Await>
-                </Suspense>
-
-                <Separator className="m-4 md:hidden" /> */}
-
-                {/* Destaques */}
-                <Suspense fallback={<Loading />}>
-                    <Await resolve={items}>
-                        {(items) => {
-                            return (
-                                <section id="destaque" className="flex flex-col gap-4 mx-2 md:flex-1 ">
-                                    {/* @ts-ignore */}
-                                    <CardapioItemListDestaque items={items} title="Sugestões do chef" tagFilter="em-destaque" />
-                                </section>
-                            );
-                        }}
-                    </Await>
-                </Suspense>
-            </div>
-
-            <Separator className="m-4" />
-
-            {/* ===================================================== */}
-            {/* LISTA PRINCIPAL DO CARDÁPIO COM FILTRO + BARRA DE GRUPOS */}
-            {/* ===================================================== */}
-            <Suspense fallback={<Loading />}>
-                <Await resolve={Promise.all([tags, items])}>
-                    {([loadedTags, loadedItems]) => {
-                        const [currentItems, setCurrentItems] = useState(loadedItems);
-                        const [currentFilterTag, setCurrentFilterTag] = useState<Tag | null>(null);
-
-                        // --- NOVO: refs dos grupos para scroll
-                        const groupRefs = useRef<Record<string, HTMLElement | null>>({});
-
-                        const scrollToGroup = (groupId: string) => {
-                            const el = groupRefs.current[groupId];
-                            if (!el) return;
-                            const OFFSET = 110; // ajusta conforme teu header/footer
-                            const top = el.getBoundingClientRect().top + window.scrollY - OFFSET;
-                            window.scrollTo({
-                                top,
-                                behavior: "smooth"
-                            });
-                        };
-
-                        const isGrouped =
-                            Array.isArray(currentItems) &&
-                            currentItems.length > 0 &&
-                            "menuItems" in (currentItems[0] as any);
-
-                        const orderedGroups = isGrouped
-                            ? (currentItems as Array<{
-                                groupId: string;
-                                group: string;
-                                sortOrderIndex?: number;
-                                menuItems: any[];
-                            }>).sort((a, b) => (a.sortOrderIndex ?? 0) - (b.sortOrderIndex ?? 0))
-                            : [];
-
-                        // filtro de tag
-                        const onCurrentTagSelected = (tag: Tag | null) => {
-                            setCurrentFilterTag(tag);
-
-                            // reset
-                            if (!tag || tag.id === "all") {
-                                setCurrentItems(loadedItems);
-                                return;
-                            }
-
-                            const tagName = tag.name;
-                            const hasTag = (i: any) =>
-                                Boolean(
-                                    i?.tags?.public?.includes?.(tagName) || i?.tags?.all?.includes?.(tagName)
-                                );
-
-                            if (isGrouped) {
-                                // mantém estrutura por grupo
-                                const filteredGroups = (loadedItems as GroupedItems[])
-                                    .map((g) => ({
-                                        ...g,
-                                        menuItems: g.menuItems.filter(hasTag)
-                                    }))
-                                    .filter((g) => g.menuItems.length > 0);
-
-                                setCurrentItems(filteredGroups);
-                            } else {
-                                const filtered = (loadedItems as MenuItem[]).filter(hasTag);
-                                setCurrentItems(filtered);
-                            }
-                        };
-
-                        return (
-                            <div className="flex flex-col mx-4">
-                                {/* linha título + filtro */}
-                                <div className="flex justify-between items-center mb-4">
-                                    <h2 className="font-neue text-sm md:text-lg font-semibold tracking-wider">
-                                        Todos os produtos
-                                    </h2>
-                                    <FilterTagSelect
-                                        tags={loadedTags}
-                                        currentTag={currentFilterTag}
-                                        onCurrentTagSelected={onCurrentTagSelected}
-                                        label="Categorias"
-                                    />
-                                </div>
-
-                                {/* ===== NOVO: BARRA HORIZONTAL DESLIZÁVEL ===== */}
-                                {isGrouped && orderedGroups.length > 0 && (
-                                    <div className="flex gap-2 overflow-x-auto pb-2 mt-1 mb-3 no-scrollbar">
-                                        {orderedGroups.map((g) => (
-                                            <button
-                                                key={g.groupId}
-                                                onClick={() => scrollToGroup(g.groupId)}
-                                                className="whitespace-nowrap px-3 py-1 rounded-full bg-zinc-100 text-xs md:text-sm font-neue hover:bg-zinc-200 transition"
-                                            >
-                                                {g.group}
-                                            </button>
-                                        ))}
-                                    </div>
-                                )}
-
-                                {/* ===== LISTA POR GRUPO ===== */}
-                                {isGrouped
-                                    ? orderedGroups.map((g) => (
-                                        <section
-                                            key={g.groupId}
-                                            ref={(el) => (groupRefs.current[g.groupId] = el)}
-                                            className="mb-6 scroll-mt-28"
-                                        >
-                                            <h3 className="font-neue text-base md:text-xl font-semibold tracking-wide mb-2 border-b">
-                                                {g.group}
-                                            </h3>
-                                            <CardapioItemsGrid items={g.menuItems} />
-                                        </section>
-                                    ))
-                                    : (
-                                        <CardapioItemsGrid items={currentItems as any[]} />
-                                    )}
-                            </div>
-                        );
-                    }}
-                </Await>
-            </Suspense>
-        </section>
-    );
-}
-
-// ======================================================
-// CARROSSEL DE IMAGENS (já estava no teu arquivo)
-// ======================================================
-type ImagesCarouselProps = {
-    imageUrls: string[];
-    className?: string;
-    autoplay?: boolean;
-    intervalMs?: number;
-};
-
-function ImagesCarousel({
-    imageUrls,
-    className,
-    autoplay = true,
-    intervalMs = 3500
-}: ImagesCarouselProps) {
-    const plugin = React.useRef(
-        Autoplay({ delay: intervalMs, stopOnInteraction: false })
-    );
-
-    return (
-        <Carousel
-            className={className}
-            plugins={autoplay ? [plugin.current] : []}
-            opts={{ loop: true, align: "start" }}
-        >
-            <CarouselContent>
-                {imageUrls.map((src, i) => (
-                    <CarouselItem key={src ?? i} className="basis-full lg:basis-1/3">
-                        <div className="p-2">
-                            <div className="overflow-hidden shadow">
-                                <img
-                                    src={src}
-                                    alt={`Imagem ${i + 1}`}
-                                    loading="lazy"
-                                    className="h-auto w-full object-cover"
-                                />
-                            </div>
-                        </div>
-                    </CarouselItem>
-                ))}
-            </CarouselContent>
-
-            <CarouselPrevious className="left-2" />
-            <CarouselNext className="right-2" />
-        </Carousel>
-    );
-}
-
-// ======================================================
-// LISTA COM INFINITE SCROLL (mantida)
-// ======================================================
-const CardapioItemList = ({ allItems }: { allItems: MenuItemWithAssociations[] }) => {
-    const [searchParams] = useSearchParams();
-    const currentFilterTag = searchParams.get("tag");
-
-    const [items, setItems] = useState<MenuItemWithAssociations[]>([]);
-    const [hasMore, setHasMore] = useState(true);
-    const [isLoading, setIsLoading] = useState(false);
-    const loadingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-
-    useEffect(() => {
-        if (loadingTimeoutRef.current) {
-            clearTimeout(loadingTimeoutRef.current);
-        }
-
-        setIsLoading(true);
-
-        loadingTimeoutRef.current = setTimeout(() => {
-            const itemsFiltered = currentFilterTag
-                ? allItems.filter((i) => i.tags?.public.some((t) => t === currentFilterTag))
-                : allItems;
-
-            setItems(itemsFiltered.slice(0, 10));
-            setHasMore(itemsFiltered.length > 10);
-            setIsLoading(false);
-        }, 300);
-
-        return () => {
-            if (loadingTimeoutRef.current) {
-                clearTimeout(loadingTimeoutRef.current);
-            }
-        };
-    }, [currentFilterTag, allItems]);
-
-    const observer = useRef<IntersectionObserver | null>(null);
-
-    const lastItemRef = useCallback(
-        (node: HTMLLIElement) => {
-            if (observer.current) observer.current.disconnect();
-
-            observer.current = new IntersectionObserver((entries) => {
-                if (entries[0].isIntersecting && hasMore) {
-                    setItems((prevItems) => {
-                        const itemsFiltered = currentFilterTag
-                            ? allItems.filter((i) => i.tags?.public.some((t) => t === currentFilterTag))
-                            : allItems;
-
-                        const newItems = itemsFiltered.slice(prevItems.length, prevItems.length + 10);
-                        setHasMore(newItems.length > 0);
-                        return [...prevItems, ...newItems];
-                    });
-                }
-            });
-
-            if (node) observer.current.observe(node);
+    const [err, likeAmount] = await prismaIt(
+      prismaClient.postLike.create({
+        data: {
+          createdAt: new Date().toISOString(),
+          amount,
+          Post: {
+            connect: {
+              id: postId,
+            },
+          },
         },
-        [hasMore, allItems, currentFilterTag]
+      })
     );
 
-    if (isLoading) {
-        return (
-            <div className="my-8">
-                <Loading />
-            </div>
-        );
+    if (err) {
+      return badRequest({
+        action: "post-like-it",
+        likeAmount,
+      });
     }
 
-    return (
-        <div className="flex flex-col gap-4">
-            <section>
-                <ul className="flex flex-col overflow-y-auto md:overflow-y-auto snap-mandatory mt-4 md:grid md:grid-cols-2 md:gap-x-4">
-                    {items.map((item, index) => {
-                        const isLastItem = items.length === index + 1;
-                        return (
-                            <CardapioItemFullImage
-                                ref={isLastItem ? lastItemRef : null}
-                                key={item.id}
-                                item={item}
-                            />
-                        );
-                    })}
-                </ul>
-            </section>
-        </div>
+    return ok({
+      action: "post-like-it",
+      likeAmount,
+    });
+  }
+
+  if (values?.action === "post-share-it") {
+    const postId = values?.postId as string;
+
+    const [err, shareAmount] = await prismaIt(
+      prismaClient.postShare.create({
+        data: {
+          createdAt: new Date().toISOString(),
+          Post: {
+            connect: {
+              id: postId,
+            },
+          },
+        },
+      })
     );
-};
 
-// ======================================================
-// GRID DE ITENS (teu componente atualizado)
-// ======================================================
-function CardapioItemsGrid({ items }: { items: MenuItemWithAssociations[] }) {
-    const [expandedItemId, setExpandedItemId] = useState<string | null>(null);
-    const [desktopDialogId, setDesktopDialogId] = useState<string | null>(null);
-    const [isDesktop, setIsDesktop] = useState(false);
-
-    const itemRefs = useRef<Record<string, HTMLLIElement | null>>({});
-
-    useEffect(() => {
-        const mq = window.matchMedia("(min-width: 1024px)");
-        const update = () => setIsDesktop(mq.matches);
-        update();
-        mq.addEventListener?.("change", update);
-        return () => mq.removeEventListener?.("change", update);
-    }, []);
-
-    if (!items?.length) return null;
-
-    const scrollToItemTop = (id: string) => {
-        const el = itemRefs.current[id];
-        if (!el) return;
-        const OFFSET = 120;
-        const top = el.getBoundingClientRect().top + window.scrollY - OFFSET;
-        window.scrollTo({ top, behavior: "smooth" });
-    };
-
-    const onCardClick = (id: string) => {
-        if (isDesktop) {
-            setDesktopDialogId(id);
-            return;
-        }
-
-        setExpandedItemId((curr) => {
-            const willExpand = curr !== id;
-            const next = willExpand ? id : null;
-
-            if (willExpand) {
-                requestAnimationFrame(() => {
-                    requestAnimationFrame(() => scrollToItemTop(id));
-                });
-            }
-            return next;
-        });
-    };
-
-    return (
-        <>
-            <ul
-                className="
-          mt-4 grid grid-cols-2 gap-3
-          sm:grid-cols-3
-          lg:grid-cols-4
-          xl:grid-cols-5
-        "
-            >
-                {items.map((item) => (
-                    <CardapioGridItem
-                        key={item.id}
-                        item={item}
-                        isExpanded={expandedItemId === item.id}
-                        onClick={() => onCardClick(item.id)}
-                        innerRef={(el) => (itemRefs.current[item.id] = el)}
-                    />
-                ))}
-            </ul>
-            {/* se tiver dialog desktop, ele entra aqui (você pode manter o seu) */}
-        </>
-    );
-}
-
-function CardapioGridItem({
-    item,
-    isExpanded,
-    onClick,
-    innerRef
-}: {
-    item: MenuItemWithAssociations;
-    isExpanded: boolean;
-    onClick: () => void;
-    innerRef?: (el: HTMLLIElement | null) => void;
-}) {
-    const featuredImage =
-        item.MenuItemGalleryImage?.find((img) => img.isPrimary) ||
-        item.MenuItemGalleryImage?.[0];
-
-    return (
-        <li
-            ref={innerRef}
-            className={cn(
-                "flex flex-col rounded-md border border-transparent",
-                "transition-all duration-300 ease-in-out",
-                "scroll-mt-24 lg:scroll-mt-0",
-                isExpanded ? "col-span-2 lg:col-span-1" : "col-span-1"
-            )}
-        >
-            <div className="flex flex-col" onClick={onClick}>
-                <div
-                    role="button"
-                    aria-label={`Abrir ${item.name}`}
-                    className="group overflow-hidden rounded-t-md relative focus:outline-none focus:ring-2 focus:ring-black/20"
-                >
-                    <div
-                        className={cn(
-                            "relative transition-all duration-300 ease-in-out",
-                            isExpanded ? "h-[260px]" : "h-[150px]"
-                        )}
-                    >
-                        <CardapioItemImageSingle
-                            src={featuredImage?.secureUrl || ""}
-                            placeholder={item.imagePlaceholderURL || ""}
-                            placeholderIcon={false}
-                            cnPlaceholderText={cn(
-                                "text-black font-urw text-sm tracking-tight",
-                                isExpanded && "text-lg"
-                            )}
-                            cnPlaceholderContainer="from-zinc-200 via-zinc-100 to-white "
-                            cnContainer="w-full h-full"
-                            enableOverlay={false}
-                        />
-
-                        {item.meta?.isBestSeller && (
-                            <div className="absolute left-1 top-2 rounded-sm bg-black px-2 py-[2px] text-[10px] font-medium text-white backdrop-blur font-neue tracking-wide">
-                                <span>Mais vendido</span>
-                            </div>
-                        )}
-                        {item.tags?.all?.includes("produtos-italianos") && (
-                            <div className="absolute left-1 top-2 rounded-sm bg-black px-2 py-[2px] text-[10px] font-medium text-white backdrop-blur font-neue tracking-wide">
-                                <span>Com produtos italianos</span>
-                            </div>
-                        )}
-                    </div>
-                </div>
-
-                <div className="px-1 pb-2 pt-1 flex flex-col bg-white rounded-b-md">
-                    <span
-                        className={cn(
-                            "font-neue line-clamp-1 font-medium text-xs tracking-wide sm:text-base",
-                            isExpanded && "text-md"
-                        )}
-                    >
-                        {item.name}
-                    </span>
-
-                    <span
-                        className={cn(
-                            "font-neue text-xs tracking-wide leading-[110%] sm:text-base line-clamp-2 my-1",
-                            isExpanded && "text-md line-clamp-none mb-2 leading-[120%]"
-                        )}
-                    >
-                        {item.ingredients}
-                    </span>
-                </div>
-            </div>
-
-            <CardapioItemPriceSelect prices={item.MenuItemSellingPriceVariation} />
-
-            <div className="flex justify-between shadow-sm bg-white">
-                <ShareIt
-                    item={item}
-                    size={isExpanded === true ? 20 : 16}
-                    cnContainer={cn("px-2 ", isExpanded && "my-2 border border-black")}
-                >
-                    {isExpanded && <span className="font-neue text-sm">Compartilhar</span>}
-                </ShareIt>
-
-                <LikeIt
-                    item={item}
-                    size={isExpanded === true ? 20 : 16}
-                    cnContainer={cn("px-2 ", isExpanded && "my-2 border border-red-500")}
-                >
-                    {isExpanded && <span className="font-neue text-sm text-red-500 mr-2">Gostei</span>}
-                </LikeIt>
-            </div>
-
-            <div
-                className={cn(
-                    "overflow-hidden transition-all duration-300 ease-in-out bg-white rounded-b-md",
-                    isExpanded ? "max-h-[320px] opacity-100 px-3 pb-3" : "max-h-0 opacity-0 px-0 pb-0"
-                )}
-            >
-                <div className="mt-1 space-y-2 text-xs">{/* extra se quiser */}</div>
-            </div>
-        </li>
-    );
-}
-
-// ======================================================
-// CARD DE LISTA COMPLETA (full image)
-// ======================================================
-interface CardapioItemFullImageProps {
-    item: MenuItemWithAssociations;
-}
-
-const CardapioItemFullImage = React.forwardRef(
-    ({ item }: CardapioItemFullImageProps, ref: any) => {
-        const { playNavigation } = useSoundEffects();
-        const italyProduct = item.tags?.public.some(
-            (t) => t.toLocaleLowerCase() === "produtos-italianos"
-        );
-        const bestMonthlySeller = item.tags?.all.some(
-            (t) => t.toLocaleLowerCase() === "mais-vendido-mes"
-        );
-        const bestSeller = item.tags?.all.some(
-            (t) => t.toLocaleLowerCase() === "mais-vendido"
-        );
-
-        const featuredImage = item.MenuItemGalleryImage.filter((img) => img.isPrimary)[0];
-
-        return (
-            <li className="snap-start border-b py-[0.15rem]" id={item.id} ref={ref}>
-                <div className="relative h-[350px]">
-                    <CardapioItemImageSingle
-                        src={featuredImage?.secureUrl || ""}
-                        placeholder={item.imagePlaceholderURL || ""}
-                        placeholderIcon={false}
-                        cnContainer="w-full h-full"
-                    />
-
-                    <div className="absolute inset-0">
-                        <div className="grid grid-cols-8 h-full">
-                            <Link
-                                to={`/cardapio/${item.slug}`}
-                                className="flex flex-col mb-2 px-4 text-white  justify-end items-end w-full col-span-7"
-                                onClick={() => {
-                                    playNavigation();
-                                }}
-                            >
-                                <div className="flex flex-col gap-0">
-                                    <div className="flex items-center gap-2">
-                                        {italyProduct && <ItalyIngredientsStatement showText={false} />}
-                                        <h3 className="font-urw text-xl">{item.name}</h3>
-                                    </div>
-
-                                    <div className="flex flex-col gap-2">
-                                        {bestSeller && <AwardBadge>A mais desejada</AwardBadge>}
-                                        {bestMonthlySeller && <AwardBadge>Mais vendida do mes</AwardBadge>}
-                                    </div>
-
-                                    <div className="flex flex-col gap-0 ">
-                                        <p className="font-neue leading-tight text-[15px] mt-1 mb-4 tracking-wide">
-                                            {capitalize(item.ingredients)}
-                                        </p>
-                                        <CardapioItemPrice
-                                            prices={item?.MenuItemSellingPriceVariation}
-                                            cnLabel="text-white"
-                                            cnValue="text-white font-semibold"
-                                            showValuta={false}
-                                        />
-                                    </div>
-                                </div>
-                            </Link>
-                            <CardapioItemActionBarVertical item={item} />
-                        </div>
-                    </div>
-                </div>
-            </li>
-        );
+    if (err) {
+      return badRequest({
+        action: "post-share-it",
+        shareAmount,
+      });
     }
-);
 
-// ======================================================
-// TIPOS / HELPERS
-// ======================================================
-type MenuItem = {
-    id: string;
-    name: string;
-    slug: string;
-    imagePlaceholderURL?: string;
-    MenuItemGalleryImage?: { isPrimary?: boolean; secureUrl?: string }[];
-    tags?: { all?: string[]; public?: string[] };
-};
+    return ok({
+      action: "post-share-it",
+      shareAmount,
+    });
+  }
 
-type GroupedItems = {
-    groupId: string;
-    group: string;
-    sortOrderIndex?: number;
-    menuItems: MenuItem[];
-};
-
-type CardapioItemListDestaqueProps = {
-    title?: string;
-    items: MenuItem[] | GroupedItems[];
-    tagFilter?: string;
-    carouselDelay?: number;
-};
-
-function isGrouped(items: MenuItem[] | GroupedItems[]): items is GroupedItems[] {
-    return Array.isArray(items) && items.length > 0 && "menuItems" in (items[0] as any);
+  return null;
 }
 
-// ======================================================
-// DESTAQUES (mantido)
-// ======================================================
-function CardapioItemListDestaque({
-    title,
+export default function CardapioWebIndex() {
+  const {
     items,
-    tagFilter,
-    carouselDelay = 2000
-}: CardapioItemListDestaqueProps) {
-    const { playNavigation } = useSoundEffects();
-    const [api, setApi] = React.useState<CarouselApi | null>(null);
-    const [selectedIndex, setSelectedIndex] = React.useState(0);
+    tags,
+    reelUrls,
+    reelsEnabled,
+    menuItemInterestEnabled,
+    likesEnabled,
+    filterViewMode,
+    bannerEnabled = true,
+    bannerText = "Confira nossas novidades",
+    bannerUrl = "https://www.amodomio.com.br",
+    featuredSections = [],
+  } = useLoaderData<typeof loader>();
+  const [showLikeCelebration, setShowLikeCelebration] = useState(false);
+  const [likeCelebrationSeed, setLikeCelebrationSeed] = useState(1);
+  const forceLikeOverlay = false;
+  const hasMobileCinematicPublication =
+    Boolean(featuredSections[0]) &&
+    featuredSections[0]?.displayStyle !== "polaroid";
 
-    const badge =
-        tagFilter?.toLowerCase() === "mais-vendido"
-            ? "Mais vendido"
-            : tagFilter?.toLowerCase() === "em-destaque"
-                ? "Sugestão do chef"
-                : undefined;
+  useEffect(() => {
+    const handler = () => {
+      setLikeCelebrationSeed(Date.now());
+      setShowLikeCelebration(true);
+    };
 
-    // MODO 1: lista plana
-    if (!isGrouped(items)) {
-        const slides = React.useMemo(() => {
-            return (items || [])
-                .filter((i) => (tagFilter ? i.tags?.all?.some((t) => t === tagFilter) : true))
-                .slice(0, 4);
-        }, [items, tagFilter]);
+    window.addEventListener("cardapio:like-celebration", handler);
+    return () =>
+      window.removeEventListener("cardapio:like-celebration", handler);
+  }, []);
 
-        React.useEffect(() => {
-            if (!api) return;
-            const onSelect = () => setSelectedIndex(api.selectedScrollSnap());
-            api.on("select", onSelect);
-            setSelectedIndex(api.selectedScrollSnap());
-            return () => api.off("select", onSelect);
-        }, [api]);
+  useEffect(() => {
+    if (!forceLikeOverlay) return;
+    setShowLikeCelebration(true);
+    const intervalId = window.setInterval(() => {
+      setLikeCelebrationSeed(Date.now());
+    }, 1800);
+    return () => window.clearInterval(intervalId);
+  }, [forceLikeOverlay]);
 
-        if (!slides.length) return null;
+  useEffect(() => {
+    if (!showLikeCelebration || forceLikeOverlay) return;
+    const timeoutId = window.setTimeout(() => {
+      setShowLikeCelebration(false);
+    }, 4500);
 
-        return (
-            <div className="p-2">
-                {title ? (
-                    <h3 className="font-neue text-base md:text-xl font-semibold tracking-wide mb-2">
-                        {title}
-                    </h3>
-                ) : null}
+    return () => window.clearTimeout(timeoutId);
+  }, [showLikeCelebration, likeCelebrationSeed]);
 
-                <Carousel
-                    setApi={setApi}
-                    opts={{ loop: true, align: "start" }}
-                    plugins={[
-                        Autoplay({
-                            delay: carouselDelay,
-                            stopOnInteraction: false,
-                            stopOnMouseEnter: true
-                        })
-                    ]}
-                    className="relative"
-                >
-                    <CarouselContent>
-                        {slides.map((i) => {
-                            const featuredImage =
-                                i.MenuItemGalleryImage?.find((img) => img.isPrimary) ||
-                                i.MenuItemGalleryImage?.[0];
+  return (
+    <section
+      className={cn(
+        "mb-20 flex flex-col md:fixed md:inset-0 md:z-20 md:mb-0 md:block md:overflow-y-auto md:bg-white md:pt-0",
+        hasMobileCinematicPublication
+          ? "pt-0"
+          : "pt-[calc(3.25rem+env(safe-area-inset-top))]"
+      )}
+      data-element="cardapio-index"
+    >
+      <LikeCelebrationOverlay
+        isOpen={forceLikeOverlay || showLikeCelebration}
+        seed={likeCelebrationSeed}
+        onClose={() => setShowLikeCelebration(false)}
+      />
 
-                            return (
-                                <CarouselItem key={i.id}>
-                                    <Link
-                                        to={`/cardapio/${i.slug}`}
-                                        className="block w-full"
-                                        onClick={() => playNavigation()}
-                                    >
-                                        <div className="relative h-[320px] md:h-[380px] overflow-hidden rounded-md">
-                                            <CardapioItemImageSingle
-                                                src={featuredImage?.secureUrl || ""}
-                                                placeholder={i.imagePlaceholderURL || ""}
-                                                placeholderIcon={false}
-                                                cnPlaceholderContainer="from-zinc-200 via-zinc-100 to-white "
-                                                cnContainer="h-full w-full"
-                                                enableOverlay={false}
-                                            />
-                                            <div className="pointer-events-none absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-black/60 via-black/30 to-transparent" />
-                                            {badge && (
-                                                <div className="absolute left-3 top-3 rounded-md bg-black/70 px-3 py-1 text-xs font-medium text-white backdrop-blur font-neue">
-                                                    {badge}
-                                                </div>
-                                            )}
-                                            <div className="absolute bottom-3 left-3 right-3">
-                                                <h4 className="font-neue text-white text-2xl leading-tight drop-shadow">
-                                                    {i.name}
-                                                </h4>
-                                            </div>
-                                        </div>
-                                    </Link>
-                                </CarouselItem>
-                            );
-                        })}
-                    </CarouselContent>
+      <Suspense fallback={<Loading />}>
+        <Await resolve={Promise.all([tags, items])}>
+          {([loadedTags, loadedItems]) => {
+            return (
+              <>
+                <aside className="fixed inset-y-0 left-0 hidden w-[300px] overflow-y-auto border-r border-zinc-200 bg-white px-5 py-6 md:block lg:w-[340px]">
+                  <DesktopCardapioSidebar
+                    items={loadedItems}
+                    likesEnabled={likesEnabled}
+                    reelUrls={reelUrls}
+                    reelsEnabled={reelsEnabled}
+                  />
+                </aside>
 
-                    <div className="absolute inset-x-0 -bottom-3 flex items-center justify-center gap-2 md:-bottom-4">
-                        {slides.map((_, idx) => (
-                            <button
-                                key={idx}
-                                aria-label={`Ir para slide ${idx + 1}`}
-                                onClick={() => api?.scrollTo(idx)}
-                                className={[
-                                    "h-2 w-2 rounded-full transition-all",
-                                    selectedIndex === idx ? "w-6 bg-black/80" : "bg-black/30"
-                                ].join(" ")}
-                            />
-                        ))}
-                    </div>
-                </Carousel>
-            </div>
-        );
+                <main className="min-h-full md:ml-[300px] md:mr-[252px] lg:ml-[340px] lg:mr-[304px] 2xl:mx-auto 2xl:max-w-[780px]">
+                  <CardapioCatalogSection
+                    items={loadedItems}
+                    tags={loadedTags}
+                    interestTrackingEnabled={menuItemInterestEnabled}
+                    likesEnabled={likesEnabled}
+                    desktopFeedLayout
+                    filterViewMode={filterViewMode}
+                    bannerEnabled={bannerEnabled}
+                    bannerText={bannerText}
+                    bannerUrl={bannerUrl}
+                    cinematicPublication={hasMobileCinematicPublication}
+                    publication={
+                      featuredSections[0] ? (
+                        <CardapioFeaturedPromotionCarousel
+                          section={featuredSections[0]}
+                        />
+                      ) : null
+                    }
+                  />
+                </main>
+
+                <DesktopFloatingOrderButton />
+              </>
+            );
+          }}
+        </Await>
+      </Suspense>
+    </section>
+  );
+}
+
+function CardapioFeaturedPromotionCarousel({
+  section,
+}: {
+  section: CardapioFeatured;
+}) {
+  const images = section.images;
+  const hasMultipleImages = images.length > 1;
+  const autoplayPlugin = useRef(
+    Autoplay({
+      delay: 2400,
+      stopOnInteraction: true,
+      stopOnMouseEnter: true,
+    })
+  );
+  const [api, setApi] = useState<CarouselApi>();
+  const [mobileExpandedApi, setMobileExpandedApi] = useState<CarouselApi>();
+  const [currentSlide, setCurrentSlide] = useState(0);
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [isMobileExpanded, setIsMobileExpanded] = useState(false);
+  const promotionRef = useRef<HTMLDivElement>(null);
+  const trackedSlidesRef = useRef(new Set<string>());
+
+  useEffect(() => {
+    const element = promotionRef.current;
+    if (!element || typeof IntersectionObserver === "undefined") return;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (!entry?.isIntersecting) return;
+        trackCardapioFeatured({
+          action: "impression",
+          sectionKey: section.key,
+          placement: getCardapioFeaturedCardPlacement(),
+        });
+        observer.disconnect();
+      },
+      { threshold: 0.5 }
+    );
+
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [section.key]);
+
+  useEffect(() => {
+    if (!api) return;
+
+    const updateCurrentSlide = () => {
+      const selectedSlide = api.selectedScrollSnap();
+      setCurrentSlide(selectedSlide);
+      const placement = getCardapioFeaturedCardPlacement();
+      const trackingKey = `${placement}:${selectedSlide}`;
+      if (!trackedSlidesRef.current.has(trackingKey)) {
+        trackedSlidesRef.current.add(trackingKey);
+        trackCardapioFeatured({
+          action: "slide_view",
+          sectionKey: section.key,
+          imageIndex: selectedSlide,
+          placement,
+        });
+      }
+    };
+    updateCurrentSlide();
+    api.on("select", updateCurrentSlide);
+
+    return () => {
+      api.off("select", updateCurrentSlide);
+    };
+  }, [api, section.key]);
+
+  useEffect(() => {
+    if (!mobileExpandedApi) return;
+
+    mobileExpandedApi.scrollTo(currentSlide, true);
+
+    const updateCurrentSlide = () => {
+      const selectedSlide = mobileExpandedApi.selectedScrollSnap();
+      setCurrentSlide(selectedSlide);
+      api?.scrollTo(selectedSlide, true);
+    };
+
+    mobileExpandedApi.on("select", updateCurrentSlide);
+
+    return () => {
+      mobileExpandedApi.off("select", updateCurrentSlide);
+    };
+  }, [api, currentSlide, mobileExpandedApi]);
+
+  useEffect(() => {
+    if (!api || !hasMultipleImages) return;
+
+    if (isExpanded || isMobileExpanded) {
+      autoplayPlugin.current.stop();
+      return;
     }
 
-    // MODO 2: agrupado
-    const groups = React.useMemo(
-        () =>
-            (items as GroupedItems[])
-                .map((g) => ({
-                    ...g,
-                    slides: (g.menuItems || [])
-                        .filter((i) => (tagFilter ? i.tags?.all?.some((t) => t === tagFilter) : true))
-                        .slice(0, 4)
-                }))
-                .filter((g) => g.slides.length > 0)
-                .sort((a, b) => (a.sortOrderIndex ?? 0) - (b.sortOrderIndex ?? 0)),
-        [items, tagFilter]
-    );
+    autoplayPlugin.current.play();
+  }, [api, hasMultipleImages, isExpanded, isMobileExpanded]);
 
-    if (!groups.length) return null;
+  return (
+    <>
+      <div
+        ref={promotionRef}
+        className={[
+          "relative transition-[width] duration-300 ease-out md:fixed md:right-6 md:top-6 md:z-30 md:m-0 md:max-w-none md:rounded-2xl md:bg-white md:p-1.5 md:shadow-lg lg:right-8",
+          isExpanded ? "md:z-[60] md:w-[440px]" : "md:w-[220px] lg:w-[260px]",
+          section.displayStyle === "polaroid"
+            ? "mx-auto mb-6 mt-1 w-[calc(100%-1rem)] max-w-[460px] border border-amber-950/10 bg-[#fffdf8] p-2 pb-4 shadow-[0_12px_28px_rgba(74,52,34,0.16)] md:-rotate-1"
+            : "h-[78dvh] min-h-[560px] w-full overflow-hidden bg-black md:mb-6 md:mt-4 md:h-auto md:min-h-0 md:px-0",
+        ].join(" ")}
+      >
+        <Carousel
+          className={cn(
+            section.displayStyle !== "polaroid" && "h-full [&>div]:h-full"
+          )}
+          setApi={setApi}
+          opts={{ align: "start", loop: true }}
+          plugins={hasMultipleImages ? [autoplayPlugin.current] : []}
+        >
+          <CarouselContent
+            className={cn(
+              "-ml-0",
+              section.displayStyle !== "polaroid" && "h-full"
+            )}
+          >
+            {images.map((image, index) => {
+              const isVideo = image.kind === "video";
+              const src = isExpanded
+                ? image.fullscreenImageUrl || image.imageUrl
+                : image.imageUrl;
+              const altText =
+                image.alt ||
+                `${section.title}, ${isVideo ? "vídeo" : "imagem"} ${
+                  index + 1
+                } de ${images.length}`;
+              return (
+                <CarouselItem
+                  key={`${src}-${index}`}
+                  className={cn(
+                    "pl-0",
+                    section.displayStyle !== "polaroid" && "h-full"
+                  )}
+                >
+                  <div
+                    className={cn(
+                      "relative transform-gpu overflow-hidden",
+                      section.displayStyle !== "polaroid"
+                        ? "h-full min-h-[560px] md:h-auto md:min-h-0 md:rounded-[0.5rem] md:-rotate-1"
+                        : "rounded-[0.5rem] md:-rotate-1"
+                    )}
+                  >
+                    {isVideo ? (
+                      <video
+                        className={
+                          isExpanded
+                            ? "hidden h-[calc(100dvh-5rem)] w-full rounded-[0.5rem] object-contain [clip-path:inset(0_round_0.5rem)] md:block"
+                            : cn(
+                                "block w-full object-cover",
+                                section.displayStyle !== "polaroid"
+                                  ? "h-full min-h-[560px] md:aspect-[4/5] md:h-auto md:min-h-0 md:max-h-[38vh] md:rounded-[0.5rem] md:[clip-path:inset(0_round_0.5rem)]"
+                                  : "aspect-[4/5] rounded-[0.5rem] [clip-path:inset(0_round_0.5rem)] md:max-h-[38vh]"
+                              )
+                        }
+                        src={src}
+                        autoPlay
+                        muted
+                        loop
+                        playsInline
+                        aria-label={altText}
+                      />
+                    ) : (
+                      <img
+                        className={
+                          isExpanded
+                            ? "hidden h-[calc(100dvh-5rem)] w-full object-contain md:block"
+                            : cn(
+                                "w-full object-cover",
+                                section.displayStyle !== "polaroid"
+                                  ? "h-full min-h-[560px] md:aspect-[4/5] md:h-auto md:min-h-0"
+                                  : "aspect-[4/5]"
+                              )
+                        }
+                        src={src}
+                        alt={altText}
+                        loading={index === 0 ? "eager" : "lazy"}
+                        decoding="async"
+                      />
+                    )}
+
+                    {section.displayStyle !== "polaroid" ? (
+                      <div
+                        className="pointer-events-none absolute inset-0 z-[5] bg-[radial-gradient(ellipse_88%_62%_at_58%_42%,transparent_24%,rgba(0,0,0,0.08)_54%,rgba(0,0,0,0.62)_100%),linear-gradient(to_bottom,rgba(0,0,0,0.68)_0%,transparent_24%,transparent_54%,rgba(0,0,0,0.42)_72%,rgba(0,0,0,0.94)_100%)] md:hidden"
+                        aria-hidden="true"
+                      />
+                    ) : null}
+
+                    {hasMultipleImages ? (
+                      <span className="pointer-events-none absolute left-2 top-2 z-10 rounded-full bg-black/65 px-2.5 py-1 font-neue text-[11px] font-semibold tabular-nums text-white shadow-sm backdrop-blur-sm">
+                        {index + 1} / {images.length}
+                      </span>
+                    ) : null}
+
+                    <button
+                      type="button"
+                      className="absolute inset-0 z-10 flex cursor-zoom-in items-start justify-end bg-transparent p-2 md:hidden"
+                      onClick={() => {
+                        trackCardapioFeatured({
+                          action: "expand",
+                          sectionKey: section.key,
+                          imageIndex: index,
+                          placement: "mobile_card",
+                        });
+                        setIsMobileExpanded(true);
+                      }}
+                      aria-label={`Ampliar ${isVideo ? "vídeo" : "imagem"}`}
+                    >
+                      <span className="rounded-full bg-black/70 p-2.5 text-white shadow-md backdrop-blur-sm">
+                        <Maximize2 className="h-4 w-4" />
+                      </span>
+                    </button>
+
+                    {!isExpanded ? (
+                      <button
+                        type="button"
+                        className="absolute inset-0 z-10 hidden cursor-zoom-in items-start justify-end bg-transparent p-2 md:flex"
+                        onClick={() => {
+                          trackCardapioFeatured({
+                            action: "expand",
+                            sectionKey: section.key,
+                            imageIndex: index,
+                            placement: "desktop_card",
+                          });
+                          setIsExpanded(true);
+                        }}
+                        aria-label={`Ampliar ${isVideo ? "vídeo" : "imagem"}`}
+                      >
+                        <span className="rounded-full bg-black/70 p-2.5 text-white shadow-md backdrop-blur-sm">
+                          <Maximize2 className="h-4 w-4" />
+                        </span>
+                      </button>
+                    ) : null}
+
+                    <PromotionLinkSticker
+                      image={image}
+                      sectionKey={section.key}
+                      imageIndex={index}
+                      placement={isExpanded ? "desktop_modal" : "card"}
+                    />
+
+                    {section.displayStyle !== "polaroid" &&
+                    !isExpanded &&
+                    section.showTitle ? (
+                      <header className="pointer-events-none absolute inset-x-0 bottom-20 z-20 px-5 text-left text-white md:hidden">
+                        <h2 className="font-lora text-2xl font-bold leading-tight drop-shadow-md">
+                          {section.title}
+                        </h2>
+                        {section.subtitle ? (
+                          <p className="mt-1.5 font-neue text-sm leading-snug text-white/85 drop-shadow-md">
+                            {section.subtitle}
+                          </p>
+                        ) : null}
+                      </header>
+                    ) : null}
+                  </div>
+                </CarouselItem>
+              );
+            })}
+          </CarouselContent>
+
+          {isExpanded && hasMultipleImages ? (
+            <>
+              <CarouselPrevious className="left-3 border-0 bg-black/65 text-white hover:bg-black/80 hover:text-white" />
+              <CarouselNext className="right-3 border-0 bg-black/65 text-white hover:bg-black/80 hover:text-white" />
+            </>
+          ) : null}
+        </Carousel>
+
+        {!isExpanded && section.showTitle ? (
+          <header
+            className={cn(
+              "px-1 pt-3 text-left md:px-2 md:pt-2.5",
+              section.displayStyle !== "polaroid" && "hidden md:block"
+            )}
+          >
+            <h2 className="font-lora text-lg font-bold leading-tight text-zinc-950 md:text-base">
+              {section.title}
+            </h2>
+            {section.subtitle ? (
+              <p className="mt-1 font-neue text-sm leading-snug text-zinc-600 md:text-xs">
+                {section.subtitle}
+              </p>
+            ) : null}
+          </header>
+        ) : null}
+
+        <div
+          className={cn(
+            "pt-3 text-center md:px-1 md:py-2",
+            section.displayStyle !== "polaroid" &&
+              "absolute inset-x-0 bottom-9 z-20 pt-0 md:static md:pt-3"
+          )}
+        >
+          {!isExpanded && section.showPromotionHint ? (
+            <button
+              type="button"
+              className={cn(
+                "mb-2 inline-flex max-w-full items-center justify-center gap-2 rounded-full bg-zinc-900 px-4 py-2 font-neue text-[13px] font-semibold leading-snug text-white shadow-sm transition hover:bg-zinc-800 focus:outline-none focus:ring-2 focus:ring-zinc-400 focus:ring-offset-2 md:px-3 md:py-1.5 md:text-xs",
+                section.displayStyle !== "polaroid" &&
+                  "border border-white/25 bg-black/70 shadow-lg backdrop-blur-md hover:bg-black/80"
+              )}
+              onClick={() => {
+                trackCardapioFeatured({
+                  action: "expand",
+                  sectionKey: section.key,
+                  imageIndex: currentSlide,
+                  placement: getCardapioFeaturedCardPlacement(),
+                });
+                if (window.matchMedia("(min-width: 768px)").matches) {
+                  setIsExpanded(true);
+                } else {
+                  setIsMobileExpanded(true);
+                }
+              }}
+            >
+              <Maximize2 className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+              <span className="truncate">
+                {section.promotionHintText ? (
+                  section.promotionHintText
+                ) : (
+                  <>
+                    <span className="md:hidden">Toque para ampliar</span>
+                    <span className="hidden md:inline">
+                      Clique para ampliar
+                    </span>
+                  </>
+                )}
+              </span>
+            </button>
+          ) : null}
+
+          {hasMultipleImages ? (
+            <div className="flex items-center justify-center gap-1.5">
+              {images.map((image, index) => (
+                <button
+                  key={`${image.imageUrl}-${index}`}
+                  type="button"
+                  className={`h-1.5 rounded-full transition-[width,background-color] ${
+                    currentSlide === index
+                      ? "w-5 bg-zinc-900"
+                      : "w-1.5 bg-zinc-300"
+                  }`}
+                  onClick={() => api?.scrollTo(index)}
+                  aria-label={`Ir para imagem ${index + 1}`}
+                />
+              ))}
+            </div>
+          ) : null}
+        </div>
+
+        {isExpanded ? (
+          <button
+            type="button"
+            className="absolute right-3 top-3 z-10 hidden items-center gap-2 rounded-full bg-black/75 px-3 py-2 font-neue text-xs font-bold uppercase tracking-wide text-white shadow-lg backdrop-blur-sm transition hover:bg-black/90 md:flex"
+            onClick={() => setIsExpanded(false)}
+            aria-label="Fechar promoção ampliada"
+          >
+            <X className="h-4 w-4" />
+            Fechar
+          </button>
+        ) : null}
+      </div>
+
+      <Dialog open={isMobileExpanded} onOpenChange={setIsMobileExpanded}>
+        <DialogContent className="h-[100dvh] w-screen max-w-none border-0 bg-transparent px-2 pt-16 pb-6 shadow-none md:hidden [&>button]:hidden">
+          <DialogTitle className="sr-only">{section.title}</DialogTitle>
+
+          <div className="fixed left-3 top-3 z-[60]">
+            <DialogClose asChild>
+              <button
+                type="button"
+                className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-2.5 font-neue text-sm font-bold text-black shadow-xl"
+              >
+                <ArrowLeft className="h-5 w-5" />
+                Voltar ao cardápio
+              </button>
+            </DialogClose>
+          </div>
+
+          <div
+            className={`relative m-auto w-full max-w-[430px] shadow-2xl ${
+              section.displayStyle === "polaroid"
+                ? "bg-[#fffdf8] p-2 pb-5"
+                : "overflow-hidden rounded-2xl bg-white"
+            }`}
+          >
+            <Carousel
+              setApi={setMobileExpandedApi}
+              opts={{ align: "start", startIndex: currentSlide }}
+            >
+              <CarouselContent className="-ml-0">
+                {images.map((image, index) => {
+                  const isVideo = image.kind === "video";
+                  const src = image.fullscreenImageUrl || image.imageUrl;
+                  const altText =
+                    image.alt ||
+                    `${section.title}, ${isVideo ? "vídeo" : "imagem"} ${
+                      index + 1
+                    } de ${images.length}`;
+                  return (
+                    <CarouselItem key={`${src}-${index}`} className="pl-0">
+                      <div className="relative">
+                        {isVideo ? (
+                          <ModalVideo
+                            src={src}
+                            className="h-[calc(100dvh-5rem)] w-full object-contain"
+                            altText={altText}
+                          />
+                        ) : (
+                          <img
+                            className="h-[calc(100dvh-5rem)] w-full object-contain"
+                            src={src}
+                            alt={altText}
+                            decoding="async"
+                          />
+                        )}
+                        <PromotionLinkSticker
+                          image={image}
+                          sectionKey={section.key}
+                          imageIndex={index}
+                          placement="mobile_modal"
+                        />
+                      </div>
+                    </CarouselItem>
+                  );
+                })}
+              </CarouselContent>
+              {hasMultipleImages ? (
+                <>
+                  <CarouselPrevious className="left-3 border-0 bg-black/65 text-white hover:bg-black/80 hover:text-white" />
+                  <CarouselNext className="right-3 border-0 bg-black/65 text-white hover:bg-black/80 hover:text-white" />
+                </>
+              ) : null}
+            </Carousel>
+
+            {hasMultipleImages ? (
+              <div className="absolute bottom-4 left-1/2 z-30 flex -translate-x-1/2 items-center justify-center gap-1.5 rounded-full bg-white/90 px-3 py-2 shadow-lg backdrop-blur-sm">
+                {images.map((image, index) => (
+                  <button
+                    key={`${image.imageUrl}-${index}`}
+                    type="button"
+                    className={`h-1.5 rounded-full transition-[width,background-color] ${
+                      currentSlide === index
+                        ? "w-5 bg-zinc-900"
+                        : "w-1.5 bg-zinc-300"
+                    }`}
+                    onClick={() => mobileExpandedApi?.scrollTo(index)}
+                    aria-label={`Ir para imagem ${index + 1}`}
+                  />
+                ))}
+              </div>
+            ) : null}
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
+function ModalVideo({
+  src,
+  className,
+  altText,
+}: {
+  src: string;
+  className: string;
+  altText: string;
+}) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [muted, setMuted] = useState(true);
+
+  const toggle = () => {
+    const v = videoRef.current;
+    if (!v) return;
+    v.muted = !v.muted;
+    setMuted(v.muted);
+  };
+
+  return (
+    <>
+      <video
+        ref={videoRef}
+        className={className}
+        src={src}
+        autoPlay
+        muted
+        loop
+        playsInline
+        aria-label={altText}
+      />
+      <button
+        type="button"
+        onClick={toggle}
+        className="absolute bottom-3 right-3 z-30 rounded-full bg-black/80 p-2.5 text-white backdrop-blur-sm"
+        aria-label={muted ? "Ativar som" : "Silenciar"}
+      >
+        {muted ? (
+          <VolumeX className="h-5 w-5" />
+        ) : (
+          <Volume2 className="h-5 w-5" />
+        )}
+      </button>
+    </>
+  );
+}
+
+function PromotionLinkSticker({
+  image,
+  sectionKey,
+  imageIndex,
+  placement,
+}: {
+  image: CardapioFeatured["images"][number];
+  sectionKey: string;
+  imageIndex: number;
+  placement: "card" | "mobile_modal" | "desktop_modal";
+}) {
+  if (image.chipAction === "none") return null;
+  if (!image.linkText) return null;
+
+  const isBottom = image.linkPosition === "bottom";
+  const opensNewTab = image.linkNewTab !== false;
+  const chipClassName = `absolute left-1/2 z-20 inline-flex max-w-[88%] -translate-x-1/2 items-center gap-2 rounded-2xl px-4 py-2.5 font-neue text-base leading-none shadow-xl transition hover:scale-[1.02] focus:outline-none focus:ring-2 focus:ring-black/30 md:text-sm ${
+    isBottom
+      ? placement === "mobile_modal"
+        ? "bottom-16"
+        : "bottom-5 md:bottom-6"
+      : "top-5 md:top-6"
+  }`;
+  const chipStyle = {
+    backgroundColor: image.linkBackgroundColor || "#ffffff",
+    color: image.linkTextColor || "#111111",
+  };
+
+  function trackClick() {
+    trackCardapioFeatured({
+      action: "cta_click",
+      sectionKey,
+      imageIndex,
+      placement:
+        placement === "card" ? getCardapioFeaturedCardPlacement() : placement,
+    });
+  }
+
+  if (image.chipAction === "modal") {
+    if (!image.chipModalBody) return null;
 
     return (
-        <div className="p-2">
-            {title ? (
-                <h3 className="font-neue text-base md:text-xl font-semibold tracking-wide mb-2">
-                    {title}
-                </h3>
-            ) : null}
-
-            <div className="flex flex-col gap-6">
-                {groups.map((group) => (
-                    <section key={group.groupId}>
-                        <Carousel
-                            opts={{ loop: true, align: "start" }}
-                            plugins={[
-                                Autoplay({
-                                    delay: carouselDelay,
-                                    stopOnInteraction: false,
-                                    stopOnMouseEnter: true
-                                })
-                            ]}
-                            className="relative"
-                        >
-                            <CarouselContent>
-                                {group.slides.map((i) => {
-                                    const featuredImage =
-                                        i.MenuItemGalleryImage?.find((img) => img.isPrimary) ||
-                                        i.MenuItemGalleryImage?.[0];
-
-                                    return (
-                                        <CarouselItem key={i.id}>
-                                            <Link
-                                                to={`/cardapio/${i.slug}`}
-                                                className="block w-full"
-                                                onClick={() => playNavigation()}
-                                            >
-                                                <div className="relative h-[320px] md:h-[380px] overflow-hidden rounded-md">
-                                                    <CardapioItemImageSingle
-                                                        src={featuredImage?.secureUrl || ""}
-                                                        placeholder={i.imagePlaceholderURL || ""}
-                                                        placeholderIcon={false}
-                                                        cnContainer="h-full w-full"
-                                                        enableOverlay={false}
-                                                        cnPlaceholderContainer="from-white via-zinc-100 to-zinc-200 "
-                                                        cnPlaceholderText="text-black font-urw text-xl tracking-tighter"
-                                                    />
-                                                    <div className="pointer-events-none absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-black/60 via-black/30 to-transparent" />
-                                                    {badge && (
-                                                        <div className="absolute left-3 top-3 rounded-md bg-black/70 px-3 py-1 text-xs font-medium text-white backdrop-blur font-neue">
-                                                            {badge}
-                                                        </div>
-                                                    )}
-                                                    <div className="absolute bottom-3 left-3 right-3">
-                                                        <h5 className="font-neue text-white text-2xl leading-tight drop-shadow">
-                                                            {i.name}
-                                                        </h5>
-                                                    </div>
-                                                </div>
-                                            </Link>
-                                        </CarouselItem>
-                                    );
-                                })}
-                            </CarouselContent>
-                        </Carousel>
-                    </section>
-                ))}
-            </div>
-        </div>
+      <Dialog>
+        <DialogTrigger asChild>
+          <button
+            type="button"
+            className={chipClassName}
+            style={chipStyle}
+            onClick={(event) => {
+              event.stopPropagation();
+              trackClick();
+            }}
+          >
+            <LinkIcon className="h-5 w-5 shrink-0 md:h-4 md:w-4" />
+            <span className="min-w-0 truncate">{image.linkText}</span>
+          </button>
+        </DialogTrigger>
+        <DialogContent className="max-h-[82dvh] w-[calc(100vw-2rem)] overflow-y-auto rounded-2xl bg-white font-neue sm:max-w-lg">
+          <DialogTitle className="pr-8 font-lora text-xl font-bold text-zinc-950">
+            {image.chipModalTitle || image.linkText}
+          </DialogTitle>
+          <div className="whitespace-pre-line text-sm leading-relaxed text-zinc-700">
+            {image.chipModalBody}
+          </div>
+        </DialogContent>
+      </Dialog>
     );
+  }
+
+  if (!image.linkUrl) return null;
+
+  return (
+    <a
+      href={image.linkUrl}
+      target={opensNewTab ? "_blank" : "_self"}
+      rel={opensNewTab ? "noreferrer" : undefined}
+      className={chipClassName}
+      style={chipStyle}
+      onClick={(event) => {
+        event.stopPropagation();
+        trackClick();
+      }}
+    >
+      <LinkIcon className="h-5 w-5 shrink-0 md:h-4 md:w-4" />
+      <span className="min-w-0 truncate">{image.linkText}</span>
+    </a>
+  );
+}
+
+function getCardapioFeaturedCardPlacement() {
+  return window.matchMedia("(min-width: 768px)").matches
+    ? ("desktop_card" as const)
+    : ("mobile_card" as const);
+}
+
+function DesktopCardapioSidebar({
+  items,
+  likesEnabled,
+  reelUrls,
+  reelsEnabled,
+}: {
+  items: CardapioIndexItem[] | GroupedItems[];
+  likesEnabled: boolean;
+  reelUrls: string[];
+  reelsEnabled: boolean;
+}) {
+  return (
+    <div className="flex min-h-full flex-col gap-6">
+      <CardapioDesktopSidebarHeader />
+
+      <CardapioHighlightsSection
+        items={items}
+        likesEnabled={likesEnabled}
+        reelUrls={reelUrls}
+        reelsEnabled={reelsEnabled}
+        includeNovelties={false}
+        showMobileHiddenContent
+        desktopColumnLayout
+      />
+    </div>
+  );
+}
+
+function DesktopFloatingOrderButton() {
+  const cardapioLayoutData =
+    useRouteLoaderData<typeof cardapioLayoutLoader>("routes/cardapio");
+
+  return (
+    <div className="fixed bottom-6 right-12 z-50 hidden w-[240px] md:block lg:right-16">
+      <Suspense fallback={<span>Carregando...</span>}>
+        <Await
+          resolve={
+            cardapioLayoutData?.fazerPedidoPublicURL ??
+            WEBSITE_LINKS.cardapioFallbackURL.href
+          }
+        >
+          {(url) => (
+            <CardapioOrderCtaButton
+              externalLinkURL={url}
+              onClick={() =>
+                trackCardapioFacebookPixelTrigger("fazer_pedido_click")
+              }
+            />
+          )}
+        </Await>
+      </Suspense>
+    </div>
+  );
+}
+
+export function ErrorBoundary() {
+  const error = useRouteError();
+  const cardapioLayoutData =
+    useRouteLoaderData<typeof cardapioLayoutLoader>("routes/cardapio");
+  const saiposHref = WEBSITE_LINKS.saiposCardapio.href;
+
+  console.error("[cardapio._index] route error boundary", error);
+
+  if (isDatabaseConnectivityError(error)) {
+    return <CardapioDatabaseUnavailable error={error} />;
+  }
+
+  return (
+    <CardapioErrorRedirect
+      redirectHref={saiposHref}
+      autoRedirectEnabled={
+        cardapioLayoutData?.redirectToSaiposOnErrorEnabled ??
+        DEFAULT_CARDAPIO_REDIRECT_TO_SAIPOS
+      }
+    />
+  );
 }

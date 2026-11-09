@@ -4,10 +4,10 @@ import { Form, useLoaderData, useNavigation, useSearchParams, useSubmit } from "
 import * as React from "react";
 
 // import { prisma } from "~/lib/prisma.server";
-import { PrismaClient } from "@prisma/client";
+import prismaClient from "~/lib/prisma/client.server";
 import { DecimalInput, IntegerInput } from "~/components/inputs/inputs";
 import { Separator } from "~/components/ui/separator";
-const prisma = new PrismaClient();
+const prisma = prismaClient;
 
 // -----------------------------
 // Tipos do loader

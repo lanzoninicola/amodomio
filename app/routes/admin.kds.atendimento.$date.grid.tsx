@@ -1,8 +1,14 @@
+import { syncKdsOrderHistory } from "~/domain/crm/order-history.server";
+import { normalizeKdsChannel } from "@/domain/kds/constants";
 // app/routes/admin.kds.atendimento.$date.grid.tsx
-import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
+import type {
+  ActionFunctionArgs,
+  LoaderFunctionArgs,
+  MetaFunction,
+} from "@remix-run/node";
 import { json, defer } from "@remix-run/node";
-import { Await, useFetcher, useLoaderData } from "@remix-run/react";
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { Await, Link, useFetcher, useLoaderData } from "@remix-run/react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import prisma from "~/lib/prisma/client.server";
 import { Prisma } from "@prisma/client";
 
@@ -71,7 +77,6 @@ import {
   Pizza,
   ChevronUp,
   ChevronDown,
-  GripVertical,
   PencilLine,
   SaveIcon,
   CrossIcon,
@@ -81,23 +86,49 @@ import {
   Bike,
   Settings as SettingsIcon,
   CalendarClock,
+  Banknote,
+  BarChart3,
+  EyeOff,
+  ExternalLink,
 } from "lucide-react";
 import { Separator } from "~/components/ui/separator";
 import { cn } from "~/lib/utils";
 import DeliveryZoneCombobox from "~/domain/kds/components/delivery-zone-combobox";
-import { computeNetRevenueAmount } from "~/domain/finance/compute-net-revenue-amount.server";
+import { computeNetRevenueAmount } from "~/domain/finance/compute-net-revenue-amount";
+import { calcWeightedCostPerc } from "~/domain/finance/calc-weighted-cost-perc";
 import { setOrderStatus } from "~/domain/kds/server/repository.server";
+import { sendKdsDailyReportWhatsapp } from "~/domain/kds/kds-daily-report-whatsapp.server";
 import { MoneyInput } from "~/components/money-input/MoneyInput";
-import { getAvailableDoughSizes, getDoughStock, normalizeCounts, saveDoughStock, type DoughSizeOption, type DoughStockSnapshot } from "~/domain/kds/dough-stock.server";
-import { Link } from "@remix-run/react";
+import {
+  getAvailableDoughSizes,
+  getDoughStock,
+  normalizeCounts,
+  saveDoughStock,
+  type DoughSizeOption,
+  type DoughStockSnapshot,
+} from "~/domain/kds/dough-stock.server";
 import { NumericInput } from "~/components/numeric-input/numeric-input";
 import { ExitIcon } from "@radix-ui/react-icons";
 import { Badge } from "@/components/ui/badge";
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import type { DzMap } from "@/domain/kds/delivery-prediction/delivery-time";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
+import { findAllCardapioItems } from "~/domain/cardapio/cardapio-items-source.server";
 
 /* ===========================
    Meta
@@ -120,21 +151,164 @@ const COLS_HDR =
 /* ===========================
    Helpers
    =========================== */
-function toDecimal(value: FormDataEntryValue | null | undefined): Prisma.Decimal {
+function toDecimal(
+  value: FormDataEntryValue | null | undefined
+): Prisma.Decimal {
   const raw = String(value ?? "0").replace(",", ".");
   const n = Number(raw);
   return new Prisma.Decimal(Number.isFinite(n) ? n.toFixed(2) : "0");
 }
 
+type PaymentMethod = "credit" | "cash" | "other";
+type DayReportActionResult = {
+  ok: boolean;
+  status?: "CLOSED" | "REOPENED" | "OPENED";
+  already?: boolean;
+  error?: string;
+  report?: {
+    ok: boolean;
+    attempted: boolean;
+    skipped: boolean;
+    detail: string;
+    sentCount: number;
+    totalRecipients: number;
+  };
+};
+
+function paymentMethodToFlags(method: PaymentMethod) {
+  return {
+    isCreditCard: method === "credit",
+    isCash: method === "cash",
+    isOtherPaymentMethod: method === "other",
+  };
+}
+
+function paymentFlagsFromForm(form: FormData) {
+  const isCreditCard = String(form.get("isCreditCard") ?? "") === "on";
+  const isCash = !isCreditCard && String(form.get("isCash") ?? "") === "on";
+  const isOtherPaymentMethod =
+    !isCreditCard &&
+    !isCash &&
+    String(form.get("isOtherPaymentMethod") ?? "") === "on";
+
+  return { isCreditCard, isCash, isOtherPaymentMethod };
+}
+
 function fmtBRL(n: number) {
-  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 2 }).format(n || 0);
+  return new Intl.NumberFormat("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+    minimumFractionDigits: 2,
+  }).format(n || 0);
+}
+
+function pad2(value: number) {
+  return String(value).padStart(2, "0");
+}
+
+function PaymentMethodDialog({
+  open,
+  onOpenChange,
+  onSelect,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onSelect: (method: PaymentMethod) => void;
+}) {
+  useEffect(() => {
+    if (!open) return;
+
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "1" || event.code === "Numpad1") {
+        event.preventDefault();
+        onSelect("credit");
+      } else if (event.key === "2" || event.code === "Numpad2") {
+        event.preventDefault();
+        onSelect("cash");
+      } else if (event.key === "3" || event.code === "Numpad3") {
+        event.preventDefault();
+        onSelect("other");
+      }
+    }
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [open, onSelect]);
+
+  const options: Array<{
+    key: PaymentMethod;
+    label: string;
+    shortcut: string;
+    icon: typeof CreditCard;
+    className: string;
+  }> = [
+    {
+      key: "credit",
+      label: "Crédito",
+      shortcut: "1",
+      icon: CreditCard,
+      className:
+        "border-slate-300 bg-slate-100 text-slate-900 hover:bg-slate-200",
+    },
+    {
+      key: "cash",
+      label: "Dinheiro",
+      shortcut: "2",
+      icon: Banknote,
+      className: "border-slate-300 bg-zinc-100 text-zinc-900 hover:bg-zinc-200",
+    },
+    {
+      key: "other",
+      label: "Outro",
+      shortcut: "3",
+      icon: Ellipsis,
+      className:
+        "border-slate-300 bg-neutral-100 text-neutral-900 hover:bg-neutral-200",
+    },
+  ];
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-3xl">
+        <DialogHeader>
+          <DialogTitle>Selecionar forma de pagamento</DialogTitle>
+        </DialogHeader>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+          {options.map((option) => {
+            const Icon = option.icon;
+            return (
+              <button
+                key={option.key}
+                type="button"
+                onClick={() => onSelect(option.key)}
+                className={cn(
+                  "flex min-h-[220px] flex-col items-center justify-center gap-4 rounded-[2rem] border-2 p-6 text-center transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2",
+                  option.className
+                )}
+              >
+                <div className="flex h-24 w-24 items-center justify-center rounded-full bg-white/90 shadow-sm">
+                  <Icon className="h-12 w-12" />
+                </div>
+                <div className="space-y-1">
+                  <div className="text-2xl font-semibold">{option.label}</div>
+                  <div className="text-sm font-medium opacity-80">
+                    Tecla {option.shortcut}
+                  </div>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
 }
 
 function CommandNumberInput({
   value,
   onChange,
   className = "w-16 text-center",
-  isVendaLivre = false
+  isVendaLivre = false,
 }: {
   value: number | null;
   onChange: (v: number | null) => void;
@@ -143,10 +317,29 @@ function CommandNumberInput({
 }) {
   function onKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
     const k = e.key;
-    if (k === "Backspace") { e.preventDefault(); onChange(value ? Math.floor(value / 10) : null); return; }
-    if (k === "Delete") { e.preventDefault(); onChange(null); return; }
-    if (/^\d$/.test(k)) { e.preventDefault(); onChange(((value ?? 0) * 10 + Number(k)) % 10000000); return; }
-    if (k === "Tab" || k === "Enter" || k.startsWith("Arrow") || k === "Home" || k === "End") return;
+    if (k === "Backspace") {
+      e.preventDefault();
+      onChange(value ? Math.floor(value / 10) : null);
+      return;
+    }
+    if (k === "Delete") {
+      e.preventDefault();
+      onChange(null);
+      return;
+    }
+    if (/^\d$/.test(k)) {
+      e.preventDefault();
+      onChange(((value ?? 0) * 10 + Number(k)) % 10000000);
+      return;
+    }
+    if (
+      k === "Tab" ||
+      k === "Enter" ||
+      k.startsWith("Arrow") ||
+      k === "Home" ||
+      k === "End"
+    )
+      return;
     e.preventDefault();
   }
   return (
@@ -155,7 +348,7 @@ function CommandNumberInput({
       inputMode="numeric"
       value={value ?? ""}
       onKeyDown={onKeyDown}
-      onChange={() => { }}
+      onChange={() => {}}
       className={`h-9 border rounded px-2 ${className}`}
       placeholder="—"
       disabled={isVendaLivre}
@@ -166,14 +359,22 @@ function CommandNumberInput({
 function parseSize(json: any): SizeCounts {
   try {
     const o = json ? JSON.parse(String(json)) : {};
-    return { F: +o?.F || 0, M: +o?.M || 0, P: +o?.P || 0, I: +o?.I || 0, FT: +o?.FT || 0 };
-  } catch { return defaultSizeCounts(); }
+    return {
+      F: +o?.F || 0,
+      M: +o?.M || 0,
+      P: +o?.P || 0,
+      I: +o?.I || 0,
+      FT: +o?.FT || 0,
+    };
+  } catch {
+    return defaultSizeCounts();
+  }
 }
 const stringifySize = (c: SizeCounts) => JSON.stringify(c);
 const sizeSummary = (c: SizeCounts) =>
   (["F", "M", "P", "I", "FT"] as (keyof SizeCounts)[])
-    .filter(k => c[k] > 0)
-    .map(k => `${k}:${c[k]}`)
+    .filter((k) => c[k] > 0)
+    .map((k) => `${k}:${c[k]}`)
     .join("  ");
 
 function fmtMinutesHHMM(totalMin: number) {
@@ -235,28 +436,261 @@ function calcRemaining(stock: SizeCounts | null, used: SizeCounts): SizeCounts {
 type DashboardMeta = {
   grossAmount: number;
   cardAmount: number;
+  marketplaceAmount: number;
   motoAmount: number;
   netAmount: number;
   taxPerc: number;
-  marketplaceTaxPerc: number
+  marketplaceTaxPerc: number;
   cardFeePerc: number;
+  costFixedPerc: number;
+  costVariablePerc: number;
+  estimatedProfitDay: number;
+  estimatedProfitMonthToDate: number;
+  estimatedProfitPrevMonth: number;
+  prevMonthLabel: string;
+  costAverageBaseLabel: string;
   goalMinAmount: number;
   goalTargetAmount: number;
-  pctOfTarget: number; // 0..100
+  pctOfMin: number;
+  pctOfTarget: number;
   status: "below-min" | "between" | "hit-target";
 };
 
-function mapGoalForDate(goal: any, dateStr: string): { min: number; target: number } {
+type OrderTimingBucket = {
+  label: string;
+  averageCount: number;
+  lastWeekCount: number;
+  currentCount: number;
+};
+
+type OrderTimingDashboard = {
+  firstOrderAt: string | null;
+  secondOrderAt: string | null;
+  penultimateOrderAt: string | null;
+  lastOrderAt: string | null;
+  buckets: OrderTimingBucket[];
+};
+
+const KDS_TIME_ZONE = "America/Sao_Paulo";
+const KDS_WEEKDAY_FORMATTER = new Intl.DateTimeFormat("en-US", {
+  timeZone: KDS_TIME_ZONE,
+  weekday: "short",
+});
+const KDS_TIME_PARTS_FORMATTER = new Intl.DateTimeFormat("pt-BR", {
+  timeZone: KDS_TIME_ZONE,
+  hour: "2-digit",
+  minute: "2-digit",
+  hour12: false,
+  hourCycle: "h23",
+});
+const WEEKDAY_INDEX: Record<string, number> = {
+  Sun: 0,
+  Mon: 1,
+  Tue: 2,
+  Wed: 3,
+  Thu: 4,
+  Fri: 5,
+  Sat: 6,
+};
+
+const ORDER_TIMING_BUCKETS = Array.from({ length: 8 }, (_, index) => {
+  const startMinutes = 18 * 60 + index * 30;
+  const endMinutes = startMinutes + 30;
+  return {
+    startMinutes,
+    endMinutes,
+    label: `${pad2(Math.floor(startMinutes / 60))}:${pad2(startMinutes % 60)}`,
+    key: `${pad2(Math.floor(startMinutes / 60))}:${pad2(startMinutes % 60)}`,
+  };
+});
+
+function getMinutesOfDay(value: Date | string | null | undefined) {
+  if (!value) return null;
+  const date = value instanceof Date ? value : new Date(value);
+  const time = date.getTime();
+  if (!Number.isFinite(time)) return null;
+  const parts = KDS_TIME_PARTS_FORMATTER.formatToParts(date);
+  const hour = Number(parts.find((part) => part.type === "hour")?.value ?? "");
+  const minute = Number(
+    parts.find((part) => part.type === "minute")?.value ?? ""
+  );
+  if (!Number.isFinite(hour) || !Number.isFinite(minute)) return null;
+  return (hour % 24) * 60 + minute;
+}
+
+function formatAverageOrderTime(minutes: number | null) {
+  if (minutes == null || !Number.isFinite(minutes)) return null;
+  const safeMinutes = Math.round(minutes);
+  return `${pad2(Math.floor(safeMinutes / 60))}:${pad2(safeMinutes % 60)}`;
+}
+
+function addDaysToYmd(dateStr: string, days: number) {
+  const [year, month, day] = dateStr.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day + days, 12, 0, 0));
+  return `${date.getUTCFullYear()}-${pad2(date.getUTCMonth() + 1)}-${pad2(
+    date.getUTCDate()
+  )}`;
+}
+
+function addMonthsToYmd(dateStr: string, months: number) {
+  const [year, month, day] = dateStr.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, 1, 12, 0, 0));
+  date.setUTCMonth(date.getUTCMonth() + months);
+  const lastDayOfTargetMonth = new Date(
+    Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 0, 12, 0, 0)
+  ).getUTCDate();
+  date.setUTCDate(Math.min(day, lastDayOfTargetMonth));
+  return `${date.getUTCFullYear()}-${pad2(date.getUTCMonth() + 1)}-${pad2(
+    date.getUTCDate()
+  )}`;
+}
+
+function ymdToUtcNoonDate(dateStr: string) {
+  const [year, month, day] = dateStr.split("-").map(Number);
+  return new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
+}
+
+function getYmdWeekday(dateStr: string) {
+  const weekday = KDS_WEEKDAY_FORMATTER.format(ymdToUtcNoonDate(dateStr));
+  return WEEKDAY_INDEX[weekday] ?? ymdToUtcNoonDate(dateStr).getUTCDay();
+}
+
+function dateIntToYmd(value: number) {
+  const raw = String(value).padStart(8, "0");
+  return `${raw.slice(0, 4)}-${raw.slice(4, 6)}-${raw.slice(6, 8)}`;
+}
+
+function bucketIndexForOrderTime(value: Date | string | null | undefined) {
+  const minutes = getMinutesOfDay(value);
+  if (minutes == null) return -1;
+  return ORDER_TIMING_BUCKETS.findIndex(
+    (bucket) => minutes >= bucket.startMinutes && minutes < bucket.endMinutes
+  );
+}
+
+async function buildOrderTimingDashboard(
+  dateStr: string,
+  dateInt: number
+): Promise<OrderTimingDashboard> {
+  const lastWeekDateInt = ymdToDateInt(addDaysToYmd(dateStr, -7));
+  const averageStartInt = ymdToDateInt(addMonthsToYmd(dateStr, -3));
+  const selectedWeekday = getYmdWeekday(dateStr);
+  const currentRowsPromise = prisma.kdsDailyOrderDetail.findMany({
+    where: {
+      dateInt,
+      novoPedidoAt: { not: null },
+    },
+    select: { novoPedidoAt: true },
+    orderBy: { novoPedidoAt: "asc" },
+  });
+
+  const lastWeekRowsPromise = prisma.kdsDailyOrderDetail.findMany({
+    where: {
+      dateInt: lastWeekDateInt,
+      novoPedidoAt: { not: null },
+    },
+    select: { novoPedidoAt: true },
+    orderBy: { novoPedidoAt: "asc" },
+  });
+
+  const previousRowsPromise = prisma.kdsDailyOrderDetail.findMany({
+    where: {
+      dateInt: { gte: averageStartInt, lt: dateInt },
+      novoPedidoAt: { not: null },
+    },
+    select: { dateInt: true, novoPedidoAt: true },
+  });
+
+  const [currentRows, lastWeekRows, previousRows] = await Promise.all([
+    currentRowsPromise,
+    lastWeekRowsPromise,
+    previousRowsPromise,
+  ]);
+
+  const currentCounts = ORDER_TIMING_BUCKETS.map(() => 0);
+  currentRows.forEach((row) => {
+    const index = bucketIndexForOrderTime(row.novoPedidoAt);
+    if (index >= 0) currentCounts[index] += 1;
+  });
+
+  const lastWeekCounts = ORDER_TIMING_BUCKETS.map(() => 0);
+  lastWeekRows.forEach((row) => {
+    const index = bucketIndexForOrderTime(row.novoPedidoAt);
+    if (index >= 0) lastWeekCounts[index] += 1;
+  });
+
+  const previousCounts = ORDER_TIMING_BUCKETS.map(() => 0);
+  const previousDays = new Set<number>();
+  const sameWeekdayPreviousRows = previousRows.filter(
+    (row) => getYmdWeekday(dateIntToYmd(row.dateInt)) === selectedWeekday
+  );
+  sameWeekdayPreviousRows.forEach((row) => {
+    const index = bucketIndexForOrderTime(row.novoPedidoAt);
+    if (index < 0) return;
+    previousCounts[index] += 1;
+    previousDays.add(row.dateInt);
+  });
+
+  const averageDivisor = Math.max(1, previousDays.size);
+  const previousRowsByDate = new Map<number, Date[]>();
+  sameWeekdayPreviousRows.forEach((row) => {
+    if (!row.novoPedidoAt) return;
+    const rowsForDate = previousRowsByDate.get(row.dateInt) ?? [];
+    rowsForDate.push(row.novoPedidoAt);
+    previousRowsByDate.set(row.dateInt, rowsForDate);
+  });
+
+  const averageTimeAt = (pick: (times: Date[]) => Date | null) => {
+    const minutes: number[] = [];
+    previousRowsByDate.forEach((times) => {
+      const ordered = [...times].sort((a, b) => a.getTime() - b.getTime());
+      const picked = pick(ordered);
+      const pickedMinutes = getMinutesOfDay(picked);
+      if (pickedMinutes != null) minutes.push(pickedMinutes);
+    });
+    if (!minutes.length) return null;
+    return minutes.reduce((sum, value) => sum + value, 0) / minutes.length;
+  };
+
+  return {
+    firstOrderAt: formatAverageOrderTime(averageTimeAt((times) => times[0])),
+    secondOrderAt: formatAverageOrderTime(averageTimeAt((times) => times[1])),
+    penultimateOrderAt: formatAverageOrderTime(
+      averageTimeAt((times) =>
+        times.length > 1 ? times[times.length - 2] : null
+      )
+    ),
+    lastOrderAt: formatAverageOrderTime(
+      averageTimeAt((times) => times[times.length - 1])
+    ),
+    buckets: ORDER_TIMING_BUCKETS.map((bucket, index) => ({
+      label: bucket.label,
+      averageCount: Number((previousCounts[index] / averageDivisor).toFixed(1)),
+      lastWeekCount: lastWeekCounts[index],
+      currentCount: currentCounts[index],
+    })),
+  };
+}
+
+function mapGoalForDate(
+  goal: any,
+  dateStr: string
+): { min: number; target: number } {
   // Considerando seu calendário: Quarta a Domingo (Dia01..Dia05)
-  const dt = new Date(`${dateStr}T12:00:00`);
-  const dow = dt.getDay(); // 0=Dom,1=Seg,...,3=Qua,4=Qui,5=Sex,6=Sab
+  const dow = getYmdWeekday(dateStr); // 0=Dom,1=Seg,...,3=Qua,4=Qui,5=Sex,6=Sab
   // Map: Qua(3)->1, Qui(4)->2, Sex(5)->3, Sab(6)->4, Dom(0)->5
-  const map: Record<number, 1 | 2 | 3 | 4 | 5> = { 3: 1, 4: 2, 5: 3, 6: 4, 0: 5 } as any;
+  const map: Record<number, 1 | 2 | 3 | 4 | 5> = {
+    3: 1,
+    4: 2,
+    5: 3,
+    6: 4,
+    0: 5,
+  } as any;
   const key = map[dow];
   if (!key) return { min: 0, target: 0 };
 
-  const minField = `minimumGoalDia0${key}Amount`;
-  const targetField = `targetProfitDia0${key}Amount`;
+  const minField = `minSalesGoalAmountDia0${key}`;
+  const targetField = `targetSalesGoalAmountDia0${key}`;
 
   const min = Number(goal?.[minField] ?? 0) || 0;
   const target = Number(goal?.[targetField] ?? 0) || 0;
@@ -266,88 +700,216 @@ function mapGoalForDate(goal: any, dateStr: string): { min: number; target: numb
 export async function loader({ params }: LoaderFunctionArgs) {
   const dateStr = params.date ?? todayLocalYMD();
   const dateInt = ymdToDateInt(dateStr);
+  const year = Number(dateStr.slice(0, 4));
+  const month = Number(dateStr.slice(5, 7));
+  const monthStartStr = `${dateStr.slice(0, 7)}-01`;
+  const monthStartInt = ymdToDateInt(monthStartStr);
+  const prevMonthStartDate = new Date(year, month - 2, 1);
+  const prevMonthYear = prevMonthStartDate.getFullYear();
+  const prevMonthMonth = prevMonthStartDate.getMonth() + 1;
+  const prevMonthEndDate = new Date(prevMonthYear, prevMonthMonth, 0);
+  const prevMonthStartStr = `${prevMonthYear}-${pad2(prevMonthMonth)}-01`;
+  const prevMonthEndStr = `${prevMonthYear}-${pad2(prevMonthMonth)}-${pad2(
+    prevMonthEndDate.getDate()
+  )}`;
+  const prevMonthStartInt = ymdToDateInt(prevMonthStartStr);
+  const prevMonthEndInt = ymdToDateInt(prevMonthEndStr);
+  const prevMonthLabel = `${pad2(prevMonthMonth)}/${prevMonthYear}`;
 
   // Dados já existentes
   const listPromise = listByDate(dateInt);
-  const header = await prisma.kdsDailyOrder.findUnique({
+  const doughStockPromise = getDoughStock(dateInt);
+  const availableSizesPromise = getAvailableDoughSizes();
+  const hiddenFlavorsPromise = findAllCardapioItems().then((items) =>
+    items
+      .filter(
+        (item) =>
+          item.active === true &&
+          item.upcoming !== true &&
+          item.visible !== true
+      )
+      .map((item) => ({ id: item.id, name: item.name }))
+      .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"))
+  );
+  const orderTimingDashboard = buildOrderTimingDashboard(dateStr, dateInt);
+  const settingsRowPromise = prisma.setting.findFirst({
+    where: { context: "kds_prediction", name: "config" },
+  });
+  const headerPromise = prisma.kdsDailyOrder.findUnique({
     where: { dateInt },
-    select: { id: true, operationStatus: true },
+    select: { id: true, operationStatus: true, financialDailyGoalId: true },
   });
 
-  const deliveryZones = await prisma.deliveryZone.findMany({
+  const deliveryZonesPromise = prisma.deliveryZone.findMany({
     select: { id: true, name: true },
     orderBy: { name: "asc" },
   });
 
-  const dzTimes = await prisma.deliveryZoneDistance.findMany({
+  const dzTimesPromise = prisma.deliveryZoneDistance.findMany({
     select: {
       deliveryZoneId: true,
       estimatedTimeInMin: true,
       distanceInKm: true,
     },
   });
-
   // ⬇️ Novos cálculos para o painel-resumo
   // Somas do dia
-  const grossRow = await prisma.kdsDailyOrderDetail.aggregate({
+  const grossRowPromise = prisma.kdsDailyOrderDetail.aggregate({
     where: { dateInt },
     _sum: { orderAmount: true },
   });
-  const cardRow = await prisma.kdsDailyOrderDetail.aggregate({
+  const cardRowPromise = prisma.kdsDailyOrderDetail.aggregate({
     where: { dateInt, isCreditCard: true },
     _sum: { orderAmount: true },
   });
-  const motoRow = await prisma.kdsDailyOrderDetail.aggregate({
+  const motoRowPromise = prisma.kdsDailyOrderDetail.aggregate({
     where: { dateInt, hasMoto: true },
     _sum: { motoValue: true },
   });
+  const grossMonthRowPromise = prisma.kdsDailyOrderDetail.aggregate({
+    where: { dateInt: { gte: monthStartInt, lte: dateInt } },
+    _sum: { orderAmount: true },
+  });
+  const grossPrevMonthRowPromise = prisma.kdsDailyOrderDetail.aggregate({
+    where: { dateInt: { gte: prevMonthStartInt, lte: prevMonthEndInt } },
+    _sum: { orderAmount: true },
+  });
 
-  const aiqfomeChannelStr = CHANNELS[2]
+  const aiqfomeChannelStr = CHANNELS[2];
   const ifoodChannelStr = CHANNELS[3];
-  const marketplaceRow = await prisma.kdsDailyOrderDetail.aggregate({
+  const marketplaceRowPromise = prisma.kdsDailyOrderDetail.aggregate({
     where: {
       AND: {
         dateInt,
         channel: {
-          in: [aiqfomeChannelStr, ifoodChannelStr]
-        }
-      }
+          in: [aiqfomeChannelStr, ifoodChannelStr],
+        },
+      },
     },
     _sum: { orderAmount: true },
-  })
+  });
+
+  const [
+    header,
+    deliveryZones,
+    dzTimes,
+    grossRow,
+    cardRow,
+    motoRow,
+    grossMonthRow,
+    grossPrevMonthRow,
+    marketplaceRow,
+  ] = await Promise.all([
+    headerPromise,
+    deliveryZonesPromise,
+    dzTimesPromise,
+    grossRowPromise,
+    cardRowPromise,
+    motoRowPromise,
+    grossMonthRowPromise,
+    grossPrevMonthRowPromise,
+    marketplaceRowPromise,
+  ]);
 
   const grossAmount = Number(grossRow._sum.orderAmount ?? 0);
   const cardAmount = Number(cardRow._sum.orderAmount ?? 0);
   const motoAmount = Number(motoRow._sum.motoValue ?? 0);
+  const grossMonthAmount = Number(grossMonthRow._sum.orderAmount ?? 0);
+  const grossPrevMonthAmount = Number(grossPrevMonthRow._sum.orderAmount ?? 0);
   const marketplaceAmount = Number(marketplaceRow._sum.orderAmount ?? 0);
 
-  // Taxas vigentes (snapshot=false)
-  const fs = await prisma.financialSummary.findFirst({
-    where: { isSnapshot: false },
-    select: { taxaCartaoPerc: true, impostoPerc: true, taxaMarketplacePerc: true },
-  });
-  const taxPerc = Number(fs?.impostoPerc ?? 0);       // ex.: 4 para 4%
-  const cardFeePerc = Number(fs?.taxaCartaoPerc ?? 0); // ex.: 3.2 para 3,2%
-  const taxaMarketplacePerc = Number(fs?.taxaMarketplacePerc ?? 0);
+  const hasConfiguredRates = (
+    close: {
+      taxaCartaoPerc: number;
+      impostoPerc: number;
+      taxaMarketplacePerc: number;
+    } | null
+  ) =>
+    Number(close?.taxaCartaoPerc ?? 0) > 0 ||
+    Number(close?.impostoPerc ?? 0) > 0 ||
+    Number(close?.taxaMarketplacePerc ?? 0) > 0;
 
-  // Meta ativa
-  const activeGoal = await prisma.financialDailyGoal.findFirst({
-    where: { isActive: true },
+  const monthlyCloseRates = await prisma.financialMonthlyClose.findUnique({
+    where: {
+      referenceYear_referenceMonth: {
+        referenceYear: year,
+        referenceMonth: month,
+      },
+    },
     select: {
-      minimumGoalDia01Amount: true,
-      minimumGoalDia02Amount: true,
-      minimumGoalDia03Amount: true,
-      minimumGoalDia04Amount: true,
-      minimumGoalDia05Amount: true,
-      targetProfitDia01Amount: true,
-      targetProfitDia02Amount: true,
-      targetProfitDia03Amount: true,
-      targetProfitDia04Amount: true,
-      targetProfitDia05Amount: true,
+      taxaCartaoPerc: true,
+      impostoPerc: true,
+      taxaMarketplacePerc: true,
     },
   });
 
-  const { min: goalMinAmount, target: goalTargetAmount } = mapGoalForDate(activeGoal, dateStr);
+  const fallbackMonthlyCloseRates = hasConfiguredRates(monthlyCloseRates)
+    ? monthlyCloseRates
+    : await prisma.financialMonthlyClose.findFirst({
+        where: {
+          AND: [
+            {
+              OR: [
+                { referenceYear: { lt: year } },
+                { referenceYear: year, referenceMonth: { lte: month } },
+              ],
+            },
+            {
+              OR: [
+                { taxaCartaoPerc: { gt: 0 } },
+                { impostoPerc: { gt: 0 } },
+                { taxaMarketplacePerc: { gt: 0 } },
+              ],
+            },
+          ],
+        },
+        orderBy: [{ referenceYear: "desc" }, { referenceMonth: "desc" }],
+        select: {
+          taxaCartaoPerc: true,
+          impostoPerc: true,
+          taxaMarketplacePerc: true,
+        },
+      });
+
+  const rates = fallbackMonthlyCloseRates;
+  const taxPerc = Number(rates?.impostoPerc ?? 0); // ex.: 4 para 4%
+  const cardFeePerc = Number(rates?.taxaCartaoPerc ?? 0); // ex.: 3.2 para 3,2%
+  const taxaMarketplacePerc = Number(rates?.taxaMarketplacePerc ?? 0);
+
+  const goalSelect = {
+    minSalesGoalAmountDia01: true,
+    minSalesGoalAmountDia02: true,
+    minSalesGoalAmountDia03: true,
+    minSalesGoalAmountDia04: true,
+    minSalesGoalAmountDia05: true,
+    targetSalesGoalAmountDia01: true,
+    targetSalesGoalAmountDia02: true,
+    targetSalesGoalAmountDia03: true,
+    targetSalesGoalAmountDia04: true,
+    targetSalesGoalAmountDia05: true,
+  } as const;
+
+  // Meta do dia (snapshot via FK no header); fallback para meta ativa.
+  const goalForDay = header?.financialDailyGoalId
+    ? await prisma.financialDailyGoal.findUnique({
+        where: { id: header.financialDailyGoalId },
+        select: goalSelect,
+      })
+    : null;
+  const activeGoal =
+    goalForDay ??
+    (await prisma.financialDailyGoal.findFirst({
+      where: { isActive: true },
+      orderBy: { createdAt: "desc" },
+      select: {
+        ...goalSelect,
+      },
+    }));
+
+  const { min: goalMinAmount, target: goalTargetAmount } = mapGoalForDate(
+    activeGoal,
+    dateStr
+  );
 
   // Receita líquida usando sua função utilitária
   const netAmount = computeNetRevenueAmount({
@@ -359,21 +921,64 @@ export async function loader({ params }: LoaderFunctionArgs) {
     impostoPerc: taxPerc,
   });
 
-  // Status vs metas
+  // Status e alcance vs metas (base: receita bruta)
   let status: DashboardMeta["status"] = "below-min";
-  if (netAmount >= goalTargetAmount && goalTargetAmount > 0) status = "hit-target";
-  else if (netAmount >= goalMinAmount) status = "between";
+  if (grossAmount >= goalTargetAmount && goalTargetAmount > 0)
+    status = "hit-target";
+  else if (grossAmount >= goalMinAmount) status = "between";
 
+  const pctOfMin = goalMinAmount > 0 ? (grossAmount / goalMinAmount) * 100 : 0;
   const pctOfTarget =
-    goalTargetAmount > 0 ? Math.min(100, (netAmount / goalTargetAmount) * 100) : 0;
+    goalTargetAmount > 0 ? (grossAmount / goalTargetAmount) * 100 : 0;
 
-  const doughStock = await getDoughStock(dateInt);
+  const monthlyCloseRepo = (prisma as any).financialMonthlyClose;
+  let costFixedPerc = 0;
+  let costVariablePerc = 0;
+  let costAverageBaseLabel = "—";
+  if (
+    monthlyCloseRepo &&
+    typeof monthlyCloseRepo.findMany === "function" &&
+    Number.isFinite(year) &&
+    Number.isFinite(month)
+  ) {
+    const closesForAverage = await monthlyCloseRepo.findMany({
+      where: {
+        OR: [
+          { referenceYear: { lt: year } },
+          { referenceYear: year, referenceMonth: { lte: month } },
+        ],
+      },
+      orderBy: [{ referenceYear: "desc" }, { referenceMonth: "desc" }],
+      take: 3,
+    });
+    const weightedCosts = calcWeightedCostPerc(closesForAverage);
+    costFixedPerc = weightedCosts.custoFixoPerc;
+    costVariablePerc = weightedCosts.custoVariavelPerc;
+    if (closesForAverage.length > 0) {
+      costAverageBaseLabel = closesForAverage
+        .map(
+          (close: any) =>
+            `${String(close.referenceMonth).padStart(2, "0")}/${
+              close.referenceYear
+            }`
+        )
+        .join(", ");
+    }
+  }
+
+  const totalCostPerc = costFixedPerc + costVariablePerc;
+  const estimatedProfitDay = grossAmount * (1 - totalCostPerc / 100);
+  const estimatedProfitMonthToDate =
+    grossMonthAmount * (1 - totalCostPerc / 100);
+  const estimatedProfitPrevMonth =
+    grossPrevMonthAmount * (1 - totalCostPerc / 100);
+
   const doughUsage = listPromise.then((rows) => sumSizes(rows));
-  const availableSizes = await getAvailableDoughSizes();
-
-  const settingsRow = await prisma.setting.findFirst({
-    where: { context: "kds_prediction", name: "config" },
-  });
+  const [doughStock, availableSizes, settingsRow] = await Promise.all([
+    doughStockPromise,
+    availableSizesPromise,
+    settingsRowPromise,
+  ]);
   let predictionSettings = {
     ...DEFAULT_PREDICTION_SETTINGS,
     operatorCount: getOperatorCountByDate(dateStr),
@@ -387,7 +992,8 @@ export async function loader({ params }: LoaderFunctionArgs) {
           ...PREP_MINUTES_PER_SIZE,
           ...parsed?.prepMinutes,
         },
-        operatorCount: Number(parsed?.operatorCount) || getOperatorCountByDate(dateStr),
+        operatorCount:
+          Number(parsed?.operatorCount) || getOperatorCountByDate(dateStr),
       };
     } catch {
       // fallback permanece
@@ -397,15 +1003,24 @@ export async function loader({ params }: LoaderFunctionArgs) {
   const dashboard: DashboardMeta = {
     grossAmount,
     cardAmount,
+    marketplaceAmount,
     motoAmount,
     netAmount,
     taxPerc,
     cardFeePerc,
+    costFixedPerc,
+    costVariablePerc,
+    estimatedProfitDay,
+    estimatedProfitMonthToDate,
+    estimatedProfitPrevMonth,
+    prevMonthLabel,
+    costAverageBaseLabel,
     goalMinAmount,
     goalTargetAmount,
+    pctOfMin,
     pctOfTarget,
     status,
-    marketplaceTaxPerc: taxaMarketplacePerc
+    marketplaceTaxPerc: taxaMarketplacePerc,
   };
 
   return defer({
@@ -417,7 +1032,9 @@ export async function loader({ params }: LoaderFunctionArgs) {
     dashboard,
     doughStock,
     doughUsage,
+    orderTimingDashboard,
     availableSizes,
+    hiddenFlavors: hiddenFlavorsPromise,
     predictionSettings,
   });
 }
@@ -430,6 +1047,41 @@ export async function action({ request, params }: ActionFunctionArgs) {
   const _action = String(form.get("_action") ?? "");
   const dateStr = String(form.get("date") ?? params.date ?? todayLocalYMD());
   const dateInt = ymdToDateInt(dateStr);
+
+  if (_action === "activateHiddenFlavor") {
+    const itemId = String(form.get("itemId") ?? "").trim();
+    if (!itemId) {
+      return json({ ok: false, error: "Sabor inválido." }, { status: 400 });
+    }
+
+    const channelLink = await prisma.itemSellingChannelItem.findFirst({
+      where: {
+        itemId,
+        ItemSellingChannel: { key: "cardapio" },
+      },
+      select: { id: true, visible: true, Item: { select: { name: true } } },
+    });
+
+    if (!channelLink) {
+      return json(
+        { ok: false, error: "Sabor sem vínculo com o Cardápio." },
+        { status: 404 }
+      );
+    }
+
+    if (!channelLink.visible) {
+      await prisma.itemSellingChannelItem.update({
+        where: { id: channelLink.id },
+        data: { visible: true },
+      });
+    }
+
+    return json({
+      ok: true,
+      activatedFlavorId: itemId,
+      message: `Venda de ${channelLink.Item.name} ativada no Cardápio.`,
+    });
+  }
 
   const header = await ensureHeader(dateInt, ymdToUtcNoon(dateStr));
   const headerFlags = await prisma.kdsDailyOrder.findUnique({
@@ -445,10 +1097,19 @@ export async function action({ request, params }: ActionFunctionArgs) {
   try {
     if (_action === "openDay") {
       if (headerFlags?.operationStatus === "CLOSED") {
-        return json({ ok: false, error: "Dia já foi fechado." }, { status: 400 });
+        return json(
+          { ok: false, error: "Dia já foi fechado." },
+          { status: 400 }
+        );
       }
-      if (headerFlags?.operationStatus === "OPENED" || headerFlags?.operationStatus === "REOPENED") {
-        return json({ ok: false, error: "Dia já está aberto." }, { status: 400 });
+      if (
+        headerFlags?.operationStatus === "OPENED" ||
+        headerFlags?.operationStatus === "REOPENED"
+      ) {
+        return json(
+          { ok: false, error: "Dia já está aberto." },
+          { status: 400 }
+        );
       }
 
       const qty = Math.max(1, Math.min(200, Number(form.get("qty") ?? 40)));
@@ -456,7 +1117,9 @@ export async function action({ request, params }: ActionFunctionArgs) {
         where: { dateInt, commandNumber: { not: null } },
         select: { commandNumber: true },
       });
-      const existSet = new Set<number>(existing.map(e => Number(e.commandNumber!)).filter(Number.isFinite));
+      const existSet = new Set<number>(
+        existing.map((e) => Number(e.commandNumber!)).filter(Number.isFinite)
+      );
 
       const { maxSort } = await getMaxes(dateInt);
       let sort = (maxSort ?? 0) + 1000;
@@ -465,10 +1128,20 @@ export async function action({ request, params }: ActionFunctionArgs) {
       for (let n = 1; n <= qty; n++) {
         if (existSet.has(n)) continue;
         toCreate.push({
-          orderId: header.id, dateInt, commandNumber: n, isVendaLivre: false,
-          sortOrderIndex: sort, orderAmount: new Prisma.Decimal(0),
-          status: "pendente", channel: "", hasMoto: false, motoValue: new Prisma.Decimal(0),
-          takeAway: false, isCreditCard: false,
+          orderId: header.id,
+          dateInt,
+          commandNumber: n,
+          isVendaLivre: false,
+          sortOrderIndex: sort,
+          orderAmount: new Prisma.Decimal(0),
+          status: "pendente",
+          channel: "",
+          hasMoto: false,
+          motoValue: new Prisma.Decimal(0),
+          takeAway: false,
+          isCreditCard: false,
+          isCash: false,
+          isOtherPaymentMethod: false,
         } as any);
         sort += 1000;
       }
@@ -494,12 +1167,28 @@ export async function action({ request, params }: ActionFunctionArgs) {
         where: { id: header.id },
         data: { operationStatus: "CLOSED" },
       });
-      return json({ ok: true, status: "CLOSED" });
+      const report = await sendKdsDailyReportWhatsapp(dateInt, dateStr).catch(
+        (error) => ({
+          ok: false,
+          attempted: true,
+          skipped: false,
+          detail:
+            error instanceof Error
+              ? error.message
+              : "Falha ao enviar relatorio do WhatsApp.",
+          sentCount: 0,
+          totalRecipients: 0,
+        })
+      );
+      return json({ ok: true, status: "CLOSED", report });
     }
 
     if (_action === "reopenDay") {
       if (headerFlags?.operationStatus !== "CLOSED") {
-        return json({ ok: false, error: "Só é possível reabrir um dia fechado." }, { status: 400 });
+        return json(
+          { ok: false, error: "Só é possível reabrir um dia fechado." },
+          { status: 400 }
+        );
       }
       await prisma.kdsDailyOrder.update({
         where: { id: header.id },
@@ -508,15 +1197,57 @@ export async function action({ request, params }: ActionFunctionArgs) {
       return json({ ok: true, status: "REOPENED" });
     }
 
+    if (_action === "sendDayReportWhatsapp") {
+      if (headerFlags?.operationStatus !== "CLOSED") {
+        return json(
+          {
+            ok: false,
+            error:
+              "O relatorio WhatsApp manual so pode ser enviado com o dia fechado.",
+          },
+          { status: 400 }
+        );
+      }
+
+      const report = await sendKdsDailyReportWhatsapp(dateInt, dateStr).catch(
+        (error) => ({
+          ok: false,
+          attempted: true,
+          skipped: false,
+          detail:
+            error instanceof Error
+              ? error.message
+              : "Falha ao enviar relatorio do WhatsApp.",
+          sentCount: 0,
+          totalRecipients: 0,
+        })
+      );
+
+      return json({ ok: report.ok, status: "CLOSED", report });
+    }
+
     if (_action === "savePredictionSettings") {
       const modeRaw = String(form.get("mode") ?? "real");
-      const operatorCount = Math.max(1, Number(form.get("operatorCount") ?? 1) || 1);
+      const operatorCount = Math.max(
+        1,
+        Number(form.get("operatorCount") ?? 1) || 1
+      );
       const prepMinutes = {
-        F: Number(form.get("prepF") ?? PREP_MINUTES_PER_SIZE.F) || PREP_MINUTES_PER_SIZE.F,
-        M: Number(form.get("prepM") ?? PREP_MINUTES_PER_SIZE.M) || PREP_MINUTES_PER_SIZE.M,
-        P: Number(form.get("prepP") ?? PREP_MINUTES_PER_SIZE.P) || PREP_MINUTES_PER_SIZE.P,
-        I: Number(form.get("prepI") ?? PREP_MINUTES_PER_SIZE.I) || PREP_MINUTES_PER_SIZE.I,
-        FT: Number(form.get("prepFT") ?? PREP_MINUTES_PER_SIZE.FT) || PREP_MINUTES_PER_SIZE.FT,
+        F:
+          Number(form.get("prepF") ?? PREP_MINUTES_PER_SIZE.F) ||
+          PREP_MINUTES_PER_SIZE.F,
+        M:
+          Number(form.get("prepM") ?? PREP_MINUTES_PER_SIZE.M) ||
+          PREP_MINUTES_PER_SIZE.M,
+        P:
+          Number(form.get("prepP") ?? PREP_MINUTES_PER_SIZE.P) ||
+          PREP_MINUTES_PER_SIZE.P,
+        I:
+          Number(form.get("prepI") ?? PREP_MINUTES_PER_SIZE.I) ||
+          PREP_MINUTES_PER_SIZE.I,
+        FT:
+          Number(form.get("prepFT") ?? PREP_MINUTES_PER_SIZE.FT) ||
+          PREP_MINUTES_PER_SIZE.FT,
       };
 
       const payload = {
@@ -568,19 +1299,33 @@ export async function action({ request, params }: ActionFunctionArgs) {
         FT: form.get("adjustFT"),
       } as any);
 
-      const snapshot = await saveDoughStock(dateInt, ymdToUtcNoon(dateStr), counts, adjustment);
+      const snapshot = await saveDoughStock(
+        dateInt,
+        ymdToUtcNoon(dateStr),
+        counts,
+        adjustment
+      );
 
       return json({ ok: true, stock: snapshot });
     }
 
     // bloqueia alterações quando fechado
     if (headerFlags?.operationStatus === "CLOSED") {
-      return json({ ok: false, error: "Dia fechado. Alterações não são permitidas." }, { status: 403 });
+      return json(
+        { ok: false, error: "Dia fechado. Alterações não são permitidas." },
+        { status: 403 }
+      );
     }
 
     if (_action === "addMore") {
       if (headerFlags?.operationStatus !== "OPENED") {
-        return json({ ok: false, error: "Abra o dia (status ABERTO) antes de adicionar mais." }, { status: 400 });
+        return json(
+          {
+            ok: false,
+            error: "Abra o dia (status ABERTO) antes de adicionar mais.",
+          },
+          { status: 400 }
+        );
       }
       const more = Math.max(1, Math.min(200, Number(form.get("more") ?? 20)));
       const { maxCmd } = await getMaxes(dateInt);
@@ -590,10 +1335,20 @@ export async function action({ request, params }: ActionFunctionArgs) {
       for (let i = 1; i <= more; i++) {
         const n = Number(maxCmd ?? 0) + i;
         toCreate.push({
-          orderId: header.id, dateInt, commandNumber: n, isVendaLivre: false,
-          sortOrderIndex: sort, orderAmount: new Prisma.Decimal(0),
-          status: "pendente", channel: "", hasMoto: false, motoValue: new Prisma.Decimal(0),
-          takeAway: false, isCreditCard: false,
+          orderId: header.id,
+          dateInt,
+          commandNumber: n,
+          isVendaLivre: false,
+          sortOrderIndex: sort,
+          orderAmount: new Prisma.Decimal(0),
+          status: "pendente",
+          channel: "",
+          hasMoto: false,
+          motoValue: new Prisma.Decimal(0),
+          takeAway: false,
+          isCreditCard: false,
+          isCash: false,
+          isOtherPaymentMethod: false,
         } as any);
         sort += 1000;
       }
@@ -606,9 +1361,13 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
     if (_action === "createVL") {
       if (headerFlags?.operationStatus !== "OPENED") {
-        return json({ ok: false, error: "Venda livre só é permitida com o dia ABERTO." }, { status: 400 });
+        return json(
+          { ok: false, error: "Venda livre só é permitida com o dia ABERTO." },
+          { status: 400 }
+        );
       }
       const amount = toDecimal(form.get("orderAmount"));
+      const paymentFlags = paymentFlagsFromForm(form);
       const created = await prisma.kdsDailyOrderDetail.create({
         data: {
           orderId: header.id,
@@ -622,7 +1381,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
           hasMoto: false,
           motoValue: new Prisma.Decimal(0),
           takeAway: false,
-          isCreditCard: String(form.get("isCreditCard") ?? "") === "on", // ← agora pega do form
+          ...paymentFlags,
         },
         select: { id: true },
       });
@@ -632,7 +1391,8 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
     if (_action === "saveRow") {
       const id = String(form.get("id") ?? "");
-      if (!id) return json({ ok: false, error: "id inválido" }, { status: 400 });
+      if (!id)
+        return json({ ok: false, error: "id inválido" }, { status: 400 });
 
       // Novo: permitir alternar "venda livre" via form
       const isVendaLivre = String(form.get("isVendaLivre") ?? "") === "on";
@@ -644,7 +1404,10 @@ export async function action({ request, params }: ActionFunctionArgs) {
         // Só valida e usa comanda quando não é venda livre
         cmd = rawCmd === "" ? null : Number(rawCmd);
         if (rawCmd !== "" && !Number.isFinite(cmd)) {
-          return json({ ok: false, error: "Número de comanda inválido" }, { status: 400 });
+          return json(
+            { ok: false, error: "Número de comanda inválido" },
+            { status: 400 }
+          );
         }
         if (cmd != null) {
           const dup = await prisma.kdsDailyOrderDetail.findFirst({
@@ -652,7 +1415,10 @@ export async function action({ request, params }: ActionFunctionArgs) {
             select: { id: true },
           });
           if (dup) {
-            return json({ ok: false, error: `Comanda ${cmd} já existe para ${dateStr}` }, { status: 400 });
+            return json(
+              { ok: false, error: `Comanda ${cmd} já existe para ${dateStr}` },
+              { status: 400 }
+            );
           }
         }
       } else {
@@ -674,22 +1440,42 @@ export async function action({ request, params }: ActionFunctionArgs) {
           select: { id: true, size: true },
         });
 
-        const usedWithoutCurrent = sumSizes(rowsForDay.filter((r) => r.id !== id));
-        const remaining = calcRemaining(doughStock.effective, usedWithoutCurrent);
+        const usedWithoutCurrent = sumSizes(
+          rowsForDay.filter((r) => r.id !== id)
+        );
+        const remaining = calcRemaining(
+          doughStock.effective,
+          usedWithoutCurrent
+        );
 
-        const shortages = (Object.keys(sizeCounts) as (keyof SizeCounts)[])
-          .filter((k) => sizeCounts[k] > remaining[k]);
+        const shortages = (
+          Object.keys(sizeCounts) as (keyof SizeCounts)[]
+        ).filter((k) => sizeCounts[k] > remaining[k]);
 
         if (shortages.length > 0) {
           const sizeOptions = await getAvailableDoughSizes();
-          const labelMap = { ...SIZE_LABELS } as Record<keyof SizeCounts, string>;
-          sizeOptions.forEach((s) => { labelMap[s.key] = s.label || s.key; });
+          const labelMap = { ...SIZE_LABELS } as Record<
+            keyof SizeCounts,
+            string
+          >;
+          sizeOptions.forEach((s) => {
+            labelMap[s.key] = s.label || s.key;
+          });
 
           const msg = shortages
-            .map((k) => `${labelMap[k] ?? k} sem estoque (restam ${Math.max(0, remaining[k])})`)
+            .map(
+              (k) =>
+                `${labelMap[k] ?? k} sem estoque (restam ${Math.max(
+                  0,
+                  remaining[k]
+                )})`
+            )
             .join("; ");
 
-          return json({ ok: false, error: msg, rowId: id, shortages }, { status: 400 });
+          return json(
+            { ok: false, error: msg, rowId: id, shortages },
+            { status: 400 }
+          );
         }
       }
 
@@ -703,12 +1489,17 @@ export async function action({ request, params }: ActionFunctionArgs) {
           aguardandoFornoAt: true,
           assandoAt: true,
           finalizadoAt: true,
-          novoPedidoAt: true
+          novoPedidoAt: true,
         },
       });
 
       const anySize =
-        (sizeCounts.F + sizeCounts.M + sizeCounts.P + sizeCounts.I + sizeCounts.FT) > 0;
+        sizeCounts.F +
+          sizeCounts.M +
+          sizeCounts.P +
+          sizeCounts.I +
+          sizeCounts.FT >
+        0;
 
       const allProdTimestampsNull =
         !current?.emProducaoAt &&
@@ -720,15 +1511,20 @@ export async function action({ request, params }: ActionFunctionArgs) {
         ? (amountDecimal as any).gt(new Prisma.Decimal(0))
         : Number(String(amountDecimal)) > 0;
 
-      const autoStatus = (amountGtZero && anySize && allProdTimestampsNull)
-        ? "novoPedido"
-        : "pendente";
+      const autoStatus =
+        amountGtZero && anySize && allProdTimestampsNull
+          ? "novoPedido"
+          : "pendente";
 
       const requestedStatus = String(form.get("status") ?? "");
       const rankOld = STATUS_RANK[current?.status ?? "pendente"] ?? 0;
 
       let finalStatus = requestedStatus?.trim();
-      if (!finalStatus || finalStatus === "pendente" || finalStatus === "novoPedido") {
+      if (
+        !finalStatus ||
+        finalStatus === "pendente" ||
+        finalStatus === "novoPedido"
+      ) {
         finalStatus = autoStatus;
       }
       const rankNew = STATUS_RANK[finalStatus ?? "pendente"] ?? 0;
@@ -747,22 +1543,33 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
       const dzIdRaw = String(form.get("deliveryZoneId") ?? "").trim();
       const deliveryZoneId = dzIdRaw === "" ? null : dzIdRaw;
+      const customerNameRaw = String(form.get("customerName") ?? "").trim();
+      const customerPhoneRaw = String(form.get("customerPhone") ?? "").trim();
 
-      await prisma.kdsDailyOrderDetail.update({
-        where: { id },
-        data: {
-          commandNumber: cmd,
-          isVendaLivre, // agora persiste direto
-          orderAmount: amountDecimal,
-          channel: String(form.get("channel") ?? ""),
-          hasMoto: String(form.get("hasMoto") ?? "") === "on",
-          motoValue: toDecimal(form.get("motoValue")),
-          takeAway: String(form.get("takeAway") ?? "") === "on",
-          size: stringifySize(sizeCounts as any),
-          deliveryZoneId: deliveryZoneId as any,
-          isCreditCard: String(form.get("isCreditCard") ?? "") === "on",
-          ...(patchNovoPedidoAt !== undefined ? { novoPedidoAt: patchNovoPedidoAt as any } : {}),
-        },
+      const paymentFlags = paymentFlagsFromForm(form);
+
+      await prisma.$transaction(async (tx) => {
+        const updated = await tx.kdsDailyOrderDetail.update({
+          where: { id },
+          data: {
+            commandNumber: cmd,
+            isVendaLivre, // agora persiste direto
+            orderAmount: amountDecimal,
+            channel: String(form.get("channel") ?? ""),
+            hasMoto: String(form.get("hasMoto") ?? "") === "on",
+            motoValue: toDecimal(form.get("motoValue")),
+            takeAway: String(form.get("takeAway") ?? "") === "on",
+            size: stringifySize(sizeCounts as any),
+            deliveryZoneId: deliveryZoneId as any,
+            ...paymentFlags,
+            customerName: customerNameRaw === "" ? null : customerNameRaw,
+            customerPhone: customerPhoneRaw === "" ? null : customerPhoneRaw,
+            ...(patchNovoPedidoAt !== undefined
+              ? { novoPedidoAt: patchNovoPedidoAt as any }
+              : {}),
+          },
+        });
+        await syncKdsOrderHistory(tx, updated);
       });
 
       await recalcHeaderTotal(dateInt);
@@ -771,7 +1578,8 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
     if (_action === "cancelRow") {
       const id = String(form.get("id") ?? "");
-      if (!id) return json({ ok: false, error: "id inválido" }, { status: 400 });
+      if (!id)
+        return json({ ok: false, error: "id inválido" }, { status: 400 });
       await prisma.kdsDailyOrderDetail.delete({ where: { id } });
       await recalcHeaderTotal(dateInt);
       return json({ ok: true, canceled: true });
@@ -816,76 +1624,186 @@ function RowItem({
   // estados por linha
   const [openConfirmId, setOpenConfirmId] = useState(false);
   const [detailsOpenId, setDetailsOpenId] = useState(false);
+  const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
+  const formRef = useRef<HTMLFormElement | null>(null);
 
   const [cmdLocal, setCmdLocal] = useState<number | null>(o.commandNumber);
   const [isVendaLivre] = useState<boolean>(!!o.isVendaLivre);
 
   const [hasMoto, setHasMoto] = useState<boolean>(!!o.hasMoto);
   const [takeAway, setTakeAway] = useState<boolean>(!!(o as any).takeAway);
-  const [deliveryZoneId, setDeliveryZoneId] = useState<string | null | undefined>((o as any).deliveryZoneId ?? null);
+  const [deliveryZoneId, setDeliveryZoneId] = useState<
+    string | null | undefined
+  >((o as any).deliveryZoneId ?? null);
 
-  const [motoDefault, setMotoDefault] = useState<number>(Number(o.motoValue ?? 0));
+  const [motoDefault, setMotoDefault] = useState<number>(
+    Number(o.motoValue ?? 0)
+  );
   const [motoKey, setMotoKey] = useState(0);
 
-  const [isCreditCard, setIsCreditCard] = useState<boolean>(!!(o as any).isCreditCard);
+  const [isCreditCard, setIsCreditCard] = useState<boolean>(
+    !!(o as any).isCreditCard
+  );
+  const [isCash, setIsCash] = useState<boolean>(!!(o as any).isCash);
+  const [isOtherPaymentMethod, setIsOtherPaymentMethod] = useState<boolean>(
+    !!(o as any).isOtherPaymentMethod
+  );
 
   const [sizes, setSizes] = useState<SizeCounts>(sizeCounts);
   const statusText = (o as any).status ?? "pendente";
-  const npAt = (o as any).novoPedidoAt ? new Date((o as any).novoPedidoAt as any) : null;
+  const npAt = (o as any).novoPedidoAt
+    ? new Date((o as any).novoPedidoAt as any)
+    : null;
+  const [detailsStatus, setDetailsStatus] = useState<string>(
+    (o as any).status ?? "pendente"
+  );
+  const [customerName, setCustomerName] = useState<string>(
+    (o as any).customerName ?? ""
+  );
+  const [customerPhone, setCustomerPhone] = useState<string>(
+    (o as any).customerPhone ?? ""
+  );
+
+  useEffect(() => {
+    setDetailsStatus((o as any).status ?? "pendente");
+    setCustomerName((o as any).customerName ?? "");
+    setCustomerPhone((o as any).customerPhone ?? "");
+  }, [(o as any).status, (o as any).customerName, (o as any).customerPhone]);
+
+  useEffect(() => {
+    if (readOnly) return;
+
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.defaultPrevented) return;
+      if (event.key.toLowerCase() !== "s") return;
+      if (!event.ctrlKey || event.metaKey || event.altKey) return;
+
+      const active = document.activeElement as HTMLElement | null;
+      if (!active) return;
+
+      const rowEl = formRef.current?.closest("li");
+      if (!rowEl || !rowEl.contains(active)) return;
+
+      event.preventDefault();
+      setPaymentDialogOpen(true);
+    }
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [readOnly]);
 
   const rowError =
-    rowFx.data && typeof (rowFx.data as any) === "object" && (rowFx.data as any).rowId === o.id
+    rowFx.data &&
+    typeof (rowFx.data as any) === "object" &&
+    (rowFx.data as any).rowId === o.id
       ? ((rowFx.data as any).error as string | null)
       : null;
 
   const fxState =
     rowFx.state !== "idle" &&
-      rowFx.formData?.get("id") === o.id &&
-      (rowFx.formData?.get("_action") === "saveRow" || rowFx.formData?.get("_action") === "cancelRow")
+    rowFx.formData?.get("id") === o.id &&
+    (rowFx.formData?.get("_action") === "saveRow" ||
+      rowFx.formData?.get("_action") === "cancelRow")
       ? rowFx.state
       : "idle";
   const savingIcon =
-    fxState !== "idle" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />;
+    fxState !== "idle" ? (
+      <Loader2 className="w-4 h-4 animate-spin" />
+    ) : (
+      <Save className="w-4 h-4" />
+    );
+
+  const submitRowUpdate = (statusValue: string) => {
+    if (readOnly) return;
+    const fd = new FormData();
+    fd.set("_action", "saveRow");
+    fd.set("id", o.id);
+    fd.set("date", dateStr);
+    fd.set("status", statusValue);
+    fd.set("commandNumber", String(cmdLocal ?? ""));
+    fd.set("orderAmount", String(o.orderAmount ?? 0));
+    fd.set("motoValue", String(o.motoValue ?? 0));
+    fd.set("hasMoto", hasMoto ? "on" : "");
+    fd.set("takeAway", takeAway ? "on" : "");
+    const sc = parseSize(o.size);
+    fd.set("sizeF", String(sc.F));
+    fd.set("sizeM", String(sc.M));
+    fd.set("sizeP", String(sc.P));
+    fd.set("sizeI", String(sc.I));
+    fd.set("sizeFT", String(sc.FT));
+    fd.set("channel", String((o.channel ?? "").trim()));
+    fd.set("deliveryZoneId", String(deliveryZoneId ?? ""));
+    fd.set("isCreditCard", String(isCreditCard ? "on" : ""));
+    fd.set("isCash", String(isCash ? "on" : ""));
+    fd.set("isOtherPaymentMethod", String(isOtherPaymentMethod ? "on" : ""));
+    fd.set("customerName", customerName.trim());
+    fd.set("customerPhone", customerPhone.trim());
+    rowFx.submit(fd, { method: "post" });
+  };
+
+  const submitWithPaymentMethod = (method: PaymentMethod) => {
+    if (readOnly || !formRef.current) return;
+
+    const nextFlags = paymentMethodToFlags(method);
+    setIsCreditCard(nextFlags.isCreditCard);
+    setIsCash(nextFlags.isCash);
+    setIsOtherPaymentMethod(nextFlags.isOtherPaymentMethod);
+
+    const fd = new FormData(formRef.current);
+    fd.set("isCreditCard", nextFlags.isCreditCard ? "on" : "");
+    fd.set("isCash", nextFlags.isCash ? "on" : "");
+    fd.set("isOtherPaymentMethod", nextFlags.isOtherPaymentMethod ? "on" : "");
+    rowFx.submit(fd, { method: "post" });
+    setPaymentDialogOpen(false);
+  };
 
   return (
     <li key={o.id} className="flex flex-col">
       <div className={COLS + " bg-white px-1 border-b border-b-gray-50 pb-1"}>
-        <rowFx.Form method="post" className="contents" id={`row-form-${o.id}`}>
+        <rowFx.Form
+          method="post"
+          className="contents"
+          id={`row-form-${o.id}`}
+          ref={formRef}
+        >
           <input type="hidden" name="_action" value="saveRow" />
           <input type="hidden" name="id" value={o.id} />
           <input type="hidden" name="date" value={dateStr} />
-          <input type="hidden" name="deliveryZoneId" value={deliveryZoneId ?? ""} />
-          <input type="hidden" name="isCreditCard" value={isCreditCard ? "on" : ""} />
+          <input
+            type="hidden"
+            name="deliveryZoneId"
+            value={deliveryZoneId ?? ""}
+          />
+          <input
+            type="hidden"
+            name="isCreditCard"
+            value={isCreditCard ? "on" : ""}
+          />
+          <input type="hidden" name="isCash" value={isCash ? "on" : ""} />
+          <input
+            type="hidden"
+            name="isOtherPaymentMethod"
+            value={isOtherPaymentMethod ? "on" : ""}
+          />
 
           {/* nº comanda */}
           <div className="flex items-center justify-center">
-            <CommandNumberInput value={cmdLocal} onChange={setCmdLocal} isVendaLivre={isVendaLivre} />
+            <CommandNumberInput
+              value={cmdLocal}
+              onChange={setCmdLocal}
+              isVendaLivre={isVendaLivre}
+            />
             <input type="hidden" name="commandNumber" value={cmdLocal ?? ""} />
           </div>
 
-          {/* Pedido (R$) + ícone Cartão (à direita) */}
+          {/* Pedido (R$) */}
           <div className="flex justify-center">
-            <div className="flex items-center gap-2">
-              <MoneyInput
-                name="orderAmount"
-                defaultValue={o.orderAmount}
-                className="w-28"
-                disabled={readOnly}
-              />
-
-              {/* Ícone de cartão: preto = true, cinza = false */}
-              <button
-                type="button"
-                onClick={() => setIsCreditCard((v) => !v)}
-                className={`h-9 w-9 grid place-items-center rounded-md border transition
-                            ${readOnly ? "pointer-events-none opacity-60" : "hover:bg-slate-50"}
-                            ${isCreditCard ? "border-blue-600" : "border-slate-200"}`}
-                title="Pago no cartão"
-                aria-pressed={isCreditCard}
-              >
-                <CreditCard className={`h-6 w-6 ${isCreditCard ? "text-blue-600" : "text-slate-300"}`} />
-              </button>
-            </div>
+            <MoneyInput
+              name="orderAmount"
+              defaultValue={o.orderAmount}
+              className="w-28"
+              disabled={readOnly}
+            />
           </div>
 
           {/* Tamanhos */}
@@ -896,19 +1814,45 @@ function RowItem({
               <input type="hidden" name="sizeP" value={sizes.P} />
               <input type="hidden" name="sizeI" value={sizes.I} />
               <input type="hidden" name="sizeFT" value={sizes.FT} />
-              <div className={`origin-center ${readOnly ? "opacity-60 pointer-events-none" : "scale-[0.95]"}`}>
+              <div
+                className={`origin-center ${
+                  readOnly ? "opacity-60 pointer-events-none" : "scale-[0.95]"
+                }`}
+              >
                 <SizeSelector
                   counts={sizes}
                   limit={sizeLimit ?? undefined}
                   onChange={(next) => {
                     setSizes(next);
-                    const formEl = document.getElementById(`row-form-${o.id}`) as HTMLFormElement | null;
+                    const formEl = document.getElementById(
+                      `row-form-${o.id}`
+                    ) as HTMLFormElement | null;
                     if (!formEl) return;
-                    (formEl.querySelector('input[name="sizeF"]') as HTMLInputElement).value = String(next.F);
-                    (formEl.querySelector('input[name="sizeM"]') as HTMLInputElement).value = String(next.M);
-                    (formEl.querySelector('input[name="sizeP"]') as HTMLInputElement).value = String(next.P);
-                    (formEl.querySelector('input[name="sizeI"]') as HTMLInputElement).value = String(next.I);
-                    (formEl.querySelector('input[name="sizeFT"]') as HTMLInputElement).value = String(next.FT);
+                    (
+                      formEl.querySelector(
+                        'input[name="sizeF"]'
+                      ) as HTMLInputElement
+                    ).value = String(next.F);
+                    (
+                      formEl.querySelector(
+                        'input[name="sizeM"]'
+                      ) as HTMLInputElement
+                    ).value = String(next.M);
+                    (
+                      formEl.querySelector(
+                        'input[name="sizeP"]'
+                      ) as HTMLInputElement
+                    ).value = String(next.P);
+                    (
+                      formEl.querySelector(
+                        'input[name="sizeI"]'
+                      ) as HTMLInputElement
+                    ).value = String(next.I);
+                    (
+                      formEl.querySelector(
+                        'input[name="sizeFT"]'
+                      ) as HTMLInputElement
+                    ).value = String(next.FT);
                   }}
                   disabled={readOnly}
                 />
@@ -918,14 +1862,21 @@ function RowItem({
 
           {/* Canal */}
           <div className="flex justify-center">
-            <Select name="channel" defaultValue={(o.channel ?? "").trim()}>
-              <SelectTrigger className={`h-9 w-[240px] truncate ${readOnly ? "opacity-60 pointer-events-none" : ""}`} disabled={readOnly}>
+            <Select name="channel" defaultValue={normalizeKdsChannel(o.channel)}>
+              <SelectTrigger
+                className={`h-9 w-[240px] truncate ${
+                  readOnly ? "opacity-60 pointer-events-none" : ""
+                }`}
+                disabled={readOnly}
+              >
                 <SelectValue placeholder="Canal" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="">(sem canal)</SelectItem>
                 {CHANNELS.map((c) => (
-                  <SelectItem key={c} value={c}>{c}</SelectItem>
+                  <SelectItem key={c} value={c}>
+                    {c}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -933,7 +1884,11 @@ function RowItem({
 
           {/* DELIVERY (switch + zona + valor moto) */}
           <div className="flex items-center justify-center gap-2">
-            <div className={`flex items-center gap-2 ${readOnly ? "opacity-60" : ""}`}>
+            <div
+              className={`flex items-center gap-2 ${
+                readOnly ? "opacity-60" : ""
+              }`}
+            >
               <Switch
                 checked={hasMoto}
                 onCheckedChange={(next) => {
@@ -974,7 +1929,11 @@ function RowItem({
           </div>
 
           {/* Retirada */}
-          <div className={`flex items-center justify-center ${readOnly ? "opacity-60" : ""}`}>
+          <div
+            className={`flex items-center justify-center ${
+              readOnly ? "opacity-60" : ""
+            }`}
+          >
             <Switch
               checked={takeAway}
               onCheckedChange={setTakeAway}
@@ -987,14 +1946,25 @@ function RowItem({
 
           {/* Detalhes */}
           <div className="flex items-center justify-center">
-            <Button type="button" variant="ghost" title="Detalhes" onClick={() => setDetailsOpenId(true)}>
+            <Button
+              type="button"
+              variant="ghost"
+              title="Detalhes"
+              onClick={() => setDetailsOpenId(true)}
+            >
               <Ellipsis className="w-4 h-4" />
             </Button>
           </div>
 
           {/* Ações */}
           <div className="flex items-center justify-center gap-2">
-            <Button type="submit" variant="outline" title="Salvar" disabled={readOnly}>
+            <Button
+              type="button"
+              variant="outline"
+              title="Salvar"
+              disabled={readOnly}
+              onClick={() => setPaymentDialogOpen(true)}
+            >
               {savingIcon}
             </Button>
             <Button
@@ -1029,35 +1999,30 @@ function RowItem({
             onOpenChange={(v) => !v && setDetailsOpenId(false)}
             createdAt={(o as any).novoPedidoAt as any}
             nowMs={nowMs}
-            status={o.status ?? "pendente"}
+            status={detailsStatus}
             onStatusChange={(value) => {
-              if (readOnly) return;
-              const fd = new FormData();
-              fd.set("_action", "saveRow");
-              fd.set("id", o.id);
-              fd.set("date", dateStr);
-              fd.set("status", value);
-              fd.set("commandNumber", String(cmdLocal ?? ""));
-              fd.set("orderAmount", String(o.orderAmount ?? 0));
-              fd.set("motoValue", String(o.motoValue ?? 0));
-              fd.set("hasMoto", hasMoto ? "on" : "");
-              fd.set("takeAway", takeAway ? "on" : "");
-              const sc = parseSize(o.size);
-              fd.set("sizeF", String(sc.F));
-              fd.set("sizeM", String(sc.M));
-              fd.set("sizeP", String(sc.P));
-              fd.set("sizeI", String(sc.I));
-              fd.set("sizeFT", String(sc.FT));
-              fd.set("channel", String((o.channel ?? "").trim()));
-              fd.set("deliveryZoneId", String(deliveryZoneId ?? ""));
-              fd.set("isCreditCard", String(isCreditCard ? "on" : ""));
-              rowFx.submit(fd, { method: "post" });
+              setDetailsStatus(value);
+              submitRowUpdate(value);
             }}
-            onSubmit={() => setDetailsOpenId(false)}
+            onSubmit={() => {
+              submitRowUpdate(detailsStatus);
+              setDetailsOpenId(false);
+            }}
             orderAmount={Number(o.orderAmount ?? 0)}
             motoValue={Number(o.motoValue ?? 0)}
             sizeSummary={sizeSummary(parseSize(o.size))}
             channel={(o.channel ?? "").trim()}
+            customerName={customerName}
+            customerPhone={customerPhone}
+            orderItems={o.orderItems}
+            onCustomerNameChange={setCustomerName}
+            onCustomerPhoneChange={setCustomerPhone}
+          />
+
+          <PaymentMethodDialog
+            open={paymentDialogOpen}
+            onOpenChange={setPaymentDialogOpen}
+            onSelect={submitWithPaymentMethod}
           />
         </rowFx.Form>
       </div>
@@ -1073,7 +2038,9 @@ function RowItem({
 
             <span>
               <span className="text-muted-foreground">Tempo de preparo: </span>
-              <span className="font-semibold">{fmtMinutesHHMM(prepMinutes)}</span>
+              <span className="font-semibold">
+                {fmtMinutesHHMM(prepMinutes)}
+              </span>
             </span>
 
             {(() => {
@@ -1096,19 +2063,28 @@ function RowItem({
               const pred = predictions.get(o.id);
               if (!pred) return null;
 
-              const isPickup = (o as any).takeAway === true && (o as any).hasMoto !== true;
+              const isPickup =
+                (o as any).takeAway === true && (o as any).hasMoto !== true;
 
               return (
                 <>
                   <span>
-                    <span className="text-muted-foreground">{isPickup ? "Retirar às: " : "Pronta às: "}</span>
-                    <span className="font-semibold">{fmtHHMM(pred.readyAtMs)}</span>
+                    <span className="text-muted-foreground">
+                      {isPickup ? "Retirar às: " : "Pronta às: "}
+                    </span>
+                    <span className="font-semibold">
+                      {fmtHHMM(pred.readyAtMs)}
+                    </span>
                   </span>
 
                   {!isPickup && pred.arriveAtMs && (
                     <span>
-                      <span className="text-muted-foreground">Na casa às: </span>
-                      <span className="font-semibold">{fmtHHMM(pred.arriveAtMs)}</span>
+                      <span className="text-muted-foreground">
+                        Na casa às:{" "}
+                      </span>
+                      <span className="font-semibold">
+                        {fmtHHMM(pred.arriveAtMs)}
+                      </span>
                     </span>
                   )}
                 </>
@@ -1134,7 +2110,10 @@ function RowsSkeleton() {
   return (
     <ul className="space-y-1" aria-busy="true" aria-live="polite">
       {Array.from({ length: 12 }).map((_, i) => (
-        <li key={i} className="rounded border p-3 bg-slate-50 h-14 animate-pulse" />
+        <li
+          key={i}
+          className="rounded border p-3 bg-slate-50 h-14 animate-pulse"
+        />
       ))}
     </ul>
   );
@@ -1186,12 +2165,15 @@ function TimelineSidebar({
 
       <div className="mt-4 space-y-4 flex-1 flex flex-col">
         <div className="rounded-lg border bg-slate-50 p-4">
-          <div className="text-sm text-slate-600">Último pedido previsto para sair às:</div>
+          <div className="text-sm text-slate-600">
+            Último pedido previsto para sair às:
+          </div>
           <div className="text-2xl font-semibold text-blue-700 leading-tight">
             {lastReadyAt ? fmtHHMM(lastReadyAt) : "Nenhum pedido em produção"}
           </div>
           <div className="text-xs text-slate-500 mt-1">
-            Baseado no tempo médio por tamanho e nº de operadores. Agora: {fmtHHMM(nowMs)}
+            Baseado no tempo médio por tamanho e nº de operadores. Agora:{" "}
+            {fmtHHMM(nowMs)}
           </div>
         </div>
 
@@ -1216,27 +2198,44 @@ function TimelineSidebar({
                   key={slot.slotStartMs}
                   className={cn(
                     "relative p-3 transition-colors border-b-1 mb-2 hover:bg-slate-100",
-                    isCurrentSlot ? "border-emerald-300 bg-emerald-50" : "bg-white"
+                    isCurrentSlot
+                      ? "border-emerald-300 bg-emerald-50"
+                      : "bg-white"
                   )}
                 >
-                  <div className="absolute left-3 top-0 bottom-0 border-l border-dashed border-slate-200" aria-hidden />
+                  <div
+                    className="absolute left-3 top-0 bottom-0 border-l border-dashed border-slate-200"
+                    aria-hidden
+                  />
 
                   <div className="flex items-center justify-between gap-3 ml-2">
                     <div className="flex items-center gap-2">
-                      <div className="text-sm font-semibold text-slate-900 font-mono">{slot.label}</div>
-                      {isCurrentSlot && <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" aria-label="Horário atual" />}
+                      <div className="text-sm font-semibold text-slate-900 font-mono">
+                        {slot.label}
+                      </div>
+                      {isCurrentSlot && (
+                        <span
+                          className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"
+                          aria-label="Horário atual"
+                        />
+                      )}
                       {slot.isPast && !slot.isCurrent && (
-                        <span className="text-[11px] uppercase tracking-wide text-slate-400">Passado</span>
+                        <span className="text-[11px] uppercase tracking-wide text-slate-400">
+                          Passado
+                        </span>
                       )}
                     </div>
                     <div className="text-xs text-slate-500">
-                      {slot.count} pedido{slot.count === 1 ? "" : "s"} neste slot
+                      {slot.count} pedido{slot.count === 1 ? "" : "s"} neste
+                      slot
                     </div>
                   </div>
 
                   <div className="mt-2 flex flex-wrap items-center justify-end gap-2">
                     {labels.length === 0 ? (
-                      <span className="text-xs text-slate-400">Sem pedidos</span>
+                      <span className="text-xs text-slate-400">
+                        Sem pedidos
+                      </span>
                     ) : (
                       labels.map((l, idx) => (
                         <Badge
@@ -1251,7 +2250,9 @@ function TimelineSidebar({
                         >
                           <span>{l.label}</span>
                           {l.readyAt && (
-                            <span className="text-[10px] text-slate-500 font-mono">· {fmtHHMM(l.readyAt)}</span>
+                            <span className="text-[10px] text-slate-500 font-mono">
+                              · {fmtHHMM(l.readyAt)}
+                            </span>
                           )}
                           <button
                             type="button"
@@ -1277,14 +2278,20 @@ function TimelineSidebar({
 
 type PredictionData = {
   // Previsão real (considera fila e operadores)
-  realPredictions: Map<string, { readyAtMs: number; arriveAtMs: number | null }>;
+  realPredictions: Map<
+    string,
+    { readyAtMs: number; arriveAtMs: number | null }
+  >;
   realReadyMap: ReadyAtMap;
   realTimelineReadyMap: ReadyAtMap;
   realTimelineBuckets: TimelineBucket[];
   realLastReadyAt: number | null;
 
   // Previsão teórica (fila ideal desde o primeiro pedido)
-  theoreticalPredictions: Map<string, { readyAtMs: number; arriveAtMs: number | null }>;
+  theoreticalPredictions: Map<
+    string,
+    { readyAtMs: number; arriveAtMs: number | null }
+  >;
   theoreticalReadyMap: ReadyAtMap;
   theoreticalTimelineReadyMap: ReadyAtMap;
   theoreticalTimelineBuckets: TimelineBucket[];
@@ -1316,11 +2323,20 @@ function computePredictionData(
     deliveryZoneId: (o as any).deliveryZoneId ?? null,
   }));
 
-  const ready = predictReadyTimes(minimal, operatorCount, nowMs, prepMinutesPerSize);
+  const ready = predictReadyTimes(
+    minimal,
+    operatorCount,
+    nowMs,
+    prepMinutesPerSize
+  );
   const arrive = predictArrivalTimes(ready, riderCount, dzMap);
 
-  const byId = new Map<string, { readyAtMs: number; arriveAtMs: number | null }>();
-  for (const r of ready) byId.set(r.id, { readyAtMs: r.readyAtMs, arriveAtMs: null });
+  const byId = new Map<
+    string,
+    { readyAtMs: number; arriveAtMs: number | null }
+  >();
+  for (const r of ready)
+    byId.set(r.id, { readyAtMs: r.readyAtMs, arriveAtMs: null });
   for (const a of arrive) {
     const cur = byId.get(a.id);
     if (cur) cur.arriveAtMs = a.arriveAtMs;
@@ -1343,10 +2359,12 @@ function computePredictionData(
   const baseMs =
     inProduction.length > 0
       ? Math.min(
-        ...inProduction.map((o) =>
-          o.createdAt ? new Date(o.createdAt as any).getTime() : Number.POSITIVE_INFINITY
+          ...inProduction.map((o) =>
+            o.createdAt
+              ? new Date(o.createdAt as any).getTime()
+              : Number.POSITIVE_INFINITY
+          )
         )
-      )
       : nowMs;
 
   const theoreticalReadyMap = computeReadyAtMap({
@@ -1363,7 +2381,8 @@ function computePredictionData(
 
   let theoreticalLastReadyAt: number | null = null;
   for (const ts of theoreticalReadyMap.values()) {
-    if (theoreticalLastReadyAt === null || ts > theoreticalLastReadyAt) theoreticalLastReadyAt = ts;
+    if (theoreticalLastReadyAt === null || ts > theoreticalLastReadyAt)
+      theoreticalLastReadyAt = ts;
   }
 
   const timelineOrders = minimal; // inclui todos os pedidos em produção na timeline
@@ -1380,15 +2399,26 @@ function computePredictionData(
     nowMs: baseMs,
   });
 
-  const theoreticalPredictions = new Map<string, { readyAtMs: number; arriveAtMs: number | null }>();
+  const theoreticalPredictions = new Map<
+    string,
+    { readyAtMs: number; arriveAtMs: number | null }
+  >();
   const theoreticalReadyList = minimal.map((o) => ({
     id: o.id,
     readyAtMs: theoreticalReadyMap.get(o.id) ?? nowMs,
     isDelivery: o.takeAway !== true && o.hasMoto === true,
     dzId: o.deliveryZoneId ?? null,
   }));
-  const theoreticalArrivals = predictArrivalTimes(theoreticalReadyList, riderCount, dzMap);
-  for (const r of theoreticalReadyList) theoreticalPredictions.set(r.id, { readyAtMs: r.readyAtMs, arriveAtMs: null });
+  const theoreticalArrivals = predictArrivalTimes(
+    theoreticalReadyList,
+    riderCount,
+    dzMap
+  );
+  for (const r of theoreticalReadyList)
+    theoreticalPredictions.set(r.id, {
+      readyAtMs: r.readyAtMs,
+      arriveAtMs: null,
+    });
   for (const a of theoreticalArrivals) {
     const cur = theoreticalPredictions.get(a.id);
     if (cur) cur.arriveAtMs = a.arriveAtMs;
@@ -1400,11 +2430,14 @@ function computePredictionData(
     minSlots: 6,
   });
 
-  const theoreticalTimelineBuckets = buildTimelineBuckets(theoreticalTimelineReadyMap, {
-    nowMs,
-    slotMinutes: 30,
-    minSlots: 6,
-  });
+  const theoreticalTimelineBuckets = buildTimelineBuckets(
+    theoreticalTimelineReadyMap,
+    {
+      nowMs,
+      slotMinutes: 30,
+      minSlots: 6,
+    }
+  );
 
   return {
     realPredictions: byId,
@@ -1421,17 +2454,205 @@ function computePredictionData(
   };
 }
 
+function OrderTimingDashboardPanel({ data }: { data: OrderTimingDashboard }) {
+  const maxValue = Math.max(
+    1,
+    ...data.buckets.flatMap((bucket) => [
+      bucket.averageCount,
+      bucket.lastWeekCount,
+      bucket.currentCount,
+    ])
+  );
+
+  const timeCards = [
+    { label: "Primeiro", value: data.firstOrderAt },
+    { label: "Segundo", value: data.secondOrderAt },
+    { label: "Penultimo", value: data.penultimateOrderAt },
+    { label: "Ultimo", value: data.lastOrderAt },
+  ];
+  const totals = data.buckets.reduce(
+    (acc, bucket) => ({
+      average: acc.average + bucket.averageCount,
+      lastWeek: acc.lastWeek + bucket.lastWeekCount,
+      current: acc.current + bucket.currentCount,
+    }),
+    { average: 0, lastWeek: 0, current: 0 }
+  );
+  const formatTotal = (value: number) =>
+    Number.isInteger(value) ? String(value) : value.toFixed(1);
+
+  return (
+    <div className="grid grid-cols-1 gap-3 xl:grid-cols-[minmax(220px,0.5fr)_minmax(0,2fr)]">
+      <div className="rounded-2xl bg-white p-3 shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+            <Clock4 className="h-4 w-4" /> Horarios dos pedidos
+          </div>
+          <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+            Mesmo dia da semana
+          </span>
+        </div>
+        <div className="mt-2 grid grid-cols-2 gap-2">
+          {timeCards.map((card) => (
+            <div key={card.label} className="rounded-xl bg-slate-50 px-3 py-2">
+              <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                {card.label}
+              </div>
+              <div className="mt-0.5 text-lg font-black tabular-nums text-slate-900">
+                {card.value ?? "--:--"}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="rounded-2xl bg-white p-3 shadow-sm">
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <div>
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+              <span className="inline-flex items-center gap-2">
+                <BarChart3 className="h-4 w-4" /> Pedidos por faixa horaria
+                <span
+                  title="A media considera apenas o mesmo dia da semana nos ultimos 3 meses anteriores a data selecionada."
+                  aria-label="A media considera apenas o mesmo dia da semana nos ultimos 3 meses anteriores a data selecionada."
+                  className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-slate-100 text-[10px] font-black text-slate-500"
+                >
+                  ?
+                </span>
+              </span>
+              <span className="text-[11px] text-slate-400">
+                Media {formatTotal(totals.average)} · Semana passada{" "}
+                {formatTotal(totals.lastWeek)} · Atual{" "}
+                {formatTotal(totals.current)}
+              </span>
+            </div>
+            <p className="mt-1 text-xs text-slate-500">
+              Media do mesmo dia da semana nos ultimos 3 meses, semana passada e
+              dia atual, em janelas de 30 minutos.
+            </p>
+          </div>
+          <div className="flex items-center gap-3 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+            <span className="inline-flex items-center gap-1.5">
+              <span className="h-2.5 w-2.5 rounded-full bg-slate-400" />
+              Media
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <span className="h-2.5 w-2.5 rounded-full bg-amber-500" />
+              Semana passada
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />
+              Atual
+            </span>
+          </div>
+        </div>
+
+        <div className="mt-2 rounded-xl bg-slate-50 px-3 py-2">
+          <div
+            className="grid h-32 items-end gap-5 lg:gap-10"
+            style={{
+              gridTemplateColumns: `repeat(${data.buckets.length}, minmax(0, 1fr))`,
+            }}
+          >
+            {data.buckets.map((bucket) => {
+              const averageHeight = Math.max(
+                4,
+                Math.round((bucket.averageCount / maxValue) * 100)
+              );
+              const lastWeekHeight = Math.max(
+                4,
+                Math.round((bucket.lastWeekCount / maxValue) * 100)
+              );
+              const currentHeight = Math.max(
+                4,
+                Math.round((bucket.currentCount / maxValue) * 100)
+              );
+
+              return (
+                <div
+                  key={bucket.label}
+                  className="flex h-full min-w-0 flex-col items-center justify-end gap-2"
+                  title={`${bucket.label}: media ${bucket.averageCount}, semana passada ${bucket.lastWeekCount}, atual ${bucket.currentCount}`}
+                >
+                  <div className="flex h-full w-full items-end justify-center gap-1">
+                    <div className="flex h-full min-w-0 flex-1 flex-col items-center justify-end gap-1">
+                      <span className="text-[10px] font-semibold tabular-nums text-slate-500">
+                        {bucket.averageCount > 0 ? bucket.averageCount : ""}
+                      </span>
+                      <div
+                        className="w-full rounded-t-md bg-slate-400"
+                        style={{ height: `${averageHeight}%` }}
+                      />
+                    </div>
+                    <div className="flex h-full min-w-0 flex-1 flex-col items-center justify-end gap-1">
+                      <span className="text-[10px] font-semibold tabular-nums text-amber-700">
+                        {bucket.lastWeekCount > 0 ? bucket.lastWeekCount : ""}
+                      </span>
+                      <div
+                        className="w-full rounded-t-md bg-amber-500"
+                        style={{ height: `${lastWeekHeight}%` }}
+                      />
+                    </div>
+                    <div className="flex h-full min-w-0 flex-1 flex-col items-center justify-end gap-1">
+                      <span className="text-[10px] font-semibold tabular-nums text-emerald-700">
+                        {bucket.currentCount > 0 ? bucket.currentCount : ""}
+                      </span>
+                      <div
+                        className="w-full rounded-t-md bg-emerald-500"
+                        style={{ height: `${currentHeight}%` }}
+                      />
+                    </div>
+                  </div>
+                  <span className="text-[10px] font-semibold tabular-nums text-slate-500">
+                    {bucket.label}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ===========================
    Página (Grid)
    =========================== */
 export default function GridKdsPage() {
-  const { dateStr, items, header, deliveryZones, dzTimes, dashboard, doughStock, doughUsage, availableSizes, predictionSettings } = useLoaderData<typeof loader>();
-  const listFx = useFetcher();
+  const {
+    dateStr,
+    items,
+    header,
+    deliveryZones,
+    dzTimes,
+    dashboard,
+    doughStock,
+    doughUsage,
+    orderTimingDashboard,
+    availableSizes,
+    hiddenFlavors,
+    predictionSettings,
+  } = useLoaderData<typeof loader>();
+  const listFx = useFetcher<DayReportActionResult>();
   const rowFx = useFetcher();
   const stockFx = useFetcher<{ ok: boolean; stock: DoughStockSnapshot }>();
-  const settingsFx = useFetcher<{ ok: boolean; settings: PredictionSettings }>();
+  const settingsFx = useFetcher<{
+    ok: boolean;
+    settings: PredictionSettings;
+  }>();
+  const hiddenFlavorFx = useFetcher<{
+    ok: boolean;
+    activatedFlavorId?: string;
+    message?: string;
+    error?: string;
+  }>();
 
-  const status = (header?.operationStatus ?? "PENDING") as "PENDING" | "OPENED" | "CLOSED" | "REOPENED";
+  const status = (header?.operationStatus ?? "PENDING") as
+    | "PENDING"
+    | "OPENED"
+    | "CLOSED"
+    | "REOPENED";
   const isClosed = status === "CLOSED";
   const readOnly = isClosed;
 
@@ -1441,23 +2662,29 @@ export default function GridKdsPage() {
 
   const [channelFilter, setChannelFilter] = useState<string>("");
   const [timelineOpen, setTimelineOpen] = useState(false);
-  const [predictionMode, setPredictionMode] = useState<"real" | "theoretical">(predictionSettings.mode ?? "theoretical");
-  const [prepMinutesConfig, setPrepMinutesConfig] = useState<Record<keyof SizeCounts, number>>(
-    predictionSettings.prepMinutes ?? PREP_MINUTES_PER_SIZE
+  const [predictionMode, setPredictionMode] = useState<"real" | "theoretical">(
+    predictionSettings.mode ?? "theoretical"
   );
+  const [prepMinutesConfig, setPrepMinutesConfig] = useState<
+    Record<keyof SizeCounts, number>
+  >(predictionSettings.prepMinutes ?? PREP_MINUTES_PER_SIZE);
   const [operatorCountSetting, setOperatorCountSetting] = useState<number>(
     predictionSettings.operatorCount ?? getOperatorCountByDate(dateStr)
   );
   const [settingsDialogOpen, setSettingsDialogOpen] = useState(false);
+  const stockBarRef = useRef<HTMLDivElement | null>(null);
+  const [isStockBarPinned, setIsStockBarPinned] = useState(false);
 
-  // ← estado do botão de cartão na Venda Livre rápida
-  const [vlIsCreditCard, setVlIsCreditCard] = useState(false);
+  const [vlPaymentDialogOpen, setVlPaymentDialogOpen] = useState(false);
+  const vlFormRef = useRef<HTMLFormElement | null>(null);
 
   const stockSnapshot: DoughStockSnapshot | null =
-    (stockFx.data?.stock as DoughStockSnapshot | undefined) ?? (doughStock as DoughStockSnapshot | null);
+    (stockFx.data?.stock as DoughStockSnapshot | undefined) ??
+    (doughStock as DoughStockSnapshot | null);
   const baseStock = stockSnapshot?.base ?? defaultSizeCounts();
   const effectiveStock = stockSnapshot?.effective ?? defaultSizeCounts();
-  const [adjustmentDraft, setAdjustmentDraft] = useState<SizeCounts>(effectiveStock);
+  const [adjustmentDraft, setAdjustmentDraft] =
+    useState<SizeCounts>(effectiveStock);
   const [editingBar, setEditingBar] = useState(false);
 
   const sizeLabelMap = useMemo(() => {
@@ -1468,34 +2695,52 @@ export default function GridKdsPage() {
     return base;
   }, [availableSizes]);
 
-  const [showStockPanel, setShowStockPanel] = useState(() => true);
-  const [floatingTop, setFloatingTop] = useState(160);
-  const [dragging, setDragging] = useState(false);
-
-  useEffect(() => {
-    function onMove(e: MouseEvent) {
-      if (!dragging) return;
-      const next = Math.min(Math.max(80, e.clientY - 30), window.innerHeight - 140);
-      setFloatingTop(next);
-    }
-    function onUp() { setDragging(false); }
-    if (dragging) {
-      window.addEventListener("mousemove", onMove);
-      window.addEventListener("mouseup", onUp);
-    }
-    return () => {
-      window.removeEventListener("mousemove", onMove);
-      window.removeEventListener("mouseup", onUp);
-    };
-  }, [dragging]);
-
   useEffect(() => {
     setAdjustmentDraft(stockSnapshot?.effective ?? defaultSizeCounts());
   }, [stockSnapshot, dateStr]);
 
+  useEffect(() => {
+    if (!(status === "OPENED" || status === "REOPENED")) {
+      setIsStockBarPinned(false);
+      return;
+    }
+
+    let rafId: number | null = null;
+    const checkPinned = () => {
+      rafId = null;
+      const el = stockBarRef.current;
+      if (!el) {
+        setIsStockBarPinned(false);
+        return;
+      }
+
+      const stickyTop = Number.parseFloat(
+        window.getComputedStyle(el).top || "0"
+      );
+      const pinned = el.getBoundingClientRect().top <= stickyTop + 0.5;
+      setIsStockBarPinned((prev) => (prev === pinned ? prev : pinned));
+    };
+
+    const onScrollOrResize = () => {
+      if (rafId !== null) return;
+      rafId = window.requestAnimationFrame(checkPinned);
+    };
+
+    checkPinned();
+    window.addEventListener("scroll", onScrollOrResize, { passive: true });
+    window.addEventListener("resize", onScrollOrResize);
+    return () => {
+      if (rafId !== null) window.cancelAnimationFrame(rafId);
+      window.removeEventListener("scroll", onScrollOrResize);
+      window.removeEventListener("resize", onScrollOrResize);
+    };
+  }, [status]);
+
   function setAdjustmentValue(key: keyof SizeCounts, value: number | string) {
     const numeric = Number(value);
-    const safe = Number.isFinite(numeric) ? Math.max(0, Math.floor(numeric)) : 0;
+    const safe = Number.isFinite(numeric)
+      ? Math.max(0, Math.floor(numeric))
+      : 0;
     setAdjustmentDraft((prev) => ({ ...prev, [key]: safe }));
   }
 
@@ -1509,7 +2754,10 @@ export default function GridKdsPage() {
   }, [opening]);
 
   useEffect(() => {
-    if (listFx.state === "submitting" && listFx.formData?.get("_action") === "openDay") {
+    if (
+      listFx.state === "submitting" &&
+      listFx.formData?.get("_action") === "openDay"
+    ) {
       setOpening(true);
       setOpenError(null);
     }
@@ -1527,15 +2775,22 @@ export default function GridKdsPage() {
   const nowMs = Date.now();
 
   const dzMap = useMemo(() => buildDzMap(dzTimes as any), [dzTimes]);
-  const operatorCount = useMemo(() => getOperatorCountByDate(dateStr), [dateStr]);
+  const operatorCount = useMemo(
+    () => getOperatorCountByDate(dateStr),
+    [dateStr]
+  );
   const riderCount = useMemo(() => getRiderCountByDate(dateStr), [dateStr]);
   const operatorCountActive = operatorCountSetting || operatorCount;
   const prepMinutesActive = prepMinutesConfig || PREP_MINUTES_PER_SIZE;
 
   useEffect(() => {
     setPredictionMode(predictionSettings.mode ?? "real");
-    setPrepMinutesConfig(predictionSettings.prepMinutes ?? PREP_MINUTES_PER_SIZE);
-    setOperatorCountSetting(predictionSettings.operatorCount ?? getOperatorCountByDate(dateStr));
+    setPrepMinutesConfig(
+      predictionSettings.prepMinutes ?? PREP_MINUTES_PER_SIZE
+    );
+    setOperatorCountSetting(
+      predictionSettings.operatorCount ?? getOperatorCountByDate(dateStr)
+    );
   }, [predictionSettings, dateStr]);
 
   useEffect(() => {
@@ -1543,40 +2798,206 @@ export default function GridKdsPage() {
       const cfg = settingsFx.data.settings;
       setPredictionMode(cfg.mode ?? "real");
       setPrepMinutesConfig(cfg.prepMinutes ?? PREP_MINUTES_PER_SIZE);
-      setOperatorCountSetting(cfg.operatorCount ?? getOperatorCountByDate(dateStr));
+      setOperatorCountSetting(
+        cfg.operatorCount ?? getOperatorCountByDate(dateStr)
+      );
       setSettingsDialogOpen(false);
     }
   }, [settingsFx.state, settingsFx.data, dateStr]);
 
+  const submitVlWithPaymentMethod = (method: PaymentMethod) => {
+    if (!vlFormRef.current) return;
+    const flags = paymentMethodToFlags(method);
+    const fd = new FormData(vlFormRef.current);
+    fd.set("isCreditCard", flags.isCreditCard ? "on" : "");
+    fd.set("isCash", flags.isCash ? "on" : "");
+    fd.set("isOtherPaymentMethod", flags.isOtherPaymentMethod ? "on" : "");
+    listFx.submit(fd, { method: "post" });
+    setVlPaymentDialogOpen(false);
+  };
+
   // Cores do status de meta
   const statusColor =
-    dashboard.status === "hit-target" ? "bg-emerald-50 text-emerald-900 border-emerald-200" :
-      dashboard.status === "between" ? "bg-amber-50 text-amber-900 border-amber-200" :
-        "bg-rose-50 text-rose-900 border-rose-200";
-  const summaryCardClass = "rounded-2xl border border-slate-200 bg-white shadow-sm p-5 flex flex-col gap-4 h-full";
+    dashboard.status === "hit-target"
+      ? "bg-emerald-50 text-emerald-900 border-emerald-200"
+      : dashboard.status === "between"
+      ? "bg-amber-50 text-amber-900 border-amber-200"
+      : "bg-rose-50 text-rose-900 border-rose-200";
+  const summaryCardClass =
+    "rounded-2xl border border-slate-200 bg-white shadow-sm p-5 flex flex-col gap-4 h-full";
   const statusDot =
-    dashboard.status === "hit-target" ? "bg-emerald-500" :
-      dashboard.status === "between" ? "bg-amber-500" :
-        "bg-rose-500";
+    dashboard.status === "hit-target"
+      ? "bg-emerald-500"
+      : dashboard.status === "between"
+      ? "bg-amber-500"
+      : "bg-rose-500";
   const statusTextColor =
-    dashboard.status === "hit-target" ? "text-emerald-700" :
-      dashboard.status === "between" ? "text-amber-700" :
-        "text-rose-700";
+    dashboard.status === "hit-target"
+      ? "text-emerald-700"
+      : dashboard.status === "between"
+      ? "text-amber-700"
+      : "text-rose-700";
   const dayStatusBadge =
-    status === "OPENED" ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
-      status === "REOPENED" ? "bg-amber-50 text-amber-700 border-amber-200" :
-        status === "CLOSED" ? "bg-slate-100 text-slate-700 border-slate-200" :
-          "bg-slate-100 text-slate-700 border-slate-200";
+    status === "OPENED"
+      ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+      : status === "REOPENED"
+      ? "bg-amber-50 text-amber-700 border-amber-200"
+      : status === "CLOSED"
+      ? "bg-slate-100 text-slate-700 border-slate-200"
+      : "bg-slate-100 text-slate-700 border-slate-200";
+  const currentListAction = String(listFx.formData?.get("_action") ?? "");
+  const isClosingDay =
+    listFx.state !== "idle" && currentListAction === "closeDay";
+  const reportFeedback = listFx.data?.report?.detail ?? null;
   const dayStatusLabel =
-    status === "OPENED" ? "Dia aberto" :
-      status === "REOPENED" ? "Dia reaberto" :
-        status === "CLOSED" ? "Dia fechado" :
-          "Aguardando abertura";
+    status === "OPENED"
+      ? "Dia aberto"
+      : status === "REOPENED"
+      ? "Dia reaberto"
+      : status === "CLOSED"
+      ? "Dia fechado"
+      : "Aguardando abertura";
+  const prevMonthDiff =
+    dashboard.estimatedProfitMonthToDate - dashboard.estimatedProfitPrevMonth;
+  const prevMonthDiffArrow =
+    prevMonthDiff > 0 ? "▲" : prevMonthDiff < 0 ? "▼" : "•";
+  const prevMonthDiffTone =
+    prevMonthDiff > 0
+      ? "text-emerald-700"
+      : prevMonthDiff < 0
+      ? "text-red-700"
+      : "text-slate-500";
+  const prevMonthDiffPrefix =
+    prevMonthDiff > 0 ? "+" : prevMonthDiff < 0 ? "-" : "";
+  const cardSharePerc =
+    dashboard.grossAmount > 0
+      ? (dashboard.cardAmount / dashboard.grossAmount) * 100
+      : 0;
+  const grossCardAmount =
+    dashboard.grossAmount > 0
+      ? (dashboard.grossAmount * cardSharePerc) / 100
+      : 0;
+  const cardFeeAmount =
+    grossCardAmount > 0 ? (grossCardAmount * dashboard.cardFeePerc) / 100 : 0;
+  const taxAmount =
+    dashboard.grossAmount > 0
+      ? (dashboard.grossAmount * dashboard.taxPerc) / 100
+      : 0;
+  const marketplaceFeeAmount =
+    dashboard.marketplaceAmount > 0
+      ? (dashboard.marketplaceAmount * dashboard.marketplaceTaxPerc) / 100
+      : 0;
+  const netAmountByRule =
+    dashboard.grossAmount - cardFeeAmount - taxAmount - marketplaceFeeAmount;
 
   return (
-    <div className="space-y-4 mt-6">
-      {/* Toolbar topo + Painel-resumo SEM suspense (feedback imediato) */}
+    <div className="space-y-4">
+      <Suspense fallback={null}>
+        <Await resolve={hiddenFlavors}>
+          {(flavors: Array<{ id: string; name: string }>) =>
+            flavors.length > 0 ? (
+              <div className="flex flex-col gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-amber-950 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-start gap-3">
+                  <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-700" />
+                  <div>
+                    <p className="font-semibold">
+                      {flavors.length === 1
+                        ? "1 sabor de pizza está oculto no Cardápio"
+                        : `${flavors.length} sabores de pizza estão ocultos no Cardápio`}
+                    </p>
+                    <p className="text-sm text-amber-800">
+                      Confira o elenco e reative a venda dos sabores
+                      disponíveis.
+                    </p>
+                  </div>
+                </div>
 
+                <Dialog>
+                  <DialogTrigger asChild>
+                    <Button
+                      type="button"
+                      className="shrink-0 bg-amber-700 text-white hover:bg-amber-800"
+                    >
+                      <EyeOff className="mr-2 h-4 w-4" />
+                      Ver sabores ocultos
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="max-h-[85vh] max-w-xl overflow-hidden">
+                    <DialogHeader>
+                      <DialogTitle>Sabores ocultos no Cardápio</DialogTitle>
+                    </DialogHeader>
+                    <ScrollArea className="max-h-[55vh] pr-3">
+                      <div className="space-y-2">
+                        {flavors.map((flavor) => {
+                          const isSubmitting =
+                            hiddenFlavorFx.state !== "idle" &&
+                            hiddenFlavorFx.formData?.get("itemId") ===
+                              flavor.id;
+
+                          return (
+                            <hiddenFlavorFx.Form
+                              method="post"
+                              key={flavor.id}
+                              className="flex items-center justify-between gap-4 rounded-lg border bg-white px-3 py-3"
+                            >
+                              <input
+                                type="hidden"
+                                name="_action"
+                                value="activateHiddenFlavor"
+                              />
+                              <input
+                                type="hidden"
+                                name="itemId"
+                                value={flavor.id}
+                              />
+                              <span className="text-sm font-medium text-slate-900">
+                                {flavor.name}
+                              </span>
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs text-slate-500">
+                                  Ativar venda
+                                </span>
+                                {isSubmitting ? (
+                                  <Loader2 className="h-4 w-4 animate-spin text-amber-700" />
+                                ) : (
+                                  <Switch
+                                    aria-label={`Ativar venda de ${flavor.name}`}
+                                    checked={false}
+                                    onCheckedChange={(checked) => {
+                                      if (!checked) return;
+                                      hiddenFlavorFx.submit(
+                                        {
+                                          _action: "activateHiddenFlavor",
+                                          itemId: flavor.id,
+                                        },
+                                        { method: "post" }
+                                      );
+                                    }}
+                                  />
+                                )}
+                              </div>
+                            </hiddenFlavorFx.Form>
+                          );
+                        })}
+                      </div>
+                    </ScrollArea>
+                    <DialogFooter>
+                      <Button variant="outline" asChild>
+                        <Link to="/admin/atendimento/lista-sabores?ocultos=1">
+                          Abrir lista completa
+                          <ExternalLink className="ml-2 h-4 w-4" />
+                        </Link>
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+              </div>
+            ) : null
+          }
+        </Await>
+      </Suspense>
+
+      {/* Toolbar topo + Painel-resumo SEM suspense (feedback imediato) */}
 
       <div className="grid gap-4 xl:grid-cols-8 items-stretch">
         <div className={`${summaryCardClass} xl:col-span-1`}>
@@ -1584,21 +3005,32 @@ export default function GridKdsPage() {
             <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
               <CalendarClock className="h-4 w-4" /> Controle do dia
             </div>
-            <div className={`text-[11px] font-semibold uppercase tracking-wide ${dayStatusBadge} w-full text-center`}>
+            <div
+              className={`text-[11px] font-semibold uppercase tracking-wide ${dayStatusBadge} w-full text-center`}
+            >
               {dayStatusLabel}
             </div>
           </div>
 
           <div className="space-y-3">
             {(!header?.id || status === "PENDING") && (
-              <listFx.Form method="post" className="flex flex-col sm:flex-row sm:items-center gap-3">
+              <listFx.Form
+                method="post"
+                className="flex flex-col sm:flex-row sm:items-center gap-3"
+              >
                 <input type="hidden" name="_action" value="openDay" />
                 <input type="hidden" name="date" value={dateStr} />
                 <div className="flex flex-col items-center gap-2">
-                  <Button type="submit" variant="default" disabled={listFx.state !== "idle"} className="bg-blue-800 w-full justify-center">
+                  <Button
+                    type="submit"
+                    variant="default"
+                    disabled={listFx.state !== "idle"}
+                    className="bg-blue-800 w-full justify-center"
+                  >
                     {listFx.state !== "idle" ? (
                       <>
-                        <Loader2 className="w-4 h-4 animate-spin mr-1" /> Abrindo…
+                        <Loader2 className="w-4 h-4 animate-spin mr-1" />{" "}
+                        Abrindo…
                       </>
                     ) : (
                       <>
@@ -1607,20 +3039,46 @@ export default function GridKdsPage() {
                       </>
                     )}
                   </Button>
-                  <NumericInput name="qty" defaultValue={40} className="h-10 w-full text-center" />
+                  <NumericInput
+                    name="qty"
+                    defaultValue={40}
+                    className="h-10 w-full text-center"
+                  />
                 </div>
               </listFx.Form>
             )}
 
             {status === "OPENED" && (
               <div className="flex flex-col gap-2">
-                <listFx.Form method="post" className="flex flex-wrap items-center gap-2">
+                <listFx.Form
+                  method="post"
+                  className="flex flex-wrap items-center gap-2"
+                >
                   <input type="hidden" name="_action" value="closeDay" />
                   <input type="hidden" name="date" value={dateStr} />
-                  <Button type="submit" variant="secondary" className="w-full">
-                    <Lock className="w-4 h-4 mr-2" /> Fechar dia
+                  <Button
+                    type="submit"
+                    variant="secondary"
+                    className="w-full"
+                    disabled={isClosingDay}
+                  >
+                    {isClosingDay ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Fechando dia...
+                      </>
+                    ) : (
+                      <>
+                        <Lock className="w-4 h-4 mr-2" /> Fechar dia
+                      </>
+                    )}
                   </Button>
                 </listFx.Form>
+                <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-900">
+                  {isClosingDay
+                    ? "Fechando o dia e enviando o relatorio final no WhatsApp..."
+                    : "Ao fechar o dia, o relatorio final e enviado automaticamente no WhatsApp."}
+                </div>
               </div>
             )}
 
@@ -1632,29 +3090,61 @@ export default function GridKdsPage() {
                   </div>
                   <div className="text-xs text-amber-800">
                     Edição liberada, sem novos registros.{" "}
-                    <span className="text-slate-700">Atalho: pressione <b>M</b> para ver o mês.</span>
+                    <span className="text-slate-700">
+                      Atalho: pressione <b>M</b> para ver o mês.
+                    </span>
                   </div>
                 </div>
                 <listFx.Form method="post" className="flex items-center gap-2">
                   <input type="hidden" name="_action" value="closeDay" />
                   <input type="hidden" name="date" value={dateStr} />
-                  <Button type="submit" variant="secondary" className="w-full">
-                    <Lock className="w-4 h-4 mr-2" /> Fechar dia
+                  <Button
+                    type="submit"
+                    variant="secondary"
+                    className="w-full"
+                    disabled={isClosingDay}
+                  >
+                    {isClosingDay ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Fechando dia...
+                      </>
+                    ) : (
+                      <>
+                        <Lock className="w-4 h-4 mr-2" /> Fechar dia
+                      </>
+                    )}
                   </Button>
                 </listFx.Form>
+                <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-900">
+                  {isClosingDay
+                    ? "Fechando o dia e enviando o relatorio final no WhatsApp..."
+                    : "Ao fechar o dia, o relatorio final e enviado automaticamente no WhatsApp."}
+                </div>
               </div>
             )}
 
             {status === "CLOSED" && (
               <div className="space-y-3">
-
-                <listFx.Form method="post" className="flex flex-wrap items-center">
+                <listFx.Form
+                  method="post"
+                  className="flex flex-wrap items-center"
+                >
                   <input type="hidden" name="_action" value="reopenDay" />
                   <input type="hidden" name="date" value={dateStr} />
-                  <Button type="submit" variant="secondary" className="justify-start w-full">
+                  <Button
+                    type="submit"
+                    variant="secondary"
+                    className="justify-start w-full"
+                  >
                     <Unlock className="w-4 h-4 mr-2" /> Reabrir dia
                   </Button>
                 </listFx.Form>
+                {reportFeedback ? (
+                  <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700">
+                    {reportFeedback}
+                  </div>
+                ) : null}
               </div>
             )}
           </div>
@@ -1664,13 +3154,44 @@ export default function GridKdsPage() {
           {/* previsao de saida + cards financeiros */}
           <Suspense
             key={`timeline-summary-${dateStr}`}
-            fallback={<div className="rounded-lg border bg-white p-3 text-sm text-slate-500">Carregando previsão de saída…</div>}
+            fallback={
+              <div className="rounded-lg border bg-white p-3 text-sm text-slate-500">
+                Carregando previsão de saída…
+              </div>
+            }
           >
             <Await resolve={items}>
               {(rowsDb: OrderRow[]) => {
                 const predictionData = useMemo(
-                  () => computePredictionData(rowsDb, operatorCountActive, riderCount, dzMap, nowMs, prepMinutesActive),
-                  [rowsDb, operatorCountActive, riderCount, dzMap, nowMs, prepMinutesActive]
+                  () =>
+                    computePredictionData(
+                      rowsDb,
+                      operatorCountActive,
+                      riderCount,
+                      dzMap,
+                      nowMs,
+                      prepMinutesActive
+                    ),
+                  [
+                    rowsDb,
+                    operatorCountActive,
+                    riderCount,
+                    dzMap,
+                    nowMs,
+                    prepMinutesActive,
+                  ]
+                );
+                const sizeKeys = [
+                  "F",
+                  "M",
+                  "P",
+                  "I",
+                  "FT",
+                ] as (keyof SizeCounts)[];
+                const pizzaCounts = useMemo(() => sumSizes(rowsDb), [rowsDb]);
+                const totalPizzas = sizeKeys.reduce(
+                  (acc, key) => acc + (pizzaCounts[key] ?? 0),
+                  0
                 );
                 const activeLastReady =
                   predictionMode === "real"
@@ -1686,309 +3207,653 @@ export default function GridKdsPage() {
                     : predictionData.theoreticalTimelineReadyMap;
 
                 return (
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 w-full items-stretch">
-                    {/* Card previsão */}
-                    <div className={summaryCardClass}>
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                            <Clock4 className="h-4 w-4" /> Previsão de saída
+                  <div className="w-full">
+                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4 w-full items-stretch">
+                      {/* Card previsão */}
+                      <div className={summaryCardClass}>
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                              <Clock4 className="h-4 w-4" /> Previsão de saída
+                            </div>
+                            <p className="text-sm font-semibold text-slate-800">
+                              Último pedido
+                            </p>
                           </div>
-                          <p className="text-sm font-semibold text-slate-800">Último pedido</p>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Badge variant="outline" className="text-[11px] font-semibold tracking-wide uppercase">
-                            {predictionMode === "real" ? "Real" : "Teórico"}
-                          </Badge>
-                          <Dialog open={settingsDialogOpen} onOpenChange={setSettingsDialogOpen}>
-                            <DialogTrigger asChild>
-                              <Button variant="ghost" size="icon" className="h-8 w-8">
-                                <SettingsIcon className="h-4 w-4" />
-                              </Button>
-                            </DialogTrigger>
-                            <DialogContent className="max-w-3xl">
-                              <DialogHeader>
-                                <DialogTitle>Configurar previsão de saída</DialogTitle>
-                              </DialogHeader>
-                              <settingsFx.Form method="post" className="space-y-6">
-                                <input type="hidden" name="_action" value="savePredictionSettings" />
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-slate-50 border rounded-lg p-4">
-                                  <div className="space-y-2">
-                                    <Label htmlFor="mode" className="text-sm font-semibold">Modalidade de cálculo</Label>
-                                    <Select name="mode" defaultValue={predictionMode}>
-                                      <SelectTrigger id="mode">
-                                        <SelectValue />
-                                      </SelectTrigger>
-                                      <SelectContent>
-                                        <SelectItem value="real">Real (fila + operadores a partir de agora)</SelectItem>
-                                        <SelectItem value="theoretical">Teórico (fila ideal desde o primeiro pedido)</SelectItem>
-                                      </SelectContent>
-                                    </Select>
-                                    <p className="text-[11px] text-slate-600">
-                                      Real: usa o backlog atual com operadores. Teórico: reinicia a fila no horário do primeiro pedido.
-                                    </p>
-                                  </div>
-                                  <div className="space-y-2">
-                                    <Label htmlFor="operatorCount" className="text-sm font-semibold">Nº de operadores</Label>
-                                    <Input
-                                      id="operatorCount"
-                                      name="operatorCount"
-                                      type="number"
-                                      min={1}
-                                      defaultValue={operatorCountActive}
-                                    />
-                                    <p className="text-[11px] text-slate-600">Usado em ambos os modos.</p>
-                                  </div>
-                                </div>
-
-                                <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-                                  {(["F", "M", "P", "I", "FT"] as (keyof SizeCounts)[]).map((k) => (
-                                    <div key={k} className="space-y-1">
-                                      <Label htmlFor={`prep-${k}`}>Tempo {k} (min)</Label>
+                          <div className="flex items-center gap-2">
+                            <Badge
+                              variant="outline"
+                              className="text-[11px] font-semibold tracking-wide uppercase"
+                            >
+                              {predictionMode === "real" ? "Real" : "Teórico"}
+                            </Badge>
+                            <Dialog
+                              open={settingsDialogOpen}
+                              onOpenChange={setSettingsDialogOpen}
+                            >
+                              <DialogTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8"
+                                >
+                                  <SettingsIcon className="h-4 w-4" />
+                                </Button>
+                              </DialogTrigger>
+                              <DialogContent className="max-w-3xl">
+                                <DialogHeader>
+                                  <DialogTitle>
+                                    Configurar previsão de saída
+                                  </DialogTitle>
+                                </DialogHeader>
+                                <settingsFx.Form
+                                  method="post"
+                                  className="space-y-6"
+                                >
+                                  <input
+                                    type="hidden"
+                                    name="_action"
+                                    value="savePredictionSettings"
+                                  />
+                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-slate-50 border rounded-lg p-4">
+                                    <div className="space-y-2">
+                                      <Label
+                                        htmlFor="mode"
+                                        className="text-sm font-semibold"
+                                      >
+                                        Modalidade de cálculo
+                                      </Label>
+                                      <Select
+                                        name="mode"
+                                        defaultValue={predictionMode}
+                                      >
+                                        <SelectTrigger id="mode">
+                                          <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          <SelectItem value="real">
+                                            Real (fila + operadores a partir de
+                                            agora)
+                                          </SelectItem>
+                                          <SelectItem value="theoretical">
+                                            Teórico (fila ideal desde o primeiro
+                                            pedido)
+                                          </SelectItem>
+                                        </SelectContent>
+                                      </Select>
+                                      <p className="text-[11px] text-slate-600">
+                                        Real: usa o backlog atual com
+                                        operadores. Teórico: reinicia a fila no
+                                        horário do primeiro pedido.
+                                      </p>
+                                    </div>
+                                    <div className="space-y-2">
+                                      <Label
+                                        htmlFor="operatorCount"
+                                        className="text-sm font-semibold"
+                                      >
+                                        Nº de operadores
+                                      </Label>
                                       <Input
-                                        id={`prep-${k}`}
-                                        name={`prep${k}`}
+                                        id="operatorCount"
+                                        name="operatorCount"
                                         type="number"
                                         min={1}
-                                        defaultValue={prepMinutesActive[k]}
+                                        defaultValue={operatorCountActive}
                                       />
+                                      <p className="text-[11px] text-slate-600">
+                                        Usado em ambos os modos.
+                                      </p>
                                     </div>
-                                  ))}
-                                </div>
+                                  </div>
 
-                                <DialogFooter className="gap-2">
-                                  <Button
-                                    type="button"
-                                    variant="ghost"
-                                    onClick={() => setSettingsDialogOpen(false)}
-                                  >
-                                    Cancelar
-                                  </Button>
-                                  <Button type="submit" disabled={settingsFx.state !== "idle"}>
-                                    {settingsFx.state !== "idle" ? (
-                                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                                    ) : null}
-                                    Salvar
-                                  </Button>
-                                </DialogFooter>
-                              </settingsFx.Form>
+                                  <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                                    {(
+                                      [
+                                        "F",
+                                        "M",
+                                        "P",
+                                        "I",
+                                        "FT",
+                                      ] as (keyof SizeCounts)[]
+                                    ).map((k) => (
+                                      <div key={k} className="space-y-1">
+                                        <Label htmlFor={`prep-${k}`}>
+                                          Tempo {k} (min)
+                                        </Label>
+                                        <Input
+                                          id={`prep-${k}`}
+                                          name={`prep${k}`}
+                                          type="number"
+                                          min={1}
+                                          defaultValue={prepMinutesActive[k]}
+                                        />
+                                      </div>
+                                    ))}
+                                  </div>
+
+                                  <DialogFooter className="gap-2">
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      onClick={() =>
+                                        setSettingsDialogOpen(false)
+                                      }
+                                    >
+                                      Cancelar
+                                    </Button>
+                                    <Button
+                                      type="submit"
+                                      disabled={settingsFx.state !== "idle"}
+                                    >
+                                      {settingsFx.state !== "idle" ? (
+                                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                                      ) : null}
+                                      Salvar
+                                    </Button>
+                                  </DialogFooter>
+                                </settingsFx.Form>
+                              </DialogContent>
+                            </Dialog>
+                          </div>
+                        </div>
+
+                        <div className="flex items-baseline gap-3">
+                          <div className="text-5xl font-black text-slate-900 tabular-nums">
+                            {activeLastReady
+                              ? fmtHHMM(activeLastReady)
+                              : "--:--"}
+                          </div>
+                          <span className="text-[11px] uppercase tracking-wide text-slate-500 font-semibold">
+                            hora prevista
+                          </span>
+                        </div>
+
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="font-semibold"
+                            onClick={() => setTimelineOpen(true)}
+                            disabled={!activeBuckets.length}
+                          >
+                            Ver linha do tempo
+                          </Button>
+                          <div className="text-[11px] text-slate-500">
+                            Operadores considerados:{" "}
+                            <span className="font-semibold text-slate-700">
+                              {operatorCountActive}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Card pizzas */}
+                      <div className={summaryCardClass}>
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                            <Pizza className="h-4 w-4" /> Pizzas do dia
+                          </div>
+                          <Badge
+                            variant="outline"
+                            className="text-[11px] font-semibold uppercase tracking-wide"
+                          >
+                            Produção
+                          </Badge>
+                        </div>
+
+                        <div className="mt-3 grid gap-3">
+                          <div className="text-center">
+                            <div className="text-5xl font-black text-slate-900 tabular-nums">
+                              {totalPizzas}
+                            </div>
+                            <span className="text-[11px] uppercase tracking-wide text-slate-500 font-semibold">
+                              pizzas
+                            </span>
+                          </div>
+
+                          <div className="grid grid-cols-2 sm:grid-cols-5 gap-1">
+                            {sizeKeys.map((k) => (
+                              <div
+                                key={k}
+                                className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-center space-y-0.5"
+                              >
+                                <div className="text-[11px] uppercase tracking-wide font-semibold text-slate-600">
+                                  {SIZE_LABELS[k]?.slice(0, 3) ?? k}
+                                </div>
+                                <div className="text-xl font-bold text-slate-900 tabular-nums leading-none">
+                                  {pizzaCounts[k]}
+                                </div>
+                                {/* <div className="text-[11px] text-slate-500 font-semibold">{k}</div> */}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Card financeiro */}
+                      <div
+                        className={`${summaryCardClass} md:col-span-2 xl:col-span-2`}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                            <BadgeDollarSign className="h-4 w-4" /> Meta
+                            financeira do dia
+                          </div>
+                          <Badge
+                            variant="outline"
+                            className="text-[11px] font-semibold uppercase tracking-wide"
+                          >
+                            Receita
+                          </Badge>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <Dialog>
+                            <DialogTrigger asChild>
+                              <button
+                                type="button"
+                                className="rounded-xl border border-emerald-100 bg-emerald-50 p-3 text-center space-y-1 transition-colors hover:border-emerald-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300"
+                              >
+                                <div className="text-[11px] font-semibold uppercase tracking-wide text-emerald-700">
+                                  Receita Líquida
+                                </div>
+                                <div className="text-3xl font-extrabold text-emerald-700 tabular-nums">
+                                  {fmtBRL(dashboard.netAmount).slice(3, 99)}
+                                </div>
+                                <div className="text-[10px] font-semibold uppercase tracking-wide text-emerald-700/80">
+                                  Ver cálculo
+                                </div>
+                              </button>
+                            </DialogTrigger>
+                            <DialogContent className="max-w-xl">
+                              <DialogHeader>
+                                <DialogTitle>
+                                  Cálculo da receita líquida do dia
+                                </DialogTitle>
+                              </DialogHeader>
+                              <div className="space-y-3 text-sm">
+                                <p className="text-slate-600">
+                                  Regra aplicada: Receita Líquida = Receita
+                                  Bruta - Taxa Cartão - Imposto - Taxa
+                                  Marketplace.
+                                </p>
+                                <div className="rounded-lg border bg-slate-50 p-3 space-y-2">
+                                  <div className="flex items-center justify-between gap-3">
+                                    <span className="text-slate-600">
+                                      1. Receita bruta
+                                    </span>
+                                    <span className="font-mono font-semibold tabular-nums">
+                                      {fmtBRL(dashboard.grossAmount)}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center justify-between gap-3">
+                                    <span className="text-slate-600">
+                                      2. Taxa cartão (
+                                      {dashboard.cardFeePerc.toFixed(2)}% sobre{" "}
+                                      {fmtBRL(grossCardAmount)})
+                                    </span>
+                                    <span className="font-mono font-semibold tabular-nums text-red-700">
+                                      - {fmtBRL(cardFeeAmount)}
+                                    </span>
+                                  </div>
+                                  <div className="pl-4 text-xs text-slate-500">
+                                    Parcela cartão no dia:{" "}
+                                    {fmtBRL(dashboard.cardAmount)} (
+                                    {cardSharePerc.toFixed(2)}% da bruta).
+                                  </div>
+                                  <div className="flex items-center justify-between gap-3">
+                                    <span className="text-slate-600">
+                                      3. Imposto ({dashboard.taxPerc.toFixed(2)}
+                                      % sobre a bruta)
+                                    </span>
+                                    <span className="font-mono font-semibold tabular-nums text-red-700">
+                                      - {fmtBRL(taxAmount)}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center justify-between gap-3">
+                                    <span className="text-slate-600">
+                                      4. Taxa marketplace (
+                                      {dashboard.marketplaceTaxPerc.toFixed(2)}%
+                                      sobre{" "}
+                                      {fmtBRL(dashboard.marketplaceAmount)})
+                                    </span>
+                                    <span className="font-mono font-semibold tabular-nums text-red-700">
+                                      - {fmtBRL(marketplaceFeeAmount)}
+                                    </span>
+                                  </div>
+                                </div>
+                                <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 flex items-center justify-between gap-3">
+                                  <span className="font-semibold text-emerald-800">
+                                    Receita líquida final
+                                  </span>
+                                  <span className="font-mono text-lg font-bold text-emerald-800 tabular-nums">
+                                    {fmtBRL(netAmountByRule)}
+                                  </span>
+                                </div>
+                              </div>
                             </DialogContent>
                           </Dialog>
+                          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-center space-y-1">
+                            <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-600">
+                              Receita Bruta
+                            </div>
+                            <div className="text-3xl font-bold text-slate-800 tabular-nums">
+                              {fmtBRL(dashboard.grossAmount).slice(3, 99)}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-slate-600">
+                          <span className="font-semibold text-slate-700">
+                            Taxas
+                          </span>
+                          <span>
+                            Cartão {dashboard.cardFeePerc?.toFixed(2)}%
+                          </span>
+                          <span>Imposto {dashboard.taxPerc?.toFixed(2)}%</span>
+                          <span>
+                            Marketplace{" "}
+                            {dashboard.marketplaceTaxPerc?.toFixed(2)}%
+                          </span>
+                        </div>
+                        <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-500">
+                          <span>
+                            Custo médio: fixo{" "}
+                            {dashboard.costFixedPerc.toFixed(2)}% + variável{" "}
+                            {dashboard.costVariablePerc.toFixed(2)}%
+                          </span>
+                          <span>
+                            Base (3 meses): {dashboard.costAverageBaseLabel}
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-center space-y-1">
+                            <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-600">
+                              Resultado estimado dia
+                            </div>
+                            <div
+                              className={`text-2xl font-bold tabular-nums ${
+                                dashboard.estimatedProfitDay > 0
+                                  ? "text-emerald-700"
+                                  : dashboard.estimatedProfitDay < 0
+                                  ? "text-red-700"
+                                  : "text-slate-900"
+                              }`}
+                            >
+                              {fmtBRL(dashboard.estimatedProfitDay).slice(
+                                3,
+                                99
+                              )}
+                            </div>
+                          </div>
+                          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-center space-y-1">
+                            <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-600">
+                              Resultado estimado mês
+                            </div>
+                            <div
+                              className={`text-2xl font-bold tabular-nums ${
+                                dashboard.estimatedProfitMonthToDate > 0
+                                  ? "text-emerald-700"
+                                  : dashboard.estimatedProfitMonthToDate < 0
+                                  ? "text-red-700"
+                                  : "text-slate-900"
+                              }`}
+                            >
+                              {fmtBRL(
+                                dashboard.estimatedProfitMonthToDate
+                              ).slice(3, 99)}
+                            </div>
+                            <div
+                              className={`text-[11px] font-semibold ${prevMonthDiffTone}`}
+                            >
+                              {prevMonthDiffArrow} Mês anterior (
+                              {dashboard.prevMonthLabel}): {prevMonthDiffPrefix}
+                              {fmtBRL(Math.abs(prevMonthDiff))}
+                            </div>
+                          </div>
                         </div>
                       </div>
 
-                      <div className="flex items-baseline gap-3">
-                        <div className="text-5xl font-black text-slate-900 tabular-nums">{activeLastReady ? fmtHHMM(activeLastReady) : "--:--"}</div>
-                        <span className="text-[11px] uppercase tracking-wide text-slate-500 font-semibold">hora prevista</span>
+                      {/* Card status */}
+                      <div className={cn(summaryCardClass, statusColor)}>
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide">
+                            <span
+                              className={`inline-flex h-2.5 w-2.5 rounded-full ${statusDot}`}
+                              aria-hidden
+                            />
+                            Status do dia
+                          </div>
+                          <div
+                            className={`text-[11px] font-semibold uppercase tracking-wide ${statusTextColor}`}
+                          >
+                            {dashboard.status === "hit-target"
+                              ? "Acima da meta"
+                              : dashboard.status === "between"
+                              ? "Acima da mínima"
+                              : "Abaixo da mínima"}
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 gap-3">
+                          <div className="rounded-lg border border-white/60 bg-white/80 px-3 py-2 space-y-1.5">
+                            <div className="text-[11px] uppercase tracking-wide font-semibold text-slate-500">
+                              Meta Mínima (bruta)
+                            </div>
+                            <div
+                              className={`text-3xl font-black ${statusTextColor} tabular-nums leading-none mb-2`}
+                            >
+                              {dashboard.pctOfMin.toFixed(0)}%
+                            </div>
+
+                            <div className="font-mono text-base text-slate-800 tabular-nums">
+                              {fmtBRL(dashboard.goalMinAmount)}
+                            </div>
+                          </div>
+                          <div className="rounded-lg border border-white/60 bg-white/80 px-3 py-2 space-y-1.5">
+                            <div className="text-[11px] uppercase tracking-wide font-semibold text-slate-500">
+                              Meta Target (bruta)
+                            </div>
+                            <div
+                              className={`text-3xl font-black ${statusTextColor} tabular-nums leading-none mb-2`}
+                            >
+                              {dashboard.pctOfTarget.toFixed(0)}%
+                            </div>
+
+                            <div className="font-mono text-base text-slate-800 tabular-nums">
+                              {fmtBRL(dashboard.goalTargetAmount)}
+                            </div>
+                          </div>
+                        </div>
                       </div>
 
-
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="font-semibold"
-                          onClick={() => setTimelineOpen(true)}
-                          disabled={!activeBuckets.length}
+                      <Sheet open={timelineOpen} onOpenChange={setTimelineOpen}>
+                        <SheetContent
+                          side="right"
+                          className="sm:max-w-md w-full p-6 h-full flex flex-col"
                         >
-                          Ver linha do tempo
-                        </Button>
-                        <div className="text-[11px] text-slate-500">
-                          Operadores considerados: <span className="font-semibold text-slate-700">{operatorCountActive}</span>
-                        </div>
-                      </div>
+                          <TimelineSidebar
+                            buckets={activeBuckets}
+                            lastReadyAt={activeLastReady}
+                            nowMs={nowMs}
+                            orderLabels={predictionData.orderLabelMap}
+                            readyAtMap={activeReadyMap}
+                          />
+                        </SheetContent>
+                      </Sheet>
                     </div>
-
-                    {/* Card financeiro */}
-                    <div className={summaryCardClass}>
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                          <BadgeDollarSign className="h-4 w-4" /> Meta financeira do dia
-                        </div>
-                        <Badge variant="outline" className="text-[11px] font-semibold uppercase tracking-wide">
-                          Receita
-                        </Badge>
-                      </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <div className="rounded-xl border border-emerald-100 bg-emerald-50 p-3 text-center space-y-1">
-                          <div className="text-[11px] font-semibold uppercase tracking-wide text-emerald-700">Receita Líquida</div>
-                          <div className="text-3xl font-extrabold text-emerald-700 tabular-nums">{fmtBRL(dashboard.netAmount)}</div>
-                        </div>
-                        <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-center space-y-1">
-                          <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-600">Receita Bruta</div>
-                          <div className="text-3xl font-bold text-slate-800 tabular-nums">{fmtBRL(dashboard.grossAmount)}</div>
-                        </div>
-                      </div>
-                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-slate-600">
-                        <span className="font-semibold text-slate-700">Taxas</span>
-                        <span>Cartão {dashboard.cardFeePerc?.toFixed(2)}%</span>
-                        <span>Imposto {dashboard.taxPerc?.toFixed(2)}%</span>
-                        <span>Marketplace {dashboard.marketplaceTaxPerc?.toFixed(2)}%</span>
-                      </div>
-
-                    </div>
-
-                    {/* Card status */}
-                    <div className={cn(summaryCardClass, statusColor)}>
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide">
-                          <span className={`inline-flex h-2.5 w-2.5 rounded-full ${statusDot}`} aria-hidden />
-                          Status do dia
-                        </div>
-                        <Badge variant="outline" className="text-[11px] font-semibold uppercase tracking-wide bg-white/70">
-                          {dashboard.pctOfTarget.toFixed(0)}% da Target
-                        </Badge>
-                      </div>
-                      <div className={`text-3xl font-black leading-tight ${statusTextColor} tabular-nums`}>
-                        {dashboard.status === "hit-target"
-                          ? "Acima da meta"
-                          : dashboard.status === "between"
-                            ? "Acima da mínima"
-                            : "Abaixo da mínima"}
-                      </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <div className="rounded-lg border border-white/60 bg-white/80 px-3 py-2">
-                          <div className="text-[11px] uppercase tracking-wide font-semibold text-slate-500">Meta Mínima (dia)</div>
-                          <div className="font-mono text-base text-slate-800 tabular-nums">{fmtBRL(dashboard.goalMinAmount)}</div>
-                        </div>
-                        <div className="rounded-lg border border-white/60 bg-white/80 px-3 py-2">
-                          <div className="text-[11px] uppercase tracking-wide font-semibold text-slate-500">Meta Target (dia)</div>
-                          <div className="font-mono text-base text-slate-800 tabular-nums">{fmtBRL(dashboard.goalTargetAmount)}</div>
-                        </div>
-                      </div>
-                    </div>
-
-                    <Sheet open={timelineOpen} onOpenChange={setTimelineOpen}>
-                      <SheetContent side="right" className="sm:max-w-md w-full p-6 h-full flex flex-col">
-                        <TimelineSidebar
-                          buckets={activeBuckets}
-                          lastReadyAt={activeLastReady}
-                          nowMs={nowMs}
-                          orderLabels={predictionData.orderLabelMap}
-                          readyAtMap={activeReadyMap}
-                        />
-                      </SheetContent>
-                    </Sheet>
                   </div>
                 );
               }}
             </Await>
           </Suspense>
+        </div>
 
+        <div className="xl:col-span-8">
+          <Suspense
+            fallback={
+              <div className="rounded-2xl border border-slate-200 bg-white p-3 text-sm text-slate-500 shadow-sm">
+                Carregando dashboard de horarios...
+              </div>
+            }
+          >
+            <Await resolve={orderTimingDashboard}>
+              {(timingDashboard: OrderTimingDashboard) => (
+                <OrderTimingDashboardPanel data={timingDashboard} />
+              )}
+            </Await>
+          </Suspense>
         </div>
       </div>
 
-      <Separator className="my-12" />
-
-      {/* Venda livre rápida + Filtro de Canal */}
       {(status === "OPENED" || status === "REOPENED") && (
-        <>
+        <Suspense fallback={null}>
+          <Await resolve={doughUsage}>
+            {(used: SizeCounts) => {
+              const effectiveCounts =
+                stockSnapshot?.effective ?? defaultSizeCounts();
+              const baseCounts = baseStock ?? defaultSizeCounts();
+              const remaining = calcRemaining(effectiveCounts, used);
+              const ordered = (availableSizes as DoughSizeOption[]) ?? [];
+              const manual = effectiveCounts;
+              const hasManualInfo = (
+                ["F", "M", "P", "I", "FT"] as (keyof SizeCounts)[]
+              ).some((k) => manual[k] > 0);
+              const manualText = ordered
+                .map(({ key, abbr }) => ({
+                  key,
+                  abbr,
+                  value: manual[key] ?? 0,
+                }))
+                .filter((item) => item.value > 0)
+                .map((item) => `${item.abbr || item.key}: ${item.value}`)
+                .join(" · ");
 
-          {/* Barra contador do estoque */}
-          <Suspense fallback={null}>
-            <Await resolve={doughUsage}>
-              {(used: SizeCounts) => {
-                const effectiveCounts = stockSnapshot?.effective ?? defaultSizeCounts();
-                const baseCounts = baseStock ?? defaultSizeCounts();
-                const remaining = calcRemaining(effectiveCounts, used);
-                const ordered = (availableSizes as DoughSizeOption[]) ?? [];
-                const manual = effectiveCounts;
-                const hasManualInfo = (["F", "M", "P", "I", "FT"] as (keyof SizeCounts)[])
-                  .some((k) => manual[k] > 0);
-                const manualText = ordered
-                  .map(({ key, abbr }) => ({ key, abbr, value: manual[key] ?? 0 }))
-                  .filter((item) => item.value > 0)
-                  .map((item) => `${item.abbr || item.key}: ${item.value}`)
-                  .join(" · ");
+              function chipClasses(k: keyof SizeCounts) {
+                const init = effectiveCounts[k];
+                if (init <= 0)
+                  return "border border-slate-200 text-slate-500 bg-white";
+                const ratio = remaining[k] / init;
+                if (remaining[k] === 0) return "bg-rose-500 text-white"; // crítico
+                if (remaining[k] <= 2) return "bg-amber-400 text-slate-900"; // alerta
+                if (remaining[k] < 3)
+                  return "border border-rose-500 text-rose-600 bg-white";
+                return "bg-emerald-500 text-white"; // ok
+              }
 
-                function chipClasses(k: keyof SizeCounts) {
-                  const init = effectiveCounts[k];
-                  if (init <= 0) return "border border-slate-200 text-slate-500 bg-white";
-                  const ratio = remaining[k] / init;
-                  if (remaining[k] === 0) return "bg-rose-500 text-white"; // crítico
-                  if (remaining[k] <= 2) return "bg-amber-400 text-slate-900"; // alerta
-                  if (remaining[k] < 3) return "border border-rose-500 text-rose-600 bg-white";
-                  return "bg-emerald-500 text-white"; // ok
-                }
-
-                return (
-                  <div
-                    className="fixed right-5 z-40"
-                    style={{ top: `${floatingTop}px` }}
+              return (
+                <div ref={stockBarRef} className="w-full sticky top-3 z-30">
+                  <stockFx.Form
+                    method="post"
+                    className="w-full rounded-2xl border bg-white/95 backdrop-blur shadow-sm px-4 py-3 flex flex-col items-center gap-4"
+                    onSubmit={() => setEditingBar(false)}
                   >
-                    <stockFx.Form
-                      method="post"
-                      className="rounded-full border bg-white shadow-lg px-3 py-2 flex items-center gap-3 backdrop-blur"
-                      onSubmit={() => setEditingBar(false)}
-                    >
-                      <input type="hidden" name="_action" value="saveDoughStock" />
-                      <input type="hidden" name="date" value={dateStr} />
+                    <input
+                      type="hidden"
+                      name="_action"
+                      value="saveDoughStock"
+                    />
+                    <input type="hidden" name="date" value={dateStr} />
 
-                      <div
-                        className="flex items-center justify-center w-7 h-7 rounded text-slate-600 hover:bg-slate-200 cursor-grab active:cursor-grabbing"
-                        onMouseDown={(e) => { setDragging(true); e.preventDefault(); }}
-                        role="presentation"
-                      >
-                        <GripVertical className="w-4 h-4" />
-                      </div>
+                    <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-3 w-full">
+                      {ordered.map(({ key, label, abbr }) => (
+                        <div
+                          key={key}
+                          className="flex flex-col items-center gap-1 min-w-[60px]"
+                        >
+                          <input
+                            type="hidden"
+                            name={`stock${key}`}
+                            value={baseCounts[key]}
+                          />
+                          <input
+                            type="hidden"
+                            name={`adjust${key}`}
+                            value={adjustmentDraft[key]}
+                          />
 
-                      <div className="flex items-center gap-2">
-                        {ordered.map(({ key, label, abbr }) => (
-                          <div key={key} className="flex flex-col items-center gap-1 min-w-[60px]">
-                            <input type="hidden" name={`stock${key}`} value={baseCounts[key]} />
-                            <input type="hidden" name={`adjust${key}`} value={adjustmentDraft[key]} />
-
-                            <div
-                              className={`w-9 h-9 rounded-full flex items-center justify-center text-[11px] font-semibold ${chipClasses(key)}`}
-                              title={`${label}: ${Math.max(0, remaining[key])}`}
-                            >
-                              {abbr || key} {Math.max(0, remaining[key])}
-                            </div>
-
-                            {editingBar && (
-                              <div className="flex items-center gap-0 text-[11px] text-slate-600">
-                                <button
-                                  type="button"
-                                  className="h-6 w-6 rounded-full border border-slate-200 hover:bg-slate-50 font-semibold"
-                                  onClick={() => setAdjustmentValue(key, (adjustmentDraft[key] ?? 0) - 1)}
-                                >
-                                  –
-                                </button>
-                                <NumericInput
-                                  min={0}
-                                  step={1}
-                                  className="h-6 w-12 text-center rounded bg-white text-xs font-semibold border-none"
-                                  value={adjustmentDraft[key]}
-                                  onChange={(e) => setAdjustmentValue(key, e.target.value)}
-                                  aria-label={`Ajuste ${label}`}
-                                />
-                                <button
-                                  type="button"
-                                  className="h-6 w-6 rounded-full border border-slate-200 hover:bg-slate-50"
-                                  onClick={() => setAdjustmentValue(key, (adjustmentDraft[key] ?? 0) + 1)}
-                                >
-                                  +
-                                </button>
-                              </div>
+                          <div
+                            className={cn(
+                              "rounded-full flex items-center justify-center font-bold leading-none tabular-nums transition-all duration-300 ease-out",
+                              isStockBarPinned ? "w-16 h-16" : "w-14 h-14",
+                              chipClasses(key)
                             )}
+                            title={`${label}: ${Math.max(0, remaining[key])}`}
+                          >
+                            <span className="flex items-baseline gap-1">
+                              <span
+                                className={cn(
+                                  "uppercase tracking-tight",
+                                  isStockBarPinned
+                                    ? "text-[22px]"
+                                    : "text-[18px]"
+                                )}
+                              >
+                                {abbr || key}
+                              </span>
+                              <span
+                                className={cn(
+                                  isStockBarPinned ? "text-2xl" : "text-xl"
+                                )}
+                              >
+                                {Math.max(0, remaining[key])}
+                              </span>
+                            </span>
                           </div>
-                        ))}
-                      </div>
 
-                      {/* {hasManualInfo && !editingBar && (
-                    <div className="text-[11px] text-slate-500 ml-1">
-                      Saldo manual: {manualText}
-                    </div>
-                  )} */}
+                          {editingBar && (
+                            <div className="flex items-center gap-0 text-[11px] text-slate-600">
+                              <button
+                                type="button"
+                                className="h-6 w-6 rounded-full border border-slate-200 hover:bg-slate-50 font-semibold"
+                                onClick={() =>
+                                  setAdjustmentValue(
+                                    key,
+                                    (adjustmentDraft[key] ?? 0) - 1
+                                  )
+                                }
+                              >
+                                –
+                              </button>
+                              <NumericInput
+                                min={0}
+                                step={1}
+                                className="h-6 w-12 text-center rounded bg-white text-xs font-semibold border-none"
+                                value={adjustmentDraft[key]}
+                                onChange={(e) =>
+                                  setAdjustmentValue(key, e.target.value)
+                                }
+                                aria-label={`Ajuste ${label}`}
+                              />
+                              <button
+                                type="button"
+                                className="h-6 w-6 rounded-full border border-slate-200 hover:bg-slate-50"
+                                onClick={() =>
+                                  setAdjustmentValue(
+                                    key,
+                                    (adjustmentDraft[key] ?? 0) + 1
+                                  )
+                                }
+                              >
+                                +
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      ))}
 
                       {editingBar ? (
                         <div className="flex items-center gap-2">
-                          <Button type="submit" size="sm" variant="secondary" disabled={stockFx.state !== "idle"}>
+                          <Button
+                            type="submit"
+                            size="sm"
+                            variant="secondary"
+                            disabled={stockFx.state !== "idle"}
+                          >
                             {stockFx.state !== "idle" ? (
                               <>
-                                <Loader2 className="w-3 h-3 animate-spin mr-1" /> Salvando…
+                                <Loader2 className="w-3 h-3 animate-spin mr-1" />{" "}
+                                Salvando…
                               </>
                             ) : (
                               "Salvar"
@@ -1999,7 +3864,9 @@ export default function GridKdsPage() {
                             size="sm"
                             variant="ghost"
                             onClick={() => {
-                              setAdjustmentDraft(stockSnapshot?.effective ?? defaultSizeCounts());
+                              setAdjustmentDraft(
+                                stockSnapshot?.effective ?? defaultSizeCounts()
+                              );
                               setEditingBar(false);
                             }}
                           >
@@ -2017,43 +3884,53 @@ export default function GridKdsPage() {
                           <PencilLine className="w-4 h-4 mr-1" />
                         </Button>
                       )}
-                    </stockFx.Form>
-                  </div>
-                );
-              }}
-            </Await>
-          </Suspense>
+                    </div>
 
+                    {/* {hasManualInfo && !editingBar && (
+                      <div className="text-[11px] text-slate-500 ml-1">
+                        Saldo manual: {manualText}
+                      </div>
+                    )} */}
+                  </stockFx.Form>
+                </div>
+              );
+            }}
+          </Await>
+        </Suspense>
+      )}
+
+      <Separator className="my-12" />
+
+      {/* Venda livre rápida + Filtro de Canal */}
+      {(status === "OPENED" || status === "REOPENED") && (
+        <>
           <div className="flex flex-wrap items-center justify-between gap-3">
             {/* Venda Livre rápida */}
             <div className="flex items-center gap-3">
               <div className="text-sm font-medium">Venda livre (rápida)</div>
-              <listFx.Form method="post" className="flex flex-wrap items-center gap-3">
+              <listFx.Form
+                method="post"
+                className="flex flex-wrap items-center gap-3"
+                ref={vlFormRef}
+              >
                 <input type="hidden" name="_action" value="createVL" />
                 <input type="hidden" name="date" value={dateStr} />
+                <input type="hidden" name="isCreditCard" value="" />
+                <input type="hidden" name="isCash" value="" />
+                <input type="hidden" name="isOtherPaymentMethod" value="" />
 
                 <MoneyInput name="orderAmount" />
 
-                {/* hidden para enviar o cartão no submit */}
-                <input type="hidden" name="isCreditCard" value={vlIsCreditCard ? "on" : ""} />
-
-                {/* Ícone Cartão (preto ativo / cinza inativo) */}
-                <button
+                <Button
                   type="button"
-                  onClick={() => setVlIsCreditCard(v => !v)}
-                  className={`h-9 w-9 grid place-items-center rounded-md border transition
-                              hover:bg-slate-50
-                              ${vlIsCreditCard ? "border-blue-800" : "border-slate-200"}`}
-                  title="Pago no cartão"
-                  aria-pressed={vlIsCreditCard}
+                  variant="secondary"
+                  disabled={listFx.state !== "idle"}
+                  onClick={() => setVlPaymentDialogOpen(true)}
                 >
-                  <CreditCard className={`h-6 w-6 ${vlIsCreditCard ? "text-blue-800" : "text-slate-300"}`} />
-                </button>
-
-                <Button type="submit" variant="secondary" disabled={listFx.state !== "idle"}>
                   {listFx.state !== "idle" ? (
                     <>
-                      <Loader2 className="w-4 h-4 animate-spin mr-1" /> Adicionando…
+                      <Loader2 className="w-4 h-4 animate-spin mr-1" />{" "}
+                      Adicionando…
                     </>
                   ) : (
                     "Adicionar"
@@ -2062,17 +3939,28 @@ export default function GridKdsPage() {
               </listFx.Form>
             </div>
 
+            <PaymentMethodDialog
+              open={vlPaymentDialogOpen}
+              onOpenChange={setVlPaymentDialogOpen}
+              onSelect={submitVlWithPaymentMethod}
+            />
+
             {/* Filtro por Canal */}
             <div className="flex items-center gap-2">
               <span className="text-sm text-slate-600">Filtrar canal:</span>
-              <Select value={channelFilter} onValueChange={(val) => setChannelFilter(val)}>
+              <Select
+                value={channelFilter}
+                onValueChange={(val) => setChannelFilter(val)}
+              >
                 <SelectTrigger className="w-[240px] h-9">
                   <SelectValue placeholder="Todos os canais" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="">Todos</SelectItem>
                   {CHANNELS.map((c) => (
-                    <SelectItem key={c} value={c}>{c}</SelectItem>
+                    <SelectItem key={c} value={c}>
+                      {c}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -2080,7 +3968,6 @@ export default function GridKdsPage() {
           </div>
 
           <Separator className="my-12" />
-
 
           {/* Cabeçalho */}
           <div className={COLS_HDR + " py-2 px-1"}>
@@ -2105,8 +3992,23 @@ export default function GridKdsPage() {
             const globalUsage = useMemo(() => sumSizes(rowsDb), [rowsDb]);
 
             const predictionData = useMemo(
-              () => computePredictionData(rowsDb, operatorCountActive, riderCount, dzMap, nowMs, prepMinutesActive),
-              [rowsDb, operatorCountActive, riderCount, dzMap, nowMs, prepMinutesActive]
+              () =>
+                computePredictionData(
+                  rowsDb,
+                  operatorCountActive,
+                  riderCount,
+                  dzMap,
+                  nowMs,
+                  prepMinutesActive
+                ),
+              [
+                rowsDb,
+                operatorCountActive,
+                riderCount,
+                dzMap,
+                nowMs,
+                prepMinutesActive,
+              ]
             );
 
             const predictions =
@@ -2118,7 +4020,7 @@ export default function GridKdsPage() {
             const filteredRows = useMemo(() => {
               if (!channelFilter) return rowsDb;
               const wanted = channelFilter;
-              return rowsDb.filter((o) => ((o.channel ?? "").trim() === wanted));
+              return rowsDb.filter((o) => (o.channel ?? "").trim() === wanted);
             }, [rowsDb, channelFilter]);
 
             return (
@@ -2126,7 +4028,8 @@ export default function GridKdsPage() {
                 {dup.length > 0 && (
                   <div className="flex items-center gap-2 border border-amber-300 bg-amber-50 text-amber-900 rounded px-3 py-2 text-sm">
                     <AlertTriangle className="w-4 h-4" />
-                    Comandas duplicadas no dia: <b className="ml-1">{dup.join(", ")}</b>
+                    Comandas duplicadas no dia:{" "}
+                    <b className="ml-1">{dup.join(", ")}</b>
                   </div>
                 )}
 
@@ -2137,11 +4040,31 @@ export default function GridKdsPage() {
                       if (!stockSnapshot?.effective) return null;
                       const currentSize = parseSize(o.size);
                       return {
-                        F: Math.max(0, stockSnapshot.effective.F - (globalUsage.F - currentSize.F)),
-                        M: Math.max(0, stockSnapshot.effective.M - (globalUsage.M - currentSize.M)),
-                        P: Math.max(0, stockSnapshot.effective.P - (globalUsage.P - currentSize.P)),
-                        I: Math.max(0, stockSnapshot.effective.I - (globalUsage.I - currentSize.I)),
-                        FT: Math.max(0, stockSnapshot.effective.FT - (globalUsage.FT - currentSize.FT)),
+                        F: Math.max(
+                          0,
+                          stockSnapshot.effective.F -
+                            (globalUsage.F - currentSize.F)
+                        ),
+                        M: Math.max(
+                          0,
+                          stockSnapshot.effective.M -
+                            (globalUsage.M - currentSize.M)
+                        ),
+                        P: Math.max(
+                          0,
+                          stockSnapshot.effective.P -
+                            (globalUsage.P - currentSize.P)
+                        ),
+                        I: Math.max(
+                          0,
+                          stockSnapshot.effective.I -
+                            (globalUsage.I - currentSize.I)
+                        ),
+                        FT: Math.max(
+                          0,
+                          stockSnapshot.effective.FT -
+                            (globalUsage.FT - currentSize.FT)
+                        ),
                       } as SizeCounts;
                     })();
 
@@ -2176,7 +4099,11 @@ export default function GridKdsPage() {
             <Button type="submit" disabled={listFx.state !== "idle"}>
               Adicionar mais
             </Button>
-            <Input name="more" defaultValue={20} className="h-9 w-28 text-center" />
+            <Input
+              name="more"
+              defaultValue={20}
+              className="h-9 w-28 text-center"
+            />
           </listFx.Form>
         </>
       )}
@@ -2186,7 +4113,10 @@ export default function GridKdsPage() {
         progress={progress}
         hasError={!!openError}
         errorMessage={openError}
-        onClose={() => { setOpening(false); setOpenError(null); }}
+        onClose={() => {
+          setOpening(false);
+          setOpenError(null);
+        }}
       />
     </div>
   );

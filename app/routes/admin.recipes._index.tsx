@@ -1,127 +1,998 @@
-import { Recipe } from "@prisma/client"
-import { Separator } from "@radix-ui/react-separator"
-import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node"
-import { useLoaderData, Form, useActionData } from "@remix-run/react"
-import { useState } from "react"
-import Container from "~/components/layout/container/container"
-import Badge from "~/components/primitives/badge/badge"
-import { EditItemButton, DeleteItemButton } from "~/components/primitives/table-list"
-import { Input } from "~/components/ui/input"
-import { toast } from "~/components/ui/use-toast"
-import RecipeBadge from "~/domain/recipe/components/recipe-badge/recipe-badge"
-import { recipeEntity } from "~/domain/recipe/recipe.entity.server"
-import { cn } from "~/lib/utils"
+import { Recipe } from "@prisma/client";
+import {
+  defer,
+  type ActionFunctionArgs,
+  type LoaderFunctionArgs,
+} from "@remix-run/node";
+import {
+  Await,
+  Form,
+  useActionData,
+  useFetcher,
+  Link,
+  useLoaderData,
+  useSubmit,
+} from "@remix-run/react";
+import { Suspense, useEffect, useRef, useState } from "react";
+import { EditItemButton } from "~/components/primitives/table-list";
+import { Button } from "~/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "~/components/ui/alert-dialog";
+import { Input } from "~/components/ui/input";
+import {
+  SearchableSelect,
+  type SearchableSelectOption,
+} from "~/components/ui/searchable-select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "~/components/ui/table";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "~/components/ui/select";
+import { toast } from "~/components/ui/use-toast";
+import RecipeBadge from "~/domain/recipe/components/recipe-badge/recipe-badge";
+import {
+  Search,
+  Check,
+  ChevronLeft,
+  ChevronsLeft,
+  ChevronsRight,
+  Trash2,
+  Monitor,
+} from "lucide-react";
 
-import { ok, serverError } from "~/utils/http-response.server"
-import tryit from "~/utils/try-it"
+import { badRequest, ok } from "~/utils/http-response.server";
+import tryit from "~/utils/try-it";
+import prismaClient from "~/lib/prisma/client.server";
+import { recipeEntity } from "~/domain/recipe/recipe.entity.server";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+} from "~/components/ui/pagination";
 
+type RecipeWithMeta = Recipe & {
+  Item: {
+    name: string;
+    ItemSellingChannelItem: Array<{
+      visible: boolean;
+      ItemSellingChannel: {
+        id: string;
+        key: string;
+        name: string;
+      };
+    }>;
+  } | null;
+};
+type FilterItem = {
+  id: string;
+  name: string;
+  classification: string | null;
+  consumptionUm: string | null;
+};
+type SellingChannelOption = {
+  id: string;
+  key: string;
+  name: string;
+};
+type ChannelVisibilityFilter = "all" | "visible" | "hidden";
+type RecipeStatusFilter = "active" | "draft" | "archived" | "all";
+type RecipesIndexPayload = {
+  recipes: RecipeWithMeta[];
+  items: FilterItem[];
+  channels: SellingChannelOption[];
+  filters: {
+    q: string;
+    itemId: string;
+    channelId: string;
+    visibility: ChannelVisibilityFilter;
+    status: RecipeStatusFilter;
+  };
+  pagination: {
+    page: number;
+    pageSize: number;
+    totalItems: number;
+    totalPages: number;
+  };
+};
+
+const PAGE_SIZE = 20;
+
+function parsePage(raw: string | null) {
+  const parsed = Number(raw || "1");
+  if (!Number.isFinite(parsed)) return 1;
+  return Math.max(1, Math.floor(parsed));
+}
+
+function parseVisibilityFilter(raw: string | null): ChannelVisibilityFilter {
+  const normalized = String(raw || "")
+    .trim()
+    .toLowerCase();
+  if (normalized === "visible" || normalized === "hidden") return normalized;
+  return "all";
+}
+
+function parseStatusFilter(raw: string | null): RecipeStatusFilter {
+  const normalized = String(raw || "active")
+    .trim()
+    .toLowerCase();
+  if (
+    normalized === "draft" ||
+    normalized === "archived" ||
+    normalized === "all"
+  ) {
+    return normalized;
+  }
+  return "active";
+}
+
+function buildPageHref(params: {
+  q: string;
+  itemId: string;
+  channelId: string;
+  visibility: ChannelVisibilityFilter;
+  status: RecipeStatusFilter;
+  page: number;
+}) {
+  const searchParams = new URLSearchParams();
+  if (params.q) searchParams.set("q", params.q);
+  if (params.itemId) searchParams.set("itemId", params.itemId);
+  if (params.channelId) searchParams.set("channelId", params.channelId);
+  if (params.visibility !== "all")
+    searchParams.set("visibility", params.visibility);
+  if (params.status !== "active") searchParams.set("status", params.status);
+  searchParams.set("page", String(params.page));
+  return `/admin/recipes?${searchParams.toString()}`;
+}
+
+async function loadRecipesIndexPayload(
+  request: Request
+): Promise<RecipesIndexPayload> {
+  const db = prismaClient as any;
+
+  const url = new URL(request.url);
+  const q = String(url.searchParams.get("q") || "").trim();
+  const itemId = String(url.searchParams.get("itemId") || "").trim();
+  const channelId = String(url.searchParams.get("channelId") || "").trim();
+  const visibility = parseVisibilityFilter(url.searchParams.get("visibility"));
+  const status = parseStatusFilter(url.searchParams.get("status"));
+  const requestedPage = parsePage(url.searchParams.get("page"));
+
+  const where: any = {};
+  if (status !== "all") where.status = status;
+  if (q) {
+    where.OR = [
+      { name: { contains: q, mode: "insensitive" } },
+      {
+        RecipeIngredient: {
+          some: {
+            IngredientItem: {
+              name: { contains: q, mode: "insensitive" },
+            },
+          },
+        },
+      },
+    ];
+  }
+  if (itemId) where.itemId = itemId;
+  if (channelId || visibility !== "all") {
+    where.Item = {
+      is: {
+        ItemSellingChannelItem: {
+          some: {
+            ...(channelId ? { itemSellingChannelId: channelId } : {}),
+            ...(visibility === "visible" ? { visible: true } : {}),
+            ...(visibility === "hidden" ? { visible: false } : {}),
+          },
+        },
+      },
+    };
+  }
+
+  const [countErr, totalItemsRaw] = await tryit(db.recipe.count({ where }));
+
+  if (countErr) {
+    throw countErr;
+  }
+
+  const totalItems = Number(totalItemsRaw ?? 0);
+  const totalPages = Math.max(1, Math.ceil(totalItems / PAGE_SIZE));
+  const page = Math.min(requestedPage, totalPages);
+
+  const [err, result] = await tryit(
+    Promise.all([
+      db.item.findMany({
+        where: { active: true },
+        select: {
+          id: true,
+          name: true,
+          classification: true,
+          consumptionUm: true,
+        },
+        orderBy: [{ name: "asc" }],
+        take: 500,
+      }),
+      db.itemSellingChannel.findMany({
+        select: {
+          id: true,
+          key: true,
+          name: true,
+        },
+        orderBy: [{ sortOrderIndex: "asc" }, { name: "asc" }],
+      }),
+      db.recipe.findMany({
+        where,
+        include: {
+          Item: {
+            select: {
+              name: true,
+              ItemSellingChannelItem: {
+                select: {
+                  visible: true,
+                  ItemSellingChannel: {
+                    select: {
+                      id: true,
+                      key: true,
+                      name: true,
+                    },
+                  },
+                },
+                orderBy: {
+                  ItemSellingChannel: {
+                    sortOrderIndex: "asc",
+                  },
+                },
+              },
+            },
+          },
+        },
+        orderBy: [{ createdAt: "desc" }],
+        skip: (page - 1) * PAGE_SIZE,
+        take: PAGE_SIZE,
+      }),
+    ])
+  );
+
+  if (err) {
+    throw err;
+  }
+
+  const [items, channels, recipesRaw] = result;
+  const recipes: RecipeWithMeta[] = recipesRaw || [];
+
+  return {
+    recipes,
+    items,
+    channels,
+    filters: {
+      q,
+      itemId,
+      channelId,
+      visibility,
+      status,
+    },
+    pagination: {
+      page,
+      pageSize: PAGE_SIZE,
+      totalItems,
+      totalPages,
+    },
+  };
+}
 
 export async function loader({ request }: LoaderFunctionArgs) {
-
-    const [err, recipes] = await tryit(recipeEntity.findAll())
-
-    if (err) {
-        return serverError(err)
-    }
-
-    return ok({ recipes })
-
+  return defer({
+    status: 200,
+    message: "Ok",
+    payload: loadRecipesIndexPayload(request),
+  });
 }
 
 export async function action({ request }: ActionFunctionArgs) {
-    let formData = await request.formData();
-    const { _action, ...values } = Object.fromEntries(formData);
+  const formData = await request.formData();
+  const values = Object.fromEntries(formData);
+  const _action = String(values._action || "");
 
+  if (_action === "recipe-delete") {
+    const recipeId = String(values.recipeId || "").trim();
+    if (!recipeId) return badRequest("Receita inválida");
 
-    if (_action === "recipe-delete") {
-
-        const [err, data] = await tryit(recipeEntity.delete(values.id as string))
-
-        if (err) {
-            return serverError(err)
-        }
-
-        return ok({ message: "Produto deletado com sucesso" })
+    try {
+      await recipeEntity.delete(recipeId);
+      return ok({ message: "Receita eliminada" });
+    } catch (error) {
+      return badRequest(
+        (error as Error)?.message || "Erro ao eliminar receita"
+      );
     }
+  }
 
-    return null
+  return null;
 }
 
+export default function RecipesIndex() {
+  const loaderData = useLoaderData<typeof loader>();
 
+  return (
+    <Suspense fallback={<RecipesIndexLoading />}>
+      <Await resolve={loaderData.payload} errorElement={<RecipesIndexError />}>
+        {(payload) => <RecipesIndexContent payload={payload} />}
+      </Await>
+    </Suspense>
+  );
+}
 
-export default function ProducstIndex() {
-    const loaderData = useLoaderData<typeof loader>()
-    const recipes = loaderData?.payload.recipes as Recipe[]
+function RecipesIndexContent({ payload }: { payload: RecipesIndexPayload }) {
+  const recipes = payload.recipes;
+  const items = payload.items;
+  const channels = payload.channels;
+  const filters = payload.filters;
+  const pagination = payload.pagination;
+  const submit = useSubmit();
+  const formRef = useRef<HTMLFormElement>(null);
 
-    const actionData = useActionData<typeof action>()
-    const status = actionData?.status
-    const message = actionData?.message
+  const actionData = useActionData<typeof action>();
+  const status = actionData?.status;
+  const message = actionData?.message;
 
-    if (status && status !== 200) {
-        toast({
-            title: "Erro",
-            description: message,
-        })
-    }
+  if (status && status !== 200) {
+    toast({
+      title: "Erro",
+      description: message,
+    });
+  }
 
-    const [searchTerm, setSearchTerm] = useState("")
+  const [searchTerm, setSearchTerm] = useState(filters?.q || "");
+  const [filterItemId, setFilterItemId] = useState(
+    filters?.itemId || "__all__"
+  );
+  const [filterChannelId, setFilterChannelId] = useState(
+    filters?.channelId || "__all__"
+  );
+  const [filterVisibility, setFilterVisibility] =
+    useState<ChannelVisibilityFilter>(filters?.visibility || "all");
+  const [filterStatus, setFilterStatus] = useState<RecipeStatusFilter>(
+    filters?.status || "active"
+  );
 
-    const recipesFilteredBySearch = recipes.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase()))
+  useEffect(() => {
+    setSearchTerm(filters?.q || "");
+    setFilterItemId(filters?.itemId || "__all__");
+    setFilterChannelId(filters?.channelId || "__all__");
+    setFilterVisibility(filters?.visibility || "all");
+    setFilterStatus(filters?.status || "active");
+  }, [
+    filters?.q,
+    filters?.itemId,
+    filters?.channelId,
+    filters?.visibility,
+    filters?.status,
+  ]);
 
-    return (
-        <Container>
-            <div className="flex flex-col gap-2">
-                <div data-element="filters" className="flex justify-between border rounded-md p-4 mb-2">
+  const triggerSubmit = (overrides?: {
+    q?: string;
+    itemId?: string;
+    channelId?: string;
+    visibility?: ChannelVisibilityFilter;
+    status?: RecipeStatusFilter;
+  }) => {
+    if (!formRef.current) return;
+    const formData = new FormData(formRef.current);
+    if (overrides?.q !== undefined) formData.set("q", overrides.q);
+    if (overrides?.itemId !== undefined)
+      formData.set(
+        "itemId",
+        overrides.itemId === "__all__" ? "" : overrides.itemId
+      );
+    if (overrides?.channelId !== undefined)
+      formData.set(
+        "channelId",
+        overrides.channelId === "__all__" ? "" : overrides.channelId
+      );
+    if (overrides?.visibility !== undefined)
+      formData.set(
+        "visibility",
+        overrides.visibility === "all" ? "" : overrides.visibility
+      );
+    if (overrides?.status !== undefined)
+      formData.set(
+        "status",
+        overrides.status === "active" ? "" : overrides.status
+      );
+    formData.set("page", "1");
+    submit(formData, { method: "get", replace: true });
+  };
 
-                    {/* <RecipesFilters /> */}
+  const itemFilterOptions: SearchableSelectOption[] = [
+    { value: "__all__", label: "Todos os itens", searchText: "todos os itens" },
+    ...items.map((item) => ({
+      value: item.id,
+      label: item.name,
+      searchText: [
+        item.name,
+        item.classification || "",
+        item.consumptionUm || "",
+      ]
+        .join(" ")
+        .trim(),
+    })),
+  ];
 
-                    <RecipesSearch onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-                        const value = e.target.value
-                        setSearchTerm(value)
-                    }} />
-                </div>
+  const itemById = new Map(items.map((item) => [item.id, item]));
 
-                <ul data-element="recipes" className="flex flex-col gap-4 md:grid md:grid-cols-3">
-                    {
-                        recipesFilteredBySearch.map(p => <RecipeItem item={p} key={p.id} />)
-                    }
-                </ul>
+  return (
+    <div className="flex flex-col gap-4">
+      <Button asChild variant="outline" className="self-start">
+        <Link to="/admin/receitas-tv" target="_blank" rel="noopener noreferrer">
+          <Monitor className="mr-2 h-4 w-4" />
+          Lista para TV / monitor
+        </Link>
+      </Button>
+      <div className="space-y-4 border-b border-slate-200 pb-4">
+        <div className="flex flex-col gap-4">
+          <p className="text-sm text-slate-600">
+            {pagination?.totalItems || 0} receita(s) encontradas.
+          </p>
+
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <Form
+              method="get"
+              ref={formRef}
+              className="flex flex-1 items-center gap-3 flex-wrap"
+            >
+              <input type="hidden" name="page" value={pagination?.page || 1} />
+              <input
+                type="hidden"
+                name="itemId"
+                value={filterItemId === "__all__" ? "" : filterItemId}
+              />
+              <input
+                type="hidden"
+                name="channelId"
+                value={filterChannelId === "__all__" ? "" : filterChannelId}
+              />
+              <input
+                type="hidden"
+                name="visibility"
+                value={filterVisibility === "all" ? "" : filterVisibility}
+              />
+              <input
+                type="hidden"
+                name="status"
+                value={filterStatus === "active" ? "" : filterStatus}
+              />
+              <RecipesSearch
+                value={searchTerm}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                  const value = e.target.value;
+                  setSearchTerm(value);
+                  triggerSubmit({ q: value });
+                }}
+              />
+              <SearchableSelect
+                value={filterItemId}
+                options={itemFilterOptions}
+                placeholder="Item vinculado"
+                searchPlaceholder="Buscar item..."
+                emptyText="Nenhum item encontrado."
+                triggerClassName="min-w-[220px] max-w-[280px]"
+                contentClassName="w-[420px] max-w-[calc(100vw-2rem)]"
+                onValueChange={(value) => {
+                  setFilterItemId(value);
+                  triggerSubmit({ itemId: value });
+                }}
+                renderOption={(option, selected) => {
+                  if (option.value === "__all__") {
+                    return (
+                      <>
+                        <Check
+                          size={14}
+                          className={
+                            selected ? "opacity-100 mr-2" : "opacity-0 mr-2"
+                          }
+                        />
+                        <span className="truncate">{option.label}</span>
+                      </>
+                    );
+                  }
+
+                  const item = itemById.get(option.value);
+                  return (
+                    <div className="flex items-center justify-between w-full gap-2 min-w-0">
+                      <div className="flex items-center min-w-0">
+                        <Check
+                          size={14}
+                          className={
+                            selected
+                              ? "opacity-100 mr-2 shrink-0"
+                              : "opacity-0 mr-2 shrink-0"
+                          }
+                        />
+                        <span className="truncate font-medium">
+                          {option.label}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {item?.classification && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded-full border border-sky-200 bg-sky-50 text-sky-700">
+                            {item.classification}
+                          </span>
+                        )}
+                        {item?.consumptionUm && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded-full border border-slate-200 bg-slate-100 text-slate-600 font-mono">
+                            {item.consumptionUm}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                }}
+              />
+              <Select
+                value={filterChannelId}
+                onValueChange={(value) => {
+                  setFilterChannelId(value);
+                  triggerSubmit({ channelId: value });
+                }}
+              >
+                <SelectTrigger className="min-w-[190px] max-w-[240px] bg-white">
+                  <SelectValue placeholder="Canal de venda" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__all__">Todos os canais</SelectItem>
+                  {(channels || []).map((channel) => (
+                    <SelectItem key={channel.id} value={channel.id}>
+                      {channel.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select
+                value={filterVisibility}
+                onValueChange={(value) => {
+                  const nextValue = value as ChannelVisibilityFilter;
+                  setFilterVisibility(nextValue);
+                  triggerSubmit({ visibility: nextValue });
+                }}
+              >
+                <SelectTrigger className="min-w-[180px] max-w-[220px] bg-white">
+                  <SelectValue placeholder="Visibilidade" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Toda visibilidade</SelectItem>
+                  <SelectItem value="visible">Visíveis no canal</SelectItem>
+                  <SelectItem value="hidden">Ocultos no canal</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select
+                value={filterStatus}
+                onValueChange={(value) => {
+                  const nextValue = value as RecipeStatusFilter;
+                  setFilterStatus(nextValue);
+                  triggerSubmit({ status: nextValue });
+                }}
+              >
+                <SelectTrigger className="min-w-[170px] max-w-[210px] bg-white">
+                  <SelectValue placeholder="Status da receita" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="active">Somente ativas</SelectItem>
+                  <SelectItem value="draft">Rascunhos</SelectItem>
+                  <SelectItem value="archived">Arquivadas</SelectItem>
+                  <SelectItem value="all">Todos os status</SelectItem>
+                </SelectContent>
+              </Select>
+            </Form>
+
+            <div className="flex flex-wrap items-center gap-5 text-sm text-black">
+              <span className="font-medium">ordenado por nome</span>
+              <span className="text-slate-600">
+                {pagination?.totalItems || 0} no total
+              </span>
+              <span className="text-slate-600">
+                {recipes.length} nesta página
+              </span>
             </div>
-        </Container>
-    )
+          </div>
+        </div>
+      </div>
+
+      <div className="rounded-2xl border border-slate-200 bg-white">
+        <Table className="min-w-[760px]">
+          <TableHeader className="bg-slate-50/90">
+            <TableRow className="hover:bg-slate-50/90">
+              <TableHead className="h-10 px-4 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Receita
+              </TableHead>
+              <TableHead className="h-10 px-4 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Item vinculado
+              </TableHead>
+              <TableHead className="h-10 px-4 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Tipo
+              </TableHead>
+              <TableHead className="h-10 px-4 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Versão e status
+              </TableHead>
+              <TableHead className="h-10 px-4 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Ações
+              </TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {recipes.length === 0 ? (
+              <TableRow className="hover:bg-transparent">
+                <TableCell
+                  colSpan={5}
+                  className="px-4 py-8 text-sm text-slate-500"
+                >
+                  Nenhuma receita encontrada.
+                </TableCell>
+              </TableRow>
+            ) : (
+              recipes.map((recipe) => (
+                <RecipeRow item={recipe} key={recipe.id} />
+              ))
+            )}
+          </TableBody>
+        </Table>
+        <div className="flex flex-col gap-3 border-t border-slate-200 px-4 py-3 text-sm text-slate-600 lg:flex-row lg:items-center lg:justify-between">
+          <div className="text-sm text-slate-500">
+            Página {pagination?.page || 1} de {pagination?.totalPages || 1}.
+          </div>
+          <div className="flex flex-wrap items-center gap-4 lg:gap-6">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-semibold text-slate-700">
+                Linhas por página
+              </span>
+              <button
+                type="button"
+                className="inline-flex h-9 items-center gap-2 rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-700"
+                aria-label={`Rows per page: ${
+                  pagination?.pageSize || PAGE_SIZE
+                }`}
+              >
+                <span>{pagination?.pageSize || PAGE_SIZE}</span>
+                <ChevronLeft className="h-4 w-4 rotate-[-90deg] text-slate-400" />
+              </button>
+            </div>
+            <Pagination className="mx-0 w-auto justify-start">
+              <PaginationContent className="gap-1.5">
+                <PaginationItem>
+                  <PaginationLink
+                    href={
+                      pagination?.page > 1
+                        ? buildPageHref({
+                            q: filters?.q || "",
+                            itemId: filters?.itemId || "",
+                            channelId: filters?.channelId || "",
+                            visibility: filters?.visibility || "all",
+                            status: filters?.status || "active",
+                            page: 1,
+                          })
+                        : "#"
+                    }
+                    className={`h-8 w-8 rounded-md border border-slate-200 bg-white p-0 text-slate-600 hover:bg-slate-50 ${
+                      pagination?.page <= 1
+                        ? "pointer-events-none opacity-40"
+                        : ""
+                    }`}
+                    aria-label="Primeira pagina"
+                  >
+                    <ChevronsLeft className="h-4 w-4" />
+                  </PaginationLink>
+                </PaginationItem>
+                <PaginationItem>
+                  <PaginationLink
+                    href={
+                      pagination?.page > 1
+                        ? buildPageHref({
+                            q: filters?.q || "",
+                            itemId: filters?.itemId || "",
+                            channelId: filters?.channelId || "",
+                            visibility: filters?.visibility || "all",
+                            status: filters?.status || "active",
+                            page: (pagination?.page || 1) - 1,
+                          })
+                        : "#"
+                    }
+                    className={`h-8 w-8 rounded-md border border-slate-200 bg-white p-0 text-slate-600 hover:bg-slate-50 ${
+                      pagination?.page <= 1
+                        ? "pointer-events-none opacity-40"
+                        : ""
+                    }`}
+                    aria-label="Pagina anterior"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </PaginationLink>
+                </PaginationItem>
+                <PaginationItem>
+                  <PaginationLink
+                    href={
+                      pagination?.page < (pagination?.totalPages || 1)
+                        ? buildPageHref({
+                            q: filters?.q || "",
+                            itemId: filters?.itemId || "",
+                            channelId: filters?.channelId || "",
+                            visibility: filters?.visibility || "all",
+                            status: filters?.status || "active",
+                            page: (pagination?.page || 1) + 1,
+                          })
+                        : "#"
+                    }
+                    className={`h-8 w-8 rounded-md border border-slate-200 bg-white p-0 text-slate-600 hover:bg-slate-50 ${
+                      pagination?.page >= (pagination?.totalPages || 1)
+                        ? "pointer-events-none opacity-40"
+                        : ""
+                    }`}
+                    aria-label="Proxima pagina"
+                  >
+                    <ChevronLeft className="h-4 w-4 rotate-180" />
+                  </PaginationLink>
+                </PaginationItem>
+                <PaginationItem>
+                  <PaginationLink
+                    href={
+                      pagination?.page < (pagination?.totalPages || 1)
+                        ? buildPageHref({
+                            q: filters?.q || "",
+                            itemId: filters?.itemId || "",
+                            channelId: filters?.channelId || "",
+                            visibility: filters?.visibility || "all",
+                            status: filters?.status || "active",
+                            page: pagination?.totalPages || 1,
+                          })
+                        : "#"
+                    }
+                    className={`h-8 w-8 rounded-md border border-slate-200 bg-white p-0 text-slate-600 hover:bg-slate-50 ${
+                      pagination?.page >= (pagination?.totalPages || 1)
+                        ? "pointer-events-none opacity-40"
+                        : ""
+                    }`}
+                    aria-label="Ultima pagina"
+                  >
+                    <ChevronsRight className="h-4 w-4" />
+                  </PaginationLink>
+                </PaginationItem>
+              </PaginationContent>
+            </Pagination>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function RecipesIndexLoading() {
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="space-y-4 border-b border-slate-200 pb-4">
+        <div className="h-4 w-48 animate-pulse rounded bg-slate-100" />
+        <div className="flex flex-wrap gap-3">
+          <div className="h-10 min-w-[220px] flex-1 animate-pulse rounded-md bg-slate-100" />
+          <div className="h-10 w-56 animate-pulse rounded-md bg-slate-100" />
+          <div className="h-10 w-48 animate-pulse rounded-md bg-slate-100" />
+          <div className="h-10 w-44 animate-pulse rounded-md bg-slate-100" />
+        </div>
+      </div>
+
+      <div className="rounded-2xl border border-slate-200 bg-white">
+        <div className="grid grid-cols-4 gap-4 border-b border-slate-100 bg-slate-50 px-4 py-3">
+          {Array.from({ length: 4 }).map((_, index) => (
+            <div
+              key={index}
+              className="h-3 animate-pulse rounded bg-slate-200"
+            />
+          ))}
+        </div>
+        {Array.from({ length: 8 }).map((_, index) => (
+          <div
+            key={index}
+            className="grid grid-cols-4 gap-4 border-b border-slate-100 px-4 py-4 last:border-b-0"
+          >
+            <div className="h-4 animate-pulse rounded bg-slate-100" />
+            <div className="h-4 animate-pulse rounded bg-slate-100" />
+            <div className="h-4 animate-pulse rounded bg-slate-100" />
+            <div className="ml-auto h-4 w-20 animate-pulse rounded bg-slate-100" />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function RecipesIndexError() {
+  return (
+    <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+      Não foi possível carregar a lista de receitas.
+    </div>
+  );
 }
 
 interface RecipeItemProps {
-    item: Recipe
+  item: RecipeWithMeta;
 }
 
-function RecipeItem({ item }: RecipeItemProps) {
+function RecipeRow({ item }: RecipeItemProps) {
+  const linkedChannels = item.Item?.ItemSellingChannelItem || [];
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const deleteFetcher = useFetcher<{ status: number; message: string }>();
+  const isDeleting = deleteFetcher.state !== "idle";
 
-    console.log({ recipe: item })
+  useEffect(() => {
+    if (!deleteFetcher.data || deleteFetcher.state !== "idle") return;
+    if (deleteFetcher.data.status && deleteFetcher.data.status >= 400) {
+      toast({ title: "Erro", description: deleteFetcher.data.message });
+      return;
+    }
+    setShowDeleteDialog(false);
+  }, [deleteFetcher.data, deleteFetcher.state]);
 
-    return (
-        <Form method="post"
-            className="flex flex-col p-4
-                                rounded-lg border border-muted hover:border-muted-foreground hover:cursor-pointer w-full">
-
-            <div className="flex items-center justify-between w-full mb-4">
-                <h3 className="text-md font-semibold tracking-tight">{item.name}</h3>
-                <EditItemButton to={`/admin/recipes/${item.id}`} />
+  return (
+    <TableRow className="border-slate-100 hover:bg-slate-50/50">
+      <TableCell className="px-4 py-3">
+        <div className="flex min-w-0 flex-col gap-0.5">
+          <Link
+            to={`/admin/recipes/${item.id}`}
+            className="truncate font-semibold text-slate-900 hover:underline"
+            title={item.name}
+          >
+            {item.name}
+          </Link>
+          <span className="text-xs text-slate-500">ID: {item.id}</span>
+        </div>
+      </TableCell>
+      <TableCell className="px-4 py-3">
+        <div className="min-w-0">
+          {item.Item ? (
+            <div className="flex min-w-0 flex-col gap-1">
+              <Link
+                to={`/admin/items/${item.itemId}`}
+                target="_blank"
+                rel="noreferrer"
+                className="truncate text-sm font-medium text-slate-700 hover:text-slate-950 hover:underline"
+                title={item.Item.name}
+              >
+                {item.Item.name}
+              </Link>
+              <div className="flex flex-wrap gap-1">
+                {linkedChannels.length === 0 ? (
+                  <span className="text-xs text-slate-400">
+                    Sem canal vinculado
+                  </span>
+                ) : (
+                  linkedChannels.slice(0, 3).map((link) => (
+                    <span
+                      key={link.ItemSellingChannel.id}
+                      className={`inline-flex items-center rounded-full border px-1.5 py-0.5 text-[10px] font-medium ${
+                        link.visible
+                          ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                          : "border-slate-200 bg-slate-50 text-slate-500"
+                      }`}
+                    >
+                      {link.ItemSellingChannel.name}
+                    </span>
+                  ))
+                )}
+                {linkedChannels.length > 3 && (
+                  <span className="text-xs text-slate-400">
+                    +{linkedChannels.length - 3}
+                  </span>
+                )}
+              </div>
             </div>
-
-            <RecipeBadge item={item} />
-            <Separator className="mb-4" />
-
-            <div className="flex gap-2 md:gap-2 justify-end">
-                <DeleteItemButton actionName="recipe-delete" />
-                <Input type="hidden" name="id" value={item.id} />
-            </div>
-        </Form>
-    )
+          ) : (
+            <span className="text-sm text-slate-400">Sem item vinculado</span>
+          )}
+        </div>
+      </TableCell>
+      <TableCell className="px-4 py-3">
+        <div className="flex items-center gap-2">
+          <RecipeBadge item={item} />
+        </div>
+      </TableCell>
+      <TableCell className="px-4 py-3">
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-medium text-slate-500">
+            v{Number((item as any).version || 1)}
+          </span>
+          <span
+            className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
+              (item as any).status === "active"
+                ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                : (item as any).status === "archived"
+                ? "border-slate-200 bg-slate-100 text-slate-500"
+                : "border-amber-200 bg-amber-50 text-amber-700"
+            }`}
+          >
+            {(item as any).status === "active"
+              ? "Ativa"
+              : (item as any).status === "archived"
+              ? "Arquivada"
+              : "Rascunho"}
+          </span>
+        </div>
+      </TableCell>
+      <TableCell className="px-4 py-3">
+        <div className="flex items-center justify-end gap-1">
+          <EditItemButton to={`/admin/recipes/${item.id}`} />
+          <Button asChild variant="outline" size="sm">
+            <Link
+              to={`/admin/receitas-tv/${item.id}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label={`Ver ${item.name} na TV (nova aba)`}
+            >
+              <Monitor className="mr-2 h-4 w-4" />
+              Ver na TV
+            </Link>
+          </Button>
+          <AlertDialog
+            open={showDeleteDialog}
+            onOpenChange={setShowDeleteDialog}
+          >
+            <AlertDialogTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="text-red-500 hover:bg-red-50"
+              >
+                <Trash2 size={16} />
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Eliminar receita?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Esta ação remove <strong>{item.name}</strong> permanentemente,
+                  junto com sua composição e etapas de produção. Se houver
+                  fichas técnicas vinculadas, elas não serão apagadas, mas
+                  deixarão de referenciar esta receita.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel disabled={isDeleting}>
+                  Cancelar
+                </AlertDialogCancel>
+                <Button
+                  type="button"
+                  variant="destructive"
+                  disabled={isDeleting}
+                  onClick={() =>
+                    deleteFetcher.submit(
+                      { _action: "recipe-delete", recipeId: item.id },
+                      { method: "post" }
+                    )
+                  }
+                >
+                  Confirmar eliminação
+                </Button>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </div>
+      </TableCell>
+    </TableRow>
+  );
 }
-
-
-
 
 /**
 function RecipesFilters() {
@@ -159,10 +1030,20 @@ function RecipesFilters() {
 
  */
 
-function RecipesSearch({ ...props }) {
-    return (
-        <div className="flex gap-4">
-            <Input type="text" name="search" placeholder="Buscar" className="w-full" {...props} />
-        </div>
-    )
+function RecipesSearch({ ...props }: React.ComponentProps<typeof Input>) {
+  return (
+    <div className="relative flex-1 min-w-[220px]">
+      <Search
+        size={14}
+        className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+      />
+      <Input
+        type="text"
+        name="q"
+        placeholder="Buscar receita ou ingrediente..."
+        className="w-full pl-9"
+        {...props}
+      />
+    </div>
+  );
 }

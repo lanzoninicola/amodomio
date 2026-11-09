@@ -1,10 +1,12 @@
 // app/routes/admin.kds.atendimento.$date.relatorio.tsx
 import { json, MetaFunction, type LoaderFunctionArgs } from "@remix-run/node";
 import { useLoaderData } from "@remix-run/react";
-import { ymdToDateInt, todayLocalYMD } from "@/domain/kds";
+import { isValidYMD, ymdToDateInt, todayLocalYMD } from "@/domain/kds";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { computeNetRevenueAmount } from "~/domain/finance/compute-net-revenue-amount";
 import { getDailyAggregates, listMotoboy } from "~/domain/kds/server/repository.server";
+import prisma from "~/lib/prisma/client.server";
 
 /** ===================== META ===================== **/
 export const meta: MetaFunction = () => {
@@ -24,8 +26,10 @@ function addDaysYMD(ymd: string, delta: number) {
 
 /** ===================== LOADER ===================== **/
 export async function loader({ params }: LoaderFunctionArgs) {
-  const dateStr = params.date ?? todayLocalYMD();
+  const dateStr = isValidYMD(params.date) ? params.date : todayLocalYMD();
   const dateInt = ymdToDateInt(dateStr);
+  const year = Number(dateStr.slice(0, 4));
+  const month = Number(dateStr.slice(5, 7));
 
   const prevDayStr = addDaysYMD(dateStr, -1);
   const prevWeekStr = addDaysYMD(dateStr, -7);
@@ -33,18 +37,84 @@ export async function loader({ params }: LoaderFunctionArgs) {
   const prevDayInt = ymdToDateInt(prevDayStr);
   const prevWeekInt = ymdToDateInt(prevWeekStr);
 
-  const [agg, aggPrev, aggWeek, motoList] = await Promise.all([
+  const [agg, aggPrev, aggWeek, motoList, ratesFromMonthlyClose] = await Promise.all([
     getDailyAggregates(dateInt),
     getDailyAggregates(prevDayInt),
     getDailyAggregates(prevWeekInt),
     listMotoboy(dateInt),
+    (async () => {
+      const hasConfiguredRates = (close: {
+        taxaCartaoPerc: number;
+        impostoPerc: number;
+        taxaMarketplacePerc: number;
+      } | null) =>
+        Number(close?.taxaCartaoPerc ?? 0) > 0 ||
+        Number(close?.impostoPerc ?? 0) > 0 ||
+        Number(close?.taxaMarketplacePerc ?? 0) > 0;
+
+      const monthlyCloseRates = await prisma.financialMonthlyClose.findUnique({
+        where: {
+          referenceYear_referenceMonth: {
+            referenceYear: year,
+            referenceMonth: month,
+          },
+        },
+        select: { taxaCartaoPerc: true, impostoPerc: true, taxaMarketplacePerc: true },
+      });
+      if (hasConfiguredRates(monthlyCloseRates)) return monthlyCloseRates;
+
+      return prisma.financialMonthlyClose.findFirst({
+        where: {
+          AND: [
+            {
+              OR: [
+                { referenceYear: { lt: year } },
+                { referenceYear: year, referenceMonth: { lte: month } },
+              ],
+            },
+            {
+              OR: [
+                { taxaCartaoPerc: { gt: 0 } },
+                { impostoPerc: { gt: 0 } },
+                { taxaMarketplacePerc: { gt: 0 } },
+              ],
+            },
+          ],
+        },
+        orderBy: [{ referenceYear: "desc" }, { referenceMonth: "desc" }],
+        select: { taxaCartaoPerc: true, impostoPerc: true, taxaMarketplacePerc: true },
+      });
+    })(),
   ]);
+
+  const taxPerc = Number(ratesFromMonthlyClose?.impostoPerc ?? 0);
+  const cardFeePerc = Number(ratesFromMonthlyClose?.taxaCartaoPerc ?? 0);
+  const taxaMarketplacePerc = Number(ratesFromMonthlyClose?.taxaMarketplacePerc ?? 0);
+
+  const netAmount = computeNetRevenueAmount({
+    receitaBrutaAmount: agg.total,
+    vendaCartaoAmount: agg.card ?? 0,
+    taxaCartaoPerc: cardFeePerc,
+    impostoPerc: taxPerc,
+    vendaMarketplaceAmount: agg.marketplace ?? 0,
+    taxaMarketplacePerc,
+  });
+  const netWeekAmount = computeNetRevenueAmount({
+    receitaBrutaAmount: aggWeek.total,
+    vendaCartaoAmount: aggWeek.card ?? 0,
+    taxaCartaoPerc: cardFeePerc,
+    impostoPerc: taxPerc,
+    vendaMarketplaceAmount: aggWeek.marketplace ?? 0,
+    taxaMarketplacePerc,
+  });
 
   return json({
     dateStr,
     agg,
     aggPrev,
     aggWeek,
+    netAmount,
+    netWeekAmount,
     motoList,
   });
 }
@@ -54,7 +124,7 @@ type AggRow = { k: string; count: number; total: number; moto: number };
 
 /** ===================== Página ===================== **/
 export default function RelatorioKdsPage() {
-  const { agg, aggPrev, aggWeek, motoList } = useLoaderData<typeof loader>();
+  const { agg, aggPrev, aggWeek, netAmount, netWeekAmount, motoList } = useLoaderData<typeof loader>();
 
   const fmt = (n: number) =>
     Number(n ?? 0).toLocaleString("pt-BR", {
@@ -81,10 +151,12 @@ export default function RelatorioKdsPage() {
           ? `R$ ${fmt(ref)}`
           : `${ref}`;
     return (
-      <div className="grid grid-cols-3 px-3 py-2 rounded border text-[11px] sm:text-xs items-center">
-        <span className="opacity-70">{label}:</span>
-        <span className="font-mono">{value}</span>
-        <span className={`ml-2 font-medium ${diff.cls}`}>{diff.text}</span>
+      <div className="px-3 py-2 rounded border text-[11px] sm:text-xs">
+        <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+          <span className="opacity-70">{label}:</span>
+          <span className="font-mono">{value}</span>
+        </div>
+        <div className={`mt-1 text-right font-medium ${diff.cls}`}>{diff.text}</div>
       </div>
     );
   };
@@ -104,10 +176,18 @@ export default function RelatorioKdsPage() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
         <Card>
           <CardHeader className="py-3"><CardTitle className="text-base sm:text-lg">Faturamento do dia</CardTitle></CardHeader>
-          <CardContent className="space-y-2">
-            <div className="text-2xl sm:text-3xl font-mono">R$ {fmt(agg.total)}</div>
-            <div className="grid grid-cols-1 gap-2">
-              {compBadge("Sem. passada", agg.total, aggWeek?.total, true)}
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="">
+                <div className="text-xs uppercase tracking-wide text-muted-foreground">Líquido</div>
+                <div className="text-2xl sm:text-3xl font-mono text-emerald-600">R$ {fmt(netAmount)}</div>
+                {compBadge("Sem. passada", netAmount, netWeekAmount, true)}
+              </div>
+              <div className="">
+                <div className="text-xs uppercase tracking-wide text-muted-foreground">Bruto</div>
+                <div className="text-2xl sm:text-3xl font-mono">R$ {fmt(agg.total)}</div>
+                {compBadge("Sem. passada", agg.total, aggWeek?.total, true)}
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -158,7 +238,7 @@ export default function RelatorioKdsPage() {
                       <tr className="text-left border-b sticky top-0 bg-background">
                         <th className="py-2 px-2">Canal</th>
                         <th className="py-2 px-2 text-right">Pedidos</th>
-                        <th className="py-2 px-2 text-right">Faturamento (R$)</th>
+                        <th className="py-2 px-2 text-right">Faturamento bruto (R$)</th>
                         <th className="py-2 px-2 text-right">Sem. passada</th>
                         <th className="py-2 px-2 text-right">Δ Sem.</th>
                       </tr>
@@ -198,7 +278,7 @@ export default function RelatorioKdsPage() {
                       <tr className="text-left border-b sticky top-0 bg-background">
                         <th className="py-2 px-2">Status</th>
                         <th className="py-2 px-2 text-right">Pedidos</th>
-                        <th className="py-2 px-2 text-right">Faturamento (R$)</th>
+                        <th className="py-2 px-2 text-right">Faturamento bruto (R$)</th>
                         <th className="py-2 px-2 text-right">Sem. passada</th>
                         <th className="py-2 px-2 text-right">Δ Sem.</th>
                       </tr>

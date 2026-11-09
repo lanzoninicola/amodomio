@@ -21,7 +21,6 @@ import { Button } from "~/components/ui/button";
    =========================== */
 type DeliveryZoneOption = { id: string; name: string };
 
-
 export default function DeliveryZoneCombobox({
   options,
   value,
@@ -48,10 +47,13 @@ export default function DeliveryZoneCombobox({
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild disabled={disabled}>
         <Button
+          type="button"
           variant="outline"
           role="combobox"
           aria-expanded={open}
-          className={`justify-between h-9 ${className} ${disabled ? "opacity-60 pointer-events-none" : ""}`}
+          className={`justify-between h-9 ${className} ${
+            disabled ? "opacity-60 pointer-events-none" : ""
+          }`}
         >
           <span className="truncate">
             {selected ? selected.name : placeholder}
@@ -68,18 +70,32 @@ export default function DeliveryZoneCombobox({
               {/* Opção para limpar */}
               <CommandItem
                 value="(sem zona)"
-                onSelect={() => { onChange(null); setOpen(false); }}
+                onSelect={() => {
+                  onChange(null);
+                  setOpen(false);
+                }}
               >
-                <Check className={`mr-2 h-4 w-4 ${value == null ? "opacity-100" : "opacity-0"}`} />
+                <Check
+                  className={`mr-2 h-4 w-4 ${
+                    value == null ? "opacity-100" : "opacity-0"
+                  }`}
+                />
                 (sem zona)
               </CommandItem>
               {options.map((opt) => (
                 <CommandItem
                   key={opt.id}
                   value={opt.name}
-                  onSelect={() => { onChange(opt.id); setOpen(false); }}
+                  onSelect={() => {
+                    onChange(opt.id);
+                    setOpen(false);
+                  }}
                 >
-                  <Check className={`mr-2 h-4 w-4 ${value === opt.id ? "opacity-100" : "opacity-0"}`} />
+                  <Check
+                    className={`mr-2 h-4 w-4 ${
+                      value === opt.id ? "opacity-100" : "opacity-0"
+                    }`}
+                  />
                   {opt.name}
                 </CommandItem>
               ))}

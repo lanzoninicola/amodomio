@@ -1,15 +1,16 @@
-import { createFirestoreModel } from "~/lib/firestore-model/src";
-
-type CategoryType = "product" | "menu";
+type CategoryType = "item" | "menu";
 
 interface Category {
   id?: string;
   name: string;
   type: CategoryType;
-  // the sortOrder should be mandatory when the type is "menu"
+  // Legacy callers still treat these as optional in some flows.
   sortOrder?: number;
+  createdAt?: Date;
+  updatedAt?: Date;
 }
 
-const CategoryModel = createFirestoreModel<Category>("categories");
+// Legacy alias used by Firestore-based catalog modules.
+type CategoryMenu = Category;
 
-export { CategoryModel, type Category, type CategoryType };
+export { type Category, type CategoryMenu, type CategoryType };

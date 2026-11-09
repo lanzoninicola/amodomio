@@ -1,0 +1,162 @@
+import { useMemo, useRef, useEffect, useState } from "react";
+import { Check, ChevronDown } from "lucide-react";
+import { cn } from "~/lib/utils";
+import {
+  Command,
+  CommandEmpty,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "~/components/ui/command";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "~/components/ui/popover";
+
+export type SearchableSelectOption = {
+  value: string;
+  label: string;
+  searchText?: string;
+};
+
+type SearchableSelectProps = {
+  value: string;
+  disabled?: boolean;
+  portalContainer?: HTMLElement | null;
+  id?: string;
+  onValueChange: (value: string) => void;
+  options: SearchableSelectOption[];
+  placeholder?: string;
+  searchPlaceholder?: string;
+  emptyText?: string;
+  triggerClassName?: string;
+  contentClassName?: string;
+  inputClassName?: string;
+  listClassName?: string;
+  itemClassName?: string;
+  renderOption?: (
+    option: SearchableSelectOption,
+    selected: boolean
+  ) => React.ReactNode;
+};
+
+export function SearchableSelect({
+  value,
+  disabled = false,
+  portalContainer,
+  id,
+  onValueChange,
+  options,
+  placeholder = "Selecionar",
+  searchPlaceholder = "Buscar...",
+  emptyText = "Nenhum item encontrado.",
+  triggerClassName,
+  contentClassName,
+  inputClassName,
+  listClassName,
+  itemClassName,
+  renderOption,
+}: SearchableSelectProps) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const contentRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    // cmdk ranks and selects matches after the search changes. Reset after that
+    // layout pass so its automatic scrolling cannot hide the first results.
+    const frame = requestAnimationFrame(() => {
+      if (listRef.current) listRef.current.scrollTop = 0;
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [search, open]);
+
+  const selected = useMemo(
+    () => options.find((option) => option.value === value),
+    [options, value]
+  );
+
+  const label = selected?.label ?? placeholder;
+
+  return (
+    <Popover open={open && !disabled} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          id={id}
+          disabled={disabled}
+          className={cn(
+            "h-9 inline-flex items-center justify-between gap-2 rounded-md border border-slate-200 bg-white px-3 text-xs text-slate-700 min-w-[180px] max-w-[260px]",
+            triggerClassName
+          )}
+          aria-expanded={open && !disabled}
+          title={label}
+        >
+          <span className="truncate">{label}</span>
+          <ChevronDown size={14} className="shrink-0 text-slate-500" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent
+        ref={contentRef}
+        container={portalContainer}
+        onOpenAutoFocus={(event) => {
+          event.preventDefault();
+          contentRef.current?.querySelector<HTMLInputElement>("input")?.focus();
+        }}
+        align="start"
+        className={cn(
+          "p-0 w-[320px] max-w-[calc(100vw-2rem)]",
+          contentClassName
+        )}
+      >
+        <Command className="max-h-[var(--radix-popover-content-available-height)] [overflow:clip] [&_[data-slot=command-input-wrapper]]:shrink-0">
+          <CommandInput
+            placeholder={searchPlaceholder}
+            value={search}
+            onValueChange={setSearch}
+            className={inputClassName}
+          />
+          <CommandList
+            ref={listRef}
+            className={cn(
+              "min-h-0 max-h-[240px] overscroll-contain",
+              listClassName
+            )}
+          >
+            <CommandEmpty>{emptyText}</CommandEmpty>
+            {options.map((option) => (
+              <CommandItem
+                key={option.value}
+                value={option.searchText || option.label}
+                className={itemClassName}
+                onSelect={() => {
+                  onValueChange(option.value);
+                  setOpen(false);
+                  setSearch("");
+                }}
+              >
+                {renderOption ? (
+                  renderOption(option, value === option.value)
+                ) : (
+                  <>
+                    <Check
+                      size={14}
+                      className={
+                        value === option.value
+                          ? "opacity-100 mr-2"
+                          : "opacity-0 mr-2"
+                      }
+                    />
+                    <span className="truncate">{option.label}</span>
+                  </>
+                )}
+              </CommandItem>
+            ))}
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+}

@@ -1,0 +1,234 @@
+import { normalizePhone } from "./zapi.service";
+import { NormalizedWebhookEvent } from "./webhook.types";
+
+const PHONE_KEYS = ["phone", "from", "participant", "sender", "chatid", "chat_id", "number", "remotejid"];
+const MESSAGE_KEYS = [
+  "text",
+  "message",
+  "body",
+  "content",
+  "caption",
+  "conversation",
+  "data.message",
+  "data.text",
+];
+const MESSAGE_TYPE_KEYS = ["type", "messagetype", "typemessage"];
+const REACTION_KEYS = [
+  "reaction",
+  "reactiontext",
+  "reaction_text",
+  "reactionemoji",
+  "reaction_emoji",
+  "emoji",
+];
+const INSTANCE_KEYS = ["instanceid", "instance_id"];
+const FROM_ME_KEYS = ["fromme", "from_me", "self", "owner"];
+const CONTACT_NAME_KEYS = [
+  "pushname",
+  "sendername",
+  "name",
+  "vname",
+  "short",
+  "profilename",
+  "displayname",
+  "formattedname",
+  "notify",
+];
+const CONTACT_PHOTO_KEYS = [
+  "photo",
+  "profilepic",
+  "profilepicthumb",
+  "profilepicthumbobj",
+  "profilepicture",
+  "picture",
+  "avatar",
+  "img",
+  "imgfull",
+  "eurl",
+  "url",
+];
+
+function coerceToString(value: any): string | null {
+  if (typeof value === "string") return value;
+  if (typeof value === "number") return String(value);
+  return null;
+}
+
+function walkObject(payload: any, visitor: (key: string, value: any) => string | null): string | null {
+  const queue: any[] = [payload];
+  while (queue.length) {
+    const current = queue.shift();
+    if (Array.isArray(current)) {
+      for (const item of current) queue.push(item);
+      continue;
+    }
+    if (current && typeof current === "object") {
+      for (const [k, v] of Object.entries(current)) {
+        const found = visitor(k, v);
+        if (found) return found;
+        if (v && typeof v === "object") queue.push(v);
+      }
+    }
+  }
+  return null;
+}
+
+function deepFindByKeys(payload: any, keys: string[]): string | null {
+  const normalizedKeys = new Set(keys.map((k) => k.toLowerCase()));
+  return walkObject(payload, (key, value) => {
+    const normalizedKey = key.toLowerCase();
+    if (normalizedKeys.has(normalizedKey)) {
+      const asString = coerceToString(value);
+      if (asString) return asString;
+    }
+    return null;
+  });
+}
+
+function deepFindBooleanByKeys(payload: any, keys: string[]): boolean | undefined {
+  const normalizedKeys = new Set(keys.map((k) => k.toLowerCase()));
+  const found = walkObject(payload, (key, value) => {
+    if (!normalizedKeys.has(key.toLowerCase())) return null;
+    if (typeof value === "boolean") return value ? "true" : "false";
+    if (typeof value === "string") {
+      const normalized = value.trim().toLowerCase();
+      if (normalized === "true" || normalized === "1" || normalized === "yes") return "true";
+      if (normalized === "false" || normalized === "0" || normalized === "no") return "false";
+    }
+    if (typeof value === "number") {
+      if (value === 1) return "true";
+      if (value === 0) return "false";
+    }
+    return null;
+  });
+
+  if (found === "true") return true;
+  if (found === "false") return false;
+  return undefined;
+}
+
+function extractPhone(payload: any): string | undefined {
+  const rawPhone = deepFindByKeys(payload, PHONE_KEYS);
+  if (!rawPhone) return undefined;
+  const cleaned = rawPhone.replace(/@.+$/, "");
+  const normalized = normalizePhone(cleaned);
+  return normalized ?? undefined;
+}
+
+function extractMessageText(payload: any): string | undefined {
+  const messageType = deepFindByKeys(payload, MESSAGE_TYPE_KEYS)?.toLowerCase();
+  const reaction = deepFindByKeys(payload, REACTION_KEYS);
+  const reactionTrimmed = reaction?.trim();
+  if (reactionTrimmed) return reactionTrimmed;
+
+  // Reaction payloads can include nested/quoted text from previous messages.
+  // Prefer reaction-specific keys to avoid showing stale text in the preview.
+  if (messageType?.includes("reaction")) return undefined;
+
+  const message = deepFindByKeys(payload, MESSAGE_KEYS);
+  const trimmed = message?.trim();
+  return trimmed || undefined;
+}
+
+function extractMessageId(payload: any): string | undefined {
+  const candidates = [
+    payload?.messageId,
+    payload?.message_id,
+    payload?.data?.messageId,
+    payload?.data?.message_id,
+    payload?.message?.messageId,
+    payload?.message?.id,
+    payload?.id,
+  ];
+  const found = candidates.find(
+    (value) => typeof value === "string" && value.trim()
+  );
+  return typeof found === "string" ? found.trim() : undefined;
+}
+
+function extractMessageType(payload: any): string | undefined {
+  const messageType = deepFindByKeys(payload, MESSAGE_TYPE_KEYS);
+  const trimmed = messageType?.trim();
+  return trimmed || undefined;
+}
+
+function extractInstanceId(payload: any): string | undefined {
+  const direct = deepFindByKeys(payload, INSTANCE_KEYS);
+  if (direct?.trim()) return direct.trim();
+
+  const instance = (payload as any)?.instance;
+  if (instance && typeof instance === "object") {
+    const nested = deepFindByKeys(instance, ["id", ...INSTANCE_KEYS]);
+    if (nested?.trim()) return nested.trim();
+  }
+
+  return undefined;
+}
+
+function extractFromMe(payload: any): boolean | undefined {
+  return deepFindBooleanByKeys(payload, FROM_ME_KEYS);
+}
+
+function isHttpUrl(value: string): boolean {
+  if (!value) return false;
+  try {
+    const url = new URL(value);
+    return url.protocol === "http:" || url.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+function findUrlInValue(value: any): string | null {
+  if (typeof value === "string") return isHttpUrl(value) ? value : null;
+  if (!value || typeof value !== "object") return null;
+  return walkObject(value, (_key, nested) => {
+    if (typeof nested === "string" && isHttpUrl(nested)) return nested;
+    return null;
+  });
+}
+
+function extractContactName(payload: any): string | undefined {
+  const name = deepFindByKeys(payload, CONTACT_NAME_KEYS);
+  const trimmed = name?.trim();
+  return trimmed || undefined;
+}
+
+function extractContactPhoto(payload: any): string | undefined {
+  const keySet = new Set(CONTACT_PHOTO_KEYS);
+  const found = walkObject(payload, (key, value) => {
+    if (!keySet.has(key.toLowerCase())) return null;
+    return findUrlInValue(value);
+  });
+  return found || undefined;
+}
+
+export function normalizeWebhookPayload(
+  event: "received" | "disconnected" | "traffic",
+  payload: any
+): NormalizedWebhookEvent {
+  return {
+    event,
+    phone: extractPhone(payload),
+    fromMe: extractFromMe(payload),
+    messageText: extractMessageText(payload),
+    messageType: extractMessageType(payload),
+    instanceId: extractInstanceId(payload),
+    messageId: extractMessageId(payload),
+    contactName: extractContactName(payload),
+    contactPhoto: extractContactPhoto(payload),
+    raw: payload,
+  };
+}
+
+export function stringifyPayloadForLog(payload: any, maxBytes = 10_000) {
+  try {
+    const asString = JSON.stringify(payload);
+    if (asString.length <= maxBytes) return asString;
+    return `${asString.slice(0, maxBytes)}...<truncated>`;
+  } catch {
+    const fallback = String(payload);
+    if (fallback.length <= maxBytes) return fallback;
+    return `${fallback.slice(0, maxBytes)}...<truncated>`;
+  }
+}

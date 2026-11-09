@@ -1,3 +1,4 @@
+@REST_API_KEY=fOD19KP7zZaloS3nMyux3qqI8ABihL3c
 
 ###
 GET  http://localhost:3000/api/settings?context=cardapio-pizza-taglio
@@ -31,3 +32,226 @@ GET https://a-modo-mio-evolutionapi-wursz4-9b618c-69-62-91-94.traefik.me
 
 ###
 GET https://evolution-api.amodomio.dev
+
+
+### Webhook recebido
+POST http://localhost:3000/webhooks/zapi/received
+Content-Type: application/json
+
+{
+  "phone": "5544999999999",
+  "message": "Teste de webhook",
+  "messageType": "text",
+  "instanceId": "instance-abc",
+  "extra": { "foo": "bar" }
+}
+
+### Webhook desconectado
+POST http://localhost:3000/webhooks/zapi/disconnected
+Content-Type: application/json
+
+{
+  "instanceId": "instance-abc",
+  "reason": "manual-test",
+  "metadata": { "at": "2024-09-01T12:00:00Z" }
+}
+
+### Webhook trafego pago (auto-resposta template via /received)
+POST http://localhost:3000/webhooks/zapi/received
+Content-Type: application/json
+
+{
+  "phone": "5546991052049",
+  "message": "Oi, vi o anuncio META_ADS ads",
+  "extra": { "utm": "meta-ads" }
+}
+
+### Webhook trafego pago (auto-resposta template via /received)
+POST http://localhost:3000/webhooks/zapi/received
+Content-Type: application/json
+
+{
+    "phone": "554691052049",
+    "messageType": "ReceivedCallback",
+    "instanceId": "3EC947CCE08D7279C1EC6A599C5ED5B8",
+    "messageTextPreview": "META_ADS"
+}
+
+### Enviar botao de acao direto na Z-API (teste)
+POST https://api.z-api.io/instances/3EC947CCE08D7279C1EC6A599C5ED5B8/token/8E1A9D0ED29E466080F58818/send-button-actions
+Content-Type: application/json
+Client-Token: Ffafb55bb0ef142e899016c31fb77a320S
+
+{
+  "phone": "5546991052049",
+  "message": "Teste de botoes direto na Z-API",
+  "buttonActions": [
+    { "id": "VIEW_MENU", "text": "Ver cardapio", "url": "https://amodomio.com.br/cardapio" },
+    { "id": "INFO_SIZES", "text": "Tamanhos" }
+  ],
+  "footerText": "Teste direto via rest.http"
+}
+
+
+### Enviar texto Z-API
+POST http://localhost:3000/api/messages/text
+Content-Type: application/json
+x-api-key: fOD19KP7zZaloS3nMyux3qqI8ABihL3c
+
+{
+  "phone": "5546991052049",
+  "message": "Olá! Teste via rest.http"
+}
+
+
+### Enviar texto Z-API
+POST https://amodomio.com.br/api/messages/text
+Content-Type: application/json
+x-api-key: fOD19KP7zZaloS3nMyux3qqI8ABihL3c
+
+{
+  "phone": "5546991052049",
+  "message": "Olá! Teste via rest.http"
+}
+
+### Enviar texto Z-API
+POST https://dev.amodomio.com.br/api/messages/text
+Content-Type: application/json
+x-api-key: fOD19KP7zZaloS3nMyux3qqI8ABihL3c
+
+{
+  "phone": "5546991052049",
+  "message": "Olá! Teste via rest.http"
+}
+
+
+### CRM contact
+POST http://localhost:3000/api/crm/customers
+Content-Type: application/json
+x-api-key: 3PjN!u9g@r5XzE1fQw7H
+
+{
+  "name": "Cliente Teste",
+  "phone": "+5544999999999",
+  "gender": "female",
+  "age_profile": "adult",
+  "source": "whatsapp-web"
+}
+
+###
+POST https://amodomio.com.br/api/crm/customers
+Content-Type: application/json
+x-api-key: fOD19KP7zZaloS3nMyux3qqI8ABihL3c
+
+{
+  "name": "Cliente Teste",
+  "phone": "+5544999999999",
+  "gender": "female",
+  "age_profile": "adult",
+  "source": "whatsapp-web"
+}
+
+### Verificar se contato existe pelos últimos 8 dígitos
+GET http://localhost:3000/api/crm/customers?phone=+55%2046%20991052049
+Accept: application/json
+x-api-key: fOD19KP7zZaloS3nMyux3qqI8ABihL3c
+
+### Verificar se contato existe pelos últimos 8 dígitos
+GET https://amodomio.com.br/api/crm/customers?phone=+55%2046%20991052049
+Accept: application/json
+x-api-key: fOD19KP7zZaloS3nMyux3qqI8ABihL3c
+
+###
+GET https://dev.amodomio.com.br/api/crm/customers?phone=+55%2046%20991052049
+Accept: application/json
+x-api-key: fOD19KP7zZaloS3nMyux3qqI8ABihL3c
+
+
+###
+
+### Webhook recebido (teste)
+POST http://localhost:3000/webhooks/zapi/received
+Content-Type: application/json
+
+{
+  "phone": "5546991052049",
+  "message": "Teste de webhook pelo rest.http",
+  "messageType": "text",
+  "instanceId": "instance-abc",
+  "extra": { "foo": "bar" }
+}
+
+
+### Webhook trafego pago (META_ADS) via /received
+POST https://amodomio.com.br/webhooks/zapi/received
+Content-Type: application/json
+
+{
+  "type": "ReceivedCallback",
+  "instanceId": "3EC947CCE08D7279C1EC6A599C5ED5B8",
+  "connectedPhone": "554691272525",
+  "fromMe": false,
+  "fromApi": false,
+  "status": "RECEIVED",
+  "chatLid": "129847561239847@lid",
+  "phone": "129847561239847@lid",
+  "chatName": "Meta Lead",
+  "isGroup": false,
+  "isNewsletter": false,
+  "broadcast": false,
+  "waitingMessage": false,
+  "isEdit": false,
+  "forwarded": false,
+  "participantLid": null,
+  "senderName": null,
+  "senderPhoto": null,
+  "messageId": "METAADSCB001",
+  "momment": 1768242408000,
+  "messageExpirationSeconds": 0,
+  "text": {
+    "message": "Olá! Tenho interesse e queria mais informações, por favor. (código: META_ADS)"
+  }
+}
+
+### Unidades de consumo - todas
+GET http://localhost:3000/api/measurement-units
+x-api-key: {{REST_API_KEY}}
+
+### Unidades de consumo - apenas ativas
+GET http://localhost:3000/api/measurement-units?active=true
+x-api-key: {{REST_API_KEY}}
+
+### Unidades de consumo - filtro por tipo
+GET http://localhost:3000/api/measurement-units?kind=weight&active=true
+x-api-key: {{REST_API_KEY}}
+
+### Unidades de consumo - globais (disponíveis em todo o sistema)
+GET http://localhost:3000/api/measurement-units?scope=global&active=true
+x-api-key: {{REST_API_KEY}}
+
+### Unidades de consumo - vinculadas a itens específicos
+GET http://localhost:3000/api/measurement-units?scope=restricted&active=true
+x-api-key: {{REST_API_KEY}}
+
+### Unidades de consumo - produção
+GET https://amodomio.com.br/api/measurement-units?active=true
+x-api-key: {{REST_API_KEY}}
+
+### Criar pedido mínimo (KDS) DELIVERY
+POST http://localhost:3000/api/kds/orders
+Content-Type: application/json
+x-api-key: {{REST_API_KEY}}
+
+{
+  "date": "2026-02-03",
+    "commandNumber": 1,
+    "orderAmount": 89.90,
+    "channel": "CARDÁPIO",
+    "sizes": { "M": 1, "P": 2 },
+    "hasMoto": true,
+    "motoValue": 6.00,
+    "takeAway": true,
+    "isCreditCard": true,
+    "customerName": "João Silva",
+    "customerPhone": "41999998888"
+}

@@ -76,6 +76,7 @@ export function FiltersTags({
                         })}
                     </ul>
                 </div>
+
             </div>
 
             {showBanner && currentTag && (

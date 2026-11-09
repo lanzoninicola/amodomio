@@ -1,21 +1,43 @@
 
-import { Link } from "@remix-run/react";
-import { Avatar, AvatarFallback, AvatarImage } from "~/modules/shadcn-ui/components/ui/avatar";
-import { Button } from "~/modules/shadcn-ui/components/ui/button";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "~/modules/shadcn-ui/components/ui/dropdown-menu";
-import { LoggedUser } from "../types.server";
+import { Link, useFetcher } from "@remix-run/react";
+import { Button } from "~/components/ui/button";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "~/components/ui/dropdown-menu";
+import { useEffect, useState } from "react";
+import { toast } from "~/components/ui/use-toast";
+import type { action } from "~/routes/api.auth.refresh-session";
+import type { LoggedUser } from "../types.server";
 
-interface UserNavProps extends LoggedUser { }
+type UserNavProps = Exclude<LoggedUser, null | false>;
 
 export function UserNav({ name, email, avatarURL }: UserNavProps) {
+    const [failedAvatarURL, setFailedAvatarURL] = useState<string | null>(null);
+    const fetcher = useFetcher<typeof action>();
+    const busy = fetcher.state !== "idle";
+    useEffect(() => {
+        if (fetcher.state !== "idle" || !fetcher.data) return;
+        const result = fetcher.data;
+        toast({
+            title: "error" in result ? "Falha ao atualizar sessão" : "Sessão atualizada",
+            description: "error" in result ? result.error : result.success,
+            variant: "error" in result ? "destructive" : "default",
+        });
+    }, [fetcher.state, fetcher.data]);
     return (
         <DropdownMenu>
             <DropdownMenuTrigger asChild>
-                <Button variant="ghost" className="relative h-8 w-8 rounded-full">
-                    <Avatar className="h-8 w-8 ">
-                        <AvatarImage src={avatarURL} alt={`Avatar de ${name}`} />
-                        <AvatarFallback className="bg-purple-900 text-white">{name.charAt(0)}</AvatarFallback>
-                    </Avatar>
+                <Button variant="ghost" className="relative h-8 w-8 rounded-full" aria-label="Menu do usuário">
+                    <span className="relative flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-purple-900 text-white">
+                        {(name || email || "U").charAt(0)}
+                        {avatarURL && avatarURL !== failedAvatarURL && (
+                            <img
+                                key={avatarURL}
+                                src={avatarURL}
+                                alt={`Avatar de ${name}`}
+                                className="absolute inset-0 h-full w-full object-cover"
+                                onError={() => setFailedAvatarURL(avatarURL)}
+                            />
+                        )}
+                    </span>
                 </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent className="w-max" align="end" forceMount>
@@ -28,6 +50,15 @@ export function UserNav({ name, email, avatarURL }: UserNavProps) {
                     </div>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
+                <DropdownMenuItem
+                    disabled={busy}
+                    onSelect={(event) => {
+                        event.preventDefault();
+                        fetcher.submit({}, { method: "post", action: "/api/auth/refresh-session" });
+                    }}
+                >
+                    {busy ? "Atualizando sessão..." : "Atualizar sessão"}
+                </DropdownMenuItem>
                 <Link to="/logout">
                     <DropdownMenuItem>
                         Sair

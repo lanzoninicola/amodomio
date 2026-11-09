@@ -1,15 +1,15 @@
 import { Link } from "@remix-run/react"
 import { ChevronRight, ChevronsUpDown } from "lucide-react"
 import { useState } from "react"
-import { NavItem } from "~/components/app-menu/app-menu"
+import { NavigationLink } from "~/components/app-menu/app-menu"
 import { Button } from "~/components/ui/button"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "~/components/ui/collapsible"
 
 
-export interface NavItemCollapsible extends NavItem { }
+export interface NavigationLinkCollapsible extends NavigationLink { }
 
 interface NavMenuCollapsibleProps {
-    navItems: NavItemCollapsible[]
+    navItems: NavigationLinkCollapsible[]
 }
 
 
@@ -17,7 +17,7 @@ export function NavMenuCollapsible({ navItems }: NavMenuCollapsibleProps) {
     const [isOpen, setIsOpen] = useState(false)
 
 
-    const onClickNavItem = () => {
+    const onClickNavigationLink = () => {
         // setIsOpen(false)
     }
 

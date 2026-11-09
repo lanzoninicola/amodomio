@@ -1,0 +1,18 @@
+-- AlterTable
+ALTER TABLE "crm_customer" ADD COLUMN     "age_profile" VARCHAR(20) NOT NULL DEFAULT 'unknown',
+ADD COLUMN     "avg_ticket" DECIMAL(12,2) NOT NULL DEFAULT 0,
+ADD COLUMN     "city" VARCHAR(255),
+ADD COLUMN     "consent_at" TIMESTAMP(3),
+ADD COLUMN     "delivery_address_last" JSONB,
+ADD COLUMN     "email" VARCHAR(255),
+ADD COLUMN     "first_order_at" TIMESTAMP(3),
+ADD COLUMN     "last_order_at" TIMESTAMP(3),
+ADD COLUMN     "lgpd_consent" BOOLEAN NOT NULL DEFAULT false,
+ADD COLUMN     "neighborhood" VARCHAR(255),
+ADD COLUMN     "orders_count" INTEGER NOT NULL DEFAULT 0,
+ADD COLUMN     "postal_code" VARCHAR(20),
+ADD COLUMN     "preferred_channel" VARCHAR(20),
+ADD COLUMN     "preferred_payment_method" VARCHAR(20) NOT NULL DEFAULT 'unknown',
+ADD COLUMN     "profession" VARCHAR(255),
+ADD COLUMN     "sex" VARCHAR(20) NOT NULL DEFAULT 'unknown',
+ADD COLUMN     "total_revenue" DECIMAL(12,2) NOT NULL DEFAULT 0;

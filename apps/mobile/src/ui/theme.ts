@@ -1,0 +1,55 @@
+import { desktop } from "../platform/desktop";
+
+const mono = Boolean(desktop);
+
+export const theme = {
+  colors: {
+    background: mono ? "#000000" : "#f8f9f7",
+    foreground: mono ? "#ffffff" : "#171717",
+    card: mono ? "#282828" : "#ffffff",
+    cardForeground: mono ? "#ffffff" : "#171717",
+    muted: mono ? "#101010" : "#f2f2f2",
+    mutedForeground: mono ? "#b3b3b3" : "#626262",
+    border: mono ? "#444444" : "#e0e0e0",
+    input: mono ? "#666666" : "#d4d4d4",
+    primary: "#111111",
+    primaryForeground: "#f8fafc",
+    secondary: mono ? "#282828" : "#f1f1f1",
+    secondaryForeground: mono ? "#ffffff" : "#171717",
+    destructive: mono ? "#f87171" : "#b83f37",
+    destructiveForeground: "#f8fafc",
+    ring: mono ? "#b3b3b3" : "#171717",
+    brandBlueMuted: "#eaf0f4",
+    brandOrangeMuted: "#fff1e7",
+    brandVioletMuted: "#f5eaf0",
+    brandYellowMuted: "#fff6d6",
+    brandOrangeInk: "#93451c",
+    brandRedInk: "#b83f37",
+    brandBlue: "#3d5f76",
+    brandOrange: "#ee8043",
+    brandViolet: "#9b386a",
+    brandRed: "#d75148",
+    brandYellow: "#fdbc12",
+    brandGreen: "#aec355",
+    success: "#52652c",
+    successMuted: "#f0f4e3",
+    dangerMuted: "#faebe9",
+  },
+  radius: { sm: 8, md: 12, lg: 16, xl: 20, full: 999 },
+  spacing: { xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32 },
+  typography: {
+    regular: mono ? "IBMPlexMono_Regular" : "Inter_400Regular",
+    medium: mono ? "IBMPlexMono_SemiBold" : "Inter_500Medium",
+    semibold: mono ? "IBMPlexMono_SemiBold" : "Inter_600SemiBold",
+    bold: mono ? "IBMPlexMono_Bold" : "Inter_700Bold",
+  },
+  shadow: {
+    card: {
+      shadowColor: "#020817",
+      shadowOpacity: 0.08,
+      shadowRadius: 8,
+      shadowOffset: { width: 0, height: 3 },
+      elevation: 2,
+    },
+  },
+} as const;

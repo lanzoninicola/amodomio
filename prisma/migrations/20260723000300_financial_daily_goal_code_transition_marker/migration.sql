@@ -1,0 +1,5 @@
+-- Step 3: Code transition marker.
+-- Application code now reads/writes only:
+--   min_sales_goal_amount_dia_01..05
+--   target_sales_goal_amount_dia_01..05
+-- No SQL changes required in this step.

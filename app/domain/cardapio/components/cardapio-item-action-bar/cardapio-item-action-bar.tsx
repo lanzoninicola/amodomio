@@ -1,310 +1,497 @@
-import { useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { MenuItemWithAssociations } from "../../menu-item.prisma.entity.server";
 import { useFetcher } from "@remix-run/react";
-import GLOBAL_LINKS from "~/domain/website-navigation/global-links.constant";
+import WEBSITE_LINKS from "~/domain/website-navigation/links/website-links";
 import { Heart, Share2 } from "lucide-react";
 import WhatsappExternalLink from "~/components/primitives/whatsapp/whatsapp-external-link";
 import WhatsAppIcon from "~/components/primitives/whatsapp/whatsapp-icon";
 import { cn } from "~/lib/utils";
 import { useSoundEffects } from "~/components/sound-effects/use-sound-effects";
 import { Button } from "~/components/ui/button";
+import { getOrCreateMenuItemInterestClientId } from "~/domain/cardapio/menu-item-interest/menu-item-interest.client";
 
-interface CardapioItemActionBarProps { item: MenuItemWithAssociations, cnContainer?: string }
+interface CardapioItemActionBarProps {
+  item: MenuItemWithAssociations;
+  cnContainer?: string;
+  likesEnabled?: boolean;
+  sharesEnabled?: boolean;
+}
 
-export function CardapioItemActionBarVertical({ item, cnContainer }: CardapioItemActionBarProps) {
+function getEngagementItemId(item: MenuItemWithAssociations) {
+  const compatItem = item as MenuItemWithAssociations & {
+    sourceType?: "legacy" | "native";
+    sourceItemId?: string | null;
+  };
 
-    const [likeIt, setLikeIt] = useState(false)
-    const [likesAmount, setLikesAmount] = useState(item.likes?.amount || 0)
-    const [sharesAmount, setSharesAmount] = useState(item.shares?.amount || 0)
-    const { playTap } = useSoundEffects();
+  return typeof compatItem.sourceItemId === "string" &&
+    compatItem.sourceItemId.trim()
+    ? compatItem.sourceItemId.trim()
+    : item.id;
+}
 
-    const fetcher = useFetcher();
+function getEngagementSourceType(item: MenuItemWithAssociations) {
+  const compatItem = item as MenuItemWithAssociations & {
+    sourceType?: "legacy" | "native";
+  };
 
-    const likingIt = () => {
-        playTap()
+  return compatItem.sourceType === "native" ? "native" : "legacy";
+}
 
-        setLikeIt(true)
-        setLikesAmount(likesAmount + 1)
+export function CardapioItemActionBarVertical({
+  item,
+  cnContainer,
+  likesEnabled = true,
+  sharesEnabled = true,
+}: CardapioItemActionBarProps) {
+  const [likeIt, setLikeIt] = useState(false);
+  const [likesAmount, setLikesAmount] = useState(item.likes?.amount || 0);
+  const [sharesAmount, setSharesAmount] = useState(item.shares?.amount || 0);
+  const { playTap } = useSoundEffects();
 
-        fetcher.submit(
-            {
-                action: "menu-item-like-it",
-                itemId: item.id,
-                likesAmount: String(1),
-            },
-            { method: 'post' }
-        );
-    };
+  const fetcher = useFetcher();
 
-    const shareIt = () => {
-        playTap()
+  const likingIt = () => {
+    const engagementItemId = getEngagementItemId(item);
+    if (!engagementItemId) return;
+    playTap();
 
-        if (!navigator?.share) {
-            console.log("Navegador não suporta o compartilhamento")
-            return
-        }
+    setLikeIt(true);
+    setLikesAmount(likesAmount + 1);
 
-        const text = `Essa pizza ${item.name} é a melhor pizza da cidade. Experimente...`
-        navigator.share({
-            title: item.name,
-            text,
-            url: `${GLOBAL_LINKS.cardapioPublic}/#${item.id}`
-        }).then(() => {
-
-            fetcher.submit(
-                {
-                    action: "menu-item-share-it",
-                    itemId: item.id,
-                },
-                { method: 'post' }
-            );
-
-        }).catch((error) => {
-        })
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("cardapio:like-celebration"));
     }
 
+    const clientId = getOrCreateMenuItemInterestClientId();
+    fetcher.submit(
+      {
+        action: "menu-item-like-it",
+        itemId: engagementItemId,
+        sourceType: getEngagementSourceType(item),
+        likesAmount: String(1),
+        clientId: clientId || "",
+      },
+      { method: "post", action: "/api/menu-item-like" }
+    );
+  };
 
+  const shareIt = () => {
+    const engagementItemId = getEngagementItemId(item);
+    if (!engagementItemId) return;
+    playTap();
 
+    if (!navigator?.share) {
+      console.log("Navegador não suporta o compartilhamento");
+      return;
+    }
 
-    return (
-        <div className={cn("flex flex-col gap-0 my-2 justify-end", cnContainer)} data-element="action-bar">
-            <div className="flex flex-col gap-4 justify-center font-neue">
-                <WhatsappExternalLink
-                    phoneNumber="46991272525"
-                    ariaLabel="Envia uma mensagem com WhatsApp"
-                    message={"Olá, gostaria fazer um pedido"}
-                    className="flex flex-col gap-1 items-center cursor-pointer p-1 active:bg-black/50"
-                >
-                    <WhatsAppIcon color="white" />
-                </WhatsappExternalLink>
-                <div className="flex flex-col gap-2 items-center">
+    const text = `Essa pizza ${item.name} é a melhor pizza da cidade. Experimente...`;
+    navigator
+      .share({
+        title: item.name,
+        text,
+        url: `${WEBSITE_LINKS.cardapioPublic}/#${item.id}`,
+      })
+      .then(() => {
+        const clientId = getOrCreateMenuItemInterestClientId();
+        fetcher.submit(
+          {
+            action: "menu-item-share-it",
+            itemId: engagementItemId,
+            sourceType: getEngagementSourceType(item),
+            clientId: clientId || "",
+          },
+          { method: "post", action: "/api/menu-item-share" }
+        );
+      })
+      .catch((error) => {});
+  };
 
-                    <div className="flex flex-col gap-1 cursor-pointer p-1 active:bg-black/50 " onClick={shareIt}>
-                        <Share2 color="white" />
-                        <span className="text-md text-center font-neue tracking-widest font-semibold uppercase text-white">
-                            {sharesAmount > 0 && `${sharesAmount}`}
-                        </span>
-                    </div>
-                    <div className="flex flex-col items-center gap-1 cursor-pointer p-1 active:bg-black/50" onClick={likingIt}>
-                        <Heart
-                            className={cn(
-                                "stroke-white",
-                                likeIt ? "fill-red-500" : "fill-none",
-                                likeIt ? "stroke-red-500" : "stroke-white",
-                                item.likes?.amount && item.likes?.amount > 0 ? "stroke-red-500" : "stroke-white"
-                            )}
-                        />
-                        <span className="text-md text-center font-neue tracking-widest font-semibold uppercase text-red-500">
-                            {likesAmount > 0 && `${likesAmount}`}
-
-                        </span>
-                    </div>
-                </div>
-
-
-            </div>
-            {/* {likesAmount === 0 && (
+  return (
+    <div
+      className={cn("flex flex-col gap-0 my-2 justify-end", cnContainer)}
+      data-element="action-bar"
+    >
+      <div className="flex flex-col gap-4 justify-center font-neue">
+        <WhatsappExternalLink
+          phoneNumber="46991272525"
+          ariaLabel="Envia uma mensagem com WhatsApp"
+          message={"Olá, gostaria fazer um pedido"}
+          className="flex flex-col gap-1 items-center cursor-pointer p-1 active:bg-black/50"
+        >
+          <WhatsAppIcon color="white" />
+        </WhatsappExternalLink>
+        {(sharesEnabled || likesEnabled) && (
+          <div className="flex flex-col gap-2 items-center">
+            {sharesEnabled && (
+              <div
+                className="flex flex-col gap-1 cursor-pointer p-1 active:bg-black/50 "
+                onClick={shareIt}
+              >
+                <Share2 color="white" />
+                <span className="text-md text-center font-neue tracking-widest font-semibold uppercase text-white">
+                  {sharesAmount > 0 && `${sharesAmount}`}
+                </span>
+              </div>
+            )}
+            {likesEnabled && (
+              <div
+                className="flex flex-col items-center gap-1 cursor-pointer p-1 active:bg-black/50"
+                onClick={likingIt}
+              >
+                <Heart
+                  className={cn(
+                    "stroke-white",
+                    likeIt ? "fill-red-500" : "fill-none",
+                    likeIt ? "stroke-red-500" : "stroke-white",
+                    item.likes?.amount && item.likes?.amount > 0
+                      ? "stroke-red-500"
+                      : "stroke-white"
+                  )}
+                />
+                <span className="text-md text-center font-neue tracking-widest font-semibold uppercase text-red-500">
+                  {likesAmount > 0 && `${likesAmount}`}
+                </span>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+      {/* {likesAmount === 0 && (
                 <div className="flex items-center gap-1">
                     <span className="text-sm font-neue tracking-widest font-semibold uppercase">Seja o primeiro! Curte com </span>
                     <Heart size={14} />
                 </div>
             )} */}
 
-            {/* <span className="text-sm font-neue tracking-widest font-semibold uppercase pl-1 text-red-500">
+      {/* <span className="text-sm font-neue tracking-widest font-semibold uppercase pl-1 text-red-500">
                 {likesAmount > 0 && `${likesAmount} curtidas`}
 
             </span> */}
-        </div>
-    );
+    </div>
+  );
 }
 
+export function CardapioItemActionBarHorizontal({
+  item,
+  cnContainer,
+  likesEnabled = true,
+  sharesEnabled = true,
+}: CardapioItemActionBarProps) {
+  const [likeIt, setLikeIt] = useState(false);
+  const [likesAmount, setLikesAmount] = useState(item.likes?.amount || 0);
 
-export function CardapioItemActionBarHorizontal({ item, cnContainer }: CardapioItemActionBarProps) {
-    const [likeIt, setLikeIt] = useState(false)
-    const [likesAmount, setLikesAmount] = useState(item.likes?.amount || 0)
+  const fetcher = useFetcher();
 
-    const fetcher = useFetcher();
+  const likingIt = () => {
+    const engagementItemId = getEngagementItemId(item);
+    if (!engagementItemId) return;
 
-    const likingIt = () => {
+    setLikeIt(true);
+    setLikesAmount(likesAmount + 1);
 
-        setLikeIt(true)
-        setLikesAmount(likesAmount + 1)
-
-        fetcher.submit(
-            {
-                action: "menu-item-like-it",
-                itemId: item.id,
-                likesAmount: String(1),
-            },
-            { method: 'post' }
-        );
-    };
-
-    const shareIt = () => {
-        if (!navigator?.share) {
-            console.log("Navegador não suporta o compartilhamento")
-            return
-        }
-
-        const text = `Essa pizza ${item.name} é a melhor pizza da cidade. Experimente...`
-        navigator.share({
-            title: item.name,
-            text,
-            url: `${GLOBAL_LINKS.cardapioPublic}/#${item.id}`
-        }).then(() => {
-
-            fetcher.submit(
-                {
-                    action: "menu-item-share-it",
-                    itemId: item.id,
-                },
-                { method: 'post' }
-            );
-
-        }).catch((error) => {
-        })
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("cardapio:like-celebration"));
     }
 
-    return (
-        <div className="flex flex-col gap-0 my-2">
-            <div className="grid grid-cols-2 font-neue">
-                <div className="flex items-center">
-                    <div className="flex flex-col gap-1 cursor-pointer p-2 active:bg-black/50" onClick={likingIt}>
-                        <Heart
-                            className={cn(
-                                likeIt ? "fill-red-500" : "fill-none",
-                                likeIt ? "stroke-red-500" : "stroke-black",
-                                item.likes?.amount && item.likes?.amount > 0 ? "stroke-red-500" : "stroke-black"
-                            )}
-                        />
-                    </div>
-                    <div className="flex flex-col gap-1 cursor-pointer p-2 active:bg-black/50 " onClick={shareIt}>
-                        <Share2 />
-                    </div>
-                </div>
-
-                <WhatsappExternalLink
-                    phoneNumber="46991272525"
-                    ariaLabel="Envia uma mensagem com WhatsApp"
-                    message={"Olá, gostaria fazer um pedido"}
-                    className="flex flex-col gap-1 items-end cursor-pointer p-2 active:bg-black/50"
-                >
-                    <WhatsAppIcon color="black" />
-                </WhatsappExternalLink>
-            </div>
-            {likesAmount === 0 && (
-                <div className="flex items-center gap-1">
-                    <span className="text-sm font-neue tracking-widest font-semibold uppercase">Seja o primeiro! Curte com </span>
-                    <Heart size={14} />
-                </div>
-            )}
-
-            <span className="text-sm font-neue tracking-widest font-semibold uppercase pl-1 text-red-500">
-                {likesAmount > 0 && `${likesAmount} curtidas`}
-
-            </span>
-        </div>
+    const clientId = getOrCreateMenuItemInterestClientId();
+    fetcher.submit(
+      {
+        action: "menu-item-like-it",
+        itemId: engagementItemId,
+        sourceType: getEngagementSourceType(item),
+        likesAmount: String(1),
+        clientId: clientId || "",
+      },
+      { method: "post", action: "/api/menu-item-like" }
     );
-}
+  };
 
-export function ShareIt({ item, size, children, cnContainer }: { item: MenuItemWithAssociations, size?: number, children?: React.ReactNode, cnContainer?: string }) {
-
-    const fetcher = useFetcher();
-
-    const shareIt = () => {
-        if (!navigator?.share) {
-            console.log("Navegador não suporta o compartilhamento")
-            return
-        }
-
-        const text = `Essa pizza ${item.name} é a melhor pizza da cidade. Experimente...`
-        navigator.share({
-            title: item.name,
-            text,
-            url: `${GLOBAL_LINKS.cardapioPublic}/#${item.id}`
-        }).then(() => {
-
-            fetcher.submit(
-                {
-                    action: "menu-item-share-it",
-                    itemId: item.id,
-                },
-                { method: 'post' }
-            );
-
-        }).catch((error) => {
-        })
+  const shareIt = () => {
+    const engagementItemId = getEngagementItemId(item);
+    if (!engagementItemId) return;
+    if (!navigator?.share) {
+      console.log("Navegador não suporta o compartilhamento");
+      return;
     }
-    return (
-        <Button
-            variant="ghost"
-            className={
-                cn(
-                    "flex gap-2 ",
-                    cnContainer
-                )
-            } onClick={shareIt}>
-            <Share2 size={size ?? 16} />
-            {children}
-        </Button>
-    )
-}
 
-export function LikeIt({ item, size, cnLabel, children, cnContainer }: { item: MenuItemWithAssociations, size?: number, cnLabel?: string, children?: React.ReactNode, cnContainer?: string }) {
-    const [likeIt, setLikeIt] = useState(false)
-    const [likesAmount, setLikesAmount] = useState(item.likes?.amount || 0)
-
-    const fetcher = useFetcher();
-
-    const likingIt = () => {
-
-        setLikeIt(true)
-        setLikesAmount(likesAmount + 1)
-
+    const text = `Essa pizza ${item.name} é a melhor pizza da cidade. Experimente...`;
+    navigator
+      .share({
+        title: item.name,
+        text,
+        url: `${WEBSITE_LINKS.cardapioPublic}/#${item.id}`,
+      })
+      .then(() => {
+        const clientId = getOrCreateMenuItemInterestClientId();
         fetcher.submit(
-            {
-                action: "menu-item-like-it",
-                itemId: item.id,
-                likesAmount: String(1),
-            },
-            { method: 'post' }
+          {
+            action: "menu-item-share-it",
+            itemId: engagementItemId,
+            sourceType: getEngagementSourceType(item),
+            clientId: clientId || "",
+          },
+          { method: "post", action: "/api/menu-item-share" }
         );
-    };
-    return (
-        <Button
-            variant={"ghost"}
-            className={cn("flex items-center cursor-pointer", cnContainer)} onClick={likingIt}>
-            {children}
-            <Heart
-                size={size ?? 16}
+      })
+      .catch((error) => {});
+  };
+
+  return (
+    <div className="flex flex-col gap-0 my-2">
+      <div className="grid grid-cols-2 font-neue">
+        <div className="flex items-center">
+          {likesEnabled && (
+            <div
+              className="flex flex-col gap-1 cursor-pointer p-2 active:bg-black/50"
+              onClick={likingIt}
+            >
+              <Heart
                 className={cn(
-                    likeIt ? "fill-red-500" : "fill-none",
-                    likeIt ? "stroke-red-500" : "stroke-black",
-                    item.likes?.amount && item.likes?.amount > 0 ? "stroke-red-500" : "stroke-black"
+                  likeIt ? "fill-red-500" : "fill-none",
+                  likeIt ? "stroke-red-500" : "stroke-black",
+                  item.likes?.amount && item.likes?.amount > 0
+                    ? "stroke-red-500"
+                    : "stroke-black"
                 )}
-            />
-            <span className={
+              />
+            </div>
+          )}
+          {sharesEnabled && (
+            <div
+              className="flex flex-col gap-1 cursor-pointer p-2 active:bg-black/50 "
+              onClick={shareIt}
+            >
+              <Share2 />
+            </div>
+          )}
+        </div>
+
+        <WhatsappExternalLink
+          phoneNumber="46991272525"
+          ariaLabel="Envia uma mensagem com WhatsApp"
+          message={"Olá, gostaria fazer um pedido"}
+          className="flex flex-col gap-1 items-end cursor-pointer p-2 active:bg-black/50"
+        >
+          <WhatsAppIcon color="black" />
+        </WhatsappExternalLink>
+      </div>
+      {likesEnabled && likesAmount === 0 && (
+        <div className="flex items-center gap-1">
+          <span className="text-sm font-neue tracking-widest font-semibold uppercase">
+            Seja o primeiro! Curte com{" "}
+          </span>
+          <Heart size={14} />
+        </div>
+      )}
+
+      {likesEnabled && (
+        <span className="text-sm font-neue tracking-widest font-semibold uppercase pl-1 text-red-500">
+          {likesAmount > 0 && `${likesAmount} curtidas`}
+        </span>
+      )}
+    </div>
+  );
+}
+
+export function ShareIt({
+  item,
+  size,
+  children,
+  cnContainer,
+}: {
+  item: MenuItemWithAssociations;
+  size?: number;
+  children?: React.ReactNode;
+  cnContainer?: string;
+}) {
+  const fetcher = useFetcher();
+
+  const shareIt = () => {
+    const engagementItemId = getEngagementItemId(item);
+    if (!engagementItemId) return;
+    if (!navigator?.share) {
+      console.log("Navegador não suporta o compartilhamento");
+      return;
+    }
+
+    const text = `Essa pizza ${item.name} é a melhor pizza da cidade. Experimente...`;
+    navigator
+      .share({
+        title: item.name,
+        text,
+        url: `${WEBSITE_LINKS.cardapioPublic}/#${item.id}`,
+      })
+      .then(() => {
+        const clientId = getOrCreateMenuItemInterestClientId();
+        fetcher.submit(
+          {
+            action: "menu-item-share-it",
+            itemId: engagementItemId,
+            sourceType: getEngagementSourceType(item),
+            clientId: clientId || "",
+          },
+          { method: "post", action: "/api/menu-item-share" }
+        );
+      })
+      .catch((error) => {});
+  };
+  return (
+    <Button
+      variant="ghost"
+      className={cn("flex gap-2 ", cnContainer)}
+      onClick={shareIt}
+    >
+      <Share2 size={size ?? 16} />
+      {children}
+    </Button>
+  );
+}
+
+export function LikeIt({
+  item,
+  size,
+  cnLabel,
+  children,
+  cnContainer,
+  cnIcon,
+  color = "red",
+  filled = false,
+  showCount = false,
+  attentionAnimation = false,
+}: {
+  item: MenuItemWithAssociations;
+  size?: number;
+  cnLabel?: string;
+  children?: React.ReactNode;
+  cnContainer?: string;
+  cnIcon?: string;
+  color?: "red" | "white";
+  filled?: boolean;
+  showCount?: boolean;
+  attentionAnimation?: boolean;
+}) {
+  const [likeIt, setLikeIt] = useState(false);
+  const [likesAmount, setLikesAmount] = useState(item.likes?.amount || 0);
+  const [isVisible, setIsVisible] = useState(false);
+  const buttonRef = useRef<HTMLButtonElement | null>(null);
+
+  const fetcher = useFetcher();
+  const animationDelay = useMemo(() => {
+    const hash = item.id
+      .split("")
+      .reduce((total, character) => total + character.charCodeAt(0), 0);
+    return `${-(hash % 48) / 10}s`;
+  }, [item.id]);
+
+  useEffect(() => {
+    if (!attentionAnimation) return;
+
+    const element = buttonRef.current;
+    if (!element || typeof IntersectionObserver === "undefined") return;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => setIsVisible(Boolean(entry?.isIntersecting)),
+      { threshold: 0.6 }
+    );
+
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [attentionAnimation]);
+
+  const likingIt = () => {
+    const engagementItemId = getEngagementItemId(item);
+    if (!engagementItemId) return;
+
+    setLikeIt(true);
+    setLikesAmount(likesAmount + 1);
+
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("cardapio:like-celebration"));
+    }
+
+    const clientId = getOrCreateMenuItemInterestClientId();
+    fetcher.submit(
+      {
+        action: "menu-item-like-it",
+        itemId: engagementItemId,
+        sourceType: getEngagementSourceType(item),
+        likesAmount: String(1),
+        clientId: clientId || "",
+      },
+      { method: "post", action: "/api/menu-item-like" }
+    );
+  };
+  const isRed = color === "red";
+  const textColor = isRed ? "text-red-500" : "text-white";
+  const strokeColor = isRed ? "stroke-red-500" : "stroke-white";
+  const fillColor = isRed ? "fill-red-500" : "fill-white";
+
+  return (
+    <Button
+      ref={buttonRef}
+      type="button"
+      variant={"ghost"}
+      aria-label={`Curtir ${item.name}. ${likesAmount} ${
+        likesAmount === 1 ? "curtida" : "curtidas"
+      }`}
+      className={cn(
+        "flex items-center cursor-pointer focus:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 focus:ring-0 focus:ring-offset-0",
+        showCount && "flex-col gap-0.5",
+        cnContainer
+      )}
+      onClick={likingIt}
+    >
+      <Heart
+        size={size ?? 16}
+        style={attentionAnimation ? { animationDelay } : undefined}
+        className={cn(
+          likeIt || filled ? fillColor : "fill-none",
+          strokeColor,
+          attentionAnimation &&
+            isVisible &&
+            !likeIt &&
+            "cardapio-like-attention",
+          likeIt && "cardapio-like-clicked",
+          cnIcon
+        )}
+      />
+      {showCount ? (
+        <span
+          aria-hidden="true"
+          className={cn(
+            "min-h-[0.75rem] font-neue text-[10px] font-semibold leading-none tabular-nums",
+            textColor,
+            cnLabel
+          )}
+        >
+          {likesAmount}
+        </span>
+      ) : null}
+      {children}
+
+      {/* <span className={
                 cn(
-                    "text-xs font-neue font-medium tracking-widest uppercase pl-1 text-red-500",
+                    `text-xs font-neue font-medium tracking-widest uppercase pl-1 ${textColor}`,
                     cnLabel
                 )
             }>
-                {likesAmount > 0 && `${likesAmount}`}
+                ({likesAmount > 0 && `${likesAmount}`})
 
-            </span>
-        </Button>
-    )
+            </span> */}
+    </Button>
+  );
 }
 
 export function WhatsAppIt() {
-    return (
-        <WhatsappExternalLink
-            phoneNumber="46991272525"
-            ariaLabel="Envia uma mensagem com WhatsApp"
-            message={"Olá, gostaria fazer um pedido"}
-            className="flex flex-col gap-1 items-end cursor-pointer p-2 active:bg-black/50"
-        >
-            <WhatsAppIcon color="black" />
-        </WhatsappExternalLink>
-    )
+  return (
+    <WhatsappExternalLink
+      phoneNumber="46991272525"
+      ariaLabel="Envia uma mensagem com WhatsApp"
+      message={"Olá, gostaria fazer um pedido"}
+      className="flex flex-col gap-1 items-end cursor-pointer p-2 active:bg-black/50"
+    >
+      <WhatsAppIcon color="black" />
+    </WhatsappExternalLink>
+  );
 }

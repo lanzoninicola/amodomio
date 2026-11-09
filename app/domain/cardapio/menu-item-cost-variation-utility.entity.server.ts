@@ -10,13 +10,13 @@ export class MenuItemCostVariationUtility {
    */
   static calculateRecommendedCostVariationBySizeKey(
     size: PizzaSizeKey,
-    refCostAmount: number
+    refCostAmount: number,
   ): number {
     switch (size) {
       case "pizza-individual":
         return refCostAmount * 0.5;
       case "pizza-small":
-        return refCostAmount * 99;
+        return refCostAmount * 0.75;
       case "pizza-medium":
         return refCostAmount;
       case "pizza-big":
@@ -37,10 +37,11 @@ export class MenuItemCostVariationUtility {
    * @returns An object containing the recommended cost variations for each pizza size key.
    */
   static calculateAllRecommendedCostVariations(
-    refCostAmount: number
+    refCostAmount: number,
   ): Record<PizzaSizeKey, number> {
     return {
-      "pizza-individual": refCostAmount * 0.5,
+      "pizza-individual": refCostAmount * 0.3,
+      "pizza-small": refCostAmount * 0.5,
       "pizza-medium": refCostAmount,
       "pizza-big": refCostAmount * 1.25,
       "pizza-bigger": refCostAmount * 2,

@@ -2,39 +2,68 @@ import { vitePlugin as remix } from "@remix-run/dev";
 import { defineConfig } from "vite";
 import tsconfigPaths from "vite-tsconfig-paths";
 import { installGlobals } from "@remix-run/node";
-import mkcert from 'vite-plugin-mkcert'
+import mkcert from "vite-plugin-mkcert";
 import { RemixVitePWA } from "@vite-pwa/remix";
 
 installGlobals();
 // Gera um hash/versão por build com base em timestamp
-const buildVersion = `v${new Date().toISOString().replace(/[-:.TZ]/g, '')}`;
+const buildVersion = `v${new Date().toISOString().replace(/[-:.TZ]/g, "")}`;
+const isVitest = process.env.VITEST === "true";
+const devWatchIgnored = [
+  /graphify-out/,
+  /\/build\//,
+  /vite\.config\.mjs\.timestamp-/,
+];
 
 const { RemixVitePWAPlugin, RemixPWAPreset } = RemixVitePWA();
 
-export default defineConfig({
+function ignoreGeneratedFilesForDevServer() {
+  return {
+    name: "ignore-generated-files-for-dev-server",
+    config() {
+      return {
+        server: {
+          watch: {
+            ignored: devWatchIgnored,
+          },
+        },
+      };
+    },
+  };
+}
+
+export default defineConfig(({ command }) => ({
   define: {
-    __APP_VERSION__: JSON.stringify(buildVersion) // para usar no frontend
+    __APP_VERSION__: JSON.stringify(buildVersion), // para usar no frontend
   },
   server: {
     https: false,
-    host: 'localhost', // importante manter "localhost"
-    port: 3000
+    host: "0.0.0.0", // permite acesso do aplicativo pela rede local
+    port: 3000,
+    watch: {
+      ignored: devWatchIgnored,
+    },
   },
   plugins: [
-    mkcert(),
+    command === "serve" && ignoreGeneratedFilesForDevServer(),
+    !isVitest && command === "serve" && mkcert(),
     remix({
       presets: [RemixPWAPreset()],
-      ignoredRouteFiles: ["**/*.css"],
+      ignoredRouteFiles: [
+        "**/*.css",
+        "**/*.test.{js,jsx,ts,tsx}",
+        "**/*.spec.{js,jsx,ts,tsx}",
+      ],
       future: {
         v3_fetcherPersist: true,
         v3_relativeSplatPath: true,
-        v3_throwAbortReason: true
+        v3_throwAbortReason: true,
       },
     }),
 
     RemixVitePWAPlugin({
       registerType: "autoUpdate",
-      injectRegister: "auto", // assegura que o registro será feito
+      injectRegister: "auto", // assegura que o registro sera feito
       manifest: {
         name: "A Modo Mio",
         short_name: "A Modo Mio",
@@ -44,8 +73,13 @@ export default defineConfig({
         theme_color: "#262626",
         icons: [
           { src: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
-          { src: "/icons/icon-512.png", sizes: "512x512", type: "image/png", purpose: "any maskable" }
-        ]
+          {
+            src: "/icons/icon-512.png",
+            sizes: "512x512",
+            type: "image/png",
+            purpose: "any maskable",
+          },
+        ],
       },
       workbox: {
         cleanupOutdatedCaches: true,
@@ -55,24 +89,24 @@ export default defineConfig({
             handler: "CacheFirst",
             options: {
               cacheName: "images",
-              expiration: { maxEntries: 60, maxAgeSeconds: 60 * 60 * 24 * 30 }
-            }
+              expiration: { maxEntries: 60, maxAgeSeconds: 60 * 60 * 24 * 30 },
+            },
           },
           {
             urlPattern: /^\/(sabores|promocoes|ofertas)$/,
             handler: "NetworkFirst",
             options: {
               cacheName: "dynamic-pages",
-              expiration: { maxEntries: 20, maxAgeSeconds: 3600 }
-            }
-          }
-        ]
+              expiration: { maxEntries: 20, maxAgeSeconds: 3600 },
+            },
+          },
+        ],
       },
       devOptions: {
-        navigateFallback: "/_offline"
-      }
+        navigateFallback: "/_offline",
+      },
     }),
 
-    tsconfigPaths()
-  ]
-});
+    tsconfigPaths({ projects: ["./tsconfig.json"] }),
+  ].filter(Boolean),
+}));

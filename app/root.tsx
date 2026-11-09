@@ -1,63 +1,69 @@
-import type { LinkDescriptor, LinksFunction, LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
+import type {
+  LinksFunction,
+  LoaderFunctionArgs,
+  MetaFunction,
+} from "@remix-run/node";
+import { redirect } from "@remix-run/node";
 import {
+  Link,
   Links,
   Meta,
   Outlet,
   Scripts,
   ScrollRestoration,
-  isRouteErrorResponse,
   useLoaderData,
   useRouteError,
+  useLocation,
 } from "@remix-run/react";
 import { Toaster } from "./components/ui/toaster";
 import stylesheet from "~/tailwind.css?url";
 import GoogleTagManagerScriptTag from "./components/primitives/google-tag-manager/gtm-script";
 import GoogleTagManagerNoScriptTag from "./components/primitives/google-tag-manager/gtm-noscript";
-import { Analytics } from '@vercel/analytics/react';
+import { Analytics } from "@vercel/analytics/react";
 import { ok } from "./utils/http-response.server";
-import { Button } from "./components/ui/button";
-import PUBLIC_WEBSITE_NAVIGATION_ITEMS from "./domain/website-navigation/public/public-website.nav-links";
-import GLOBAL_LINKS from "./domain/website-navigation/global-links.constant";
-import ExternalLink from "./components/primitives/external-link/external-link";
-import { cn } from "./lib/utils";
 import { ArrowRight } from "lucide-react";
 import Logo from "./components/primitives/logo/logo";
 import MicrosoftClarityScriptTag from "./components/primitives/ms-clarity/ms-clarity-script";
+import WEBSITE_LINKS from "./domain/website-navigation/links/website-links";
+import {
+  getErrorMessage,
+  isDatabaseConnectivityError,
+} from "./lib/errors/connectivity";
 
 export const meta: MetaFunction = () => {
   return [
     { title: "Pizza Delivery Italiana em Pato Branco - A Modo Mio" },
     {
       name: "description",
-      content: "Experimente a autêntica pizza italiana da A Modo Mio em Pato Branco. Crocante, artesanal e irresistível. Peça agora!",
+      content:
+        "Experimente a autêntica pizza italiana da A Modo Mio em Pato Branco. Crocante, artesanal e irresistível. Peça agora!",
     },
     {
       name: "keywords",
-      content: "pizza, pizza pato branco, pizza em pedaços, pizza al taglio, delivery, pizza delivery, pizza delivery a modo mio, pizzaria pato branco, pizza pato branco, pizza al taglio",
-    }
+      content:
+        "pizza, pizza pato branco, pizza em pedaços, pizza al taglio, delivery, pizza delivery, pizza delivery a modo mio, pizzaria pato branco, pizza pato branco, pizza al taglio",
+    },
   ];
 };
 
 const fontsVariants = (font: string) => {
   // const variants = ["Black", "Bold", "Light", "Medium", "Regular", "Semibold", "Thin"]
-  const variants = ["Medium"]
+  const variants = ["Medium"];
 
-  return variants.map(v => `${font}${v}`)
-}
+  return variants.map((v) => `${font}${v}`);
+};
 
 const linkFontVariant = (font: string) => {
-
-  return fontsVariants(font).map(variant => {
+  return fontsVariants(font).map((variant) => {
     return {
       rel: "preload",
       href: `/fonts/${variant}.ttf`,
       as: "font",
       type: "font/ttf",
       crossOrigin: "anonymous",
-    }
-  })
-}
-
+    };
+  });
+};
 
 // @ts-ignore
 export const links: LinksFunction = () => [
@@ -72,8 +78,8 @@ export const links: LinksFunction = () => [
   //   rel: "stylesheet",
   // },
   {
-    href: "https://fonts.googleapis.com/css2?family=Inter&family=Montagu+Slab:opsz,wght@16..144,400;16..144,600;16..144,700&display=swap",
-    rel: "preload",
+    href: "https://fonts.googleapis.com/css2?family=Inter&family=Lora:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap",
+    rel: "stylesheet",
   },
   // {
   //   rel: 'apple-touch-icon',
@@ -108,66 +114,54 @@ export const links: LinksFunction = () => [
   // { rel: 'icon', href: '/favicon.ico' },
 
   // ...linkFontVariant("Lufga"),
-
 ];
 
 export interface EnvironmentVariables {
-
-  MODE: "development" | "production"
-  GTM_ID?: string
-  CLOUDINARY_CLOUD_NAME?: string
-  STORE_OPENING_CONFIG?: {
-    OPENING_DAYS: number[]
-    OPENING_HOUR: number
-    CLOSING_HOUR: number
-  }
-  REST_API_SECRET_KEY?: string
+  MODE: "development" | "production";
+  GTM_ID?: string;
+  REST_API_SECRET_KEY?: string;
 }
 
-
 export async function loader({ request }: LoaderFunctionArgs) {
+  const url = new URL(request.url);
 
-  const env = import.meta.env
+  if (url.hostname === "bio.amodomio.com.br") {
+    return redirect("https://www.amodomio.com.br/bio", 308);
+  }
 
+  const env = import.meta.env;
   const ENV: EnvironmentVariables = {
     MODE: env.VITE_MODE ?? "development",
     GTM_ID: env.VITE_GOOGLE_TAG_MANAGER_ID ?? "",
-    CLOUDINARY_CLOUD_NAME: env.VITE_CLOUDINARY_CLOUD_NAME ?? "",
-    STORE_OPENING_CONFIG: {
-      OPENING_DAYS: env.VITE_STORE_OPEN_DAYWEEK ? env.VITE_STORE_OPEN_DAYWEEK.split(",").map(Number) : [],
-      OPENING_HOUR: env?.STORE_OPEN_HH_START ? parseInt(env.VITE_STORE_OPEN_HH_START) : 1800,
-      CLOSING_HOUR: env?.STORE_OPEN_HH_END ? parseInt(env.VITE_STORE_OPEN_HH_END) : 1800,
-    }
-  }
+  };
 
   return ok({
-    env: ENV
-  })
+    env: ENV,
+  });
 }
 
 export default function App() {
-  const loaderData = useLoaderData<typeof loader>()
-  const ENV: EnvironmentVariables = loaderData?.payload?.env
-
-
+  const loaderData = useLoaderData<typeof loader>();
+  const ENV: EnvironmentVariables = loaderData?.payload?.env;
 
   return (
     <html lang="pt-br" className="scroll-smooth">
       <head>
         <meta charSet="utf-8" />
-        <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+        <meta
+          name="viewport"
+          content="width=device-width,initial-scale=1,viewport-fit=cover"
+        />
         <Meta />
         <Links />
         {ENV.GTM_ID !== "" && <GoogleTagManagerScriptTag id={ENV.GTM_ID} />}
         {ENV.MODE === "production" && <MicrosoftClarityScriptTag />}
       </head>
       <body>
-
         <Outlet />
         <Toaster />
         <ScrollRestoration />
         <Scripts />
-        <script src="https://upload-widget.cloudinary.com/latest/global/all.js" type="text/javascript" />
         <Analytics />
         {ENV.GTM_ID !== "" && <GoogleTagManagerNoScriptTag id={ENV.GTM_ID} />}
       </body>
@@ -175,61 +169,224 @@ export default function App() {
   );
 }
 
-
-
-
 export function ErrorBoundary() {
   const error = useRouteError();
+  const location = useLocation();
+  const pathname = location?.pathname || "";
+  const isAdminRootRoute = pathname === "/admin";
+  const shouldRedirectCardapio = pathname.startsWith("/cardapio");
+  const isDbUnavailable = isDatabaseConnectivityError(error);
+  const shouldForceCardapioRedirect =
+    shouldRedirectCardapio && !isDbUnavailable;
+  const cardapioFallbackHref = WEBSITE_LINKS.saiposCardapio.href;
+  const errorDetails = (() => {
+    if (error instanceof Error) {
+      return [error.message, error.stack].filter(Boolean).join("\n\n");
+    }
 
-  console.log({ error })
+    try {
+      return JSON.stringify(error, null, 2);
+    } catch (stringifyError) {
+      return String(error);
+    }
+  })();
+
+  const primaryAction = (() => {
+    if (pathname.startsWith("/admin"))
+      return { href: "/admin", label: "Voltar para o painel" };
+    if (pathname.startsWith("/cardapio"))
+      return {
+        href: cardapioFallbackHref,
+        label: "Ir para finalizar o pedido",
+      };
+    return { href: "/", label: "Ir para a página inicial" };
+  })();
+
+  console.error("[root] route error boundary", error);
+
+  if (isAdminRootRoute) {
+    return (
+      <html>
+        <head>
+          <title>Erro no admin</title>
+          <Meta />
+          <Links />
+        </head>
+        <body>
+          <div className="min-h-screen bg-slate-50 px-6 py-8 text-slate-900 md:px-10 md:py-10">
+            <div className="mx-auto max-w-3xl space-y-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm md:p-8">
+              <div className="space-y-2">
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+                  Admin
+                </p>
+                <h1 className="text-2xl font-semibold md:text-3xl">
+                  {isDbUnavailable
+                    ? "Banco temporariamente indisponível"
+                    : "Ocorreu um erro no painel administrativo"}
+                </h1>
+                <p className="text-sm text-slate-600 md:text-base">
+                  {isDbUnavailable
+                    ? "A aplicação não conseguiu falar com o banco de dados nesta tentativa."
+                    : "A rota falhou e o erro foi capturado no boundary global do admin."}
+                </p>
+              </div>
+
+              {isDbUnavailable ? (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                  {getErrorMessage(error) ||
+                    "Falha de conectividade com a base de dados."}
+                </div>
+              ) : null}
+
+              <div className="flex flex-wrap gap-3">
+                <Link
+                  to={`${pathname}${location.search}`}
+                  reloadDocument
+                  className="inline-flex items-center rounded-md bg-slate-900 px-4 py-2 text-sm font-semibold text-white"
+                >
+                  Tentar novamente
+                </Link>
+                <Link
+                  to="/admin"
+                  className="inline-flex items-center rounded-md border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700"
+                >
+                  Voltar ao painel
+                </Link>
+                <Link
+                  to="/"
+                  className="inline-flex items-center rounded-md border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700"
+                >
+                  Ir para o site
+                </Link>
+              </div>
+
+              <details className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                <summary className="cursor-pointer text-sm font-semibold text-slate-800">
+                  Ver detalhes do erro
+                </summary>
+                <pre className="mt-3 max-h-[28rem] overflow-auto whitespace-pre-wrap text-xs text-slate-700">
+                  {errorDetails || "Sem detalhes disponíveis."}
+                </pre>
+              </details>
+            </div>
+          </div>
+          <ScrollRestoration />
+          <Scripts />
+        </body>
+      </html>
+    );
+  }
 
   return (
     <html>
       <head>
         <title>Oops!</title>
+        {shouldForceCardapioRedirect ? (
+          <meta httpEquiv="refresh" content={`0;url=${cardapioFallbackHref}`} />
+        ) : null}
         <Meta />
         <Links />
       </head>
       <body>
-        {/* <h1>
-          {isRouteErrorResponse(error)
-            ? `${error.status} ${error.statusText}`
-            : error instanceof Error
-              ? error.message
-              : "Unknown Error"}
-        </h1> */}
-        <div className="w-screen h-screen">
-          <div className="grid grid-rows-6 w-full h-full items-center justify-center">
-            <Logo onlyText={true} className="w-full h-full px-32 flex row-span-2 mb:w-[250px]" color="black" />
-            <div className="flex flex-col items-center row-span-2" >
-              <div className="flex flex-col ">
-                <h1 className="font-thin leading-none text-6xl md:text-7xl">Desculpe</h1>
-                <h2 className="font-semibold text-xl">mas alguma coisa deu errado.</h2>
+        {shouldForceCardapioRedirect ? (
+          <script
+            dangerouslySetInnerHTML={{
+              __html: `window.location.replace(${JSON.stringify(
+                cardapioFallbackHref
+              )});`,
+            }}
+          />
+        ) : null}
+        <div className="min-h-screen bg-gradient-to-br from-amber-50 via-white to-orange-50 text-slate-900">
+          <div className="mx-auto flex min-h-screen max-w-5xl flex-col gap-10 px-6 py-10 md:py-16">
+            <header className="flex items-center justify-between">
+              <Logo onlyText={true} className="w-40 md:w-48" color="black" />
+              <div className="rounded-full border border-amber-200 bg-white/70 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-amber-700 shadow-sm">
+                Erro inesperado
               </div>
-              <img src="/images/gato-chorando.gif" alt="Erro" className="h-64" />
-            </div>
-            <div className="flex flex-col items-center justify-center gap-2">
-              <ExternalLink
-                to={GLOBAL_LINKS.saiposCardapio.href}
-                ariaLabel="Cardápio digital pizzaria A Modo Mio"
-              >
-                <div className='flex gap-2 items-center justify-between px-4 py-2 bg-black rounded-lg'>
-                  <span className={
-                    cn(
-                      "uppercase tracking-wide font-semibold text-white",
-                    )
-                  }>
-                    Visualizar o cardápio
-                  </span>
-                  <ArrowRight color="white" />
+            </header>
+
+            <main className="grid items-center gap-10 rounded-3xl border border-amber-100 bg-white/80 p-8 shadow-[0_20px_70px_rgba(17,24,39,0.08)] backdrop-blur-sm md:p-12 lg:grid-cols-[1.05fr_0.95fr]">
+              <div className="space-y-6">
+                <p className="text-xs font-semibold uppercase tracking-[0.25em] text-amber-600">
+                  Algo saiu do forno errado
+                </p>
+                <div className="space-y-3">
+                  <h1 className="text-4xl font-semibold leading-tight md:text-5xl">
+                    {isDbUnavailable
+                      ? "Banco temporariamente indisponível."
+                      : "Desculpe, tivemos um imprevisto."}
+                  </h1>
+                  <p className="text-lg text-slate-600 md:max-w-xl">
+                    {isDbUnavailable
+                      ? "A aplicação não conseguiu alcançar o banco de dados agora. Tente recarregar a rota atual em instantes."
+                      : "Ocorreu um erro no cardápio digital. Estamos redirecionando você imediatamente para finalizar seu pedido."}
+                  </p>
+                  {isDbUnavailable ? (
+                    <p className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 md:max-w-xl">
+                      {getErrorMessage(error) ||
+                        "Falha de conectividade com a base de dados."}
+                    </p>
+                  ) : null}
+                  {shouldForceCardapioRedirect ? (
+                    <p className="text-sm font-semibold text-slate-800">
+                      Caso isso não aconteça, use o botão abaixo.
+                    </p>
+                  ) : null}
                 </div>
-              </ExternalLink>
 
-            </div>
+                <div className="flex flex-wrap gap-3">
+                  <Link
+                    to={
+                      isDbUnavailable
+                        ? `${pathname}${location.search}`
+                        : primaryAction.href
+                    }
+                    reloadDocument={isDbUnavailable}
+                    className="inline-flex items-center gap-2 rounded-full bg-slate-900 px-5 py-3 text-sm font-semibold uppercase tracking-wide text-white shadow-md transition hover:-translate-y-0.5 hover:shadow-lg"
+                  >
+                    <span>
+                      {isDbUnavailable
+                        ? "Tentar novamente"
+                        : primaryAction.label}
+                    </span>
+                    <ArrowRight className="h-4 w-4" />
+                  </Link>
+                  <Link
+                    to={
+                      shouldForceCardapioRedirect
+                        ? cardapioFallbackHref
+                        : "/cardapio"
+                    }
+                    className="inline-flex items-center gap-2 rounded-full border border-slate-300 px-5 py-3 text-sm font-semibold uppercase tracking-wide text-slate-700 transition hover:border-slate-400 hover:bg-slate-50"
+                  >
+                    <span>
+                      {shouldForceCardapioRedirect
+                        ? "Ir para finalizar o pedido"
+                        : "Ver cardápio digital"}
+                    </span>
+                  </Link>
+                </div>
+              </div>
 
-
+              <div className="relative flex items-center justify-center">
+                <div
+                  className="absolute inset-0 -z-10 mx-auto h-72 w-72 rounded-full bg-amber-100/70 blur-3xl"
+                  aria-hidden
+                />
+                <div className="flex flex-col items-center gap-4 rounded-2xl border border-amber-100 bg-white/80 p-6 shadow-inner">
+                  <img
+                    src="/images/gato-chorando.gif"
+                    alt="Gatinho triste"
+                    className="w-44 md:w-52"
+                  />
+                  <div className="text-sm text-slate-500">
+                    Prometemos voltar a servir rapidinho.
+                  </div>
+                </div>
+              </div>
+            </main>
           </div>
-
         </div>
         <Scripts />
       </body>
