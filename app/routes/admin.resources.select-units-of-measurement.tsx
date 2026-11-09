@@ -1,14 +1,14 @@
 import { type LoaderFunctionArgs } from "@remix-run/node"
 import { useLoaderData } from "@remix-run/react"
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select"
-import { categoryEntity } from "~/domain/category/category.entity.server"
+import { categoryPrismaEntity } from "~/domain/category/category.entity.server"
 import { type Category } from "~/domain/category/category.model.server"
 import type { HttpResponse } from "~/utils/http-response.server";
 import { ok } from "~/utils/http-response.server"
 
 export async function loader() {
 
-    const categories = await categoryEntity.findAll() as Category[]
+    const categories = await categoryPrismaEntity.findAll() as Category[]
 
     return ok({ categories })
 }

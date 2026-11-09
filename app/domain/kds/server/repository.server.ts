@@ -1,6 +1,59 @@
 import { Prisma } from "@prisma/client";
 import prisma from "~/lib/prisma/client.server";
+import { CHANNELS } from "~/domain/kds/constants";
+
+export const kdsOrderApiSelect = {
+  id: true,
+  orderId: true,
+  dateInt: true,
+  createdAt: true,
+  updatedAt: true,
+  deletedAt: true,
+  deliveredAt: true,
+  commandNumber: true,
+  size: true,
+  hasMoto: true,
+  motoValue: true,
+  orderAmount: true,
+  channel: true,
+  status: true,
+  customerName: true,
+  customerPhone: true,
+  orderItems: true,
+  takeAway: true,
+  requestedForOven: true,
+  sortOrderIndex: true,
+  isVendaLivre: true,
+  isCreditCard: true,
+  isCash: true,
+  isOtherPaymentMethod: true,
+  novoPedidoAt: true,
+  emProducaoAt: true,
+  aguardandoFornoAt: true,
+  assandoAt: true,
+  finalizadoAt: true,
+  deliveryZoneId: true,
+  DeliveryZone: {
+    select: {
+      id: true,
+      name: true,
+      city: true,
+      state: true,
+      zipCode: true,
+    },
+  },
+} satisfies Prisma.KdsDailyOrderDetailSelect;
+
+export type KdsOrderApiRow = Prisma.KdsDailyOrderDetailGetPayload<{
+  select: typeof kdsOrderApiSelect;
+}>;
 export async function ensureHeader(dateInt: number, currentDate: Date) {
+  const activeGoal = await prisma.financialDailyGoal.findFirst({
+    where: { isActive: true },
+    orderBy: { createdAt: "desc" },
+    select: { id: true },
+  });
+
   return prisma.kdsDailyOrder.upsert({
     where: { dateInt },
     update: {},
@@ -8,6 +61,7 @@ export async function ensureHeader(dateInt: number, currentDate: Date) {
       date: currentDate,
       dateInt,
       totOrdersAmount: new Prisma.Decimal(0),
+      financialDailyGoalId: activeGoal?.id ?? null,
     },
     select: { id: true },
   });
@@ -38,11 +92,49 @@ export async function listByDate(dateInt: number) {
     orderBy: [{ sortOrderIndex: "asc" }, { createdAt: "asc" }],
   });
 }
+export async function listOrdersForApiByDate(dateInt: number) {
+  return prisma.kdsDailyOrderDetail.findMany({
+    where: { dateInt, deletedAt: null },
+    orderBy: [{ sortOrderIndex: "asc" }, { createdAt: "asc" }],
+    select: kdsOrderApiSelect,
+  });
+}
+
+export async function getOrderForApiByCommandNumber(
+  dateInt: number,
+  commandNumber: number
+) {
+  return prisma.kdsDailyOrderDetail.findFirst({
+    where: { dateInt, commandNumber, deletedAt: null },
+    select: kdsOrderApiSelect,
+  });
+}
+
+export async function getOrderForApiById(id: string) {
+  return prisma.kdsDailyOrderDetail.findFirst({
+    where: { id, deletedAt: null },
+    select: kdsOrderApiSelect,
+  });
+}
 export async function getDailyAggregates(dateInt: number) {
   const agg = await prisma.kdsDailyOrderDetail.aggregate({
     where: { dateInt, status: { not: "pendente" } },
     _sum: { orderAmount: true, motoValue: true },
     _count: { _all: true },
+  });
+  const cardAgg = await prisma.kdsDailyOrderDetail.aggregate({
+    where: { dateInt, status: { not: "pendente" }, isCreditCard: true },
+    _sum: { orderAmount: true },
+  });
+  const aiqfomeChannelStr = CHANNELS[2];
+  const ifoodChannelStr = CHANNELS[3];
+  const marketplaceAgg = await prisma.kdsDailyOrderDetail.aggregate({
+    where: {
+      dateInt,
+      status: { not: "pendente" },
+      channel: { in: [aiqfomeChannelStr, ifoodChannelStr] },
+    },
+    _sum: { orderAmount: true },
   });
   const byChannel = await prisma.kdsDailyOrderDetail.groupBy({
     by: ["channel"],
@@ -60,6 +152,8 @@ export async function getDailyAggregates(dateInt: number) {
     total: Number(agg._sum.orderAmount ?? 0),
     moto: Number(agg._sum.motoValue ?? 0),
     count: agg._count._all ?? 0,
+    card: Number(cardAgg._sum.orderAmount ?? 0),
+    marketplace: Number(marketplaceAgg._sum.orderAmount ?? 0),
     byChannel: byChannel.map((x) => ({
       k: x.channel ?? "(sem canal)",
       total: Number(x._sum.orderAmount ?? 0),
@@ -131,7 +225,11 @@ export type KdsStatus =
  * Obs.: usamos "definir se null" para manter o primeiro instante da fase.
  * Ao voltar fases, limpamos os *At das fases posteriores para manter a linha do tempo consistente.
  */
-export async function setOrderStatus(id: string, next: KdsStatus) {
+export async function setOrderStatus(
+  id: string,
+  next: KdsStatus,
+  options: { fulfillOvenRequest?: boolean } = {}
+) {
   const now = new Date();
 
   // Pega status atual para evitar writes desnecessários (opcional)
@@ -174,6 +272,7 @@ export async function setOrderStatus(id: string, next: KdsStatus) {
     case "assando": {
       data.assandoAt = current.assandoAt ?? now;
       data.finalizadoAt = null;
+      if (options.fulfillOvenRequest) data.requestedForOven = false;
       break;
     }
     case "finalizado": {
@@ -185,5 +284,16 @@ export async function setOrderStatus(id: string, next: KdsStatus) {
   await prisma.kdsDailyOrderDetail.update({
     where: { id },
     data,
+  });
+}
+
+export async function setOrderRequestedForOven(
+  id: string,
+  requestedForOven: boolean
+) {
+  return prisma.kdsDailyOrderDetail.update({
+    where: { id },
+    data: { requestedForOven },
+    select: { id: true, requestedForOven: true },
   });
 }

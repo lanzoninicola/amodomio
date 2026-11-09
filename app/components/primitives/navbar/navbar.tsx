@@ -13,7 +13,7 @@ export default function Navbar({ links }: NavbarProps) {
         <>
             <input type="checkbox" id="navbar-toggle" className="peer hidden outline-0" onChange={() => setNavbarOpen(!navbarOpen)} />
             <div className="hidden peer-checked:block md:block">
-                <div className="absolute z-50 top-[100%] left-0 h-[75vh] w-[95vw] md:w-[inherit] md:h-[inherit] bg-white flex justify-center flex-col md:flex-row md:bg-none md:relative">
+                <div className="absolute z-50 top-[100%] left-0 h-[75vh] w-[95vw] md:w-[inherit] md:h-[inherit] bg-white flex justify-center flex-col md:flex-row md:bg-none md:relative md:max-w-[calc(100vw-120px)] md:overflow-x-auto md:justify-start">
                     {links.map((link) => (
                         <NavbarItem key={link.href} {...link} />
                     ))}

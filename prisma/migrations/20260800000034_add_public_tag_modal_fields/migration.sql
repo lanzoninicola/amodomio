@@ -1,0 +1,3 @@
+ALTER TABLE "tags"
+ADD COLUMN "description" TEXT,
+ADD COLUMN "clickable" BOOLEAN NOT NULL DEFAULT false;

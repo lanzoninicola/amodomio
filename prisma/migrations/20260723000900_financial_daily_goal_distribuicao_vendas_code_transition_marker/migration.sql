@@ -1,0 +1,4 @@
+-- Step 3: Code transition marker.
+-- Application code now reads/writes only:
+--   distribuicao_vendas_dia_01_perc..05_perc
+-- No SQL changes required in this step.

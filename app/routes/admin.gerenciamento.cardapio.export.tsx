@@ -13,7 +13,7 @@ export default function CardapioExport() {
 
     return (
         <div className="flex flex-col">
-            <div className="grid grid-cols-4 gap-x-4 mb-4">
+            <div className="grid grid-cols-5 gap-x-4 mb-4">
                 <Link to="/admin/gerenciamento/cardapio/export/basic-list"
                     className="hover:bg-muted my-4"
                 >
@@ -65,6 +65,19 @@ export default function CardapioExport() {
                     }>
                         <List size={14} />
                         <span className="text-[14px] uppercase tracking-wider font-semibold">Parede (2)</span>
+                    </div>
+                </Link>
+                <Link to="/admin/gerenciamento/cardapio/export/print-list"
+                    className="hover:bg-muted my-4"
+                >
+                    <div className={
+                        cn(
+                            "flex items-center gap-2 justify-center  py-1",
+                            activeTab === "print-list" && "bg-muted font-semibold rounded-md "
+                        )
+                    }>
+                        <List size={14} />
+                        <span className="text-[14px] uppercase tracking-wider font-semibold">Cardapio Print</span>
                     </div>
                 </Link>
 

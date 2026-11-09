@@ -1,7 +1,30 @@
 import { InstagramLogoIcon } from "@radix-ui/react-icons";
-import { LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
-import { Await, Link, Outlet, defer, matchPath, useLoaderData, useLocation } from "@remix-run/react";
-import { ArrowRight, Divide, Donut, Info, Instagram, LayoutTemplate, MapPin, Proportions, SearchIcon, User, Users } from "lucide-react";
+import {
+  LinksFunction,
+  LoaderFunctionArgs,
+  MetaFunction,
+} from "@remix-run/node";
+import {
+  Await,
+  Link,
+  Outlet,
+  defer,
+  useLoaderData,
+  useLocation,
+  useMatches,
+  useRouteError,
+  useRouteLoaderData,
+} from "@remix-run/react";
+import {
+  Bell,
+  Divide,
+  Info,
+  Instagram,
+  LayoutTemplate,
+  MapPin,
+  Proportions,
+  SearchIcon,
+} from "lucide-react";
 import React, { ReactNode, Suspense, useEffect, useState } from "react";
 
 import ItalyFlag from "~/components/italy-flag/italy-flag";
@@ -11,16 +34,40 @@ import Logo from "~/components/primitives/logo/logo";
 import WhatsappExternalLink from "~/components/primitives/whatsapp/whatsapp-external-link";
 import WhatsAppIcon from "~/components/primitives/whatsapp/whatsapp-icon";
 import { Button } from "~/components/ui/button";
-import { Dialog, DialogClose, DialogContent, DialogTrigger } from "~/components/ui/dialog";
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogTrigger,
+} from "~/components/ui/dialog";
 import { Separator } from "~/components/ui/separator";
 import FazerPedidoButton from "~/domain/cardapio/components/fazer-pedido-button/fazer-pedido-button";
-import { MenuItemWithAssociations } from "~/domain/cardapio/menu-item.prisma.entity.server";
+import CardapioOrderCtaButton from "~/domain/cardapio/components/cardapio-order-cta-button";
 import { WebsiteNavigationSidebar } from "~/domain/website-navigation/components/website-navigation-sidebar";
-import GLOBAL_LINKS from "~/domain/website-navigation/global-links.constant";
-import PUBLIC_WEBSITE_NAVIGATION_ITEMS from "~/domain/website-navigation/public/public-website.nav-links";
+import WEBSITE_LINKS from "~/domain/website-navigation/links/website-links";
+import PUBLIC_NAVIGATION_LINKS from "~/domain/website-navigation/links/public-navigation";
 import prismaClient from "~/lib/prisma/client.server";
 import { cn } from "~/lib/utils";
-
+import { parseBooleanSetting } from "~/utils/parse-boolean-setting";
+import { PushOptIn } from "~/domain/push/components/push-opt-in";
+import useCurrentPage from "~/hooks/use-current-page";
+import {
+  NotificationCenterProvider,
+  useNotificationCenter,
+} from "~/domain/push/notification-center-context";
+import { PwaInstallPrompt } from "~/domain/pwa/pwa-install-prompt";
+import { CardapioSizesContent } from "~/domain/cardapio/components/cardapio-sizes-content";
+import CardapioDatabaseUnavailable from "~/domain/cardapio/components/cardapio-database-unavailable/cardapio-database-unavailable";
+import CardapioErrorRedirect from "~/domain/cardapio/components/cardapio-error-redirect/cardapio-error-redirect";
+import RouteProgressBar from "~/components/route-progress-bar/route-progress-bar";
+import { isDatabaseConnectivityError } from "~/lib/errors/connectivity";
+import CardapioFacebookPixel from "~/domain/cardapio/components/cardapio-facebook-pixel";
+import { trackCardapioFacebookPixelTrigger } from "~/domain/cardapio/facebook-pixel.client";
+import { trackCardapioOrderIntent } from "~/domain/cardapio/tracking/cardapio-tracking.client";
+import {
+  CARDAPIO_REDIRECT_TO_SAIPOS_SETTING_NAME,
+  DEFAULT_CARDAPIO_REDIRECT_TO_SAIPOS,
+} from "~/domain/cardapio/cardapio-contingency-settings";
 
 /**
  * TODO:
@@ -45,553 +92,654 @@ import { cn } from "~/lib/utils";
  * - [] Cache https://vercel.com/docs/frameworks/remix
  */
 
-export interface CardapioOutletContext {
-    items: MenuItemWithAssociations[]
-}
-
 export const meta: MetaFunction = ({ data }) => {
-    return [
-        { title: "Cardápio A Modo Mio - Pizzaria Italiana em Pato Branco" },
-        { name: "description", content: "É a pizza! Italiana! Um sabor que você nunca experimentou! Descubra no nosso cardápio as melhores pizzas da cidade. Experimente e saboreie a verdadeira italianidade em Pato Branco." },
-        { name: "og:title", content: "Cardápio A Modo Mio - Pizzaria Italiana em Pato Branco" },
-        { name: "og:description", content: "É a pizza! Italiana! Um sabor que nunca experimentou! Descubra no nosso cardápio as melhores pizzas da cidade. Experimente e saboreie a verdadeira italianidade em Pato Branco." },
-        { name: "og:image", content: "https://www.amodomio.com.br/images/cardapio_og_image.jpg" },
-        { name: "og:url", content: "https://www.amodomio.com.br/cardapio" },
-        { name: "og:site_name", content: "Cardápio A Modo Mio - Pizzaria Italiana em Pato Branco" },
-        { name: "og:type", content: "website" },
-    ];
+  return [
+    { title: "Cardápio A Modo Mio - Pizzaria Italiana em Pato Branco" },
+    {
+      name: "description",
+      content:
+        "É a pizza! Italiana! Um sabor que você nunca experimentou! Descubra no nosso cardápio as melhores pizzas da cidade. Experimente e saboreie a verdadeira italianidade em Pato Branco.",
+    },
+    {
+      name: "og:title",
+      content: "Cardápio A Modo Mio - Pizzaria Italiana em Pato Branco",
+    },
+    {
+      name: "og:description",
+      content:
+        "É a pizza! Italiana! Um sabor que nunca experimentou! Descubra no nosso cardápio as melhores pizzas da cidade. Experimente e saboreie a verdadeira italianidade em Pato Branco.",
+    },
+    {
+      name: "og:image",
+      content: "https://www.amodomio.com.br/images/cardapio_og_image.jpg",
+    },
+    { name: "og:url", content: "https://www.amodomio.com.br/cardapio" },
+    {
+      name: "og:site_name",
+      content: "Cardápio A Modo Mio - Pizzaria Italiana em Pato Branco",
+    },
+    { name: "og:type", content: "website" },
+  ];
 };
 
+export const links: LinksFunction = () => [
+  { rel: "manifest", href: "/site.webmanifest" },
+  {
+    rel: "apple-touch-icon",
+    sizes: "180x180",
+    href: "/favicons/apple-touch-icon.png",
+  },
+  {
+    rel: "icon",
+    type: "image/png",
+    sizes: "32x32",
+    href: "/favicons/favicon-32x32.png",
+  },
+  {
+    rel: "icon",
+    type: "image/png",
+    sizes: "16x16",
+    href: "/favicons/favicon-16x16.png",
+  },
+  {
+    rel: "icon",
+    type: "image/png",
+    sizes: "192x192",
+    href: "/favicons/android-chrome-192x192.png",
+  },
+  {
+    rel: "icon",
+    type: "image/png",
+    sizes: "512x512",
+    href: "/favicons/android-chrome-512x512.png",
+  },
+  { rel: "shortcut icon", href: "/favicon.ico" },
+];
+
 export async function loader({ request }: LoaderFunctionArgs) {
+  const url = new URL(request.url);
+  const simulateError = url.searchParams.get("simularErro");
+  const simulateErrorByQuery = simulateError === "cardapio-layout";
 
-    const fazerPedidoPublicURL = await prismaClient.cardapioSetting.findFirst({
-        where: {
-            key: "cardapio.fazer_pedido.public.url"
-        }
-    })
+  const CARDAPIO_SETTINGS_CONTEXT = "cardapio";
+  const requestedKeys = [
+    "fazer_pedido.public.url",
+    "aviso_loja_fechada.yesno",
+    "notificacoes.enabled",
+    CARDAPIO_REDIRECT_TO_SAIPOS_SETTING_NAME,
+  ] as const;
 
-    const url = fazerPedidoPublicURL?.value ?? GLOBAL_LINKS.cardapioFallbackURL.href
+  const defaults = {
+    fazerPedidoPublicURL: WEBSITE_LINKS.cardapioFallbackURL.href,
+    showLojaFechadaMessage: false,
+    notificationsEnabled: false,
+    redirectToSaiposOnErrorEnabled: DEFAULT_CARDAPIO_REDIRECT_TO_SAIPOS,
+  };
 
-    return defer({
-        fazerPedidoPublicURL: Promise.resolve(url)
-    })
+  let settingsMap: Record<string, string | null> = {};
 
+  try {
+    const globalSettings = await prismaClient.setting.findMany({
+      where: {
+        context: CARDAPIO_SETTINGS_CONTEXT,
+        name: { in: [...requestedKeys] },
+      },
+      select: { name: true, value: true },
+      orderBy: [{ createdAt: "desc" }],
+    });
+
+    settingsMap = globalSettings.reduce<Record<string, string | null>>(
+      (acc, setting) => {
+        if (acc[setting.name] !== undefined) return acc;
+        acc[setting.name] = setting.value;
+        return acc;
+      },
+      {}
+    );
+  } catch (error) {
+    console.error(
+      "[cardapio] non-blocking settings load failed, using defaults",
+      error
+    );
+  }
+
+  const fPUrl = settingsMap[requestedKeys[0]] ?? defaults.fazerPedidoPublicURL;
+  const showLojaFechadaMessage = parseBooleanSetting(
+    settingsMap[requestedKeys[1]],
+    defaults.showLojaFechadaMessage
+  );
+  const notificationsEnabled = parseBooleanSetting(
+    settingsMap[requestedKeys[2]],
+    defaults.notificationsEnabled
+  );
+  const redirectToSaiposOnErrorEnabled = parseBooleanSetting(
+    settingsMap[CARDAPIO_REDIRECT_TO_SAIPOS_SETTING_NAME],
+    defaults.redirectToSaiposOnErrorEnabled
+  );
+
+  if (simulateErrorByQuery) {
+    throw new Error("SIMULACAO_ERRO_CARDAPIO_LAYOUT");
+  }
+
+  const { getFacebookPixelRuntimeConfigForPath } = await import(
+    "~/domain/cardapio/facebook-pixel.server"
+  );
+  const facebookPixel = await getFacebookPixelRuntimeConfigForPath(
+    url.pathname
+  );
+
+  return defer({
+    fazerPedidoPublicURL: fPUrl,
+    showLojaFechadaMessage,
+    notificationsEnabled,
+    redirectToSaiposOnErrorEnabled,
+    vapidPublicKey: process.env.VAPID_PUBLIC_KEY ?? null,
+    facebookPixel,
+  });
 }
 
-
-
-
 export default function CardapioWeb() {
-    const location = useLocation();
-    const pathname = location?.pathname;
+  const currentPage = useCurrentPage();
 
-    const searchPagePath = "/cardapio/buscar";
-    const singleItemPattern = "/cardapio/:id";
+  const { showLojaFechadaMessage, notificationsEnabled, facebookPixel } =
+    useLoaderData<typeof loader>();
 
-    const isSearchPage = pathname === searchPagePath;
-    const isSingleItemPage = matchPath(singleItemPattern, pathname);
+  // const sessionId = useClientSessionId();
 
-    const currentPage = isSearchPage
-        ? "busca"
-        : isSingleItemPage
-            ? "single"
-            : "other";
+  // // Controle de renderização no cliente
+  // const [isClient, setIsClient] = useState(false);
+  // useEffect(() => {
+  //     setIsClient(true);
+  // }, []);
 
-    // const sessionId = useClientSessionId();
+  // if (!isClient) return null; // ou um spinner, se quiser
 
-    // // Controle de renderização no cliente
-    // const [isClient, setIsClient] = useState(false);
-    // useEffect(() => {
-    //     setIsClient(true);
-    // }, []);
+  return (
+    <NotificationCenterProvider enabled={notificationsEnabled}>
+      <RouteProgressBar />
+      {facebookPixel ? <CardapioFacebookPixel config={facebookPixel} /> : null}
+      {showLojaFechadaMessage && <BannerFechado />}
+      <CardapioHeader />
 
-    // if (!isClient) return null; // ou um spinner, se quiser
+      <div className="md:m-auto md:max-w-6xl">
+        {/* <PwaInstallPrompt className="mt-16 md:mt-24 mb-6" /> */}
+        {/* {currentPage === "other" && <CompanyInfo />} */}
+        <Outlet />
+      </div>
+      {currentPage === "other" && <CardapioFooter />}
+    </NotificationCenterProvider>
+  );
+}
 
-    return (
-        <>
-            {/* <BannerFechado /> */}
-            <CardapioHeader />
-            <div className="md:m-auto md:max-w-6xl">
-                {/* {currentPage === "other" && <CompanyInfo />} */}
-                <Outlet />
-            </div>
-            {currentPage === "other" && <CardapioFooter />}
-        </>
-    );
+export function ErrorBoundary() {
+  const error = useRouteError();
+  const routeData = useRouteLoaderData<typeof loader>("routes/cardapio");
+  const saiposHref = WEBSITE_LINKS.saiposCardapio.href;
+
+  console.error("[cardapio] route error boundary", error);
+
+  if (isDatabaseConnectivityError(error)) {
+    return <CardapioDatabaseUnavailable error={error} />;
+  }
+
+  return (
+    <CardapioErrorRedirect
+      redirectHref={saiposHref}
+      autoRedirectEnabled={
+        routeData?.redirectToSaiposOnErrorEnabled ??
+        DEFAULT_CARDAPIO_REDIRECT_TO_SAIPOS
+      }
+    />
+  );
 }
 
 function shouldShowBanner(date: Date = new Date()) {
-    const day = date.getDay(); // 0 = domingo, 1 = segunda, ... 6 = sábado
-    return day === 1 || day === 2; // mostra apenas segunda e terça
+  const day = date.getDay(); // 0 = domingo, 1 = segunda, ... 6 = sábado
+  return day === 1 || day === 2; // mostra apenas segunda e terça
 }
 
 function BannerFechado() {
+  const text =
+    "Estamos fechado agora! Nosso horarío de funcionamento: Quarta a domingo, das 18h às 22h";
+  const [isClosed, setIsClosed] = useState<boolean | null>(null);
 
-    const text = "Estamos fechado agora! Nosso horarío de funcionamento: Quarta a domingo, das 18h às 22h"
-    const [isClosed, setIsClosed] = useState<boolean | null>(null);
+  useEffect(() => {
+    setIsClosed(shouldShowBanner());
+  }, []);
 
-    useEffect(() => {
-        setIsClosed(shouldShowBanner());
-    }, []);
+  if (!isClosed) return null;
 
-    if (!isClosed) return null;
-
-    return (
-        <>
-            <ScrollingBanner cnContainer="fixed top-0 inset-x-0 w-screen bg-red-500 z-50" data-element="banner-fechado">
-                <span className="font-neue text-white  font-semibold uppercase tracking-wide">{text}</span>
-            </ScrollingBanner>
-            <ScrollingBanner cnContainer="fixed bottom-0 w-screen bg-red-500 z-50" data-element="banner-fechado">
-                <span className="font-neue text-white font-semibold uppercase tracking-wide">{text}</span>
-            </ScrollingBanner>
-        </>
-    )
+  return (
+    <>
+      <ScrollingBanner
+        cnContainer="fixed top-0 right-0 w-fit bg-red-500 z-50"
+        data-element="banner-fechado"
+      >
+        <span className="font-neue text-white  font-semibold uppercase tracking-wide">
+          {text}
+        </span>
+      </ScrollingBanner>
+      <ScrollingBanner
+        cnContainer="fixed bottom-0 right-0 w-fit bg-red-500 z-50"
+        data-element="banner-fechado"
+      >
+        <span className="font-neue text-white font-semibold uppercase tracking-wide">
+          {text}
+        </span>
+      </ScrollingBanner>
+    </>
+  );
 }
 
-
-
-
 function CardapioHeader() {
-    const [showSearch, setShowSearch] = useState(false)
-    const { fazerPedidoPublicURL } = useLoaderData<typeof loader>()
+  const currentPage = useCurrentPage();
+  const location = useLocation();
+  const matches = useMatches();
+  const [showSearch, setShowSearch] = useState(false);
+  const [isCinematicHeaderScrolled, setIsCinematicHeaderScrolled] =
+    useState(false);
+  const { fazerPedidoPublicURL, notificationsEnabled, vapidPublicKey } =
+    useLoaderData<typeof loader>();
+  const usesDesktopSidebar =
+    location.pathname === WEBSITE_LINKS.cardapioPublic.href ||
+    currentPage === "single";
+  const hasMobileCinematicPublication =
+    location.pathname === WEBSITE_LINKS.cardapioPublic.href &&
+    matches.some((match) => match.id === "routes/cardapio._index");
+  const isCinematicHeaderTransparent =
+    hasMobileCinematicPublication && !isCinematicHeaderScrolled;
 
+  useEffect(() => {
+    if (!hasMobileCinematicPublication) {
+      setIsCinematicHeaderScrolled(false);
+      return;
+    }
 
-    return (
-        <header className="fixed top-0 w-full z-10 md:max-w-6xl md:-translate-x-1/2 md:left-1/2 " >
-            <div className="flex flex-col bg-white px-1 pt-2 py-3 h-[50px] md:h-[70px]">
-                <div className="grid grid-cols-3 items-center w-full">
-                    {/* <div className="flex gap-1 items-center" onClick={() => setShowSearch(!showSearch)}>
+    const updateHeaderAppearance = () => {
+      const catalogContent = document.querySelector(
+        "[data-cardapio-catalog-content]"
+      );
+      if (!(catalogContent instanceof HTMLElement)) return;
+      setIsCinematicHeaderScrolled(
+        catalogContent.getBoundingClientRect().top <= 52
+      );
+    };
+
+    updateHeaderAppearance();
+    window.addEventListener("scroll", updateHeaderAppearance, {
+      passive: true,
+    });
+    window.addEventListener("resize", updateHeaderAppearance);
+
+    return () => {
+      window.removeEventListener("scroll", updateHeaderAppearance);
+      window.removeEventListener("resize", updateHeaderAppearance);
+    };
+  }, [hasMobileCinematicPublication]);
+
+  return (
+    <header
+      className={cn(
+        "fixed inset-x-0 top-[env(safe-area-inset-top)] z-50 px-4 transition-[background-color,border-color,box-shadow] duration-300 md:left-1/2 md:right-auto md:top-0 md:w-full md:max-w-6xl md:-translate-x-1/2 md:border-b-0 md:bg-white md:px-0 md:shadow-none",
+        isCinematicHeaderTransparent
+          ? "border-b border-transparent bg-transparent text-white shadow-none"
+          : "border-b border-black/10 bg-white/95 text-black shadow-sm backdrop-blur-xl",
+        usesDesktopSidebar && "md:hidden"
+      )}
+    >
+      <div className="flex h-[52px] flex-col justify-center md:h-[70px] md:border-b-0 md:bg-white md:px-1 md:pb-3 md:pt-2">
+        <div className="flex w-full items-center justify-between gap-4 md:hidden">
+          <Link
+            to={WEBSITE_LINKS.cardapioPublic.href}
+            className="flex min-w-0 touch-manipulation rounded-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black"
+            aria-label="Ir para o início do cardápio A Modo Mio"
+          >
+            <Logo
+              color={isCinematicHeaderTransparent ? "white" : "black"}
+              onlyText
+              className="w-36 p-1"
+              tagline={false}
+            />
+          </Link>
+
+          <Suspense fallback={<div className="h-8 w-[110px]" />}>
+            <Await resolve={fazerPedidoPublicURL}>
+              {(url) => (
+                <div className="w-[110px] shrink-0">
+                  <CardapioOrderCtaButton
+                    compact
+                    headerCompact
+                    externalLinkURL={url}
+                    onClick={() => {
+                      trackCardapioOrderIntent("mobile_header");
+                      trackCardapioFacebookPixelTrigger("fazer_pedido_click");
+                    }}
+                  />
+                </div>
+              )}
+            </Await>
+          </Suspense>
+        </div>
+
+        <div className="hidden w-full grid-cols-3 items-center md:grid">
+          {/* <div className="flex gap-1 items-center" onClick={() => setShowSearch(!showSearch)}>
                         <HamburgerMenuIcon className="w-6 h-6" />
                         <span className="font-neue text-[10px] font-semibold  uppercase">Menu</span>
                     </div> */}
 
-                    <Link to={GLOBAL_LINKS.cardapioPublic.href} className="flex col-span-2">
-                        <div className="px-4 -py-3">
-                            <Logo color="black" onlyText={true} className="w-[120px] h-[30px] md:w-[150px] md:h-[50px]" tagline={false} />
-                        </div>
-                    </Link>
+          <Link
+            to={WEBSITE_LINKS.cardapioPublic.href}
+            className="col-span-2 hidden touch-manipulation rounded-full focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black md:flex"
+          >
+            <div className="flex h-10 items-center px-1 md:h-auto md:px-4 md:-py-3">
+              <Logo
+                color="black"
+                onlyText={true}
+                className="hidden h-[50px] w-[150px] md:block"
+                tagline={false}
+              />
+            </div>
+          </Link>
 
-                    <div className="w-full flex items-center gap-x-4 justify-end col-span-1">
-                        <Link to={'buscar'} >
-                            <div className="flex justify-end items-center cursor-pointer" onClick={() => setShowSearch(!showSearch)}>
-                                <SearchIcon color={"black"} />
-                                {/* <span className="font-neue text-[10px] font-semibold  uppercase text-brand-blue">Pesquisar</span> */}
-                            </div>
-                        </Link>
-                        <WebsiteNavigationSidebar
-                            homeLink={{ label: GLOBAL_LINKS.cardapioPublic.title, to: GLOBAL_LINKS.cardapioPublic.href }}
-                            navigationLinks={PUBLIC_WEBSITE_NAVIGATION_ITEMS}
-                            buttonTrigger={{
-                                label: "",
-                                classNameLabel: "block font-neue text-[10px] font-semibold uppercase",
-                                classNameButton: "justify-end h-full text-black bg-transparent hover:bg-transparent hover:text-black px-0",
+          <div className="col-span-1 col-start-3 flex w-full items-center justify-end gap-x-2">
+            {notificationsEnabled && <NotificationBell />}
+            <Link to={"buscar"} className="hidden md:block">
+              <div
+                className="flex h-10 w-10 items-center justify-center cursor-pointer"
+                onClick={() => setShowSearch(!showSearch)}
+              >
+                <SearchIcon color={"black"} className="h-5 w-5" />
+                {/* <span className="font-neue text-[10px] font-semibold  uppercase text-brand-blue">Pesquisar</span> */}
+              </div>
+            </Link>
+            <div className="hidden md:block">
+              <WebsiteNavigationSidebar
+                homeLink={{
+                  label: WEBSITE_LINKS.cardapioPublic.title,
+                  to: WEBSITE_LINKS.cardapioPublic.href,
+                }}
+                navigationLinks={PUBLIC_NAVIGATION_LINKS}
+                buttonTrigger={{
+                  label: "",
+                  classNameLabel:
+                    "block font-neue text-[10px] font-semibold uppercase",
+                  classNameButton:
+                    "justify-end h-full text-black bg-transparent hover:bg-transparent hover:text-black px-0",
+                }}
+                cnLink="font-neue md:text-xl uppercase tracking-widest"
+                preMenuContent={<CompanyInfo />}
+              >
+                <div className="flex flex-col justify-center mb-2 font-neue">
+                  <p className=" font-semibold md:text-xl leading-relaxed uppercase tracking-wide">
+                    Hórarios de funcionamento
+                  </p>
+                  <div className="flex flex-col justify-center mb-4">
+                    <p className="text-muted-foreground font-neue md:text-xl">
+                      Quarta - Domingo
+                    </p>
+                    <p className="text-muted-foreground font-neue md:text-xl">
+                      18:00 - 22:00
+                    </p>
+                  </div>
+                </div>
+
+                <div className="pr-4 mb-4">
+                  <Suspense fallback={<Loading />}>
+                    <Await resolve={fazerPedidoPublicURL}>
+                      {(url) => {
+                        return (
+                          <FazerPedidoButton
+                            cnLabel="text-2xl tracking-wider"
+                            externalLinkURL={url}
+                            onClick={() => {
+                              trackCardapioOrderIntent("desktop_menu");
+                              trackCardapioFacebookPixelTrigger(
+                                "fazer_pedido_click"
+                              );
                             }}
-                            cnLink="font-neue md:text-xl uppercase tracking-widest"
-                            preMenuContent={
-                                <CompanyInfo />
-                            }
-
-                        >
-                            <div className="flex flex-col justify-center mb-2 font-neue">
-                                <p className=" font-semibold md:text-xl leading-relaxed uppercase tracking-wide">Hórarios de funcionamento</p>
-                                <div className="flex flex-col justify-center mb-4">
-                                    <p className="text-muted-foreground font-neue md:text-xl">Quarta - Domingo</p>
-                                    <p className="text-muted-foreground font-neue md:text-xl">18:00 - 22:00</p>
-                                </div>
-                            </div>
-
-
-                            <div className="pr-4 mb-4">
-                                <Suspense fallback={<Loading />}>
-                                    <Await resolve={fazerPedidoPublicURL}>
-                                        {(url) => {
-                                            return <FazerPedidoButton cnLabel="text-2xl tracking-wider" externalLinkURL={url} />
-                                        }}
-                                    </Await>
-                                </Suspense>
-
-                            </div>
-
-                        </WebsiteNavigationSidebar>
-                    </div>
+                          />
+                        );
+                      }}
+                    </Await>
+                  </Suspense>
                 </div>
-
+              </WebsiteNavigationSidebar>
             </div>
+          </div>
+        </div>
+      </div>
 
-            {/* Barra de informação de contato */}
+      {/* Barra de informação de contato */}
 
-            <div className=" bg-white   flex items-center justify-between border-t border-b px-4 py-2">
-                <div className="flex gap-4 items-center">
-                    <ExternalLink to={GLOBAL_LINKS.instagram.href} aria-label={GLOBAL_LINKS.instagram.title} ariaLabel="Link pagina instagram"
-                    >
-                        <InstagramLogoIcon color="black" className="w-[16px] h-[16px] md:w-[24px] md:h-[24px]" />
-                        {/* <span className="font-semibold tracking-wide text-[12px]">Instagram</span> */}
-                    </ExternalLink>
-                    <ExternalLink to={GLOBAL_LINKS.maps.href} aria-label={GLOBAL_LINKS.maps.title} ariaLabel="Link para o google maps"
-                    >
-                        <MapPin color="black" className="w-[16px] h-[16px] md:w-[24px] md:h-[24px]" />
-                        {/* <span className="font-semibold tracking-wide text-[12px]">Maps</span> */}
-                    </ExternalLink>
-                </div>
+      <div className="hidden bg-white items-center justify-between border-t border-b px-4 py-2 md:flex">
+        <div className="flex gap-4 items-center">
+          <ExternalLink
+            to={WEBSITE_LINKS.instagram.href}
+            aria-label={WEBSITE_LINKS.instagram.title}
+            ariaLabel="Link pagina instagram"
+          >
+            <InstagramLogoIcon
+              color="black"
+              className="w-[16px] h-[16px] md:w-[24px] md:h-[24px]"
+            />
+            {/* <span className="font-semibold tracking-wide text-[12px]">Instagram</span> */}
+          </ExternalLink>
+          <ExternalLink
+            to={WEBSITE_LINKS.maps.href}
+            aria-label={WEBSITE_LINKS.maps.title}
+            ariaLabel="Link para o google maps"
+          >
+            <MapPin
+              color="black"
+              className="w-[16px] h-[16px] md:w-[24px] md:h-[24px]"
+            />
+            {/* <span className="font-semibold tracking-wide text-[12px]">Maps</span> */}
+          </ExternalLink>
+        </div>
 
-                <WhatsappExternalLink
-                    phoneNumber="46991272525"
-                    ariaLabel="Envia uma mensagem com WhatsApp"
-                    message={"Olá, gostaria fazer um pedido"}
-                    className="flex flex-col gap-1 items-center cursor-pointer active:bg-black/50"
-                >
-                    <span className="font-mono  text-[.85rem] md:text-lg font-semibold">(46) 99127-2525</span>
+        <WhatsappExternalLink
+          phoneNumber="46991272525"
+          ariaLabel="Envia uma mensagem com WhatsApp"
+          message={"Olá, gostaria fazer um pedido"}
+          className="flex flex-col gap-1 items-center cursor-pointer active:bg-black/50"
+        >
+          <span className="font-mono  text-[.85rem] md:text-lg font-semibold">
+            (46) 99127-2525
+          </span>
+        </WhatsappExternalLink>
+      </div>
 
-                </WhatsappExternalLink>
-            </div>
+      <div className="hidden bg-black items-center justify-center h-[24px] md:flex md:h-[32px]">
+        <p className="font-neue text-white text-[11px] md:text-sm uppercase tracking-wider font-semibold">
+          Hórarios de funcionamento: Qua <span className="lowercase">a</span>{" "}
+          Dom, <span className="lowercase">das</span> 18h{" "}
+          <span className="lowercase">às</span> 22h
+        </p>
+      </div>
 
-            <ScrollingBanner
+      {/* <ScrollingBanner
                 cnContainer="h-[30px] md:h-[40px] bg-white border-b border-t border-solid border-black flex"
             >
                 <div className="flex items-center gap-2 justify-center">
-                    {/* @ts-ignore */}
+
                     <ItalyFlag className="w-4 h-4 md:w-6 md:h-6" />
                     <p className="font-neue text-[15px] uppercase tracking-wider md:text-lg">
                         Todas as nossas pizzas são preparadas com farinha e molho de tomate importados da Itália
                     </p>
                 </div>
 
-            </ScrollingBanner>
-
-        </header>
-    )
+            </ScrollingBanner> */}
+      {currentPage === "other" && notificationsEnabled && (
+        <PushOptIn vapidPublicKey={vapidPublicKey} />
+      )}
+    </header>
+  );
 }
 
+function NotificationBell() {
+  const { unreadCount } = useNotificationCenter();
 
-const ScrollingBanner = ({ children, cnContainer, style }: { children?: ReactNode, cnContainer?: string, style?: React.CSSProperties }) => {
-    const content = (
-        <div className="flex items-center gap-4 px-6">
-            {children}
-        </div>
-    );
+  return (
+    <Link to="/cardapio/notificacoes" prefetch="intent">
+      <Button
+        variant="ghost"
+        size="icon"
+        className="relative h-10 w-10 p-0 inline-flex items-center justify-center align-middle"
+        aria-label="Notificações"
+      >
+        <Bell className="h-5 w-5" />
+        {unreadCount > 0 && (
+          <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-red-500 ring-2 ring-white" />
+        )}
+      </Button>
+    </Link>
+  );
+}
 
-    return (
-        <div className={
-            cn(
-                "overflow-hidden whitespace-nowrap",
-                cnContainer
-            )
+const ScrollingBanner = ({
+  children,
+  cnContainer,
+  style,
+}: {
+  children?: ReactNode;
+  cnContainer?: string;
+  style?: React.CSSProperties;
+}) => {
+  const content = (
+    <div className="flex items-center gap-4 px-6">{children}</div>
+  );
 
-        }
-            style={style}
-        >
-            <div
-                className="text-center text-lg font-semibold text-black animate-scrollingText whitespace-nowrap flex w-max"
-            >
-                {content}
-                <div aria-hidden="true">
-                    {content}
-                </div>
-            </div>
-        </div>
-    );
+  return (
+    <div
+      className={cn("overflow-hidden whitespace-nowrap", cnContainer)}
+      style={style}
+    >
+      <div className="text-center text-lg font-semibold text-black animate-scrollingText whitespace-nowrap flex w-max">
+        {content}
+        <div aria-hidden="true">{content}</div>
+      </div>
+    </div>
+  );
 };
 
-
-
-
 function CompanyInfo({ cnContainer }: { cnContainer?: string }) {
+  return (
+    <section>
+      <div
+        className={cn(
+          "bg-banner md:bg-banner-md bg-center bg-cover bg-no-repeat min-h-[150px] flex items-end justify-end py-2 mb-2 mr-2",
+          cnContainer
+        )}
+      >
+        <div className="flex justify-end gap-4 px-4">
+          <Link
+            to={WEBSITE_LINKS.instagram.href}
+            aria-label={WEBSITE_LINKS.instagram.title}
+            className="flex items-center justify-center gap-1 rounded-full backdrop-blur-lg bg-black/30 w-[48px] h-[48px]"
+          >
+            <Instagram size={24} color="white" />
+            {/* <span className="font-semibold tracking-wide text-[12px]">Instagram</span> */}
+          </Link>
+          <WhatsappExternalLink
+            phoneNumber="46991272525"
+            ariaLabel="Envia uma mensagem com WhatsApp"
+            message={"Olá, gostaria fazer um pedido"}
+            className="flex items-center justify-center gap-2  rounded-full backdrop-blur-lg bg-black/30 w-[48px] h-[48px]"
+          >
+            <WhatsAppIcon color="white" height={24} width={24} />
+            {/* <span className="font-semibold tracking-wide text-[12px]">WhatsApp</span> */}
+          </WhatsappExternalLink>
+          <Link
+            to={WEBSITE_LINKS.maps.href}
+            aria-label={WEBSITE_LINKS.maps.title}
+            className="flex items-center justify-center gap-1 rounded-full backdrop-blur-lg bg-black/30 w-[48px] h-[48px]"
+          >
+            <MapPin size={24} color="white" />
+            {/* <span className="font-semibold tracking-wide text-[12px]">Maps</span> */}
+          </Link>
+        </div>
+      </div>
 
-    return (
-        <section>
-            <div className={
-                cn(
-                    "bg-banner md:bg-banner-md bg-center bg-cover bg-no-repeat min-h-[150px] flex items-end justify-end py-2 mb-2 mr-2",
-                    cnContainer
-                )
-            }>
-                <div className="flex justify-end gap-4 px-4">
+      <div className="flex flex-col font-neue">
+        <h2 className="font-semibold md:text-xl tracking-wide uppercase">
+          A Modo Mio | Pizzeria Italiana
+        </h2>
+        <h3 className="text-muted-foreground text-sm tracking-wider uppercase">
+          Pizza Al Taglio & Delivery
+        </h3>
+      </div>
 
-                    <Link to={GLOBAL_LINKS.instagram.href} aria-label={GLOBAL_LINKS.instagram.title}
-                        className="flex items-center justify-center gap-1 rounded-full backdrop-blur-lg bg-black/30 w-[48px] h-[48px]">
-                        <Instagram size={24} color="white" />
-                        {/* <span className="font-semibold tracking-wide text-[12px]">Instagram</span> */}
-                    </Link>
-                    <WhatsappExternalLink
-                        phoneNumber="46991272525"
-                        ariaLabel="Envia uma mensagem com WhatsApp"
-                        message={"Olá, gostaria fazer um pedido"}
-                        className="flex items-center justify-center gap-2  rounded-full backdrop-blur-lg bg-black/30 w-[48px] h-[48px]"
-                    >
-                        <WhatsAppIcon color="white" height={24} width={24} />
-                        {/* <span className="font-semibold tracking-wide text-[12px]">WhatsApp</span> */}
-                    </WhatsappExternalLink>
-                    <Link to={GLOBAL_LINKS.maps.href} aria-label={GLOBAL_LINKS.maps.title}
-                        className="flex items-center justify-center gap-1 rounded-full backdrop-blur-lg bg-black/30 w-[48px] h-[48px]">
-                        <MapPin size={24} color="white" />
-                        {/* <span className="font-semibold tracking-wide text-[12px]">Maps</span> */}
-                    </Link>
-                </div>
-            </div>
-
-            <div className="flex flex-col font-neue">
-                <h2 className="font-semibold md:text-xl tracking-wide uppercase">A Modo Mio | Pizzeria Italiana</h2>
-                <h3 className="text-muted-foreground text-sm tracking-wider uppercase">Pizza Al Taglio & Delivery</h3>
-            </div>
-
-            <div className="text-sm  text-muted-foreground mb-2 font-neue">
-                <p>Rua Arariboia 64 - Pato Branco</p>
-            </div>
-
-
-        </section>
-
-    )
+      <div className="text-sm  text-muted-foreground mb-2 font-neue">
+        <p>Rua Arariboia 64 - Pato Branco</p>
+      </div>
+    </section>
+  );
 }
 
 function CardapioFooter() {
-    const { fazerPedidoPublicURL } = useLoaderData<typeof loader>();
+  const { fazerPedidoPublicURL } = useLoaderData<typeof loader>();
 
-    return (
-        <footer className="fixed bottom-0 w-full h-[70px] bg-white px-4 flex items-center justify-between border-t border-gray-200
-        z-10 md:max-w-6xl md:-translate-x-1/2 md:left-1/2
-        ">
-            {/* Botão Tamanhos à esquerda */}
-            <div className="flex">
-                <CardapioSizesDialog />
-            </div>
+  return (
+    <footer
+      className="fixed bottom-[calc(0.75rem+env(safe-area-inset-bottom))] left-1/2 grid w-[calc(100%-2rem)] max-w-[308px] -translate-x-1/2 grid-cols-[auto_1fr] items-center gap-3 rounded-[1.5rem] border border-black/10 bg-white/95 px-3 py-1 shadow-[0_10px_35px_rgba(0,0,0,0.24)] backdrop-blur-xl
+        z-50 md:hidden
+        "
+    >
+      <div className="flex shrink-0 items-center gap-1">
+        <TamanhosLinkButton />
+        <CardapioHighlightsFooterButton />
+      </div>
 
-            {/* Botão flutuante central */}
-            <div className="absolute left-1/2 -translate-x-1/2 -translate-y-6 z-20">
-                <Suspense fallback={<span>Carregando...</span>}>
-                    <Await resolve={fazerPedidoPublicURL}>
-                        {(url) => (
-                            <div className="flex flex-col gap-1">
-                                <FazerPedidoButton
-                                    // variant="accent"
-                                    cnLabel="text-md tracking-wider font-semibold font-neue"
-                                    externalLinkURL={url}
-                                />
-                                <div className="flex flex-col justify-center items-center gap-0 ">
-                                    <p className="font-neue font-semibold text-[10px]">Hórarios de funcionamento</p>
-                                    <p className="text-muted-foreground font-neue text-xs ">QUA a DOM das 18h às 22h</p>
-                                </div>
-                            </div>
-                        )}
-                    </Await>
-                </Suspense>
+      {/* Botão central */}
+      <Suspense fallback={<span>Carregando...</span>}>
+        <Await resolve={fazerPedidoPublicURL}>
+          {(url) => (
+            <div className="min-w-0">
+              <CardapioOrderCtaButton
+                compact
+                externalLinkURL={url}
+                onClick={() => {
+                  trackCardapioOrderIntent("mobile_footer");
+                  trackCardapioFacebookPixelTrigger("fazer_pedido_click");
+                }}
+              />
             </div>
-
-            {/* Botão Tamanhos à direita (se for necessário) */}
-            <div className="flex">
-                <CardapioSizesDialog />
-            </div>
-        </footer>
-    );
+          )}
+        </Await>
+      </Suspense>
+    </footer>
+  );
 }
 
-
-
-
-interface CardapioFooterMenuItemDialogProps {
-    children?: React.ReactNode;
-    triggerComponent?: React.ReactNode;
+function TamanhosLinkButton() {
+  return (
+    <Link
+      to={WEBSITE_LINKS.cardapioTamanhosPagina.href}
+      className="flex touch-manipulation rounded-full focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black"
+      prefetch="intent"
+      aria-label="Ver tamanhos disponíveis"
+    >
+      <div className="flex h-10 w-11 flex-col items-center justify-center gap-0.5 rounded-full active:bg-black/10 md:h-12 md:w-14 md:hover:bg-black/5">
+        <Proportions className="h-4 w-4 md:h-6 md:w-6" />
+        <span className="font-neue text-[7px] uppercase leading-tight tracking-wide md:text-[10px]">
+          Tamanhos
+        </span>
+      </div>
+    </Link>
+  );
 }
 
-function CardapioFooterMenuItemDialog({ children, triggerComponent }: CardapioFooterMenuItemDialogProps) {
-
-    return (
-        <Dialog>
-            <DialogTrigger asChild className="w-full">
-                <button>
-                    {triggerComponent}
-                </button>
-            </DialogTrigger>
-            <DialogContent className="p-0 bg-transparent border-none">
-                <div className="bg-white p-4">
-                    {children}
-                    <DialogClose asChild>
-                        <div className="w-full">
-                            <Button type="button" variant="secondary" className="w-full" >
-                                <span className=" tracking-wide font-semibold uppercase">Fechar</span>
-                            </Button>
-                        </div>
-
-                    </DialogClose>
-                </div>
-
-            </DialogContent>
-
-        </Dialog>
-    )
-}
-
-
-type SizesSelection = "individual" | "pequeno" | "medio" | "familia";
-
-const SIZE_ORDER: SizesSelection[] = ["individual", "pequeno", "medio", "familia"];
-
-const sizeConfig: Record<
-    SizesSelection,
-    {
-        label: string;
-        serves: string;
-        flavors: string;
-        dims: string;
-        donuts: number;
-        imgW: string;
-    }
-> = {
-    individual: {
-        label: "Individual",
-        serves: "Serve até 1 pessoa",
-        flavors: "Máximo 1 sabor",
-        dims: "aprox. 25x15cm",
-        donuts: 1,
-        imgW: "w-[50px]",
-    },
-    pequeno: {
-        // por enquanto, exatamente igual ao "Individual"
-        label: "Pequeno",
-        serves: "Serve até 1 pessoa",
-        flavors: "Máximo 1 sabor",
-        dims: "aprox. metade de uma média",
-        donuts: 1,
-        imgW: "w-[60px]", // levemente maior para diferenciar visualmente
-    },
-    medio: {
-        label: "Médio",
-        serves: "Serve até 2 pessoas",
-        flavors: "Máximo 2 sabores",
-        dims: "aprox. 40x20cm (8 fatias)",
-        donuts: 2,
-        imgW: "w-[80px]",
-    },
-    familia: {
-        label: "Família",
-        serves: "Serve até 6 pessoas",
-        flavors: "Máximo 4 sabores",
-        dims: "aprox. 60x40cm (16 fatias)",
-        donuts: 4,
-        imgW: "w-[120px]",
-    },
-};
-
-export function CardapioSizesDialog() {
-    const [currentSize, setCurrentSize] = useState<SizesSelection>("individual");
-
-    const onKeySelect: React.KeyboardEventHandler<HTMLButtonElement> = (e) => {
-        if (e.key === "Enter" || e.key === " ") {
-            (e.currentTarget as HTMLButtonElement).click();
-            e.preventDefault();
-        }
-    };
-
-    function ButtonSelection({ size }: { size: SizesSelection }) {
-        const cfg = sizeConfig[size];
-        const active = currentSize === size;
-
-        return (
-            <button
-                type="button"
-                role="tab"
-                aria-pressed={active}
-                aria-selected={active}
-                onKeyDown={onKeySelect}
-                onClick={() => setCurrentSize(size)}
-                className={cn(
-                    "group relative flex flex-col items-center justify-center gap-y-4 rounded-xl border transition h-[130px]",
-                    "hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40",
-                    active
-                        ? "border-brand-blue bg-brand-blue/5"
-                        : "border-zinc-200 bg-white"
-                )}
-            >
-                <img
-                    src="/images/cardapio-web-app/pizza-placeholder-sm.png"
-                    alt={`Tamanho ${cfg.label}`}
-                    className={cn(cfg.imgW, "h-auto")}
-                    draggable={false}
-                />
-                <span className="mt-2 font-neue text-sm font-semibold tracking-wide uppercase">
-                    {cfg.label}
-                </span>
-
-                {active && (
-                    <span className="absolute -top-2 right-2 rounded-full bg-brand-blue px-2 py-0.5 text-[10px] font-semibold uppercase text-white">
-                        Selecionado
-                    </span>
-                )}
-            </button>
-        );
-    }
-
-    const current = sizeConfig[currentSize];
-
-    return (
-        <CardapioFooterMenuItemDialog
-            triggerComponent={
-                <div className="flex flex-col items-center justify-center">
-                    <Proportions className="col-span-1 md:col-span-2" />
-                    <span className="font-neue text-[10px] uppercase tracking-widest">Tamanhos</span>
-                </div>
-            }
-        >
-            <div className="h-[580px] overflow-auto py-4">
-                <div className="mb-6">
-                    <h3 className="font-neue text-2xl font-semibold tracking-tight">
-                        Tamanhos disponíveis
-                    </h3>
-                    <span className="text-sm text-zinc-600">
-                        Selecione o tamanho para visualizar os detalhes
-                    </span>
-                </div>
-
-                {/* Botões de tamanho */}
-                <div
-                    role="tablist"
-                    aria-label="Selecionar tamanho"
-                    className="grid grid-cols-2 gap-3 sm:grid-cols-4"
-                >
-                    {SIZE_ORDER.map((s) => (
-                        <ButtonSelection key={s} size={s} />
-                    ))}
-                </div>
-
-                <Separator className="my-6" />
-
-                {/* Detalhes do tamanho */}
-                <div className="mx-auto flex max-w-sm flex-col items-center gap-y-2 text-center">
-                    <h4 className="mb-2 font-neue text-lg font-semibold uppercase ">
-                        Tamanho {current.label}
-                    </h4>
-
-                    <div className="grid grid-cols-3 gap-x-4 font-neue">
-
-                        {/* Serve */}
-                        <div className="flex flex-col items-center gap-2 leading-tight text-sm">
-                            {currentSize === "familia" || currentSize === "medio" ? (
-                                <Users size={32} />
-                            ) : (
-                                <User size={32} />
-                            )}
-                            <span>{current.serves}</span>
-                        </div>
-
-                        {/* Sabores */}
-                        <div className="flex flex-col items-center gap-2 leading-tight text-sm">
-                            <div className="flex gap-1">
-                                {Array.from({ length: current.donuts }).map((_, i) => (
-                                    <Donut key={i} size={32} />
-                                ))}
-                            </div>
-                            <span>{current.flavors}</span>
-                        </div>
-
-                        {/* Dimensões */}
-                        <div className="flex flex-col items-center gap-2 leading-tight text-sm">
-                            <Proportions size={32} />
-                            <span>{current.dims}</span>
-                        </div>
-
-                    </div>
-                </div>
-            </div>
-        </CardapioFooterMenuItemDialog>
-    );
+function CardapioHighlightsFooterButton() {
+  return (
+    <a
+      href="/cardapio/dicas"
+      className="flex h-10 w-10 touch-manipulation flex-col items-center justify-center gap-0.5 rounded-full active:bg-black/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black md:hidden"
+      aria-label="Ver dicas do cardápio"
+    >
+      <Info className="h-4 w-4" />
+      <span className="font-neue text-[7px] uppercase leading-tight tracking-wide">
+        Dicas
+      </span>
+    </a>
+  );
 }

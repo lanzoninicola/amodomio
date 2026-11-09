@@ -1,4 +1,4 @@
-import { MenuItemTag, Tag } from "@prisma/client";
+import { Tag } from "@prisma/client";
 import { HamburgerMenuIcon } from "@radix-ui/react-icons";
 import { HeadersFunction, LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
 import { Link, Outlet, useLoaderData } from "@remix-run/react";
@@ -11,17 +11,16 @@ import WhatsAppIcon from "~/components/primitives/whatsapp/whatsapp-icon";
 import { Input } from "~/components/ui/input";
 import { Separator } from "~/components/ui/separator";
 import { toast } from "~/components/ui/use-toast";
-import { menuItemTagPrismaEntity } from "~/domain/cardapio/menu-item-tags.prisma.entity.server";
-import { MenuItemWithAssociations, menuItemPrismaEntity } from "~/domain/cardapio/menu-item.prisma.entity.server";
+import { MenuItemWithAssociations } from "~/domain/cardapio/menu-item.prisma.entity.server";
+import { findAllCardapioItems } from "~/domain/cardapio/cardapio-items-source.server";
 import BadgeTag from "~/domain/tags/components/badge-tag";
 import { tagPrismaEntity } from "~/domain/tags/tag.prisma.entity.server";
 import { WebsiteNavigationSidebar } from "~/domain/website-navigation/components/website-navigation-sidebar";
-import GLOBAL_LINKS from "~/domain/website-navigation/global-links.constant";
-import PUBLIC_WEBSITE_NAVIGATION_ITEMS from "~/domain/website-navigation/public/public-website.nav-links";
-import { prismaAll } from "~/lib/prisma/prisma-all.server";
+import WEBSITE_LINKS from "~/domain/website-navigation/links/website-links";
+import PUBLIC_NAVIGATION_LINKS from "~/domain/website-navigation/links/public-navigation";
 import { prismaIt } from "~/lib/prisma/prisma-it.server";
-import getSearchParam from "~/utils/get-search-param";
 import { badRequest, ok } from "~/utils/http-response.server";
+import { getEngagementSettings } from "~/domain/cardapio/engagement-settings.server";
 
 
 /**
@@ -41,7 +40,9 @@ import { badRequest, ok } from "~/utils/http-response.server";
  */
 
 export interface CardapioOutletContext {
-    items: MenuItemWithAssociations[]
+    items: MenuItemWithAssociations[];
+    likesEnabled: boolean;
+    sharesEnabled: boolean;
 }
 
 export const meta: MetaFunction = ({ data }) => {
@@ -59,15 +60,15 @@ export const meta: MetaFunction = ({ data }) => {
 
 
 
-export async function loader({ request }: LoaderFunctionArgs) {
-    const env = process.env?.NODE_ENV
+export async function loader({}: LoaderFunctionArgs) {
 
     // const tagParam = getSearchParam({ request, paramName: 'tag' })
 
-    //@ts-ignore
-    const itemsQuery = prismaIt(menuItemPrismaEntity.findAll({
+    const itemsQuery = prismaIt(findAllCardapioItems({
         where: {
             visible: true,
+            active: true,
+            upcoming: false,
             // tags: {
             //     some: {
             //         Tag: {
@@ -93,7 +94,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
         public: true
     }))
 
-    const results = await Promise.all([itemsQuery, tagsQuery])
+    const [engagementSettings, results] = await Promise.all([
+        getEngagementSettings(),
+        Promise.all([itemsQuery, tagsQuery])
+    ])
 
     const [errItems, items] = results[0]
     const [errTags, tags] = results[1]
@@ -104,7 +108,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
 
     return ok({
-        items, tags
+        items,
+        tags,
+        likesEnabled: engagementSettings.likesEnabled,
+        sharesEnabled: engagementSettings.sharesEnabled
     })
 
 
@@ -115,6 +122,8 @@ export default function CardapioWeb() {
     const loaderData = useLoaderData<typeof loader>()
     const items = loaderData?.payload.items as MenuItemWithAssociations[] || []
     const tags = loaderData?.payload.tags as Tag[] || []
+    const likesEnabled = loaderData?.payload.likesEnabled ?? true
+    const sharesEnabled = loaderData?.payload.sharesEnabled ?? true
 
     // const [storedValue, setStoredValue] = useLocalStorage("sessionId", null)
 
@@ -152,7 +161,7 @@ export default function CardapioWeb() {
                     </div>
                     <div className="grid grid-cols-3 gap-x-4">
 
-                        <Link to={GLOBAL_LINKS.instagram.href} aria-label={GLOBAL_LINKS.instagram.title} className="flex items-center justify-center gap-1 rounded-lg bg-muted py-1">
+                        <Link to={WEBSITE_LINKS.instagram.href} aria-label={WEBSITE_LINKS.instagram.title} className="flex items-center justify-center gap-1 rounded-lg bg-muted py-1">
                             <Instagram />
                             <span className="font-semibold text-xs">Instagram</span>
                         </Link>
@@ -165,7 +174,7 @@ export default function CardapioWeb() {
                             <WhatsAppIcon color="black" />
                             <span className="font-semibold text-xs">WhatsApp</span>
                         </WhatsappExternalLink>
-                        <Link to={GLOBAL_LINKS.maps.href} aria-label={GLOBAL_LINKS.maps.title} className="flex items-center justify-center gap-1 rounded-lg bg-muted py-1">
+                        <Link to={WEBSITE_LINKS.maps.href} aria-label={WEBSITE_LINKS.maps.title} className="flex items-center justify-center gap-1 rounded-lg bg-muted py-1">
                             <MapPin />
                             <span className="font-semibold text-xs">Maps</span>
                         </Link>
@@ -173,7 +182,7 @@ export default function CardapioWeb() {
                 </section>
                 <Separator />
                 {/* <Featured /> */}
-                <Outlet context={{ items }} />
+            <Outlet context={{ items, likesEnabled, sharesEnabled }} />
 
             </div>
             <CardapioFooter />
@@ -199,7 +208,7 @@ function CardapioHeader({ items, tags }: CardapioHeaderProps) {
 
                     <WebsiteNavigationSidebar
                         homeLink={{ label: "Cardápio", to: "cardapio" }}
-                        navigationLinks={PUBLIC_WEBSITE_NAVIGATION_ITEMS}
+                        navigationLinks={PUBLIC_NAVIGATION_LINKS}
                         buttonTrigger={{
                             label: "Menu",
                             classNameLabel: "block font-neue text-[10px] font-semibold  uppercase",
@@ -217,7 +226,7 @@ function CardapioHeader({ items, tags }: CardapioHeaderProps) {
                     </WebsiteNavigationSidebar>
 
                     <Link to="/cardapio-web" className="flex justify-center">
-                        <Logo color="black" className="w-[60px]" tagline={false} />
+                        <Logo color="black" className="w-[60px]" tagline={false} showSantaHat />
                     </Link>
                     <div className="flex justify-end items-center cursor-pointer" onClick={() => setShowSearch(!showSearch)}>
                         <SearchIcon />
@@ -248,7 +257,7 @@ function CardapioFooter() {
         <footer className="py-6 px-2 fixed bottom-0 w-screen md:max-w-2xl md:-translate-x-1/2 md:left-1/2 ">
             {/* <Separator className="my-4" /> */}
             <div className="px-2 w-full">
-                <ExternalLink to={GLOBAL_LINKS.saiposCardapio.href}
+                <ExternalLink to={WEBSITE_LINKS.saiposCardapio.href}
                     ariaLabel="Cardápio digital pizzaria A Modo Mio"
                     className="flex justify-between font-neue rounded-sm bg-green-400 py-2 px-4"
                 >
@@ -313,7 +322,7 @@ function CardapioSearch({ items, setShowSearch }: {
                                 >
                                     <div className="bg-center bg-cover bg-no-repeat w-8 h-8 rounded-lg col-span-1 "
                                         style={{
-                                            backgroundImage: `url(${item.MenuItemImage?.thumbnailUrl || "/images/cardapio-web-app/placeholder.png"})`,
+                                            backgroundImage: `url(${item.MenuItemImage?.thumbnailUrl || item.imageTransformedURL || "/images/cardapio-web-app/placeholder.png"})`,
                                         }}></div>
                                     <div className="flex flex-col col-span-7">
                                         <span className="font-neue text-[0.65rem] font-semibold leading-tight uppercase">{item.name}</span>

@@ -1,5 +1,5 @@
 import prismaClient from "~/lib/prisma/client.server";
-import { getWppSessionName, sendMessage } from "../bot/wpp.server";
+import { sendTextMessage } from "~/domain/z-api/zapi.service.server";
 
 export function daysSince(date?: Date | null) {
   if (!date) return null;
@@ -94,8 +94,8 @@ export async function sendOne({
   });
 
   try {
-    const session = getWppSessionName();
-    const messageId = await sendMessage(session, c.phone, body);
+    const response = await sendTextMessage({ phone: c.phone, message: body });
+    const messageId = response.messageId ?? response.id ?? undefined;
 
     await prismaClient.$transaction([
       prismaClient.sendLog.update({
@@ -138,7 +138,6 @@ export async function sendBulk({
     error?: string;
     messageId?: string;
   }> = [];
-  const session = getWppSessionName();
 
   // carrega os clientes (respeitando opt-out)
   const customers = await prismaClient.customer.findMany({

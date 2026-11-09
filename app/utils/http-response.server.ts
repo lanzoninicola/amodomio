@@ -8,6 +8,7 @@ interface HttpResponseOptions {
   corsOrigin?: string;
   corsAllowHeaders?: string[];
   corsAllowMethods?: string[];
+  headers?: HeadersInit;
 }
 
 export interface HttpResponse {
@@ -120,7 +121,7 @@ function doResponse(response: HttpResponse, options: HttpResponseOptions = {}) {
     throw new Error(response.message);
   }
 
-  const headers = new Headers();
+  const headers = new Headers(options.headers);
 
   if (options.cors) {
     headers.set("Access-Control-Allow-Origin", options.corsOrigin ?? "*");

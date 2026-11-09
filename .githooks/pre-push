@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+REMOTE_NAME="${1:-}"
+REMOTE_URL="${2:-}"
+TARGET_BRANCH="refs/heads/vercel-prod"
+RUN_GUARD="false"
+
+while read -r local_ref local_sha remote_ref remote_sha; do
+  if [[ "$remote_ref" == "$TARGET_BRANCH" ]]; then
+    RUN_GUARD="true"
+    break
+  fi
+done
+
+if [[ "$RUN_GUARD" != "true" ]]; then
+  exit 0
+fi
+
+echo "[pre-push] Detectado push para vercel-prod em ${REMOTE_NAME:-remote}."
+echo "[pre-push] Rodando guard do loader blocante do cardápio..."
+
+if ! npx vitest run app/routes/cardapio._index.loader.test.ts; then
+  echo ""
+  echo "[pre-push] Falha no guard do cardápio. Push bloqueado."
+  echo "[pre-push] Corrija os testes e tente novamente."
+  exit 1
+fi
+
+echo "[pre-push] Guard aprovado. Prosseguindo com push."
+exit 0

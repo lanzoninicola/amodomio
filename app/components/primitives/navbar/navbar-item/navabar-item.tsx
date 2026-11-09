@@ -9,8 +9,8 @@ export interface NavbarItemProps {
 export default function NavbarItem({ label, href }: NavbarItemProps) {
     return (
         <NavLink to={href}>
-            <div className="hover:rounded-lg hover:bg-muted px-6 py-2">
-                <span className="text-2xl md:text-xl font-semibold">{label}</span>
+            <div className="hover:rounded-lg hover:bg-muted px-6 py-2 shrink-0 whitespace-nowrap">
+                <span className="text-2xl md:text-sm lg:text-base font-semibold">{label}</span>
             </div>
         </NavLink>
     )

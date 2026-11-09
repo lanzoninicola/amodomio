@@ -34,7 +34,6 @@ export default function Login() {
             <AlertError message={message || "Falha na autenticação"} />
           )
         }
-
       </div>
     </div>
   )

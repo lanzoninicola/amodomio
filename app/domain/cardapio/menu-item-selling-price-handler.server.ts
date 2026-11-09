@@ -1,6 +1,6 @@
 import {
   MenuItemGroup,
-  MenuItemSellingChannel,
+  ItemSellingChannel,
   MenuItemSize,
 } from "@prisma/client";
 import prismaClient from "~/lib/prisma/client.server";
@@ -10,21 +10,22 @@ import {
   SellPriceVariation,
   Warning,
 } from "./menu-item.types";
-import { CacheManager } from "../cache/cache-manager.server";
 import {
   PizzaSizeKey,
   menuItemSizePrismaEntity,
 } from "./menu-item-size.entity.server";
 import { menuItemSellingPriceUtilityEntity } from "./menu-item-selling-price-utility.entity";
-import { menuItemSellingChannelPrismaEntity } from "./menu-item-selling-channel.entity.server";
+import { itemSellingChannelPrismaEntity } from "./menu-item-selling-channel.entity.server";
 import { PrismaEntityProps } from "~/lib/prisma/types.server";
 import { menuItemPrismaEntity } from "./menu-item.prisma.entity.server";
+import { redisGetJson, redisSetJson } from "~/lib/cache/redis.server";
+import { getSellingPriceHandlerCacheVersion } from "./cardapio-cache.server";
 
 interface MenuItemSellingPriceHandlerProps extends PrismaEntityProps {
   menuItemPrismaEntity: typeof menuItemPrismaEntity;
   menuItemSellingPriceUtility: typeof menuItemSellingPriceUtilityEntity;
   menuItemSize: typeof menuItemSizePrismaEntity;
-  menuItemSellingChannel: typeof menuItemSellingChannelPrismaEntity;
+  itemSellingChannel: typeof itemSellingChannelPrismaEntity;
 }
 
 type GroupedMenu = {
@@ -35,16 +36,20 @@ type GroupedMenu = {
 type LoadManyReturn<T extends "default" | "grouped" | undefined> =
   T extends "grouped" ? GroupedMenu[] : MenuItemWithSellPriceVariations[];
 
+const SELLING_PRICE_HANDLER_CACHE_KEY_PREFIX =
+  "cardapio:selling-price-handler:v1";
+const SELLING_PRICE_HANDLER_CACHE_TTL_SECONDS = Number(
+  process.env.SELLING_PRICE_HANDLER_CACHE_TTL_SECONDS ?? 20
+);
+
 export class MenuItemSellingPriceHandler {
   client;
-  // Simple in-memory cache
-  private cacheManager: CacheManager;
 
   menuItemPrismaEntity: typeof menuItemPrismaEntity;
 
   menuItemSellingPriceUtility: typeof menuItemSellingPriceUtilityEntity;
 
-  menuItemSellingChannel: typeof menuItemSellingChannelPrismaEntity;
+  itemSellingChannel: typeof itemSellingChannelPrismaEntity;
 
   menuItemSize: typeof menuItemSizePrismaEntity;
 
@@ -53,16 +58,15 @@ export class MenuItemSellingPriceHandler {
     menuItemPrismaEntity,
     menuItemSellingPriceUtility,
     menuItemSize,
-    menuItemSellingChannel,
+    itemSellingChannel,
   }: MenuItemSellingPriceHandlerProps) {
     this.client = client;
-    this.cacheManager = new CacheManager();
 
     this.menuItemPrismaEntity = menuItemPrismaEntity;
     this.menuItemSellingPriceUtility = menuItemSellingPriceUtilityEntity;
 
     this.menuItemSize = menuItemSize;
-    this.menuItemSellingChannel = menuItemSellingChannel;
+    this.itemSellingChannel = itemSellingChannel;
   }
 
   async loadMany<T extends "default" | "grouped" | undefined = "default">(
@@ -70,12 +74,38 @@ export class MenuItemSellingPriceHandler {
       channelKey?: string;
       sizeKey?: string;
       menuItemId?: string;
+      includeAuditRecords?: boolean;
     },
     returnedOptions?: {
       format?: T;
       fn?: (data: MenuItemWithSellPriceVariations[]) => LoadManyReturn<T>;
     }
   ): Promise<LoadManyReturn<T>> {
+    const cacheableParams = {
+      channelKey: params.channelKey ?? null,
+      sizeKey: params.sizeKey ?? null,
+      menuItemId: params.menuItemId ?? null,
+      includeAuditRecords: Boolean(params.includeAuditRecords),
+    };
+    const shouldUseCache = cacheableParams.includeAuditRecords === false;
+    const cacheVersion = shouldUseCache
+      ? await getSellingPriceHandlerCacheVersion()
+      : "na";
+    const cacheKey = `${SELLING_PRICE_HANDLER_CACHE_KEY_PREFIX}:${cacheVersion}:${JSON.stringify(
+      cacheableParams
+    )}`;
+
+    if (shouldUseCache) {
+      const cachedResults =
+        await redisGetJson<MenuItemWithSellPriceVariations[]>(cacheKey);
+      if (cachedResults) {
+        if (returnedOptions?.fn) {
+          return returnedOptions.fn(cachedResults);
+        }
+        return cachedResults as LoadManyReturn<T>;
+      }
+    }
+
     const [
       allMenuItemsWithSellPrices,
       allMenuItemsWithCosts,
@@ -83,10 +113,14 @@ export class MenuItemSellingPriceHandler {
       channels,
       sellingPriceConfig,
     ] = await Promise.all([
-      this.menuItemPrismaEntity.findManyWithSellPriceVariations(),
+      this.menuItemPrismaEntity.findManyWithSellPriceVariations(
+        undefined,
+        params.channelKey,
+        { includeAuditRecords: cacheableParams.includeAuditRecords }
+      ),
       this.menuItemPrismaEntity.findManyWithCostVariations(),
       this.menuItemSize.findAll(),
-      this.menuItemSellingChannel.findAll(),
+      this.itemSellingChannel.findAll(),
       this.menuItemSellingPriceUtility.getSellingPriceConfig(),
     ]);
 
@@ -107,7 +141,7 @@ export class MenuItemSellingPriceHandler {
     const buildVariation = async (
       item: MenuItemWithSellPriceVariations,
       size: MenuItemSize,
-      channel: MenuItemSellingChannel
+      channel: ItemSellingChannel
     ): Promise<SellPriceVariation> => {
       const variation = item.sellPriceVariations?.find(
         (spv) => spv.sizeId === size.id && spv.channelId === channel.id
@@ -195,11 +229,22 @@ export class MenuItemSellingPriceHandler {
           ingredients: item.ingredients,
           visible: item.visible,
           active: item.active,
+          upcoming: item.upcoming,
           sellPriceVariations: variations,
           warnings, // ← novo campo
         };
       })
     );
+
+    if (shouldUseCache) {
+      await redisSetJson(
+        cacheKey,
+        results,
+        Number.isFinite(SELLING_PRICE_HANDLER_CACHE_TTL_SECONDS)
+          ? SELLING_PRICE_HANDLER_CACHE_TTL_SECONDS
+          : 20
+      );
+    }
 
     if (returnedOptions?.fn) {
       return returnedOptions.fn(results);
@@ -220,7 +265,7 @@ export class MenuItemSellingPriceHandler {
         this.menuItemPrismaEntity.findOneWithSellPriceVariations(menuItemId),
         this.menuItemPrismaEntity.findOneWithCostVariations(menuItemId),
         this.menuItemSize.findAll(),
-        this.menuItemSellingChannel.findAll(),
+        this.itemSellingChannel.findAll(),
         this.menuItemSellingPriceUtility.getSellingPriceConfig(),
       ]);
 
@@ -229,7 +274,7 @@ export class MenuItemSellingPriceHandler {
     const filterSizes = (size: MenuItemSize) =>
       !params?.sizeKey || size.key === params.sizeKey;
 
-    const filterChannels = (channel: MenuItemSellingChannel) =>
+    const filterChannels = (channel: ItemSellingChannel) =>
       !params?.channelKey || channel.key === params.channelKey;
 
     const costBySizeKey: Record<string, number> = {};
@@ -239,7 +284,7 @@ export class MenuItemSellingPriceHandler {
 
     const buildVariation = async (
       size: MenuItemSize,
-      channel: MenuItemSellingChannel
+      channel: ItemSellingChannel
     ): Promise<SellPriceVariation> => {
       const variation = item.sellPriceVariations?.find(
         (spv) => spv.sizeId === size.id && spv.channelId === channel.id
@@ -315,6 +360,7 @@ export class MenuItemSellingPriceHandler {
       ingredients: item.ingredients,
       visible: item.visible,
       active: item.active,
+      upcoming: item.upcoming,
       sellPriceVariations: variations,
       warnings,
     };
@@ -337,7 +383,6 @@ export class MenuItemSellingPriceHandler {
 
     const base = `${itemName} (${sizeName} - ${channelName})`;
 
-    // excluir os tamanhos "Fatia"
     if (sizeName === "Fatia") {
       return warnings;
     }
@@ -393,7 +438,7 @@ const menuItemSellingPriceHandler = new MenuItemSellingPriceHandler({
   menuItemPrismaEntity: menuItemPrismaEntity,
   menuItemSellingPriceUtility: menuItemSellingPriceUtilityEntity,
   menuItemSize: menuItemSizePrismaEntity,
-  menuItemSellingChannel: menuItemSellingChannelPrismaEntity,
+  itemSellingChannel: itemSellingChannelPrismaEntity,
 });
 
 export { menuItemSellingPriceHandler };

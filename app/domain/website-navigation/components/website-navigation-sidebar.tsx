@@ -5,7 +5,7 @@ import { Sheet, SheetContent, SheetTrigger } from "~/components/ui/sheet"
 import { cn } from "~/lib/utils"
 import { AlignLeftIcon } from "lucide-react"
 import MobileLink from "./mobile-link"
-import { WebsiteNavigationLinks } from "../website-navigation.type"
+import { WebsiteNavigationConfig } from "../types/navigation-types"
 import { Separator } from "~/components/ui/separator"
 
 export interface WebsiteNavigationSidebarProps {
@@ -20,7 +20,7 @@ export interface WebsiteNavigationSidebarProps {
         to: string;
     };
     cnLink?: string;
-    navigationLinks: Partial<WebsiteNavigationLinks>;
+    navigationLinks: Partial<WebsiteNavigationConfig>;
     children?: React.ReactNode;
     preMenuContent?: React.ReactNode
 }
@@ -35,6 +35,54 @@ export function WebsiteNavigationSidebar({
     preMenuContent
 }: WebsiteNavigationSidebarProps) {
     const [open, setOpen] = React.useState(false)
+
+    const renderSidebarItems = (
+        items: WebsiteNavigationConfig["sidebarNav"][number]["items"],
+        depth = 0
+    ) => {
+        return items
+            .filter((item) => item.disabled === false)
+            .map((item) => (
+                <div
+                    key={`${item.title}-${item.href ?? "no-link"}`}
+                    className={cn(depth > 0 && "pl-4 border-l border-muted")}
+                >
+                    {item.href ? (
+                        <MobileLink
+                            to={item.href}
+                            onOpenChange={setOpen}
+                            className={cn(
+                                "text-muted-foreground",
+                                depth === 0 && "text-sm",
+                                depth > 0 && "text-xs"
+                            )}
+                        >
+                            {item.title}
+                            {item.label && (
+                                <span className="ml-2 rounded-md bg-[#adfa1d] px-1.5 py-0.5 text-xs leading-none text-[#000000] no-underline group-hover:no-underline">
+                                    {item.label}
+                                </span>
+                            )}
+                        </MobileLink>
+                    ) : (
+                        <span
+                            className={cn(
+                                "text-muted-foreground",
+                                depth === 0 && "text-sm",
+                                depth > 0 && "text-xs"
+                            )}
+                        >
+                            {item.title}
+                        </span>
+                    )}
+                    {item.items?.length ? (
+                        <div className="mt-2 flex flex-col space-y-2">
+                            {renderSidebarItems(item.items, depth + 1)}
+                        </div>
+                    ) : null}
+                </div>
+            ))
+    }
 
     return (
         <Sheet open={open} onOpenChange={setOpen}>
@@ -119,28 +167,7 @@ export function WebsiteNavigationSidebar({
                         {navigationLinks?.sidebarNav && navigationLinks.sidebarNav.map((item, index) => (
                             <div key={index} className="flex flex-col space-y-3 pt-6">
                                 <h4 className="font-semibold">{item.title}</h4>
-                                {item?.items?.length &&
-                                    item.items.map((item) => (
-                                        <React.Fragment key={item.href}>
-                                            {!item.disabled &&
-                                                (item.href ? (
-                                                    <MobileLink
-                                                        to={item.href}
-                                                        onOpenChange={setOpen}
-                                                        className="text-muted-foreground"
-                                                    >
-                                                        {item.title}
-                                                        {item.label && (
-                                                            <span className="ml-2 rounded-md bg-[#adfa1d] px-1.5 py-0.5 text-xs leading-none text-[#000000] no-underline group-hover:no-underline">
-                                                                {item.label}
-                                                            </span>
-                                                        )}
-                                                    </MobileLink>
-                                                ) : (
-                                                    item.title
-                                                ))}
-                                        </React.Fragment>
-                                    ))}
+                                {item?.items?.length ? renderSidebarItems(item.items) : null}
                             </div>
                         ))}
                     </div>
@@ -151,4 +178,3 @@ export function WebsiteNavigationSidebar({
         </Sheet>
     )
 }
-

@@ -6,6 +6,13 @@ import { ComputedSellingPriceBreakdown } from "./menu-item-selling-price-utility
 import { PizzaSizeKey } from "./menu-item-size.entity.server";
 import { Category } from "../category/category.model.server";
 
+export type MenuItemVisibilityFilterOption =
+  | "all"
+  | "active"
+  | "lancamento-futuro"
+  | "venda-pausada"
+  | "inactive";
+
 // para custos
 export interface MenuItemWithCostVariations {
   menuItemId: string;
@@ -56,6 +63,7 @@ export interface SellPriceVariation {
   computedSellingPriceBreakdown?: ComputedSellingPriceBreakdown;
   warnings?: Warning[];
   lastAuditRecord?: MenuItemSellingPriceVariationAudit;
+  auditRecords?: MenuItemSellingPriceVariationAudit[];
 }
 
 export interface MenuItemWithSellPriceVariations {
@@ -67,6 +75,7 @@ export interface MenuItemWithSellPriceVariations {
   ingredients?: string;
   visible: boolean;
   active: boolean;
+  upcoming?: boolean;
   sellPriceVariations: SellPriceVariation[];
   warnings?: Warning[];
 }

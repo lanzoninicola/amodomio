@@ -1,0 +1,51 @@
+export const CRM_SEGMENTATION_TAGS = [
+  {
+    key: "segmento_praticidade",
+    label: "1. Praticidade",
+    characteristic: "Quer comida rapida",
+    values: "Velocidade e facilidade",
+    strategy: "Entrega rapida",
+  },
+  {
+    key: "segmento_familia",
+    label: "2. Familia",
+    characteristic: "Compra para varias pessoas",
+    values: "Tamanho e variedade",
+    strategy: "Pizzas grandes e combos",
+  },
+  {
+    key: "segmento_experiencia_gastronomica",
+    label: "3. Experiencia gastronomica",
+    characteristic: "Aprecia comida diferenciada",
+    values: "Ingredientes premium",
+    strategy: "Pizzas especiais",
+  },
+  {
+    key: "segmento_social_encontro",
+    label: "4. Social / encontro",
+    characteristic: "Reuniao com amigos",
+    values: "Compartilhar comida",
+    strategy: "Pizzas grandes e varios sabores",
+  },
+  {
+    key: "segmento_promocao",
+    label: "5. Promocao",
+    characteristic: "Decide pelo preco",
+    values: "Desconto",
+    strategy: "Cupons e combos",
+  },
+  {
+    key: "segmento_rotina",
+    label: "6. Rotina",
+    characteristic: "Compra frequentemente",
+    values: "Previsibilidade",
+    strategy: "Fidelizacao",
+  },
+  {
+    key: "segmento_curioso_novidade",
+    label: "7. Curioso / novidade",
+    characteristic: "Gosta de experimentar",
+    values: "Sabores novos",
+    strategy: "Lancamentos",
+  },
+] as const;

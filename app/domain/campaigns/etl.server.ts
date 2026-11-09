@@ -1,24 +1,10 @@
 // ~/domain/campaigns/etl.server.ts
 
 import prismaClient from "~/lib/prisma/client.server";
+import { resolveOrderCustomer } from "~/domain/crm/order-history.server";
+import { normalize_phone_e164_br } from "~/domain/crm/normalize-phone.server";
 
 /* ======================= Utils ======================= */
-function normalizePhoneBR(raw?: string | null): string | null {
-  if (!raw) return null;
-  const t = raw.trim();
-  if (!t) return null;
-
-  // Já começa com +55?
-  if (t.startsWith("+55")) return t.replace(/\s+/g, "");
-
-  // Só dígitos
-  const digits = t.replace(/\D/g, "");
-  // 13 com '55' na frente (55 + DDD + número)
-  if (digits.length === 13 && digits.startsWith("55")) return `+${digits}`;
-  // 10 (DDD+fixo) ou 11 (DDD+celular)
-  if (digits.length === 10 || digits.length === 11) return `+55${digits}`;
-  return null;
-}
 
 function onlyDigits(s?: string | null): string | null {
   if (!s) return null;
@@ -57,7 +43,7 @@ function isDiscountLike(txt?: string | null): boolean {
  * Consolida pedidos normalizados (header + items) a partir da tabela de import.
  * - idempotente por (source, externalOrderNumber, paidAtDate, paidAtHour)
  * - apaga/recria itens do pedido na reexecução
- * - NÃO cria FK para Customer; relação futura será por telefone (phoneE164/dígitos)
+ * - vincula ao CrmCustomer pelo telefone normalizado, preservando seu perfil
  */
 export async function upsertCustomerOrdersFromImport(source = "csv") {
   // Lê toda a import (você pode filtrar por período se quiser)
@@ -83,63 +69,71 @@ export async function upsertCustomerOrdersFromImport(source = "csv") {
 
     const paidAt = parseBRDateTimeToDate(first.paidAtDate, first.paidAtHour);
     const phoneRaw = first.phone || null;
-    const phoneE164 = normalizePhoneBR(phoneRaw);
+    const phoneE164 = phoneRaw ? normalize_phone_e164_br(phoneRaw) : null;
     const totalAmount = list.reduce((acc, r) => acc + Number(r.amount), 0);
 
-    // UPSERT do cabeçalho (CustomerOrder)
-    const order = await prismaClient.customerOrder.upsert({
-      where: {
-        // <- nome do compound unique gerado pelo Prisma Client
-        source_externalOrderNumber_paidAtDate_paidAtHour: {
+    await prismaClient.$transaction(async (tx) => {
+      const customer = await resolveOrderCustomer(
+        tx,
+        phoneRaw,
+        first.customerName
+      );
+      // UPSERT do cabeçalho (CustomerOrder)
+      const order = await tx.customerOrder.upsert({
+        where: {
+          // <- nome do compound unique gerado pelo Prisma Client
+          source_externalOrderNumber_paidAtDate_paidAtHour: {
+            source,
+            externalOrderNumber: first.orderNumber,
+            paidAtDate: first.paidAtDate,
+            paidAtHour: first.paidAtHour,
+          },
+        },
+        update: {
+          customerId: customer?.id ?? null,
+          customerName: first.customerName,
+          phoneRaw: phoneRaw,
+          phoneE164: phoneE164,
+          paymentType: first.paymentType,
+          paidAt,
+          tableLabel: first.tableLabel ?? null,
+          orderTag: first.orderTag ?? null,
+          totalAmount,
+        },
+        create: {
           source,
           externalOrderNumber: first.orderNumber,
+          customerId: customer?.id ?? null,
+          customerName: first.customerName,
+          phoneRaw: phoneRaw,
+          phoneE164: phoneE164,
+          paymentType: first.paymentType,
           paidAtDate: first.paidAtDate,
           paidAtHour: first.paidAtHour,
+          paidAt,
+          tableLabel: first.tableLabel ?? null,
+          orderTag: first.orderTag ?? null,
+          totalAmount,
         },
-      },
-      update: {
-        customerName: first.customerName,
-        phoneRaw: phoneRaw,
-        phoneE164: phoneE164,
-        paymentType: first.paymentType,
-        paidAt,
-        tableLabel: first.tableLabel ?? null,
-        orderTag: first.orderTag ?? null,
-        totalAmount,
-      },
-      create: {
-        source,
-        externalOrderNumber: first.orderNumber,
-        customerName: first.customerName,
-        phoneRaw: phoneRaw,
-        phoneE164: phoneE164,
-        paymentType: first.paymentType,
-        paidAtDate: first.paidAtDate,
-        paidAtHour: first.paidAtHour,
-        paidAt,
-        tableLabel: first.tableLabel ?? null,
-        orderTag: first.orderTag ?? null,
-        totalAmount,
-      },
-      select: { id: true },
-    });
+        select: { id: true },
+      });
 
-    // Recria os itens do pedido (snapshot idempotente)
-    await prismaClient.customerOrderItem.deleteMany({
-      where: { orderId: order.id },
+      // Recria os itens do pedido (snapshot idempotente)
+      await tx.customerOrderItem.deleteMany({
+        where: { orderId: order.id },
+      });
+      await tx.customerOrderItem.createMany({
+        data: list.map((r) => ({
+          orderId: order.id,
+          productName: r.productName,
+          quantity: Number(r.quantity || 1),
+          amount: r.amount,
+          isFee: isFeeLike(r.productName) || isFeeLike(r.paymentType),
+          isDiscount:
+            isDiscountLike(r.productName) || isDiscountLike(r.paymentType),
+        })),
+      });
     });
-    await prismaClient.customerOrderItem.createMany({
-      data: list.map((r) => ({
-        orderId: order.id,
-        productName: r.productName,
-        quantity: Number(r.quantity || 1),
-        amount: r.amount,
-        isFee: isFeeLike(r.productName) || isFeeLike(r.paymentType),
-        isDiscount:
-          isDiscountLike(r.productName) || isDiscountLike(r.paymentType),
-      })),
-    });
-
     ordersUpserted++;
   }
 
@@ -159,7 +153,7 @@ export async function upsertCustomersFromErp() {
   const orders = await prismaClient.customerOrder.groupBy({
     by: ["phoneE164"],
     _max: { paidAt: true },
-    where: { phoneE164: { not: null } },
+    where: { phoneE164: { not: null }, source: { not: "suitable-kds" } },
   });
 
   let upserted = 0;
@@ -170,7 +164,7 @@ export async function upsertCustomersFromErp() {
 
     // Nome mais recente não vazio (preferimos do pedido mais recente)
     const latest = await prismaClient.customerOrder.findFirst({
-      where: { phoneE164 },
+      where: { phoneE164, source: { not: "suitable-kds" } },
       orderBy: { paidAt: "desc" },
       select: { customerName: true },
     });

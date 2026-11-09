@@ -1,7 +1,7 @@
 import { ArrowRight } from 'lucide-react';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import ExternalLink from '~/components/primitives/external-link/external-link';
-import GLOBAL_LINKS from '~/domain/website-navigation/global-links.constant';
+import WEBSITE_LINKS from "~/domain/website-navigation/links/website-links";
 import useBrandColors from '~/hooks/use-brand-colors';
 import { cn } from '~/lib/utils';
 
@@ -20,6 +20,7 @@ interface FazerPedidoButtonProps {
     variant?: Variant;
     externalLinkURL?: string;
     ariaLabel?: string;
+    onClick?: React.MouseEventHandler<HTMLAnchorElement>;
 }
 
 export default function FazerPedidoButton({
@@ -32,8 +33,9 @@ export default function FazerPedidoButton({
     disabled = false,
     iconRight,
     variant = 'primary',
-    externalLinkURL = GLOBAL_LINKS.cardapioFallbackURL.href,
+    externalLinkURL = WEBSITE_LINKS.cardapioFallbackURL.href,
     ariaLabel,
+    onClick,
 }: FazerPedidoButtonProps) {
     const brandColors = useBrandColors();
 
@@ -86,10 +88,15 @@ export default function FazerPedidoButton({
             style={dynamicStyle}
             aria-busy={loading || undefined}
             onClick={(e) => {
-                if (!isInteractive) e.preventDefault();
+                if (!isInteractive) {
+                    e.preventDefault();
+                    return;
+                }
+
+                onClick?.(e);
             }}
         >
-            <div className="flex items-center justify-between gap-4">
+            <div className="flex h-full items-center justify-between gap-4">
                 <span
                     className={cn(
                         'uppercase tracking-wide font-semibold',

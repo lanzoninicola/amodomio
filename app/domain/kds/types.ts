@@ -1,3 +1,4 @@
+import type { KdsOrderItem } from "./order-items";
 import type { Prisma } from "@prisma/client";
 export type DecimalLike = number | string | Prisma.Decimal;
 export type SizeCounts = {
@@ -30,4 +31,10 @@ export type OrderRow = {
   orderAmount?: DecimalLike | null;
   channel?: string | null;
   status?: string | null;
+  isCreditCard?: boolean | null;
+  isCash?: boolean | null;
+  isOtherPaymentMethod?: boolean | null;
+  customerName?: string | null;
+  customerPhone?: string | null;
+  orderItems?: KdsOrderItem[] | Prisma.JsonValue | null;
 };

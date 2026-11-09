@@ -59,7 +59,11 @@ export class MenuItemLikePrismaEntity {
       _sum: {
         amount: true,
       },
-      where: { menuItemId },
+      where: {
+        menuItemId,
+        amount: { gt: 0, lte: 1 },
+        deletedAt: null,
+      },
     });
 
     return result[0]?._sum.amount || 0;

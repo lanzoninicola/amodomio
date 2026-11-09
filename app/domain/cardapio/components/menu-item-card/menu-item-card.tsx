@@ -1,5 +1,5 @@
 import { Form, Link } from "@remix-run/react"
-import { AlertCircle, ChevronRight, Loader } from "lucide-react"
+import { ChevronRight, Loader } from "lucide-react"
 import { OveredPoint } from "../menu-item-list/menu-item-list"
 import { MenuItemWithAssociations } from "../../menu-item.prisma.entity.server"
 import { mapPriceVariationsLabel } from "../../fn.utils"
@@ -19,6 +19,7 @@ import MenuItemSwitchUpcomingSubmit from "../menu-item-switch-upcoming/menu-item
 
 interface MenuItemCardProps {
     item: MenuItemWithAssociations
+    readOnly?: boolean
     dragAndDrop?: {
         itemDragging: MenuItemWithAssociations | null
         itemOvered: MenuItemWithAssociations | null
@@ -26,7 +27,7 @@ interface MenuItemCardProps {
     }
 }
 
-export default function MenuItemCard({ item, dragAndDrop }: MenuItemCardProps) {
+export default function MenuItemCard({ item, readOnly = false, dragAndDrop }: MenuItemCardProps) {
 
     // const missingInfo = !item?.name || !item?.ingredients
 
@@ -50,6 +51,20 @@ export default function MenuItemCard({ item, dragAndDrop }: MenuItemCardProps) {
             title: "Ingredientes copiados",
         })
     }
+
+    const compatItem = item as MenuItemWithAssociations & {
+        sourceType?: "legacy" | "native"
+        sourceItemId?: string | null
+        itemId?: string | null
+    }
+
+    const itemVendaId = compatItem.sourceType === "native"
+        ? compatItem.sourceItemId || item.id
+        : compatItem.itemId || compatItem.sourceItemId || null
+
+    const targetHref = itemVendaId
+        ? `/admin/items/${itemVendaId}/venda`
+        : `/admin/gerenciamento/cardapio/${item?.id}/main`
 
 
     return (
@@ -75,21 +90,27 @@ export default function MenuItemCard({ item, dragAndDrop }: MenuItemCardProps) {
                         </div>
                     </div>
 
-                    <div className="flex gap-4 col-span-7">
-                        <MenuItemSwitchUpcomingSubmit menuItem={item} cnLabel="leading-[1.2]" />
-                        <MenuItemSwitchVisibilitySubmit menuItem={item} />
-                        <MenuItemSwitchActivationSubmit menuItem={item} cnContainer="md:justify-start" />
-                    </div>
+                    {readOnly ? (
+                        <div className="col-span-7">
+                            <span className="inline-flex rounded-full bg-slate-100 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-600">
+                                Publicado pela regra atual do cardápio
+                            </span>
+                        </div>
+                    ) : (
+                        <div className="flex gap-4 col-span-7">
+                            <MenuItemSwitchUpcomingSubmit menuItem={item} cnLabel="leading-[1.2]" />
+                            <MenuItemSwitchVisibilitySubmit menuItem={item} />
+                            <MenuItemSwitchActivationSubmit menuItem={item} cnContainer="md:justify-start" />
+                        </div>
+                    )}
 
                     <div className="col-span-1 flex justify-end">
-                        <Link to={`/admin/gerenciamento/cardapio/${item?.id}/main`} className="hover:bg-muted rounded-full p-1">
+                        <Link to={targetHref} className="hover:bg-muted rounded-full p-1">
                             <ChevronRight />
                         </Link>
                     </div>
 
                 </section>
-
-                {item.visible === true && !item.mogoId && <MissingInfoAlert message="Item publicado mas sem MOGO ID" />}
             </div>
         </div>
 
@@ -150,20 +171,4 @@ function PriceVariationsInCard({ item }: { item: MenuItemWithAssociations }) {
         </>
     )
 
-}
-
-
-interface MissingInfoAlertProps {
-    message: string
-}
-
-function MissingInfoAlert({ message }: MissingInfoAlertProps) {
-    return (
-        <div className=" bg-orange-100 rounded-md py-2 px-4 mt-4 w-max">
-            <div className="flex gap-2 items-center">
-                <AlertCircle color="orange" size={16} />
-                <span className="text-xs font-semibold text-orange-500">{message}</span>
-            </div>
-        </div>
-    )
 }

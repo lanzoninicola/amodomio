@@ -1,156 +1,352 @@
-import { LoaderFunctionArgs } from "@remix-run/node";
-import { Link, useLoaderData } from "@remix-run/react";
-import { ChevronRight } from "lucide-react";
-import { Heart, MenuSquare, Share2 } from "lucide-react";
+import { Link } from "@remix-run/react";
+import { QuestionMarkCircledIcon } from "@radix-ui/react-icons";
+import {
+    ChevronRight,
+    ClipboardCopy,
+    Heart,
+    MenuSquare,
+    Share2,
+} from "lucide-react";
 import { useState } from "react";
 import TypewriterComponent from "typewriter-effect";
 import Logo from "~/components/primitives/logo/logo";
+import RouteProgressBar from "~/components/route-progress-bar/route-progress-bar";
+import { Button } from "~/components/ui/button";
+import { Dialog, DialogContent, DialogTrigger } from "~/components/ui/dialog";
+import { useToast } from "~/components/ui/use-toast";
 import WhatsappExternalLink from "~/components/primitives/whatsapp/whatsapp-external-link";
 import WhatsAppIcon from "~/components/primitives/whatsapp/whatsapp-icon";
 import { fmtYYYMMDD } from "~/domain/kds";
-import GLOBAL_LINKS from "~/domain/website-navigation/global-links.constant";
-import { CloudinaryUtils } from "~/lib/cloudinary";
+import WEBSITE_LINKS from "~/domain/website-navigation/links/website-links";
 import { cn } from "~/lib/utils";
-import { ok } from "~/utils/http-response.server";
 
 // https://smart-pizza-marketing.framer.ai/
 // https://traderepublic.com/pt-pt
 
+type CardapioLinkProps = {
+    mode?: "header" | "hero" | "campaign";
+    className?: string;
+};
 
-export async function loader({ request }: LoaderFunctionArgs) {
-    return ok({
-        videoURLs: {
-            video480: CloudinaryUtils.getVideoURL("amodomio-hero_480p_haz9se"),
-            video1080: CloudinaryUtils.getVideoURL("amodomio-hero_1080p_vgk1eq")
-        }
-    });
+function CardapioLink({ mode = "hero", className }: CardapioLinkProps) {
+    // const cardapioPath = WEBSITE_LINKS.cardapioPublic.href;
+    const cardapioPath = '/cardapio';
+
+    if (mode === "header") {
+        return (
+            <a href={cardapioPath} className={cn("hidden md:block", className)}>
+                <div className="bg-black px-2 py-2 rounded-lg w-max flex items-center gap-2 shadow-sm">
+                    <span className="font-neue font-semibold text-white uppercase tracking-wider text-xs">
+                        cardápio
+                    </span>
+                    <span className="flex items-center justify-center rounded-full bg-white/10 text-white">
+                        <ChevronRight color="#ffffff" size={14} />
+                    </span>
+                </div>
+            </a>
+        );
+    }
+
+    if (mode === "campaign") {
+        return (
+            <a
+                href={cardapioPath}
+                className={cn(
+                    "flex h-12 w-full touch-manipulation items-center justify-center bg-brand-green px-4 text-white transition-opacity hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-green",
+                    "font-neue uppercase tracking-wide",
+                    className
+                )}
+                aria-label="Abrir cardápio"
+            >
+                <span>Cardápio</span>
+            </a>
+        );
+    }
+
+    return (
+        <a
+            href={cardapioPath}
+            className={cn("group block touch-manipulation", className)}
+        >
+            <div className="relative overflow-hidden rounded-xl border border-black bg-black px-6 py-3.5 text-white shadow-[0_10px_30px_rgba(0,0,0,0.25)] transition-all duration-150 md:group-hover:-translate-y-0.5 md:group-hover:shadow-[0_16px_40px_rgba(0,0,0,0.28)] group-focus-visible:outline group-focus-visible:outline-2 group-focus-visible:outline-offset-2 group-focus-visible:outline-black">
+                <div
+                    className="absolute inset-0 bg-white opacity-0 transition-opacity duration-300 md:group-hover:opacity-10"
+                    aria-hidden
+                />
+                <div className="relative flex items-center gap-3 font-neue font-bold uppercase tracking-wide">
+                    <span>Ver cardápio</span>
+                    <span className="flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-white">
+                        <ChevronRight color="#ffffff" />
+                    </span>
+                </div>
+            </div>
+        </a>
+    );
 }
 
-
 export default function HomePage() {
-    const today = fmtYYYMMDD(new Date())
-    const mktDateTarget = "20250917"
+    const today = fmtYYYMMDD(new Date());
+    const mktDateTarget = "20250917";
 
     return (
         <>
-            <section className={
-                cn(
-                    today === mktDateTarget && 'hidden'
-                )
-            }>
-                <header className="fixed top-0 left-0 w-screen z-50 transition-all p-4 flex justify-between items-center">
+            <RouteProgressBar />
+            <section className={cn(today === mktDateTarget && "hidden")}>
+                <header className="fixed top-0 left-0 w-screen z-50 transition-all p-4 flex justify-between items-center bg-white/90 backdrop-blur-md shadow-sm border-b border-black/5 md:px-52">
                     <div className="w-[130px] md:w-[150px] ">
-                        <Logo onlyText={true} className="w-full h-full" />
+                        <Logo onlyText={true} className="w-full h-full" color="black" />
                     </div>
-                    <Link to={GLOBAL_LINKS.cardapioPublic.href} className="hidden md:block" >
-                        <div className="bg-black px-2 py-2 rounded-lg w-max flex items-center gap-2">
-                            <span className="font-rubik font-semibold text-white uppercase tracking-wider text-xs">cardápio</span>
-                        </div>
-                    </Link>
+                    <CardapioLink mode="header" />
                 </header>
-                <section className="relative">
-                    <HomePageVideoBackground />
-                    <div className="absolute inset-0 p-4 pt-32">
-                        <div className="flex flex-col">
+                <section className="relative bg-white overflow-hidden">
+                    <div className="relative grid grid-cols-1 md:grid-cols-[1.05fr_0.95fr] gap-6 md:gap-8 px-5 pt-24 pb-14 md:px-52 md:pt-28 md:pb-16 items-center">
+                        <div className="flex flex-col gap-5">
+                            <div className="space-y-4">
+                                <div className="flex items-center gap-2 text-black font-neue text-xs tracking-[0.18em] uppercase">
+                                    <span className="text-sm">[</span>
+                                    <span>Autêntica Pizza romana</span>
+                                    <span className="text-sm">]</span>
+                                </div>
+                                <h1 className="text-black uppercase font-neue font-semibold text-[2.8rem] leading-[1.05] tracking-tight md:text-6xl flex flex-col">
+                                    <span>A pizza mais desejada de </span>
+                                    <span className="text-black/60">Pato Branco</span>
+                                </h1>
+                                <p className="text-black/90 font-neue tracking-wide text-[1rem] leading-[1.6] max-w-[36ch] md:text-[1.05rem]">
+                                    Ingredientes selecionados, técnica artesanal e fermentação
+                                    lenta para um sabor que fala por si. Crocante, leve e
+                                    autêntica — sua próxima pizza inesquecível começa aqui.
+                                </p>
+                            </div>
 
-                            <h1 className="text-white font-rubik font-semibold transition-all
-                            text-5xl leading-none tracking-tight mb-6 max-w-[300px]
-                            md:text-7xl md:max-w-3xl
-                        ">
-                                A pizza mais desejada de Pato Branco
-                            </h1>
-
-                            <p className="text-white font-rubik font-semibold  tracking-wide max-w-prose transition-all
-                            text-[1rem] leading-[120%]
-                            md:text-xl md:leading-tight
-                        ">
-                                Preparada com ingredientes selecionados e técnicas artesanais, nossa pizza combina tradição italiana e inovação para entregar uma experiência única. Crocante, leve e irresistível, ela conquistou Pato Branco e agora espera por você.
-                            </p>
-
+                            <div className="mt-2 flex flex-wrap items-center gap-3">
+                                <CardapioLink />
+                            </div>
                         </div>
 
+                        <div className="relative flex justify-center ">
+                            <div className="relative overflow-hidden rounded-[28px] border-[3px] border-black/10 shadow-[0_18px_60px_rgba(0,0,0,0.18)] rotate-[-2deg] bg-black/80">
+                                <HeroImage />
+                            </div>
+                        </div>
                     </div>
-                </section >
-
-                <div className="fixed right-4 bottom-8">
-
-                    <Link to={GLOBAL_LINKS.cardapioPublic.href} >
-                        <div className="bg-black px-8 py-4 rounded-lg w-max flex items-center gap-2">
-                            <span className="font-rubik font-bold text-white">Vai ao cardápio</span>
-                            <ChevronRight color="#ffffff" />
-                        </div>
-                    </Link>
-
-                </div>
-
+                </section>
+                <ItalianIngredientsSection />
             </section>
-            <DiaCliente25 targetDate={mktDateTarget} />
+            {/* <DiaCliente25 targetDate={mktDateTarget} /> */}
         </>
     );
 }
 
-
-
-function HomePageVideoBackground() {
-    const loaderData = useLoaderData<typeof loader>();
-    const videoURLs = loaderData.payload?.videoURLs
-
+function HeroImage() {
     return (
-        <>
-            <div className="md:hidden">
-                <video
-                    autoPlay
-                    loop
-                    muted
-                    playsInline
-                    className="w-screen h-screen object-cover z-[-1]"
-                    poster="/images/cardapio-web-app/amodomio-hero-f000000.png"
-                >
-                    <source src={videoURLs.video480} type="video/mp4" />
-                </video>
-            </div>
-            <div className="hidden md:block">
-                <video
-                    autoPlay
-                    loop
-                    muted
-                    playsInline
-                    className="w-screen h-screen object-cover z-[-1]"
-                    poster="/images/cardapio-web-app/amodomio-hero-f000000.png"
-                >
-                    <source src={videoURLs.video1080} type="video/mp4" />
-                </video>
-            </div>
-            <div className="absolute inset-0 overflow-hidden rotate-0 opacity-40 bg-black"
-                data-element="hero-overlay"
+        <div className="relative h-[420px] w-full md:h-[520px] aspect-[3/4] bg-black overflow-hidden">
+            <img
+                src="/images/cardapio-web-app/amodomio-hero-f000000.webp"
+                alt="Pizza artesanal A Modo Mio"
+                className="absolute inset-0 h-full w-full object-cover"
             />
-        </>
+            <div
+                className="absolute inset-0 bg-gradient-to-b from-transparent via-black/10 to-black/30 pointer-events-none"
+                aria-hidden
+            />
+        </div>
+    );
+}
+
+function ItalianPizzaLineArt() {
+    return (
+        <svg
+            viewBox="0 0 300 380"
+            xmlns="http://www.w3.org/2000/svg"
+            fill="none"
+            className="w-full max-w-[240px] md:max-w-[280px]"
+            aria-hidden
+        >
+            {/* Main face – 3/4 view */}
+            <path
+                d="M 145 35 C 165 30 192 42 202 62 C 212 82 207 108 198 128 C 196 136 197 140 197 148 C 192 168 184 188 171 204 C 159 220 143 226 130 224 C 116 222 102 208 95 193 C 88 178 88 158 92 141 C 92 134 96 129 96 121 C 92 106 89 83 94 64 C 100 46 121 32 145 35 Z"
+                stroke="#1a1a1a"
+                strokeWidth="1.3"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+            />
+            <path
+                d="M 145 35 C 140 21 127 14 113 14 C 98 13 86 21 86 34 C 83 46 89 56 94 64"
+                stroke="#1a1a1a"
+                strokeWidth="1.3"
+                strokeLinecap="round"
+            />
+            <path
+                d="M 202 62 C 210 49 208 32 197 22 C 186 11 169 10 156 16 C 150 20 146 28 145 35"
+                stroke="#1a1a1a"
+                strokeWidth="1.3"
+                strokeLinecap="round"
+            />
+            <path
+                d="M 94 121 C 83 126 79 137 82 148 C 85 158 95 162 100 155"
+                stroke="#1a1a1a"
+                strokeWidth="1.2"
+                strokeLinecap="round"
+            />
+            <path
+                d="M 149 74 C 160 67 175 67 183 73"
+                stroke="#1a1a1a"
+                strokeWidth="1.2"
+                strokeLinecap="round"
+            />
+            <path
+                d="M 147 86 C 157 79 174 79 180 87 C 173 97 156 98 147 86"
+                stroke="#1a1a1a"
+                strokeWidth="1.2"
+                strokeLinecap="round"
+            />
+            <path
+                d="M 107 77 C 114 71 124 71 129 77"
+                stroke="#1a1a1a"
+                strokeWidth="1.2"
+                strokeLinecap="round"
+            />
+            <path
+                d="M 106 88 C 113 82 124 82 128 89 C 122 96 113 96 106 88"
+                stroke="#1a1a1a"
+                strokeWidth="1.2"
+                strokeLinecap="round"
+            />
+            <path
+                d="M 164 83 C 162 102 161 122 158 138 C 155 150 148 156 152 162"
+                stroke="#1a1a1a"
+                strokeWidth="1.2"
+                strokeLinecap="round"
+            />
+            <path
+                d="M 140 158 C 144 164 154 164 158 159"
+                stroke="#1a1a1a"
+                strokeWidth="1.2"
+                strokeLinecap="round"
+            />
+            <path
+                d="M 127 176 C 136 169 149 168 159 174 C 163 177 163 181 158 183"
+                stroke="#1a1a1a"
+                strokeWidth="1.2"
+                strokeLinecap="round"
+            />
+            <path
+                d="M 136 170 C 142 166 148 166 153 170"
+                stroke="#1a1a1a"
+                strokeWidth="1.0"
+                strokeLinecap="round"
+            />
+            <path
+                d="M 126 185 C 136 196 155 196 161 185"
+                stroke="#1a1a1a"
+                strokeWidth="1.2"
+                strokeLinecap="round"
+            />
+            <path
+                d="M 123 230 C 118 248 116 268 118 284"
+                stroke="#1a1a1a"
+                strokeWidth="1.2"
+                strokeLinecap="round"
+            />
+            <path
+                d="M 153 227 C 158 244 160 265 157 280"
+                stroke="#1a1a1a"
+                strokeWidth="1.2"
+                strokeLinecap="round"
+            />
+            <path
+                d="M 118 284 C 103 294 86 298 68 295"
+                stroke="#1a1a1a"
+                strokeWidth="1.2"
+                strokeLinecap="round"
+            />
+            <path
+                d="M 157 280 C 172 290 190 296 210 293"
+                stroke="#1a1a1a"
+                strokeWidth="1.2"
+                strokeLinecap="round"
+            />
+
+            {/* Second face – profile facing right */}
+            <path
+                d="M 218 70 C 227 50 248 44 265 50 C 280 56 288 72 287 90 C 286 107 276 121 268 134 C 260 146 254 158 252 172 C 250 184 254 197 247 208 C 240 218 226 220 222 230"
+                stroke="#1a1a1a"
+                strokeWidth="1.1"
+                strokeLinecap="round"
+            />
+            <path
+                d="M 218 70 C 218 53 220 38 228 29 C 236 20 248 17 258 20 C 268 23 276 32 278 46 C 281 58 282 72 287 90"
+                stroke="#1a1a1a"
+                strokeWidth="1.0"
+                strokeLinecap="round"
+            />
+            <path
+                d="M 252 78 C 260 72 271 73 276 79"
+                stroke="#1a1a1a"
+                strokeWidth="1.0"
+                strokeLinecap="round"
+            />
+            <path
+                d="M 255 88 C 262 82 273 83 276 90"
+                stroke="#1a1a1a"
+                strokeWidth="1.0"
+                strokeLinecap="round"
+            />
+            <path
+                d="M 271 92 C 276 106 275 122 269 134 C 265 144 258 150 261 156"
+                stroke="#1a1a1a"
+                strokeWidth="1.0"
+                strokeLinecap="round"
+            />
+            <path
+                d="M 247 172 C 253 166 261 166 263 173 C 259 181 249 180 247 172"
+                stroke="#1a1a1a"
+                strokeWidth="1.0"
+                strokeLinecap="round"
+            />
+            <path
+                d="M 222 230 C 220 244 222 258 226 268"
+                stroke="#1a1a1a"
+                strokeWidth="1.0"
+                strokeLinecap="round"
+            />
+        </svg>
+    );
+}
+
+function ItalianIngredientsSection() {
+    return (
+        <section className="hidden flex-col md:flex-row items-center gap-10 md:gap-16 px-6 py-14 md:px-52 bg-white border-t border-black/5">
+            <div className="flex-1 flex justify-center order-2 md:order-1">
+                <ItalianPizzaLineArt />
+            </div>
+            <div className="flex-1 flex justify-center md:justify-start order-1 md:order-2">
+                <p className="font-lora italic text-black/75 leading-relaxed text-center md:text-left text-[1.35rem] md:text-[1.55rem] max-w-[28ch]">
+                    Todas as nossas pizzas são preparadas com farinha e molho de tomate
+                    importados da Itália.
+                </p>
+            </div>
+        </section>
     );
 }
 
 interface DiaCliente25Props {
-    targetDate: string
+    targetDate: string;
 }
 
-import { ClipboardCopy } from "lucide-react";
-import { Dialog, DialogContent, DialogTrigger } from "~/components/ui/dialog";
-import { Button } from "~/components/ui/button";
-import { useToast } from "~/components/ui/use-toast";
-import { QuestionMarkCircledIcon } from "@radix-ui/react-icons";
-
 function DiaCliente25({ targetDate }: DiaCliente25Props) {
-    const [loaded, setLoaded] = useState(false)
-    const { toast } = useToast()
-    const today = fmtYYYMMDD(new Date())
-    const cupomCode = "CLIENTE10"
+    const [loaded, setLoaded] = useState(false);
+    const { toast } = useToast();
+    const today = fmtYYYMMDD(new Date());
+    const cupomCode = "CLIENTE10";
 
     const copyToClipboard = () => {
-        navigator.clipboard.writeText(cupomCode)
+        navigator.clipboard.writeText(cupomCode);
         toast({
             title: "Cupom copiado!",
             description: `"${cupomCode}" foi copiado para a área de transferência.`,
-        })
-    }
+        });
+    };
 
     return (
         <section
@@ -161,7 +357,6 @@ function DiaCliente25({ targetDate }: DiaCliente25Props) {
         >
             {/* Fundo com imagem + overlay para contraste */}
             <div className="relative w-full h-screen md:w-[720px] overflow-hidden">
-
                 <img
                     src={"/images/2025_dia_cliente_fundo.png"}
                     alt="Dia do Cliente — arte promocional"
@@ -188,7 +383,8 @@ function DiaCliente25({ targetDate }: DiaCliente25Props) {
                         />
 
                         {/* Cartão de Cupom */}
-                        <div className="mt-6 w-full rounded-2xl bg-white/95 p-4 shadow-xl backdrop-blur"
+                        <div
+                            className="mt-6 w-full rounded-2xl bg-white/95 p-4 shadow-xl backdrop-blur"
                             onClick={copyToClipboard}
                         >
                             <div className="grid grid-cols-[1fr_auto_1fr] items-stretch">
@@ -203,15 +399,16 @@ function DiaCliente25({ targetDate }: DiaCliente25Props) {
                                         Somente hoje
                                     </div> */}
                                     <div className="flex items-baseline gap-2">
-                                        <span className="font-rubik text-5xl font-extrabold leading-none">
+                                        <span className="font-neue text-5xl font-extrabold leading-none">
                                             10%
                                         </span>
-                                        <span className="font-rubik text-base font-semibold">OFF</span>
+                                        <span className="font-neue text-base font-semibold">
+                                            OFF
+                                        </span>
                                     </div>
 
                                     {/* Código + copiar inline */}
                                     <div className="mt-1 flex w-full items-center justify-center gap-2">
-
                                         <Button
                                             variant="secondary"
                                             size="sm"
@@ -237,7 +434,12 @@ function DiaCliente25({ targetDate }: DiaCliente25Props) {
                                             stroke="currentColor"
                                             aria-hidden
                                         >
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                            <path
+                                                strokeLinecap="round"
+                                                strokeLinejoin="round"
+                                                strokeWidth={2}
+                                                d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+                                            />
                                         </svg>
                                         Válido até 28/09
                                     </div>
@@ -252,7 +454,8 @@ function DiaCliente25({ targetDate }: DiaCliente25Props) {
 
                         {/* Observação/CTA secundário */}
                         <p className="mt-3 max-w-[520px] text-balance text-sm text-white tracking-wide font-neue">
-                            Válido somente na proxima compra no cardápio digital. Não cumulativo com outras promoções.
+                            Válido somente na proxima compra no cardápio digital. Não
+                            cumulativo com outras promoções.
                         </p>
 
                         {/* Ações */}
@@ -271,23 +474,21 @@ function DiaCliente25({ targetDate }: DiaCliente25Props) {
                                 <DialogContent className="max-w-md text-left">
                                     <h2 className="text-lg font-bold">Regulamento</h2>
                                     <p className="mt-2 text-sm leading-snug text-muted-foreground">
-                                        Promoção válida para compras realizadas no dia 17 de setembro de 2025.
-                                        O cupom <span className="font-semibold">CLIENTE10</span> garante 10% de desconto
-                                        em uma nova compra realizada até o dia 28 de setembro de 2025.
-                                        <span className="font-semibold"> Válido apenas para pedidos pelo nosso cardápio digital.</span>
+                                        Promoção válida para compras realizadas no dia 17 de
+                                        setembro de 2025. O cupom{" "}
+                                        <span className="font-semibold">CLIENTE10</span> garante 10%
+                                        de desconto em uma nova compra realizada até o dia 28 de
+                                        setembro de 2025.
+                                        <span className="font-semibold">
+                                            {" "}
+                                            Válido apenas para pedidos pelo nosso cardápio digital.
+                                        </span>
                                         Não cumulativo com outras promoções.
                                     </p>
                                 </DialogContent>
                             </Dialog>
 
-                            <Link to={GLOBAL_LINKS.cardapioPublic.href} className="w-full">
-                                <Button
-                                    className="h-12 w-full justify-center bg-brand-green text-white hover:opacity-90 uppercase font-neue tracking-wide"
-                                    aria-label="Abrir cardápio"
-                                >
-                                    Cardápio
-                                </Button>
-                            </Link>
+                            <CardapioLink mode="campaign" />
                         </div>
                     </div>
 
@@ -296,127 +497,5 @@ function DiaCliente25({ targetDate }: DiaCliente25Props) {
                 </div>
             </div>
         </section>
-    )
+    );
 }
-
-
-
-
-
-// export default function HomePage() {
-//     return (
-//         <div className="bg-black h-screen p-4 md:py-24 md:px-32 lg:px-96">
-
-//             <div className="bg-white h-full rounded-lg">
-
-//                 {/* <!-- Mobile screen -> */}
-//                 <main className="md:hidden grid grid-cols-1 grid-rows-[auto_1fr_auto] h-full">
-//                     <header>
-//                         <WebsiteCardHeader />
-//                         <div className="p-4 ">
-//                             <p className="font-neue leading-tight max-w-prose text-3xl ">A autentica pizza italiana<br /> em Pato Branco feita <br /> das mãos de um italiano.</p>
-//                         </div>
-//                     </header>
-//                     <div className="bg-hero bg-center bg-cover bg-no-repeat"></div>
-//                     <WebsiteCardFooter />
-//                 </main>
-
-
-//                 {/* <!-- Large screen -> */}
-//                 <div className="hidden md:grid md:grid-cols-2 md:h-full">
-//                     <div className="bg-hero bg-center bg-cover bg-no-repeat"></div>
-//                     <div className="grid grid-cols-1 grid-rows-[auto_1fr_auto] h-full p-8">
-
-//                         <WebsiteCardHeader >
-//                             <Separator className="my-2" />
-//                         </WebsiteCardHeader>
-
-//                         <div className="p-4 ">
-//                             <p className="font-neue leading-tight max-w-prose text-3xl ">A autentica pizza italiana<br /> em Pato Branco feita <br /> das mãos de um italiano.</p>
-//                         </div>
-
-//                         <WebsiteCardFooter />
-//                     </div>
-
-//                 </div>
-
-//             </div>
-
-
-//         </div>
-//     )
-// }
-
-interface WebsiteCardHeaderProps {
-    children?: React.ReactNode;
-}
-
-
-
-function WebsiteActionBar() {
-
-    const [likeIt, setLikeIt] = useState(false)
-
-
-
-    return (
-        <div className="grid grid-cols-4 font-neue">
-
-            <WhatsappExternalLink phoneNumber=""
-                ariaLabel="Envia uma mensagem com WhatsApp"
-                message={"Essa é a melhor pizzaria da cidade. Experimente..."}
-                className="flex flex-col gap-2 justify-center items-center cursor-pointer"
-            >
-                <Share2 />
-                <span className="text-xs tracking-normal font-semibold">Compartilhe</span>
-            </WhatsappExternalLink>
-
-
-            <div className="flex flex-col gap-2 justify-center items-center cursor-pointer" onClick={() => {
-                setLikeIt(true)
-            }}>
-                <Heart className={
-                    cn(
-                        likeIt ? "fill-red-500" : "fill-none",
-                        likeIt ? "stroke-red-500" : "stroke-black"
-                    )
-                } />
-                <span className={
-                    cn(
-                        "text-xs tracking-normal font-semibold",
-                        likeIt ? "text-red-500" : "text-black"
-                    )
-                }>Curtir</span>
-            </div>
-
-
-            <WhatsappExternalLink phoneNumber="46991272525"
-                ariaLabel="Envia uma mensagem com WhatsApp"
-                message={"Olá, gostaria fazer um pedido"}
-                className="flex flex-col gap-2 justify-center items-center"
-            >
-                <WhatsAppIcon color="black" />
-                <span className="text-xs tracking-normal font-semibold">Atendimento</span>
-            </WhatsappExternalLink>
-
-            <Link to={'cardapio'} className="flex flex-col gap-2 justify-center items-center">
-                <MenuSquare />
-                <span className="text-xs tracking-normal font-semibold">
-                    <TypewriterComponent
-                        options={{
-                            strings: ["Cardápio", "Peça já"],
-                            autoStart: true,
-                            loop: true,
-                            delay: 75,
-                            cursorClassName: "hidden"
-                        }}
-                    />
-                </span>
-            </Link>
-
-        </div>
-    )
-}
-
-
-

@@ -1,11 +1,11 @@
 import { ActionFunction, LoaderFunctionArgs } from "@remix-run/node";
 import { Await, Form, Link, Outlet, defer, useActionData, useLoaderData, useLocation } from "@remix-run/react";
-import { ArrowUp, Option, Settings, Terminal } from "lucide-react";
+import { AlertTriangle, ArrowUp, Option, Settings, Terminal } from "lucide-react";
 import { c } from "node_modules/vite/dist/node/types.d-aGj9QkWt";
 import { NumericInput } from "~/components/numeric-input/numeric-input";
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import { Separator } from "~/components/ui/separator";
-import { SellingChannelKey, menuItemSellingChannelPrismaEntity } from "~/domain/cardapio/menu-item-selling-channel.entity.server";
+import { SellingChannelKey, itemSellingChannelPrismaEntity } from "~/domain/cardapio/menu-item-selling-channel.entity.server";
 import { prismaIt } from "~/lib/prisma/prisma-it.server";
 import { cn } from "~/lib/utils";
 import { badRequest, ok } from "~/utils/http-response.server";
@@ -13,13 +13,13 @@ import { lastUrlSegment } from "~/utils/url";
 import { json } from "@remix-run/node";
 import { Suspense, useState, useTransition } from "react";
 import Loading from "~/components/loading/loading";
-import { MenuItemSellingChannel } from "@prisma/client";
+import { ItemSellingChannel } from "@prisma/client";
 import SubmitButton from "~/components/primitives/submit-button/submit-button";
 
 
 export async function loader({ request }: LoaderFunctionArgs) {
 
-  const sellingChannel = menuItemSellingChannelPrismaEntity.findAll();
+  const sellingChannel = itemSellingChannelPrismaEntity.findAll();
 
   return defer(
     {
@@ -50,7 +50,7 @@ export const action: ActionFunction = async ({ request }) => {
     return json({ errors }, { status: 400 });
   }
 
-  const sellingChannelRecord = await menuItemSellingChannelPrismaEntity.findOneByKey(channelKey)
+  const sellingChannelRecord = await itemSellingChannelPrismaEntity.findOneByKey(channelKey)
 
   if (!sellingChannelRecord) {
     // create the record
@@ -58,7 +58,7 @@ export const action: ActionFunction = async ({ request }) => {
   }
 
   // Atualize o registro no banco de dados (exemplo: atualizando o registro com id 1)
-  const [err, record] = await prismaIt(menuItemSellingChannelPrismaEntity.update({
+  const [err, record] = await prismaIt(itemSellingChannelPrismaEntity.update({
     where: { id: sellingChannelRecord.id },
     data: {
       targetMarginPerc: Number(targetMarginPerc),
@@ -91,10 +91,14 @@ export default function AdminGerenciamentoCardapioSellPriceManagement() {
       <div className="flex justify-between items-center mb-2">
         <h2 >Gerenciamento Preços de Vendas Itens</h2>
 
-        <div>
-
-
-          <Link to="/admin/gerenciamento/cardapio/dna"
+        <div className="flex items-center gap-4">
+          <Link to="/admin/vendas/publicados-sem-ficha"
+            className="flex gap-2 items-center hover:underline hover:cursor-pointer"
+          >
+            <AlertTriangle size={20} />
+            <span className="text-[12px] uppercase tracking-wider">Publicados sem ficha</span>
+          </Link>
+          <Link to="/admin/vendas/dna"
             className="flex gap-2 items-center hover:underline hover:cursor-pointer"
           >
             <Settings size={20} />
@@ -105,14 +109,14 @@ export default function AdminGerenciamentoCardapioSellPriceManagement() {
       </div>
 
 
-      <div className="grid grid-cols-3 gap-x-2 items-center">
+<div className="grid grid-cols-3 gap-x-2 items-center">
 
         <Suspense fallback={<Loading />}>
           <Await resolve={sellingChannel}>
             {(sellingChannel) => {
               {
                 return sellingChannel.map(
-                  (channel: MenuItemSellingChannel) => {
+                  (channel: ItemSellingChannel) => {
                     return (
                       <div
                         key={channel?.id}
@@ -132,12 +136,13 @@ export default function AdminGerenciamentoCardapioSellPriceManagement() {
                             <span className="">Profito desejado</span>
                           </button>
                         </div>
-                        <div className="grid grid-cols-2 ">
+                        <div className="grid grid-cols-2">
                           <Link to={`/admin/gerenciamento/cardapio/sell-price-management/${channel.key}/list`}>
                             <p className="text-[11px] uppercase font-semibold tracking-wider text-center
                             hover:underline">Tabela preços</p>
                           </Link>
-                          <Link to={`/admin/gerenciamento/cardapio/sell-price-management/${channel.key}/edit`}>
+
+                          <Link to={`/admin/gerenciamento/cardapio/sell-price-management/${channel.key}/edit-items`}>
                             <p className="text-[11px] uppercase font-semibold tracking-wider text-center
                             hover:underline">Editar preços</p>
                           </Link>
@@ -190,5 +195,3 @@ export default function AdminGerenciamentoCardapioSellPriceManagement() {
     </div>
   )
 }
-
-

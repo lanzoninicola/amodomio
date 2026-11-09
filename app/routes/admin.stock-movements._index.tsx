@@ -1,0 +1,1183 @@
+import type {
+  ActionFunctionArgs,
+  LoaderFunctionArgs,
+  MetaFunction,
+} from "@remix-run/node";
+import {
+  Form,
+  Link,
+  useFetcher,
+  useLoaderData,
+  useNavigation,
+  useSearchParams,
+} from "@remix-run/react";
+import { ChevronLeft, Eye, PlusCircle, Trash2 } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "~/components/ui/alert-dialog";
+import { Separator } from "~/components/ui/separator";
+import Container from "~/components/layout/container/container";
+import { Badge } from "~/components/ui/badge";
+import { Button } from "~/components/ui/button";
+import { Input } from "~/components/ui/input";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "~/components/ui/table";
+import { authenticator } from "~/domain/auth/google.server";
+import { itemPrismaEntity } from "~/domain/item/item.prisma.entity.server";
+import { getAvailableItemUnits } from "~/domain/item/item-units.server";
+import {
+  getStockMovementDirectionLabel,
+  getStockMovementTypeLabel,
+  normalizeStockMovementDirection,
+} from "~/domain/stock-movement/stock-movement-types";
+import {
+  deleteStockMovement,
+  importStockMovementImportBatchLine,
+  listStockMovementImportMovements,
+  rollbackStockMovementImportBatchLine,
+  setBatchLineIgnored,
+  updateStandaloneStockMovement,
+  updateStockMovementImportBatchLineEditableFields,
+} from "~/domain/stock-movement/stock-movement-import.server";
+import { badRequest, ok, serverError } from "~/utils/http-response.server";
+
+export const meta: MetaFunction = () => [
+  { title: "Admin | Movimentações de estoque" },
+];
+
+const PAGE_SIZE = 50;
+
+function str(value: FormDataEntryValue | string | null) {
+  return String(value || "").trim();
+}
+
+function parsePage(value: string | null) {
+  const parsed = Number(value || "1");
+  if (!Number.isFinite(parsed)) return 1;
+  return Math.max(1, Math.floor(parsed));
+}
+
+function parseYmdStart(value: string) {
+  if (!value) return null;
+  const [year, month, day] = value.split("-").map(Number);
+  if (!year || !month || !day) return null;
+  return new Date(year, month - 1, day, 0, 0, 0, 0);
+}
+
+function parseYmdEnd(value: string) {
+  if (!value) return null;
+  const [year, month, day] = value.split("-").map(Number);
+  if (!year || !month || !day) return null;
+  return new Date(year, month - 1, day, 23, 59, 59, 999);
+}
+
+function parseDateTimeLocal(value: string) {
+  if (!value) return null;
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return parsed;
+}
+
+function optionalNumber(value: FormDataEntryValue | null) {
+  const raw = str(value).replace(",", ".");
+  if (!raw) return null;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) ? parsed : NaN;
+}
+
+function normalizeUnit(value: unknown) {
+  const normalized = String(value || "")
+    .trim()
+    .toUpperCase();
+  return normalized || null;
+}
+
+function getItemTargetUnit(item: any) {
+  return normalizeUnit(item?.consumptionUm || item?.purchaseUm);
+}
+
+function findMeasurementConversion(
+  measurementConversions: Array<{
+    fromUnit: string;
+    toUnit: string;
+    factor: number;
+  }>,
+  fromUnit: string | null,
+  toUnit: string | null
+) {
+  if (!fromUnit || !toUnit || fromUnit === toUnit) return null;
+
+  for (const row of measurementConversions) {
+    const rowFrom = normalizeUnit(row?.fromUnit);
+    const rowTo = normalizeUnit(row?.toUnit);
+    const factor = Number(row?.factor ?? NaN);
+    if (!rowFrom || !rowTo || !(factor > 0)) continue;
+    if (rowFrom === fromUnit && rowTo === toUnit)
+      return { factor, mode: "direct" as const };
+    if (rowFrom === toUnit && rowTo === fromUnit)
+      return { factor, mode: "reverse" as const };
+  }
+
+  return null;
+}
+
+function resolveConvertedCostPreview(params: {
+  costAmount: number | null;
+  movementUnit: string | null;
+  selectedItem: any;
+  manualConversionFactor: unknown;
+  measurementConversions: Array<{
+    fromUnit: string;
+    toUnit: string;
+    factor: number;
+  }>;
+}) {
+  const costAmount = Number(params.costAmount);
+  const movementUnit = normalizeUnit(params.movementUnit);
+  const targetUnit = getItemTargetUnit(params.selectedItem);
+  if (
+    !Number.isFinite(costAmount) ||
+    costAmount <= 0 ||
+    !movementUnit ||
+    !targetUnit
+  )
+    return null;
+
+  if (movementUnit === targetUnit) {
+    return {
+      convertedCostAmount: costAmount,
+      targetUnit,
+      conversionSource: "same-unit",
+      conversionFactorUsed: 1,
+    };
+  }
+
+  const manualFactor = Number(params.manualConversionFactor);
+  if (manualFactor > 0) {
+    return {
+      convertedCostAmount: costAmount / manualFactor,
+      targetUnit,
+      conversionSource: "manual",
+      conversionFactorUsed: manualFactor,
+    };
+  }
+
+  const itemConsumptionUm = normalizeUnit(params.selectedItem?.consumptionUm);
+  const itemPurchaseUm = normalizeUnit(params.selectedItem?.purchaseUm);
+  const itemConversions: Array<{
+    purchaseUm?: string | null;
+    factor?: number | null;
+  }> = Array.isArray(params.selectedItem?.ItemPurchaseConversion)
+    ? params.selectedItem.ItemPurchaseConversion
+    : [];
+  const matchedConversion = itemConversions.find(
+    (conversion) => normalizeUnit(conversion?.purchaseUm) === movementUnit
+  );
+  const matchedFactor = Number(matchedConversion?.factor ?? NaN);
+
+  if (
+    matchedConversion &&
+    itemConsumptionUm &&
+    targetUnit === itemConsumptionUm &&
+    matchedFactor > 0
+  ) {
+    return {
+      convertedCostAmount: costAmount / matchedFactor,
+      targetUnit,
+      conversionSource: "item_purchase_factor",
+      conversionFactorUsed: matchedFactor,
+    };
+  }
+
+  const itemFactor = Number(
+    params.selectedItem?.purchaseToConsumptionFactor ?? NaN
+  );
+  if (itemPurchaseUm && itemConsumptionUm && itemFactor > 0) {
+    if (movementUnit === itemPurchaseUm && targetUnit === itemConsumptionUm) {
+      return {
+        convertedCostAmount: costAmount / itemFactor,
+        targetUnit,
+        conversionSource: "item_purchase_factor",
+        conversionFactorUsed: itemFactor,
+      };
+    }
+    if (movementUnit === itemConsumptionUm && targetUnit === itemPurchaseUm) {
+      return {
+        convertedCostAmount: costAmount * itemFactor,
+        targetUnit,
+        conversionSource: "item_purchase_factor_reverse",
+        conversionFactorUsed: itemFactor,
+      };
+    }
+  }
+
+  const measured = findMeasurementConversion(
+    params.measurementConversions,
+    movementUnit,
+    targetUnit
+  );
+  if (measured) {
+    return {
+      convertedCostAmount:
+        measured.mode === "direct"
+          ? costAmount / measured.factor
+          : costAmount * measured.factor,
+      targetUnit,
+      conversionSource:
+        measured.mode === "direct"
+          ? "measurement_conversion_direct"
+          : "measurement_conversion_reverse",
+      conversionFactorUsed: measured.factor,
+    };
+  }
+
+  return null;
+}
+
+async function loadMeasurementConversions(db: any) {
+  const rows =
+    typeof db.measurementUnitConversion?.findMany === "function"
+      ? await db.measurementUnitConversion.findMany({
+          where: { active: true },
+          select: {
+            factor: true,
+            FromUnit: { select: { code: true } },
+            ToUnit: { select: { code: true } },
+          },
+        })
+      : [];
+
+  return (rows as Array<any>)
+    .map((row) => ({
+      fromUnit: String(row.FromUnit?.code || "").toUpperCase(),
+      toUnit: String(row.ToUnit?.code || "").toUpperCase(),
+      factor: Number(row.factor),
+    }))
+    .filter(
+      (row) =>
+        row.fromUnit &&
+        row.toUnit &&
+        Number.isFinite(row.factor) &&
+        row.factor > 0
+    );
+}
+
+function formatDate(value: unknown) {
+  if (!value) return "-";
+  const d = new Date(String(value));
+  if (Number.isNaN(d.getTime())) return "-";
+  return d.toLocaleString("pt-BR");
+}
+
+function extractSupplierNoteInvoiceDate(row: any) {
+  const note =
+    row?.Line?.metadata?.supplierNote || row?.metadata?.supplierNote || null;
+  return (
+    note?.data_emissao ||
+    note?.dataEntrada ||
+    note?.data_entrada ||
+    note?.dataCadastro ||
+    note?.data_cadastro ||
+    null
+  );
+}
+
+function getMovementCostTotal(row: any) {
+  return row?.Line?.costTotalAmount ?? row?.metadata?.costTotalAmount ?? null;
+}
+
+function formatMoney(value: unknown) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return "-";
+  return n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+}
+
+function formatNumber(value: unknown) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return "-";
+  return n.toLocaleString("pt-BR", { maximumFractionDigits: 6 });
+}
+
+function formatDecimal(value: unknown) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return "-";
+  return n.toLocaleString("pt-BR", {
+    minimumFractionDigits: 3,
+    maximumFractionDigits: 3,
+  });
+}
+
+function rollbackFailureMessage(result: {
+  deleted?: number;
+  conflicts?: number;
+  errors?: number;
+}) {
+  if (Number(result?.deleted || 0) > 0) return null;
+  if (Number(result?.conflicts || 0) > 0) {
+    return "Não foi possível reverter esta movimentação porque o custo atual do item já não aponta mais para esta importação.";
+  }
+  if (Number(result?.errors || 0) > 0) {
+    return "Não foi possível concluir a reversão desta movimentação.";
+  }
+  return "A reversão desta movimentação não produziu alterações.";
+}
+
+function buildPageHref(filters: {
+  q: string;
+  movementId: string;
+  lineId: string;
+  supplier: string;
+  item: string;
+  itemId: string;
+  from: string;
+  to: string;
+  status: string;
+  page: number;
+}) {
+  const searchParams = new URLSearchParams();
+  if (filters.q) searchParams.set("q", filters.q);
+  if (filters.movementId) searchParams.set("movementId", filters.movementId);
+  if (filters.lineId) searchParams.set("lineId", filters.lineId);
+  if (filters.supplier) searchParams.set("supplier", filters.supplier);
+  if (filters.item) searchParams.set("item", filters.item);
+  if (filters.itemId) searchParams.set("itemId", filters.itemId);
+  if (filters.from) searchParams.set("from", filters.from);
+  if (filters.to) searchParams.set("to", filters.to);
+  if (filters.status && filters.status !== "active")
+    searchParams.set("status", filters.status);
+  if (filters.page > 1) searchParams.set("page", String(filters.page));
+  return `/admin/stock-movements?${searchParams.toString()}`;
+}
+
+function movementLifecycleBadgeClass(deletedAt: unknown) {
+  return deletedAt
+    ? "border-amber-200 bg-amber-50 text-amber-700"
+    : "border-emerald-200 bg-emerald-50 text-emerald-700";
+}
+
+function movementDirectionBadgeClass(direction: unknown) {
+  const normalized = normalizeStockMovementDirection(direction);
+  if (normalized === "exit") return "border-rose-200 bg-rose-50 text-rose-700";
+  if (normalized === "neutral")
+    return "border-violet-200 bg-violet-50 text-violet-700";
+  return "border-sky-200 bg-sky-50 text-sky-700";
+}
+
+export async function loader({ request }: LoaderFunctionArgs) {
+  try {
+    const url = new URL(request.url);
+    const q = str(url.searchParams.get("q"));
+    const movementId = str(url.searchParams.get("movementId"));
+    const lineId = str(url.searchParams.get("lineId"));
+    const supplier = str(url.searchParams.get("supplier"));
+    const item = str(url.searchParams.get("item"));
+    const itemId = str(url.searchParams.get("itemId"));
+    const from = str(url.searchParams.get("from"));
+    const to = str(url.searchParams.get("to"));
+    const requestedStatus = str(url.searchParams.get("status"));
+    const status =
+      requestedStatus === "all" || requestedStatus === "deleted"
+        ? requestedStatus
+        : "active";
+    const page = parsePage(url.searchParams.get("page"));
+
+    const result = await listStockMovementImportMovements({
+      q,
+      movementId,
+      lineId,
+      supplier,
+      item,
+      itemId,
+      from: parseYmdStart(from),
+      to: parseYmdEnd(to),
+      status: status as "active" | "deleted" | "all",
+      page,
+      pageSize: PAGE_SIZE,
+    });
+
+    return ok({
+      ...result,
+      filters: {
+        q,
+        movementId,
+        lineId,
+        supplier,
+        item,
+        itemId,
+        from,
+        to,
+        status,
+      },
+    });
+  } catch (error) {
+    return serverError(error);
+  }
+}
+
+export async function action({ request }: ActionFunctionArgs) {
+  try {
+    const user = await authenticator.isAuthenticated(request);
+    if (!user) return badRequest("Não autenticado");
+
+    const formData = await request.formData();
+    const _action = str(formData.get("_action"));
+    let batchId = str(formData.get("batchId"));
+    let lineId = str(formData.get("lineId"));
+    const movementId = str(formData.get("movementId"));
+    const actor = String(
+      (user as any)?.email || (user as any)?.name || "admin"
+    );
+
+    if ((!batchId || !lineId) && movementId) {
+      const db = itemPrismaEntity.client as any;
+      const movement = await db.stockMovement.findUnique({
+        where: { id: movementId },
+        select: {
+          id: true,
+          importBatchId: true,
+          importLineId: true,
+        },
+      });
+      if (!movement) return badRequest("Movimentação inválida");
+      batchId = str(movement.importBatchId);
+      lineId = str(movement.importLineId);
+    }
+
+    if (_action === "movement-delete") {
+      if (!movementId) return badRequest("Movimentação inválida");
+      if (batchId && lineId) {
+        const result = await rollbackStockMovementImportBatchLine({
+          batchId,
+          lineId,
+          actor,
+          allowDeleteWithoutCostRollback: true,
+        });
+        const rollbackError = rollbackFailureMessage(result);
+        if (rollbackError) return badRequest(rollbackError);
+        return ok({
+          deletedMovementId: movementId,
+          message:
+            Number((result as any)?.deletedWithoutCostRollback || 0) > 0
+              ? "Movimentação eliminada. A linha do lote voltou para pronta para importar, mas o custo atual foi preservado porque já havia alterações posteriores."
+              : "Movimentação eliminada. A linha do lote voltou para pronta para importar novamente.",
+        });
+      }
+
+      const result = await deleteStockMovement({ movementId, actor });
+      return ok({
+        deletedMovementId: movementId,
+        message: (result as any)?.alreadyDeleted
+          ? "Movimentação já estava eliminada."
+          : "Movimentação eliminada.",
+      });
+    }
+
+    if (_action === "movement-rollback-line") {
+      if (!batchId || !lineId) return badRequest("Movimentação inválida");
+      const result = await rollbackStockMovementImportBatchLine({
+        batchId,
+        lineId,
+        actor,
+        allowDeleteWithoutCostRollback: true,
+      });
+      const rollbackError = rollbackFailureMessage(result);
+      if (rollbackError) return badRequest(rollbackError);
+      return ok({
+        rolledBackMovementId: movementId || null,
+        message:
+          Number((result as any)?.deletedWithoutCostRollback || 0) > 0
+            ? "Movimentação revertida para remapeamento. O custo atual do item anterior foi preservado porque já havia alterações posteriores."
+            : "Movimentação revertida. A linha de origem já pode ser remapeada e editada novamente.",
+      });
+    }
+
+    if (_action === "movement-rollback-and-ignore-line") {
+      if (!batchId || !lineId) return badRequest("Movimentação inválida");
+      const result = await rollbackStockMovementImportBatchLine({
+        batchId,
+        lineId,
+        actor,
+        allowDeleteWithoutCostRollback: true,
+      });
+      const rollbackError = rollbackFailureMessage(result);
+      if (rollbackError) return badRequest(rollbackError);
+      await setBatchLineIgnored({
+        batchId,
+        lineId,
+        ignored: true,
+      });
+      return ok({
+        rolledBackMovementId: movementId || null,
+        ignoredLineId: lineId,
+        message:
+          Number((result as any)?.deletedWithoutCostRollback || 0) > 0
+            ? "Movimentação removida do fluxo e linha ignorada. O custo atual do item foi preservado porque já havia alterações posteriores."
+            : "Movimentação revertida e linha ignorada. Ela saiu do fluxo de importação deste lote.",
+      });
+    }
+
+    if (_action !== "movement-edit-line") return badRequest("Ação inválida");
+
+    const ingredientName = str(formData.get("ingredientName"));
+    if (!ingredientName) return badRequest("Ingrediente é obrigatório");
+
+    const costTotalAmount = optionalNumber(formData.get("costTotalAmount"));
+    if (Number.isNaN(costTotalAmount))
+      return badRequest("Custo total inválido");
+    const qtyEntry = optionalNumber(formData.get("qtyEntry"));
+    if (Number.isNaN(qtyEntry))
+      return badRequest("Quantidade de entrada inválida");
+    const qtyConsumption = optionalNumber(formData.get("qtyConsumption"));
+    if (Number.isNaN(qtyConsumption))
+      return badRequest("Quantidade de consumo inválida");
+    const rawCostAmount = optionalNumber(formData.get("costAmount"));
+    if (Number.isNaN(rawCostAmount))
+      return badRequest("Custo unitário inválido");
+    const costAmount =
+      Number.isFinite(Number(costTotalAmount)) &&
+      Number.isFinite(Number(qtyEntry)) &&
+      Number(qtyEntry) > 0
+        ? Number(costTotalAmount) / Number(qtyEntry)
+        : rawCostAmount;
+    if (
+      costAmount != null &&
+      (!Number.isFinite(costAmount) || costAmount <= 0)
+    ) {
+      return badRequest("Não foi possível calcular o custo unitário");
+    }
+    if (costAmount == null) return badRequest("Custo unitário inválido");
+    const manualConversionFactor = optionalNumber(
+      formData.get("manualConversionFactor")
+    );
+    if (Number.isNaN(manualConversionFactor))
+      return badRequest("Fator manual inválido");
+
+    const movementAtRaw = str(formData.get("movementAt"));
+    const movementAt = movementAtRaw ? parseDateTimeLocal(movementAtRaw) : null;
+    if (movementAtRaw && !movementAt)
+      return badRequest("Data da movimentação inválida");
+    const mappedItemId = str(formData.get("mappedItemId")) || null;
+    const movementUnit =
+      str(formData.get("movementUnit")).toUpperCase() || null;
+    if (movementUnit) {
+      const availableUnits = await getAvailableItemUnits(
+        mappedItemId || undefined
+      );
+      if (!availableUnits.includes(movementUnit))
+        return badRequest("UM do movimento inválida");
+    }
+
+    const db = itemPrismaEntity.client as any;
+
+    if (!batchId || !lineId) {
+      if (!movementId) return badRequest("Movimentação inválida");
+      const selectedItem = mappedItemId
+        ? await db.item.findUnique({
+            where: { id: mappedItemId },
+            select: {
+              id: true,
+              purchaseUm: true,
+              consumptionUm: true,
+              purchaseToConsumptionFactor: true,
+              ItemPurchaseConversion: {
+                select: { purchaseUm: true, factor: true },
+              },
+            },
+          })
+        : null;
+      const targetUnit = selectedItem
+        ? selectedItem.consumptionUm || selectedItem.purchaseUm || movementUnit
+        : movementUnit;
+      const conversion =
+        selectedItem && movementUnit
+          ? resolveConvertedCostPreview({
+              costAmount: Number(costAmount),
+              movementUnit,
+              selectedItem,
+              manualConversionFactor,
+              measurementConversions: await loadMeasurementConversions(db),
+            })
+          : null;
+      if (selectedItem && movementUnit && !conversion) {
+        return badRequest(
+          `Sem conversão automática de ${movementUnit} para ${
+            targetUnit || "UM do item"
+          }`
+        );
+      }
+      await updateStandaloneStockMovement({
+        movementId,
+        actor,
+        movementAt,
+        invoiceNumber: str(formData.get("invoiceNumber")) || null,
+        supplierId: str(formData.get("supplierId")) || null,
+        supplierName: str(formData.get("supplierName")) || null,
+        supplierCnpj: str(formData.get("supplierCnpj")) || null,
+        quantityAmount: qtyEntry,
+        quantityUnit: movementUnit,
+        movementUnit,
+        costAmount: Number(conversion?.convertedCostAmount ?? costAmount),
+        costUnit:
+          String(
+            conversion?.targetUnit || targetUnit || movementUnit || ""
+          ).trim() || null,
+        costTotalAmount,
+        conversionSource: conversion?.conversionSource || null,
+        conversionFactorUsed: conversion?.conversionFactorUsed ?? null,
+        manualConversionFactor,
+        motivo: str(formData.get("motivo")) || null,
+        identification: str(formData.get("identification")) || null,
+        observation: str(formData.get("observation")) || null,
+      });
+
+      return ok({
+        updatedMovementId: movementId,
+        message: "Movimentação atualizada.",
+      });
+    }
+
+    const previousLine = await db.stockMovementImportBatchLine.findUnique({
+      where: { id: lineId },
+      select: { appliedAt: true, rolledBackAt: true },
+    });
+
+    await updateStockMovementImportBatchLineEditableFields({
+      batchId,
+      lineId,
+      actor,
+      movementAt,
+      ingredientName,
+      motivo: str(formData.get("motivo")) || null,
+      identification: str(formData.get("identification")) || null,
+      invoiceNumber: str(formData.get("invoiceNumber")) || null,
+      supplierId: str(formData.get("supplierId")) || null,
+      supplierName: str(formData.get("supplierName")) || null,
+      supplierCnpj: str(formData.get("supplierCnpj")) || null,
+      qtyEntry,
+      unitEntry: movementUnit,
+      qtyConsumption,
+      unitConsumption: movementUnit,
+      movementUnit,
+      costAmount,
+      costTotalAmount,
+      observation: str(formData.get("observation")) || null,
+      mappedItemId,
+      manualConversionFactor,
+    });
+
+    let importedLine = false;
+    if (previousLine?.rolledBackAt || !previousLine?.appliedAt) {
+      const importResult = await importStockMovementImportBatchLine({
+        batchId,
+        lineId,
+        actor,
+      });
+      importedLine = importResult.imported > 0;
+    }
+
+    return ok({
+      updatedLineId: lineId,
+      importedLine,
+      message: importedLine
+        ? "Linha atualizada e reaplicada no estoque. O histórico do item já foi atualizado."
+        : undefined,
+    });
+  } catch (error) {
+    return serverError(error);
+  }
+}
+
+function DeleteStockMovementButton({ row }: { row: any }) {
+  const fetcher = useFetcher<any>();
+  const isDeleting = fetcher.state !== "idle";
+  const isImportLinked = Boolean(row.batchId && row.lineId);
+  const isDeleted = Boolean(row.deletedAt);
+
+  if (isDeleted) {
+    return (
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        disabled
+        className="h-8 w-8 p-0 text-slate-300"
+      >
+        <Trash2 size={15} />
+      </Button>
+    );
+  }
+
+  return (
+    <AlertDialog>
+      <AlertDialogTrigger asChild>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="h-8 w-8 border-rose-200 p-0 text-rose-700 hover:bg-rose-50"
+          title="Eliminar movimentação"
+          aria-label="Eliminar movimentação"
+        >
+          <Trash2 size={15} />
+        </Button>
+      </AlertDialogTrigger>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Eliminar movimentação de estoque?</AlertDialogTitle>
+          <AlertDialogDescription>
+            {isImportLinked
+              ? "Esta movimentação está vinculada a um lote de importação. Ao eliminar, a linha do lote será atualizada e ficará pronta para importar novamente."
+              : "Esta movimentação será marcada como eliminada e deixará de contar no histórico ativo de custos."}
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <fetcher.Form method="post" action="/admin/stock-movements?index">
+          <input type="hidden" name="_action" value="movement-delete" />
+          <input type="hidden" name="movementId" value={row.id} />
+          {row.batchId ? (
+            <input type="hidden" name="batchId" value={row.batchId} />
+          ) : null}
+          {row.lineId ? (
+            <input type="hidden" name="lineId" value={row.lineId} />
+          ) : null}
+          <AlertDialogFooter>
+            <AlertDialogCancel type="button">Cancelar</AlertDialogCancel>
+            <Button type="submit" variant="destructive" disabled={isDeleting}>
+              {isDeleting ? "Eliminando..." : "Eliminar"}
+            </Button>
+          </AlertDialogFooter>
+        </fetcher.Form>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+}
+
+export default function AdminStockMovementsRoute() {
+  const loaderData = useLoaderData<typeof loader>();
+  const navigation = useNavigation();
+  const [searchParams] = useSearchParams();
+  const payload = (loaderData as any)?.payload || {};
+  const rows = (payload.rows || []) as any[];
+  const pagination = payload.pagination || {
+    page: 1,
+    totalPages: 1,
+    totalItems: 0,
+  };
+  const filters = payload.filters || {
+    q: "",
+    movementId: "",
+    lineId: "",
+    supplier: "",
+    item: "",
+    itemId: "",
+    from: "",
+    to: "",
+    status: "active",
+  };
+  const isFiltering =
+    navigation.state !== "idle" &&
+    navigation.location?.pathname === "/admin/stock-movements";
+  const currentPath = `/admin/stock-movements${
+    searchParams.toString() ? `?${searchParams.toString()}` : ""
+  }`;
+
+  return (
+    <Container fullWidth className=" px-4">
+      <div className="flex flex-col gap-6">
+        <section className="space-y-5 border-b border-slate-200/80 pb-5">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex flex-wrap items-center gap-2 text-sm">
+              <Link
+                to="/admin/stock-movements"
+                className="inline-flex items-center gap-1.5 font-semibold text-slate-700 transition hover:text-slate-950"
+              >
+                <span className="flex size-5 items-center justify-center rounded-full border border-slate-200 text-slate-500">
+                  <ChevronLeft size={12} />
+                </span>
+                voltar
+              </Link>
+              <span className="text-slate-300">/</span>
+              <span className="font-medium text-slate-900">movimentações</span>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <Link
+                to="/admin/stock-movements/new"
+                className="inline-flex h-9 items-center justify-center gap-2 rounded-full bg-black px-4 text-sm font-semibold text-white transition hover:bg-slate-800"
+              >
+                <PlusCircle size={15} />
+                Novo movimento
+              </Link>
+              <Link
+                to="/admin/import-stock-movements"
+                className="inline-flex h-9 items-center justify-center gap-2 rounded-full border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+              >
+                Importação de movimentações
+              </Link>
+              <Link
+                to="/admin/import-stock-movements/new"
+                className="inline-flex h-9 items-center justify-center gap-2 rounded-full border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+              >
+                <PlusCircle size={15} />
+                Nova importação
+              </Link>
+            </div>
+          </div>
+
+          <div className="space-y-1">
+            <h1 className="text-2xl font-semibold tracking-tight text-slate-950">
+              Movimentações de estoque
+            </h1>
+            <p className="max-w-3xl text-sm text-slate-500">
+              Analise entradas e saídas de estoque a partir da entidade
+              principal de movimentação. A importação é apenas uma das origens
+              possíveis.
+            </p>
+          </div>
+        </section>
+
+        <section>
+          <Form
+            method="get"
+            className="grid gap-3 md:grid-cols-2 xl:grid-cols-6"
+          >
+            {filters.itemId ? (
+              <input type="hidden" name="itemId" value={filters.itemId} />
+            ) : null}
+            <div className="xl:col-span-2">
+              <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-400">
+                Busca geral
+              </label>
+              <Input
+                name="q"
+                defaultValue={filters.q}
+                placeholder="documento, lote, fornecedor ou ingrediente"
+                className="h-9 border-0 border-b border-slate-200 rounded-none bg-transparent px-0 shadow-none focus-visible:ring-0 focus-visible:border-slate-400"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-400">
+                Movimentação ID
+              </label>
+              <Input
+                name="movementId"
+                defaultValue={filters.movementId}
+                placeholder="ID exato da movimentação"
+                className="h-9 border-0 border-b border-slate-200 rounded-none bg-transparent px-0 shadow-none focus-visible:ring-0 focus-visible:border-slate-400"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-400">
+                Fornecedor
+              </label>
+              <Input
+                name="supplier"
+                defaultValue={filters.supplier}
+                placeholder="Nome do fornecedor"
+                className="h-9 border-0 border-b border-slate-200 rounded-none bg-transparent px-0 shadow-none focus-visible:ring-0 focus-visible:border-slate-400"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-400">
+                Produto
+              </label>
+              <Input
+                name="item"
+                defaultValue={filters.item}
+                placeholder="Item ou ingrediente"
+                className="h-9 border-0 border-b border-slate-200 rounded-none bg-transparent px-0 shadow-none focus-visible:ring-0 focus-visible:border-slate-400"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-400">
+                De
+              </label>
+              <Input
+                name="from"
+                type="date"
+                defaultValue={filters.from}
+                className="h-9 border-0 border-b border-slate-200 rounded-none bg-transparent px-0 shadow-none focus-visible:ring-0 focus-visible:border-slate-400"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-400">
+                Até
+              </label>
+              <Input
+                name="to"
+                type="date"
+                defaultValue={filters.to}
+                className="h-9 border-0 border-b border-slate-200 rounded-none bg-transparent px-0 shadow-none focus-visible:ring-0 focus-visible:border-slate-400"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-400">
+                Status
+              </label>
+              <select
+                name="status"
+                defaultValue={filters.status}
+                className="h-9 w-full border-0 border-b border-slate-200 bg-transparent px-0 text-sm text-slate-700 focus:outline-none focus:border-slate-400"
+              >
+                <option value="active">Somente ativas</option>
+                <option value="deleted">Somente eliminadas</option>
+                <option value="all">Todas</option>
+              </select>
+            </div>
+            <Separator className="xl:col-span-6" />
+            <div className="flex items-center gap-2 xl:col-span-6">
+              <Button type="submit" disabled={isFiltering} size="sm">
+                {isFiltering ? "Filtrando..." : "Aplicar filtros"}
+              </Button>
+              <Link
+                to="/admin/stock-movements"
+                className="inline-flex h-8 items-center justify-center rounded-md px-3 text-sm text-slate-500 hover:text-slate-800"
+              >
+                Limpar
+              </Link>
+            </div>
+          </Form>
+        </section>
+
+        <section className="rounded-xl border border-slate-200 bg-white">
+          <div className="overflow-auto rounded-xl">
+            <Table className="min-w-[1320px]">
+              <TableHeader className="bg-slate-50/80">
+                <TableRow className="hover:bg-slate-50/80">
+                  <TableHead className="px-3 py-2 text-xs">
+                    Movimentação
+                  </TableHead>
+                  <TableHead className="px-3 py-2 text-xs">
+                    Fornecedor / Documento
+                  </TableHead>
+                  <TableHead className="px-3 py-2 text-xs">Produto</TableHead>
+                  <TableHead className="px-3 py-2 text-xs">Direção</TableHead>
+                  <TableHead className="px-3 py-2 text-xs">
+                    Quantidade
+                  </TableHead>
+                  <TableHead className="px-3 py-2 text-xs">Custo</TableHead>
+                  <TableHead className="px-3 py-2 text-xs">Origem</TableHead>
+                  <TableHead className="px-3 py-2 text-xs">Ações</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {rows.length === 0 ? (
+                  <TableRow>
+                    <TableCell
+                      colSpan={9}
+                      className="px-3 py-10 text-center text-sm text-slate-500"
+                    >
+                      Nenhuma movimentação encontrada para os filtros
+                      informados.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  rows.map((row) => (
+                    <TableRow
+                      key={row.id}
+                      className="border-slate-100 align-top"
+                    >
+                      <TableCell className="px-3 py-3 text-xs text-slate-700">
+                        <div className="font-medium text-slate-900">
+                          {formatDate(row.movementAt)}
+                        </div>
+                        <div className="text-slate-500">
+                          lançado em {formatDate(row.appliedAt)}
+                        </div>
+                        <div className="text-slate-400">mov. {row.id}</div>
+                        <div className="text-slate-400">
+                          linha {row.Line?.rowNumber ?? "-"}
+                        </div>
+                      </TableCell>
+                      <TableCell className="px-3 py-3 text-xs text-slate-700">
+                        <div className="font-medium text-slate-900">
+                          {row.supplierName || "Sem fornecedor"}
+                        </div>
+                        <div className="text-slate-500">
+                          Doc. {row.invoiceNumber || "-"}
+                        </div>
+                        <div className="text-slate-400">
+                          {extractSupplierNoteInvoiceDate(row)
+                            ? `NF em ${formatDate(
+                                extractSupplierNoteInvoiceDate(row)
+                              )}`
+                            : "data NF indisponível"}
+                        </div>
+                      </TableCell>
+                      <TableCell className="px-3 py-3 text-xs text-slate-700">
+                        {row.itemId && row.Item?.name ? (
+                          <Link
+                            to={`/admin/items/${row.itemId}`}
+                            className="font-medium text-slate-900 hover:underline"
+                          >
+                            {row.Item.name}
+                          </Link>
+                        ) : (
+                          <div className="font-medium text-slate-900">
+                            {row.Item?.name || "Item removido"}
+                          </div>
+                        )}
+                        <div className="text-slate-500">
+                          origem: {row.Line?.ingredientName || "-"}
+                        </div>
+                        <div className="text-slate-400">
+                          {row.Item?.classification || "-"}
+                        </div>
+                      </TableCell>
+                      <TableCell className="px-3 py-3 text-xs">
+                        <Badge
+                          variant="outline"
+                          className={movementDirectionBadgeClass(row.direction)}
+                        >
+                          {getStockMovementDirectionLabel(row.direction)}
+                        </Badge>
+                        <div className="mt-1 text-slate-500">
+                          {getStockMovementTypeLabel(
+                            row.movementType || "manual"
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell className="px-3 py-3 text-xs text-slate-700">
+                        <div className="font-medium text-slate-900">
+                          {formatDecimal(
+                            row.quantityAmount ??
+                              row.Line?.qtyEntry ??
+                              row.Line?.qtyConsumption
+                          )}{" "}
+                          {row.quantityUnit ||
+                            row.Line?.unitEntry ||
+                            row.Line?.unitConsumption ||
+                            ""}
+                        </div>
+                        {row.Line ? (
+                          <div className="text-slate-500">
+                            origem:{" "}
+                            {formatDecimal(
+                              row.Line?.qtyEntry ?? row.Line?.qtyConsumption
+                            )}{" "}
+                            {row.Line?.unitEntry ||
+                              row.Line?.unitConsumption ||
+                              ""}
+                          </div>
+                        ) : null}
+                      </TableCell>
+                      <TableCell className="px-3 py-3 text-xs text-slate-700">
+                        <div className="font-medium text-slate-900">
+                          {formatMoney(row.newCostAtImport)} /{" "}
+                          {row.newCostUnitAtImport || row.movementUnit || "-"}
+                        </div>
+                        <div className="text-slate-500">
+                          total: {formatMoney(getMovementCostTotal(row))}
+                        </div>
+                        <div className="text-slate-400">
+                          antes: {formatMoney(row.lastCostAtImport)} /{" "}
+                          {row.lastCostUnitAtImport || "-"}
+                        </div>
+                      </TableCell>
+                      <TableCell className="px-3 py-3 text-xs text-slate-700">
+                        <div className="flex flex-col gap-2">
+                          <div>
+                            <Badge
+                              variant="outline"
+                              className="border-slate-200 bg-slate-50 text-slate-700"
+                            >
+                              {getStockMovementTypeLabel(
+                                row.movementType || "manual"
+                              )}
+                            </Badge>
+                          </div>
+                          {row.batchId ? (
+                            <div className="rounded-lg border border-slate-200 bg-slate-50/70 px-2.5 py-2">
+                              <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+                                Lote
+                              </div>
+                              <Link
+                                to={`/admin/import-stock-movements/${row.batchId}`}
+                                className="mt-0.5 block font-medium text-slate-900 hover:underline"
+                              >
+                                {row.Batch?.name || row.batchId}
+                              </Link>
+                            </div>
+                          ) : (
+                            <div className="rounded-lg border border-dashed border-slate-200 px-2.5 py-2 text-slate-500">
+                              Origem sem lote vinculado
+                            </div>
+                          )}
+                          <div className="text-slate-400">
+                            item ID: {row.itemId}
+                          </div>
+                        </div>
+                      </TableCell>
+
+                      <TableCell className="px-3 py-3 text-xs text-slate-700">
+                        <div className="flex items-center gap-2">
+                          <Link
+                            to={`/admin/stock-movements/${
+                              row.id
+                            }?returnTo=${encodeURIComponent(currentPath)}`}
+                            className="inline-flex h-8 items-center gap-2 rounded-md border border-slate-200 px-3 text-[11px] font-medium text-slate-700 hover:bg-slate-50"
+                            title="Editar movimentação"
+                            aria-label="Editar movimentação"
+                          >
+                            <Eye size={16} />
+                          </Link>
+                          <DeleteStockMovementButton row={row} />
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
+
+          <div className="flex flex-col gap-3 border-t border-slate-100 px-4 py-3 text-sm text-slate-600 md:flex-row md:items-center md:justify-between">
+            <div>
+              Página {pagination.page} de {pagination.totalPages}
+            </div>
+            <div className="flex items-center gap-2">
+              <Link
+                to={buildPageHref({
+                  ...filters,
+                  page: Math.max(1, pagination.page - 1),
+                })}
+                className={`inline-flex h-9 items-center justify-center rounded-md border px-3 ${
+                  pagination.page <= 1
+                    ? "pointer-events-none border-slate-100 text-slate-300"
+                    : "border-slate-200 text-slate-700 hover:bg-slate-50"
+                }`}
+              >
+                Anterior
+              </Link>
+              <Link
+                to={buildPageHref({
+                  ...filters,
+                  page: Math.min(pagination.totalPages, pagination.page + 1),
+                })}
+                className={`inline-flex h-9 items-center justify-center rounded-md border px-3 ${
+                  pagination.page >= pagination.totalPages
+                    ? "pointer-events-none border-slate-100 text-slate-300"
+                    : "border-slate-200 text-slate-700 hover:bg-slate-50"
+                }`}
+              >
+                Próxima
+              </Link>
+            </div>
+          </div>
+        </section>
+      </div>
+    </Container>
+  );
+}
