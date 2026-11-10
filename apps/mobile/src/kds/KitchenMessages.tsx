@@ -1,3 +1,4 @@
+import { IconButton } from "../ui/IconButton";
 import { useEffect, useRef, useState } from "react";
 import { AppState, Modal, ScrollView, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -101,18 +102,30 @@ export function KitchenMessages({
   return (
     <>
       {sender ? (
-        <View style={{ padding: 8, gap: 4 }}>
-          <Button
-            variant="secondary"
+        <View style={{ position: "relative" }}>
+          <IconButton
+            icon="message"
+            appearance="highlight"
+            label={notice || "Avisar cozinha"}
             onPress={() => {
               setOpen(true);
               setNotice("");
               setError("");
             }}
-          >
-            Avisar cozinha
-          </Button>
-          {notice ? <Text accessibilityRole="alert">{notice}</Text> : null}
+          />
+          {notice ? (
+            <Text
+              accessibilityLiveRegion="polite"
+              style={{
+                position: "absolute",
+                width: 1,
+                height: 1,
+                overflow: "hidden",
+              }}
+            >
+              {notice}
+            </Text>
+          ) : null}
         </View>
       ) : null}
       <Modal

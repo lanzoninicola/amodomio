@@ -1,3 +1,4 @@
+import { DesktopKanban } from "./DesktopKanban";
 import { OrderWhatsappButton } from "./OrderWhatsappButton";
 import { OrderDeliveryIcon } from "./OrderDeliveryIcon";
 import { Text } from "../ui/Text";
@@ -19,6 +20,7 @@ export function DesktopBoard({
   busy,
   loading = false,
   onToggleOven,
+  onToggleCut,
   onChooseStatus,
   onContact,
 }: {
@@ -27,9 +29,11 @@ export function DesktopBoard({
   busy: boolean;
   loading?: boolean;
   onToggleOven: (order: KdsOrder) => void;
+  onToggleCut: (order: KdsOrder) => void;
   onChooseStatus: (order: KdsOrder) => void;
   onContact: (order: KdsOrder) => void;
 }) {
+  const [kanban, setKanban] = useState(true);
   const [visible, setVisible] = useState<KdsStatus[]>(defaults);
   const [closed, setClosed] = useState<KdsStatus[]>(
     KDS_STATUSES.map((status) => status.id)
@@ -41,8 +45,13 @@ export function DesktopBoard({
 
   useEffect(() => {
     let active = true;
-    const read = () =>
-      AsyncStorage.getItem(KEY)
+    const read = () => {
+      void AsyncStorage.getItem("amodomio.desktop.kds.view")
+        .then((value) => {
+          if (active) setKanban(value !== "classic");
+        })
+        .catch(() => {});
+      return AsyncStorage.getItem(KEY)
         .then((raw) => {
           if (!active || !raw) return;
           const saved = JSON.parse(raw);
@@ -54,6 +63,7 @@ export function DesktopBoard({
           }
         })
         .catch(() => {});
+    };
     void read();
     const unsubscribe = subscribeStatusPreferences(() => {
       void read();
@@ -63,6 +73,19 @@ export function DesktopBoard({
       unsubscribe();
     };
   }, []);
+  if (kanban)
+    return (
+      <DesktopKanban
+        orders={orders}
+        now={now}
+        busy={busy}
+        loading={loading}
+        onToggleOven={onToggleOven}
+        onToggleCut={onToggleCut}
+        onChooseStatus={onChooseStatus}
+        onContact={onContact}
+      />
+    );
   return (
     <View style={{ flex: 1, backgroundColor: "#000000" }}>
       <View
@@ -384,6 +407,7 @@ export function DesktopBoard({
                         >
                           {status.id === "aguardandoForno" ? (
                             <IconButton
+                              compact
                               appearance="card"
                               icon={order.requestedForOven ? "undo" : "flame"}
                               label={
@@ -409,11 +433,33 @@ export function DesktopBoard({
                               gap: 2,
                             }}
                           >
-                            <OrderWhatsappButton
-                              order={order}
-                              onContact={onContact}
-                              busy={busy}
-                            />
+                            <View
+                              style={{
+                                flexDirection: "row",
+                                alignItems: "center",
+                                gap: 6,
+                              }}
+                            >
+                              <IconButton
+                                compact
+                                appearance="card"
+                                icon="scissors"
+                                label={
+                                  order.requiresCut
+                                    ? "Cortar pizza ativado. Remover aviso"
+                                    : "Marcar para cortar pizza"
+                                }
+                                active={Boolean(order.requiresCut)}
+                                disabled={busy}
+                                onPress={() => onToggleCut(order)}
+                              />
+                              <OrderWhatsappButton
+                                compact
+                                order={order}
+                                onContact={onContact}
+                                busy={busy}
+                              />
+                            </View>
                           </View>
                         </View>
                       </View>

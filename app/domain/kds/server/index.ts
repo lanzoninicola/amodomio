@@ -9,5 +9,6 @@ export {
   getOrderForApiById,
   setOrderStatus,
   setOrderRequestedForOven,
+  setOrderRequiresCut,
 } from "./repository.server";
 export type { KdsOrderApiRow, KdsStatus } from "./repository.server";

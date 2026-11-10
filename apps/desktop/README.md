@@ -104,3 +104,36 @@ Requer o rclone com o remote `amodomio-drive`. As variáveis
 assim como em `build:extension`. Cada envio recebe um nome com data para
 preservar builds anteriores. Falhas no envio fazem o comando falhar, mantendo
 o instalador local. Use `-- --no-upload` para gerar apenas localmente.
+
+### Visualização Kanban do atendimento
+
+Na engrenagem **Configurações do KDS → Visualização**, escolha **Lista atual**
+ou **Kanban com tempo médio** e clique em **Salvar e fechar**. A preferência é
+local ao computador e aplicada sem reiniciar; o Kanban é o padrão quando não há uma escolha salva.
+Os filtros de status configurados continuam valendo para a lista atual.
+
+O Kanban mantém Aguardando forno e Assando abertos lado a lado, com rolagem
+independente e pedidos mais antigos primeiro. Mantém detalhes/status, aviso de
+forno e WhatsApp. O círculo mostra a média entre entrada e finalização dos
+pedidos finalizados do dia selecionado; não representa tempo restante nem inclui
+trajeto de entrega. Sem finalizados válidos, mostra “Sem finalizados”. Em janelas
+estreitas, o círculo fica acima das colunas. As animações respeitam movimento
+reduzido; os alertas de atraso seguem as regras do mobile.
+
+Prévia sem login e sem banco: abra `/?preview=kds` na exportação web. Exibe
+pedidos fictícios; clicar no número avança o status apenas em memória, e
+“Reiniciar prévia” restaura os exemplos. WhatsApp fica desativado.
+
+### Cortar pizza
+
+A tesoura ao lado do WhatsApp marca/desmarca **Cortar pizza** por pedido, nas
+duas visualizações do Windows. A marcação é salva no servidor e compartilhada
+com o KDS mobile. No mobile, ao mudar para **Assando** e novamente para
+**Finalizado**, aparece o aviso amarelo **CORTAR PIZZA** com o número da comanda e
+confirmação **Entendi**. O atalho de assar do alerta de forno também mostra o
+aviso. Confirmar o aviso não remove a marcação; só a tesoura a remove.
+
+Na prévia, o pedido #102 começa marcado. Clique no número para simular Assando,
+confirme o aviso e clique novamente para simular Finalizado. Nada é persistido.
+A sincronização real exige a migration `20261110021000_add_kds_requires_cut`
+aplicada e atualização do servidor e dos clientes.

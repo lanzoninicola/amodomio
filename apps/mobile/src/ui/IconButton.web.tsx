@@ -3,6 +3,9 @@ import { theme } from "./theme";
 import { desktop } from "../platform/desktop";
 import { useState } from "react";
 const paths: Record<string, string> = {
+  message: "M4 4h16v12H9l-5 4V4z M8 8h8 M8 12h5",
+  scissors:
+    "M6 6m-3 0a3 3 0 1 0 6 0a3 3 0 1 0-6 0 M6 18m-3 0a3 3 0 1 0 6 0a3 3 0 1 0-6 0 M8.1 8.1 21 21 M8.1 15.9 21 3 M14 12l-2-2",
   calendar:
     "M4 5h16v16H4z M8 3v4 M16 3v4 M4 10h16 M8 14h.01 M12 14h.01 M16 14h.01 M8 18h.01 M12 18h.01",
   stock: "M3 7l9-4 9 4v12l-9 3-9-3z M3 7l9 4 9-4 M12 11v11 M7 5l9 4",
@@ -26,7 +29,7 @@ const paths: Record<string, string> = {
   pin: "m9 3 6 0-1 6 4 4v2H6v-2l4-4-1-6 M12 15v6",
   widget: "M4 4h16v16H4z M12 12h8v8h-8z",
   settings:
-    "M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8 M12 2v3 M12 19v3 M2 12h3 M19 12h3 M5 5l2 2 M17 17l2 2 M5 19l2-2 M17 7l2-2",
+    "M9.7 4.3 10.2 2h3.6l.5 2.3 2.1 1.2 2.2-.7 1.8 3.1-1.7 1.6v2.5l1.7 1.6-1.8 3.1-2.2-.7-2.1 1.2-.5 2.3h-3.6l-.5-2.3-2.1-1.2-2.2.7-1.8-3.1 1.7-1.6V9.5L3.6 7.9l1.8-3.1 2.2.7 2.1-1.2z M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8",
 };
 export function IconButton({
   label,
@@ -35,14 +38,16 @@ export function IconButton({
   icon,
   active,
   appearance = "toolbar",
+  compact = false,
   onPress,
 }: {
+  compact?: boolean;
   label: string;
   disabled?: boolean;
   caption?: string;
   icon: string;
   active?: boolean;
-  appearance?: "toolbar" | "card";
+  appearance?: "toolbar" | "card" | "highlight";
   onPress: () => void;
 }) {
   const fontFamily = useTextFont(theme.typography.semibold);
@@ -69,7 +74,13 @@ export function IconButton({
         onBlur={() => setHover(false)}
         style={{
           width:
-            appearance === "card" && caption ? "100%" : caption ? "auto" : 48,
+            appearance === "card" && caption
+              ? "100%"
+              : caption
+              ? "auto"
+              : compact
+              ? 40
+              : 48,
           flexDirection: appearance === "card" ? "column" : "row",
           display: "inline-flex",
           alignItems: "center",
@@ -83,11 +94,14 @@ export function IconButton({
           flexShrink: 0,
           fontFamily,
           opacity: disabled ? 0.65 : 1,
-          height: appearance === "card" && caption ? undefined : 48,
-          minHeight: appearance === "card" && caption ? 72 : 48,
+          height:
+            appearance === "card" && caption ? undefined : compact ? 40 : 48,
+          minHeight: appearance === "card" && caption ? 72 : compact ? 40 : 48,
           padding: appearance === "card" ? "10px 6px" : 6,
           border: `1px solid ${
-            icon === "filter-off"
+            appearance === "highlight"
+              ? theme.colors.brandYellow
+              : icon === "filter-off"
               ? "#2563eb"
               : appearance === "card"
               ? active
@@ -105,7 +119,9 @@ export function IconButton({
           }`,
           borderRadius: theme.radius.md,
           background:
-            icon === "filter-off"
+            appearance === "highlight"
+              ? theme.colors.brandYellow
+              : icon === "filter-off"
               ? "#2563eb"
               : appearance === "card"
               ? active
@@ -119,7 +135,9 @@ export function IconButton({
               ? theme.colors.secondary
               : theme.colors.card,
           color:
-            icon === "filter-off"
+            appearance === "highlight"
+              ? "#171717"
+              : icon === "filter-off"
               ? "#ffffff"
               : appearance === "card"
               ? active
@@ -135,8 +153,8 @@ export function IconButton({
       >
         <svg
           aria-hidden="true"
-          width={appearance === "card" ? 26 : 18}
-          height={appearance === "card" ? 26 : 18}
+          width={compact ? 22 : appearance === "card" ? 26 : 18}
+          height={compact ? 22 : appearance === "card" ? 26 : 18}
           viewBox="0 0 24 24"
           fill="none"
           stroke="currentColor"

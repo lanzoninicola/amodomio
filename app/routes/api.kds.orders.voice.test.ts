@@ -4,6 +4,7 @@ const mocks = vi.hoisted(() => ({
   getOrder: vi.fn(),
   setStatus: vi.fn(),
   setOven: vi.fn(),
+  setCut: vi.fn(),
   bearer: vi.fn(),
 }));
 vi.mock("~/lib/prisma/client.server", () => ({ default: {} }));
@@ -11,6 +12,7 @@ vi.mock("~/domain/kds/server", () => ({
   getOrderForApiById: mocks.getOrder,
   setOrderStatus: mocks.setStatus,
   setOrderRequestedForOven: mocks.setOven,
+  setOrderRequiresCut: mocks.setCut,
 }));
 vi.mock("~/domain/auth/user-session.server", () => ({
   getAuthenticatedBearerSession: mocks.bearer,
@@ -95,3 +97,69 @@ it("rejects unauthenticated requests before writing", async () => {
   ).toBe(401);
   expect(mocks.setStatus).not.toHaveBeenCalled();
 });
+
+it.each([true, false])(
+  "persists the cut flag independently of status: %s",
+  async (requiresCut) => {
+    mocks.setCut.mockResolvedValue({ id: "order-id", requiresCut });
+    const response = await patch({
+      id: "order-id",
+      action: "setRequiresCut",
+      requiresCut,
+    });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ ok: true, requiresCut });
+    expect(mocks.setCut).toHaveBeenCalledWith("order-id", requiresCut);
+    expect(mocks.setStatus).not.toHaveBeenCalled();
+  }
+);
+it.each(["true", null, undefined, 1])(
+  "rejects invalid cut flags before writing: %s",
+  async (requiresCut) => {
+    expect(
+      (await patch({ id: "order-id", action: "setRequiresCut", requiresCut }))
+        .status
+    ).toBe(400);
+    expect(mocks.setCut).not.toHaveBeenCalled();
+  }
+);
+it("rejects cut changes for missing orders", async () => {
+  mocks.getOrder.mockResolvedValue(null);
+  expect(
+    (
+      await patch({
+        id: "missing",
+        action: "setRequiresCut",
+        requiresCut: true,
+      })
+    ).status
+  ).toBe(404);
+  expect(mocks.setCut).not.toHaveBeenCalled();
+});
+it("requires authentication for cut changes", async () => {
+  mocks.bearer.mockResolvedValue({ user: null });
+  expect(
+    (
+      await patch({
+        id: "order-id",
+        action: "setRequiresCut",
+        requiresCut: true,
+      })
+    ).status
+  ).toBe(401);
+  expect(mocks.setCut).not.toHaveBeenCalled();
+});
+it.each(["assando", "finalizado"])(
+  "keeps the cut instruction in the updated order at %s",
+  async (status) => {
+    mocks.getOrder.mockResolvedValue({
+      id: "order-id",
+      commandNumber: 123,
+      status,
+      requiresCut: true,
+      DeliveryZone: null,
+    });
+    const response = await patch({ id: "order-id", status });
+    expect((await response.json()).order.requiresCut).toBe(true);
+  }
+);

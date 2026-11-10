@@ -1,3 +1,6 @@
+import { CutPizzaNotice } from "./src/kds/CutPizzaNotice";
+import { needsCutNotice } from "./src/kds/cut-notice";
+import { KdsPreview } from "./src/kds/KdsPreview";
 import { ProductionOrdersScreen } from "./src/production/ProductionOrdersScreen";
 import { KitchenMessages } from "./src/kds/KitchenMessages";
 import { DailyProgrammingScreen } from "./src/production/DailyProgrammingScreen";
@@ -60,6 +63,7 @@ import {
   login,
   logout,
   updateOvenRequest,
+  updateCutRequest,
   updateStatus,
 } from "./src/api/client";
 import {
@@ -934,6 +938,7 @@ function KanbanScreen({
   const [refreshing, setRefreshing] = useState(false);
   const [mutatingId, setMutatingId] = useState<string | null>(null);
   const [selected, setSelected] = useState<KdsOrder | null>(null);
+  const [cutNotice, setCutNotice] = useState<KdsOrder | null>(null);
   const [statusOnly, setStatusOnly] = useState(false);
   const openOrderDetails = (order: KdsOrder) => {
     setStatusOnly(false);
@@ -1137,6 +1142,7 @@ function KanbanScreen({
       setOrders((current) =>
         current.map((item) => (item.id === order.id ? updated : item))
       );
+      if (!desktop && needsCutNotice(updated)) setCutNotice(updated);
       void load();
       return true;
     } catch (reason) {
@@ -1171,6 +1177,23 @@ function KanbanScreen({
         "Ação não atualizada",
         reason instanceof Error ? reason.message : "Tente novamente."
       );
+    } finally {
+      setMutatingId(null);
+    }
+  };
+  const toggleCut = async (order: KdsOrder) => {
+    if (mutatingId) return;
+    if (!online)
+      return Alert.alert("Sem conexão", "Reconecte para alterar o pedido.");
+    setMutatingId(order.id);
+    try {
+      const updated = await updateCutRequest(apiUrl, token, order.id, !order.requiresCut);
+      setOrders((current) => current.map((item) =>
+        item.id === order.id ? { ...item, requiresCut: updated.requiresCut } : item
+      ));
+      void load();
+    } catch (reason) {
+      Alert.alert("Aviso não atualizado", reason instanceof Error ? reason.message : "Tente novamente.");
     } finally {
       setMutatingId(null);
     }
@@ -1289,6 +1312,11 @@ function KanbanScreen({
             <IconButton icon="home" label="Voltar ao início" onPress={onBack} />
           ) : null}
         </View>
+        {desktop ? (
+          <View style={{ marginLeft: "auto", flexShrink: 0 }}>
+            <KitchenMessages sender token={token} apiUrl={apiUrl} />
+          </View>
+        ) : null}
         {compactHeader ? (
           <>
             <View style={styles.toolbarSummaries}>
@@ -1343,6 +1371,7 @@ function KanbanScreen({
           loading={loading}
           busy={loading || Boolean(mutatingId)}
           onToggleOven={toggleOven}
+          onToggleCut={toggleCut}
           onChooseStatus={openOrderDetails}
           onContact={openContact}
         />
@@ -1960,6 +1989,7 @@ function KanbanScreen({
           </View>
         </Pressable>
       </Modal>
+      <CutPizzaNotice order={cutNotice} onDismiss={() => setCutNotice(null)} />
     </Screen>
   );
 }
@@ -2161,9 +2191,6 @@ function AppContent() {
         }
       />
       {renderScreen()}
-      {session && desktop && activeFeature === "kds" ? (
-        <KitchenMessages key={`${session.user.id}:${session.apiUrl}`} sender token={session.token} apiUrl={session.apiUrl} />
-      ) : null}
       {session ? (
         <KdsTypographyContext.Provider value={true}>
           <OvenRequestAlert
@@ -2181,7 +2208,13 @@ function AppContent() {
 export default function App() {
   return (
     <SafeAreaProvider>
-      <AppContent />
+      {Platform.OS === "web" &&
+      typeof window !== "undefined" &&
+      new URLSearchParams(window.location.search).get("preview") === "kds" ? (
+        <KdsPreview />
+      ) : (
+        <AppContent />
+      )}
     </SafeAreaProvider>
   );
 }

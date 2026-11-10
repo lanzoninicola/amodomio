@@ -7,7 +7,23 @@
   </head>
   <body>
     <h1>Configurações do KDS</h1>
-    <h2>Status visíveis</h2>
+    <h2>Visualização</h2>
+    <fieldset id="view-mode">
+      <legend>Como exibir os pedidos</legend>
+      <label
+        ><input type="radio" name="view" value="classic" />Lista
+        atual</label
+      >
+      <label
+        ><input type="radio" name="view" value="kanban" checked />Kanban com tempo
+        médio</label
+      >
+    </fieldset>
+    <p>
+      O Kanban mostra Aguardando forno e Assando lado a lado. A média considera
+      o preparo dos pedidos finalizados no dia, sem o trajeto da entrega.
+    </p>
+    <h2>Status visíveis na lista atual</h2>
     <p>Escolha os accordions exibidos no KDS.</p>
     <form id="statuses"></form>
     <h2>Som dos alertas</h2>
