@@ -28,12 +28,15 @@
     };
     return sizes[normalized] ?? null;
   }
-  function extractModal(dialog) {
-    const heading = [...dialog.querySelectorAll("h6")].find((el) =>
+  function orderHeading(dialog) {
+    return [...dialog.querySelectorAll("h1,h2,h3,h4,h5,h6,[role=heading]")].find((el) =>
       /^Detalhes do pedido ordem\s+\d+$/i.test(text(el))
     );
+  }
+  function extractModal(dialog) {
+    const heading = orderHeading(dialog);
     if (!heading) return null;
-    const summaryHeading = [...dialog.querySelectorAll("h6")].find(
+    const summaryHeading = [...dialog.querySelectorAll("h1,h2,h3,h4,h5,h6,[role=heading]")].find(
       (el) => text(el) === "Resumo de valores"
     );
     const summary = summaryHeading?.closest(".MuiPaper-root");
@@ -192,5 +195,5 @@
       };
     });
   }
-  globalThis.SuitableKds = { extractModal, pizzaSize, validateItems };
+  globalThis.SuitableKds = { orderHeading, extractModal, pizzaSize, validateItems };
 })();

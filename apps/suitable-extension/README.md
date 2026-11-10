@@ -329,3 +329,18 @@ Na janela **Cadastrar nota de compra**, clique em **Lançar entrada** (ou **Ver 
 A revisão ocorre na mesma janela: vínculo de produtos e fornecedor, conversão manual e aprovação de custos. O componente `app/components/admin/stock-batch-review.tsx` é compartilhado com a visualização de cards dos lotes Suitable no servidor. **Importar nota no estoque** fica disponível somente quando todas as linhas estão resolvidas. A criação de lote não movimenta o estoque. O link **Abrir lote** é opcional.
 
 Requer publicar a rota `/api/stock/suitable` no Amodomio e recarregar a extensão e o Suitable. Usa o servidor/chave globais já configurados; a integração de estoque permanece disponível quando o KDS está desativado. Repetir a criação recupera o lote pelo fornecedor, número e data; não substitui o conteúdo de um lote existente. Após erro de conexão durante a importação, use **Atualizar lote** para conferir o progresso antes de tentar novamente.
+
+### Compatibilidade com mudanças do Suitable
+
+O botão KDS fica em uma linha própria abaixo do cabeçalho, fora da linha de
+ ações do Suitable. A detecção usa `role="dialog"` e o título do pedido, sem
+ depender da posição dos botões ou das classes geradas `jss*`. Títulos HTML de
+ níveis diferentes e `role="heading"` são aceitos. O botão aparece mesmo quando
+ o resumo ainda não pode ser lido; nesse caso, mostra uma mensagem e permite
+ tentar novamente. O envio continua exigindo a leitura e a revisão do pedido.
+ O observador restaura o botão quando o conteúdo do modal é substituído.
+
+Após atualizar os arquivos da extensão, recarregue-a em `chrome://extensions`
+ e recarregue a página do Suitable. Para validar a montagem com mudanças de
+ estrutura, execute `node --test apps/suitable-extension/modal-resilience.test.cjs`
+ com a versão Node do projeto ativada. `CHROME_BIN` pode indicar o Chrome local.

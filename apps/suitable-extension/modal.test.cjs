@@ -5,7 +5,7 @@ const { tmpdir } = require("node:os");
 const { join } = require("node:path");
 const { spawnSync } = require("node:child_process");
 
-for (const [width, delivery, blocked] of [
+for (const [width, delivery, blocked, height = 1100] of [
   [1440, true],
   [820, false],
   [360, false],
@@ -13,6 +13,7 @@ for (const [width, delivery, blocked] of [
   [360, true],
   [820, true, "aiqfome"],
   [820, true, "missing-zone"],
+  [1100, true, "missing-zone", 620],
   [820, false, "exists"],
   [360, true, "shortage"],
   [820, false, "missing-day"],
@@ -65,7 +66,7 @@ for (const [width, delivery, blocked] of [
           : true
       }}};} if(message.type==='suitable:zones') return {ok:true,zones:[{id:'morro-id',name:'${
         blocked === "missing-zone" ? "Outro bairro" : "Morro da Cruz"
-      }',city:'Pato Branco'},{id:'centro-id',name:'Centro',city:'Pato Branco'}]}; window.sent = message; return {ok:true, id:'imported', status:'novoPedido'}; } } };
+      }',city:'Pato Branco'},{id:'centro-id',name:'Centro',city:'Pato Branco'},...Array.from({length:50},(_,index)=>({id:'zone-'+index,name:'Bairro '+index,city:'Pato Branco'}))]}; window.sent = message; return {ok:true, id:'imported', status:'novoPedido'}; } } };
       ${parser}
       ${content}
       (async () => {
@@ -95,6 +96,16 @@ for (const [width, delivery, blocked] of [
           summaryHeading.textContent='Resumo de valores';
           dialog.querySelector('[data-amodomio-kds]').shadowRoot.querySelector('button').click();
           const review = dialog.querySelector('[data-amodomio-review]').shadowRoot;
+          const itemToggles=[...review.querySelectorAll('.item-expand')];
+          if(!itemToggles.length || itemToggles.some(button=>button.getAttribute('aria-expanded')!=='false' || !review.getElementById(button.getAttribute('aria-controls')).hidden)) throw new Error('Items must start compact');
+          itemToggles[0].click();
+          await new Promise(resolve=>setTimeout(resolve,20));
+          if(review.getElementById(itemToggles[0].getAttribute('aria-controls')).hidden) throw new Error('Item toggle must reveal editable details');
+          itemToggles[0].click();
+          await new Promise(resolve=>setTimeout(resolve,20));
+          if(!review.getElementById(itemToggles[0].getAttribute('aria-controls')).hidden) throw new Error('Item toggle must compact details again');
+          itemToggles.forEach(button=>button.click());
+          await new Promise(resolve=>setTimeout(resolve,20));
           const form = review.querySelector('form');
           const refresh=review.querySelector('[aria-label="Atualizar comanda e estoque"]');
           const detail=review.querySelector('[aria-controls=order-details]');
@@ -102,6 +113,9 @@ for (const [width, delivery, blocked] of [
           if(refresh.nextElementSibling!==detail) throw new Error('Refresh must precede details');
           if(!review.querySelector('.review-title')?.textContent.includes('Comanda #1')) throw new Error('Review must identify the command');
           if(!review.querySelector('.order-summary') || !review.querySelector('.order-customer-card')) throw new Error('Review needs a customer card and a side summary');
+          const formCards=[...review.querySelectorAll('.order-information,.delivery-section,.items-section')];
+          if(formCards.length!==(${delivery} ? 3 : 2) || formCards.some(card=>getComputedStyle(card).backgroundColor!=='rgb(255, 255, 255)')) throw new Error('Order, delivery, and items must be visually separated cards');
+          if([...review.querySelectorAll('.section-title')].some(title=>parseFloat(getComputedStyle(title).fontSize)>14)) throw new Error('Section titles must remain compact');
           const summaryToggle=review.querySelector('[aria-controls=order-summary]');
           const summaryPanel=review.querySelector('#order-summary');
           if(!summaryToggle || !summaryPanel.hidden || summaryToggle.getAttribute('aria-expanded')!=='false') throw new Error('Summary must start hidden with an accessible toggle');
@@ -119,6 +133,11 @@ for (const [width, delivery, blocked] of [
           if(${blocked === "missing-zone"}) {
             for(let attempt=0;attempt<40 && !review.querySelector('.required-summary');attempt++) await new Promise(resolve=>setTimeout(resolve,10));
             if(!review.querySelector('.required-summary')?.textContent.includes('Selecione ou crie o bairro')) throw new Error('Missing neighborhood must be explained in the footer');
+            const requiredBounds=review.querySelector('.required-summary').getBoundingClientRect();
+            const sendBounds=review.querySelector('button[type=submit]').getBoundingClientRect();
+            if(${width}>560 && (getComputedStyle(review.querySelector('.required-summary')).justifySelf!=='end' || requiredBounds.width>=review.querySelector('.footer').getBoundingClientRect().width/2)) throw new Error('Required data alert must fit its text instead of filling the footer');
+            if(${width}>560 && (requiredBounds.right>sendBounds.left || requiredBounds.top>sendBounds.bottom || requiredBounds.bottom<sendBounds.top)) throw new Error('Required data alert must align beside the KDS action');
+            if(${height}<=760 && review.querySelector('.footer').getBoundingClientRect().height>115) throw new Error('Short screens need a compact footer with room for order content');
             if(neighborhood.querySelector('[aria-invalid=true]') == null) throw new Error('Missing neighborhood must highlight the delivery select');
             if(!review.querySelector('button[type=submit]').disabled) throw new Error('Missing neighborhood must block sending');
             if(!review.querySelector('#delivery-zone-required')?.textContent.includes('Bairro obrigatório')) throw new Error('Missing neighborhood needs an inline explanation');
@@ -161,10 +180,39 @@ for (const [width, delivery, blocked] of [
             const trigger=review.querySelector('[aria-label="Selecionar bairro no KDS"]');
             if(!trigger) throw new Error('Delivery neighborhood must remain editable');
             for(let attempt=0;attempt<30 && trigger.disabled;attempt++) await new Promise(resolve=>setTimeout(resolve,10));
-            trigger.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowDown',bubbles:true}));
+            trigger.scrollIntoView({block:'center'});
+            await new Promise(resolve=>setTimeout(resolve,30));
+            trigger.dispatchEvent(new PointerEvent('pointerdown',{button:0,pointerType:'mouse',isPrimary:true,bubbles:true}));
+            await new Promise(resolve=>setTimeout(resolve,30));
+            const search=review.querySelector('[aria-label="Buscar bairro ou cidade"]');
+            if(!search || review.activeElement!==search) throw new Error('Opening neighborhoods must focus the search input');
+            const selectContent=review.querySelector('.delivery-zone-options');
+            if(selectContent?.dataset.side!=='bottom') throw new Error('Neighborhood options must always open below the trigger');
+            const setSearch=value=>{
+              Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(search,value);
+              search.dispatchEvent(new Event('input',{bubbles:true,composed:true}));
+            };
+            setSearch('CÉNTRO');
+            await new Promise(resolve=>setTimeout(resolve,30));
+            if(review.querySelectorAll('[role=option]').length!==1 || !review.querySelector('[role=option]').textContent.includes('Centro')) throw new Error('Neighborhood search must ignore accents and case');
+            if(review.activeElement!==search) throw new Error('Filtering must retain input focus');
+            if(selectContent?.dataset.side!=='bottom') throw new Error('Filtering must not move neighborhood options above the trigger');
+            setSearch('bairro inexistente');
+            await new Promise(resolve=>setTimeout(resolve,30));
+            if(review.querySelector('[role=option]') || !review.querySelector('.delivery-zone-empty')) throw new Error('Empty search must explain no matches');
+            setSearch('Pato Branco');
+            await new Promise(resolve=>setTimeout(resolve,30));
+            if(review.querySelectorAll('[role=option]').length<50) throw new Error('Neighborhood search must match city names');
+            setSearch('');
             await new Promise(resolve=>setTimeout(resolve,30));
             const option=[...review.querySelectorAll('[role=option]')].find(element=>element.textContent.includes('Centro'));
             if(!option) throw new Error('Other registered neighborhoods must be available');
+            const zoneViewport=review.querySelector('.delivery-zone-options [data-radix-select-viewport]');
+            const zoneBounds=zoneViewport.getBoundingClientRect();
+            if(zoneBounds.height>281 || zoneBounds.top<0 || zoneBounds.bottom>innerHeight) throw new Error('Neighborhood options must stay within the screen');
+            if(zoneViewport.scrollHeight<=zoneViewport.clientHeight || getComputedStyle(zoneViewport).overflowY!=='auto') throw new Error('Long neighborhood list must scroll vertically');
+            zoneViewport.scrollTop=zoneViewport.scrollHeight;
+            if(zoneViewport.scrollTop<=0) throw new Error('Neighborhood list must allow reaching the final options');
             option.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}));
             await new Promise(resolve=>setTimeout(resolve,30));
             if(${
@@ -293,7 +341,7 @@ for (const [width, delivery, blocked] of [
           "--headless",
           "--no-sandbox",
           "--disable-gpu",
-          `--window-size=${width},1100`,
+          `--window-size=${width},${height}`,
           "--disable-dev-shm-usage",
           "--no-first-run",
           `--user-data-dir=${join(directory, "profile")}`,
@@ -324,7 +372,7 @@ for (const [width, delivery, blocked] of [
       );
       assert.notEqual(result.layout.inputBackground, "rgb(255, 0, 255)");
       assert.equal(result.layout.overflow, false);
-      assert.equal(
+      if (height > 760) assert.equal(
         width >= 1200
           ? result.layout.summaryAtSide
           : result.layout.summaryBelow,

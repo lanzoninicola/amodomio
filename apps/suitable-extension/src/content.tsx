@@ -22,7 +22,7 @@ import {
   OrderDetailsFooter,
 } from "./order-details-ui";
 import { FloatingStockReview } from "./floating-stock-review";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { flushSync } from "react-dom";
 import { Button } from "@/components/ui/button";
@@ -75,6 +75,38 @@ if (!(globalThis as any).suitableInterLoaded) {
   }
 }
 
+function NeighborhoodSearch({ value, onChange }: {
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  const input = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    // Radix focuses an option on open and when filtering changes its collection.
+    const timer = setTimeout(() => input.current?.focus(), 0);
+    return () => clearTimeout(timer);
+  }, [value]);
+  return (
+    <div className="delivery-zone-search">
+      <Input
+        ref={input}
+        aria-label="Buscar bairro ou cidade"
+        placeholder="Buscar bairro ou cidade…"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === "Escape" || event.key === "Tab") return;
+          event.stopPropagation();
+          if (event.key === "ArrowDown") {
+            event.preventDefault();
+            event.currentTarget.closest('[role="listbox"]')
+              ?.querySelector<HTMLElement>('[role="option"]')?.focus();
+          }
+        }}
+      />
+    </div>
+  );
+}
+
 type Item = {
   name: string;
   quantity: number;
@@ -96,6 +128,7 @@ type Order = {
   deliveryFee: number | null;
 };
 declare const SuitableKds: {
+  orderHeading(dialog: Element): Element | undefined;
   extractModal(dialog: Element): Order | null;
   validateItems(items: Item[]): Item[];
 };
@@ -259,6 +292,10 @@ function Review({
 }) {
   const [zones, setZones] = useState<Zone[]>([]);
   const [zoneId, setZoneId] = useState("");
+  const [zoneSearch, setZoneSearch] = useState("");
+  const filteredZones = zones.filter((zone) =>
+    normalize(`${zone.name} ${zone.city || ""}`).includes(normalize(zoneSearch))
+  );
   const [zoneError, setZoneError] = useState("");
   const [loadingZones, setLoadingZones] = useState(!order.takeAway);
   const [creatingZone, setCreatingZone] = useState(false);
@@ -1060,6 +1097,7 @@ function Review({
                           <Select
                             value={zoneId}
                             onValueChange={setZoneId}
+                            onOpenChange={() => setZoneSearch("")}
                             disabled={
                               loadingZones || pending || done || savingZone
                             }
@@ -1089,8 +1127,20 @@ function Review({
                                 </span>
                               </SelectValue>
                             </SelectTrigger>
-                            <SelectContent portalContainer={portalContainer}>
-                              {zones.map((zone) => (
+                            <SelectContent
+                              portalContainer={portalContainer}
+                              className="delivery-zone-options"
+                              position="popper"
+                              side="bottom"
+                              sideOffset={4}
+                              avoidCollisions={false}
+                              collisionPadding={12}
+                            >
+                              <NeighborhoodSearch value={zoneSearch} onChange={setZoneSearch} />
+                              {filteredZones.length === 0 && (
+                                <p className="delivery-zone-empty" role="status">Nenhum bairro encontrado.</p>
+                              )}
+                              {filteredZones.map((zone) => (
                                 <SelectItem key={zone.id} value={zone.id}>
                                   {zone.name}
                                   {zone.city ? ` · ${zone.city}` : ""}
@@ -1219,7 +1269,7 @@ function Review({
                 </div>
                 <OrderItemsSection count={items.length}>
                   {items.map((item, index) => (
-                    <OrderItemRow key={index} index={index}>
+                    <OrderItemRow key={index} index={index} summary={`${item.quantity}× ${item.name || `Item ${index + 1}`}${item.size ? ` · ${sizeNames[item.size] || item.size}` : ""}`}>
                       <div className="item-row">
                         <span className="item-label">
                           <span className="item-number">{index + 1}</span>
@@ -1650,8 +1700,20 @@ function AddToKds({ dialog }: { dialog: Element }) {
     let currentKey = "";
     let request = 0;
     async function checkOrder() {
-      const order = SuitableKds.extractModal(dialog);
-      if (!order) return;
+      let order: Order | null;
+      try {
+        order = SuitableKds.extractModal(dialog);
+      } catch {
+        order = null;
+      }
+      if (!order) {
+        currentKey = "";
+        ++request;
+        setConfirmed(false);
+        setChecking(false);
+        setError("Não foi possível ler o pedido. Aguarde o resumo de valores carregar e tente novamente.");
+        return;
+      }
       const key = `${order.date}:${order.commandNumber}`;
       if (key === currentKey) return;
       currentKey = key;
@@ -2038,19 +2100,23 @@ if (!(globalThis as any).suitableKdsStarted) {
     scanCardStatuses(kdsEnabled);
     if (!kdsEnabled) return;
     for (const dialog of document.querySelectorAll(
-      '.MuiDialog-paper[role="dialog"]'
+      '[role="dialog"]'
     )) {
       if (
         dialog.querySelector("[data-amodomio-kds]") ||
-        !SuitableKds.extractModal(dialog)
+        !SuitableKds.orderHeading(dialog)
       )
         continue;
       const host = document.createElement("div");
       host.dataset.amodomioKds = "true";
-      host.style.cssText = "flex-shrink:0;margin-right:8px";
+      host.style.cssText = "display:block;flex-shrink:0;align-self:stretch;margin:8px 0;position:relative;z-index:1";
       const { root } = attach(host);
-      const header = dialog.firstElementChild!;
-      (header.children[1] || header).prepend(host);
+      // Keep our action outside the provider's nowrap action row: additional
+      // Suitable buttons must not push KDS beyond the dialog's visible area.
+      let header = SuitableKds.orderHeading(dialog)!;
+      while (header.parentElement && header.parentElement !== dialog)
+        header = header.parentElement;
+      header.after(host);
       flushSync(() => root.render(<AddToKds dialog={dialog} />));
     }
   }

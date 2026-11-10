@@ -1,5 +1,5 @@
-import type { ReactNode } from "react";
-import { MapPin, Pencil, Truck, UserRound } from "lucide-react";
+import { useId, useState, type ReactNode } from "react";
+import { ChevronDown, MapPin, Pencil, Truck, UserRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 type Children = { children: ReactNode };
@@ -86,10 +86,24 @@ export function OrderItemsSection({
 export function OrderItemRow({
   children,
   index,
-}: Children & { index: number }) {
+  summary,
+}: Children & { index: number; summary: string }) {
+  const [expanded, setExpanded] = useState(false);
+  const detailsId = useId();
   return (
     <article className="item" aria-label={`Item ${index + 1}`}>
-      {children}
+      <button
+        type="button"
+        className="item-expand"
+        aria-label={`${expanded ? "Recolher" : "Expandir"} item ${index + 1}`}
+        aria-expanded={expanded}
+        aria-controls={detailsId}
+        onClick={() => setExpanded((value) => !value)}
+      >
+        <span>{summary}</span>
+        <ChevronDown size={18} aria-hidden="true" style={{ transform: expanded ? "rotate(180deg)" : undefined }} />
+      </button>
+      <div id={detailsId} hidden={!expanded}>{children}</div>
     </article>
   );
 }

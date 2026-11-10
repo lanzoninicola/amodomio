@@ -6,10 +6,13 @@ Rules:
 
 - Before answering architecture or codebase questions, read graphify-out/GRAPH_REPORT.md for god nodes and community structure
 - If graphify-out/wiki/index.md exists, navigate it instead of reading raw files
-- After modifying code files in this session, run `/home/lanzo/.local/share/pipx/venvs/graphifyy/bin/python scripts/rebuild-graphify-wiki.py` to keep the graph and wiki current
-- In this environment, plain `/usr/bin/python3` may not see the module; prefer the pipx venv Python shown above
-- The pipx package/venv is named `graphifyy`, but the required importable Python module for this repo is `graphify`
-- Validation command: `/home/lanzo/.local/share/pipx/venvs/graphifyy/bin/python -c "from graphify.watch import _rebuild_code; print('ok')"`
+- After modifying code files in this session, rebuild the graph and wiki using the Python environment for the current OS (commands below).
+- Windows PowerShell setup: `uv venv --python 3.12 .venv-graphify`, then `uv pip install --python .venv-graphify/Scripts/python.exe graphifyy`.
+- Windows PowerShell rebuild: `& .\.venv-graphify\Scripts\python.exe scripts/rebuild-graphify-wiki.py`.
+- Windows PowerShell validation: `& .\.venv-graphify\Scripts\python.exe -c "from graphify.watch import _rebuild_code; print('ok')"`.
+- Linux rebuild (when this pipx environment exists): `/home/lanzo/.local/share/pipx/venvs/graphifyy/bin/python scripts/rebuild-graphify-wiki.py`.
+- Do not use the Linux interpreter path on Windows or the Microsoft Store Python alias. The local `.venv-graphify/` environment is ignored by Git.
+- The package is named `graphifyy`, but the required importable Python module for this repo is `graphify`.
 
 ## Node environment
 
