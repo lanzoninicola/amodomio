@@ -3,6 +3,8 @@ import { Text } from "./Text";
 import { theme } from "./theme";
 
 const symbols: Record<string, string> = {
+  scissors: "✂",
+  message: "✉",
   details: "☰",
   kanban: "▥",
   reduced: "▦",
@@ -21,18 +23,22 @@ export function IconButton({
   caption,
   icon,
   active,
+  appearance = "toolbar",
   onPress,
 }: {
+  compact?: boolean;
   label: string;
   disabled?: boolean;
   caption?: string;
   icon: string;
   active?: boolean;
-  appearance?: "toolbar" | "card";
+  appearance?: "toolbar" | "card" | "highlight";
   onPress: () => void;
 }) {
   const color =
-    icon === "filter-off"
+    appearance === "highlight"
+      ? "#171717"
+      : icon === "filter-off"
       ? "#ffffff"
       : active
       ? theme.colors.primaryForeground
@@ -54,7 +60,9 @@ export function IconButton({
         paddingVertical: 4,
         borderRadius: theme.radius.md,
         backgroundColor:
-          icon === "filter-off"
+          appearance === "highlight"
+            ? theme.colors.brandYellow
+            : icon === "filter-off"
             ? "#2563eb"
             : active
             ? theme.colors.primary

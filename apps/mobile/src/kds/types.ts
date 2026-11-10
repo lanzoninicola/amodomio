@@ -66,6 +66,7 @@ export type KdsOrder = {
   channel: string;
   takeAway: boolean;
   requestedForOven: boolean;
+  requiresCut?: boolean;
   customerName: string | null;
   customerPhone?: string | null;
   orderItems?: KdsOrderItem[];

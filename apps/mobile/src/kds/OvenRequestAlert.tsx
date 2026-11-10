@@ -1,3 +1,5 @@
+import { CutPizzaNotice } from "./CutPizzaNotice";
+import { needsCutNotice } from "./cut-notice";
 import { KitchenMessages } from "./KitchenMessages";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { theme } from "../ui/theme";
@@ -32,6 +34,7 @@ export function OvenRequestAlert({
   apiUrl: string;
   kitchenEnabled?: boolean;
 }) {
+  const [cutNotice, setCutNotice] = useState<KdsOrder | null>(null);
   const { width, height } = useWindowDimensions();
   const numberSize = Math.min(
     160,
@@ -149,7 +152,14 @@ export function OvenRequestAlert({
     savingRef.current = true;
     setSaving(true);
     try {
-      await updateStatus(apiUrl, token, current.id, "assando", true);
+      const updated = await updateStatus(
+        apiUrl,
+        token,
+        current.id,
+        "assando",
+        true
+      );
+      if (needsCutNotice(updated)) setCutNotice(updated);
       acknowledged.current.set(current.id, Infinity);
       setPending((values) => values.filter((order) => order.id !== current.id));
     } catch (reason) {
@@ -164,15 +174,16 @@ export function OvenRequestAlert({
   };
   return (
     <>
+      <CutPizzaNotice order={cutNotice} onDismiss={() => setCutNotice(null)} />
       {kitchenEnabled ? (
         <KitchenMessages
           apiUrl={apiUrl}
           token={token}
-          blocked={Boolean(current)}
+          blocked={Boolean(current || cutNotice)}
         />
       ) : null}
       <Modal
-        visible={Boolean(current)}
+        visible={Boolean(current) && !cutNotice}
         presentationStyle="fullScreen"
         animationType="fade"
         supportedOrientations={[

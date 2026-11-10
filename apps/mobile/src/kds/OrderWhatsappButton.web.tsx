@@ -4,7 +4,9 @@ export function OrderWhatsappButton({
   order,
   onContact,
   busy = false,
+  compact = false,
 }: {
+  compact?: boolean;
   order: KdsOrder;
   onContact: (order: KdsOrder) => void;
   busy?: boolean;
@@ -26,8 +28,8 @@ export function OrderWhatsappButton({
         onContact(order);
       }}
       style={{
-        width: 44,
-        height: 44,
+        width: compact ? 40 : 44,
+        height: compact ? 40 : 44,
         display: "inline-flex",
         alignItems: "center",
         justifyContent: "center",
@@ -41,8 +43,8 @@ export function OrderWhatsappButton({
       }}
     >
       <svg
-        width="25"
-        height="25"
+        width={compact ? 22 : 25}
+        height={compact ? 22 : 25}
         viewBox="0 0 24 24"
         fill="none"
         stroke="currentColor"

@@ -1,3 +1,8 @@
+const viewKey = "amodomio.desktop.kds.view";
+try {
+  if (localStorage.getItem(viewKey) === "classic")
+    document.querySelector('input[name="view"][value="classic"]').checked = true;
+} catch {}
 const key = "amodomio.desktop.kds.statuses";
 const statuses = [
   ["novoPedido", "Novo pedido"],
@@ -81,6 +86,10 @@ document.getElementById("save").addEventListener("click", () => {
     return;
   }
   try {
+    localStorage.setItem(
+      viewKey,
+      document.querySelector('input[name="view"]:checked').value
+    );
     localStorage.setItem(key, JSON.stringify(values));
     localStorage.setItem(
       soundKey,

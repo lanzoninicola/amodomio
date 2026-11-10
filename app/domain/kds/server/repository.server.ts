@@ -22,6 +22,7 @@ export const kdsOrderApiSelect = {
   orderItems: true,
   takeAway: true,
   requestedForOven: true,
+  requiresCut: true,
   sortOrderIndex: true,
   isVendaLivre: true,
   isCreditCard: true,
@@ -295,5 +296,13 @@ export async function setOrderRequestedForOven(
     where: { id },
     data: { requestedForOven },
     select: { id: true, requestedForOven: true },
+  });
+}
+
+export async function setOrderRequiresCut(id: string, requiresCut: boolean) {
+  return prisma.kdsDailyOrderDetail.update({
+    where: { id },
+    data: { requiresCut },
+    select: { id: true, requiresCut: true },
   });
 }

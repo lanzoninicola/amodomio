@@ -14,6 +14,7 @@ import {
   type KdsOrderApiRow,
   setOrderStatus,
   setOrderRequestedForOven,
+  setOrderRequiresCut,
   type KdsStatus,
 } from "~/domain/kds/server";
 import { getAuthenticatedBearerSession } from "~/domain/auth/user-session.server";
@@ -61,6 +62,7 @@ type KdsOrderStatusUpdatePayload = {
   status?: string;
   action?: string;
   requestedForOven?: boolean;
+  requiresCut?: boolean;
   fulfillOvenRequest?: boolean;
 };
 
@@ -226,6 +228,7 @@ function serializeOrder(row: KdsOrderApiRow) {
     orderItems: readStoredOrderItems(row.orderItems),
     takeAway: row.takeAway,
     requestedForOven: row.requestedForOven,
+    requiresCut: row.requiresCut,
     sortOrderIndex: row.sortOrderIndex,
     isVendaLivre: row.isVendaLivre,
     isCreditCard: row.isCreditCard,
@@ -470,6 +473,17 @@ async function handleUpdateOrderStatus(request: Request) {
     body = await request.json();
   } catch {
     return json({ error: "invalid_json" }, { status: 400 });
+  }
+
+  if (body.action === "setRequiresCut") {
+    const id = typeof body.id === "string" ? body.id.trim() : "";
+    if (!id || typeof body.requiresCut !== "boolean") {
+      return json({ error: "invalid_cut_request" }, { status: 400 });
+    }
+    const target = await getOrderForApiById(id);
+    if (!target) return json({ error: "order_not_found" }, { status: 404 });
+    const updated = await setOrderRequiresCut(id, body.requiresCut);
+    return json({ ok: true, mode: "cut_updated", ...updated });
   }
 
   if (body.action === "setRequestedForOven") {

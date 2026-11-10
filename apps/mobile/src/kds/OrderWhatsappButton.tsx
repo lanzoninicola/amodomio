@@ -6,6 +6,7 @@ export function OrderWhatsappButton({
   onContact,
   busy = false,
 }: {
+  compact?: boolean;
   order: KdsOrder;
   onContact: (order: KdsOrder) => void;
   busy?: boolean;

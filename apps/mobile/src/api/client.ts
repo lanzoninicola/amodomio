@@ -346,3 +346,9 @@ export function submitProductionOrder(
     baseUrl, "/api/mobile/production-orders", { method: "POST", body: JSON.stringify(body), signal }, token
   );
 }
+
+export function updateCutRequest(baseUrl: string, token: string, id: string, requiresCut: boolean) {
+  return request<{ id: string; requiresCut: boolean }>(baseUrl, "/api/kds/orders", {
+    method: "PATCH", body: JSON.stringify({ action: "setRequiresCut", id, requiresCut }),
+  }, token);
+}

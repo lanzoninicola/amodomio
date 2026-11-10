@@ -2399,6 +2399,7 @@ model KdsDailyOrderDetail {
   takeAway Boolean @default(false) @map("take_away")
 
   requestedForOven Boolean @default(false) @map("requested_for_oven")
+  requiresCut     Boolean @default(false) @map("requires_cut")
 
   sortOrderIndex Int @default(0) @map("sort_order_index") // NOVO
 
