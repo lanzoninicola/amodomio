@@ -49,12 +49,14 @@ export async function getRecipeProduction(recipeId: string) {
     }),
   ]);
   if (!config) throw new Response("Receita não encontrada", { status: 404 });
-  const ingredients: ProductionRecipeIngredient[] = recipe.ingredients.map((i: any) => ({
-    id: i.id,
-    name: i.name,
-    quantity: Number(i.quantity),
-    unit: i.unit,
-  }));
+  const ingredients: ProductionRecipeIngredient[] = recipe.ingredients.map(
+    (i: any) => ({
+      id: i.id,
+      name: i.name,
+      quantity: Number(i.quantity),
+      unit: i.unit,
+    })
+  );
   const storedBase = config.productionBaseRecipeIngredientId;
   const baseIngredientId =
     storedBase && ingredients.some((i) => i.id === storedBase)
@@ -115,7 +117,9 @@ export async function saveRecipeProduction(
 
   for (const p of input.preparations) {
     if (!p.name.trim()) throw new Error("Informe o nome de cada preparação.");
-    if (p.ingredients.some((l) => !Number.isFinite(l.quantity) || l.quantity < 0))
+    if (
+      p.ingredients.some((l) => !Number.isFinite(l.quantity) || l.quantity < 0)
+    )
       throw new Error(`${p.name}: quantidade inválida.`);
   }
   const preparations = input.preparations
@@ -129,11 +133,7 @@ export async function saveRecipeProduction(
         .map((l) => {
           const ingredient = byId.get(l.recipeIngredientId);
           if (!ingredient) throw new Error("Ingrediente inválido.");
-          const quantity = convertQuantity(
-            l.quantity,
-            l.unit,
-            ingredient.unit
-          );
+          const quantity = convertQuantity(l.quantity, l.unit, ingredient.unit);
           if (quantity == null)
             throw new Error(
               `Unidade ${l.unit} incompatível com ${ingredient.name} (${ingredient.unit}).`
@@ -154,12 +154,15 @@ export async function saveRecipeProduction(
   const plan = calculateProductionPlan({
     ingredients: recipe.ingredients,
     preparations: preparations.map((p, index) => ({
-      id: String(index), name: p.name, ingredients: p.lines,
+      id: String(index),
+      name: p.name,
+      ingredients: p.lines,
     })),
     baseIngredientId: input.baseIngredientId,
     baseQuantity: byId.get(input.baseIngredientId)!.quantity,
   });
-  if (plan.inconsistencies.length) throw new Error(plan.inconsistencies.join(" "));
+  if (plan.inconsistencies.length)
+    throw new Error(plan.inconsistencies.join(" "));
 
   await prismaClient.$transaction(async (tx) => {
     await tx.recipe.update({
@@ -194,7 +197,10 @@ export async function createProductionOrder(input: {
     throw new Error("Data de produção inválida.");
   if (input.usageDate && !Number.isFinite(input.usageDate.getTime()))
     throw new Error("Data de uso inválida.");
-  if (input.usageDate && input.usageDate.getTime() < input.productionDate.getTime())
+  if (
+    input.usageDate &&
+    input.usageDate.getTime() < input.productionDate.getTime()
+  )
     throw new Error("A data de uso não pode ser anterior à data de produção.");
   const recipe = await getRecipeProduction(input.recipeId);
   const baseId = input.baseIngredientId || recipe.baseIngredientId;
@@ -217,10 +223,143 @@ export async function createProductionOrder(input: {
   });
 }
 
+/** Cadastro reutilizavel de OP. Datas e estado pertencem apenas aos lancamentos. */
+export async function createProductionOrderTemplate(input: {
+  name?: string;
+  recipeId: string;
+  baseIngredientId?: string;
+  baseQuantity: number;
+  notes?: string;
+}) {
+  const recipe = await getRecipeProduction(input.recipeId);
+  const baseId = input.baseIngredientId || recipe.baseIngredientId;
+  const base = recipe.ingredients.find(
+    (ingredient) => ingredient.id === baseId
+  );
+  if (!base) throw new Error("Escolha o ingrediente-base.");
+  if (!Number.isFinite(input.baseQuantity) || input.baseQuantity <= 0)
+    throw new Error("Informe uma quantidade maior que zero.");
+
+  let plan = planForRecipe(recipe, input.baseQuantity, base.id);
+  const preparations = recipe.preparations.map((preparation, index) => ({
+    id: `p${index + 1}`,
+    name: preparation.name,
+    notes: preparation.notes,
+    ingredients: preparation.ingredients.map((line) => ({
+      recipeIngredientId: line.recipeIngredientId,
+      quantity: line.quantity * plan.scaleFactor,
+    })),
+  }));
+  plan = applyPreparationsToPlan(plan, preparations);
+  if (plan.inconsistencies.length)
+    throw new Error(plan.inconsistencies.join(" "));
+
+  return prismaClient.productionOrderTemplate.create({
+    data: {
+      name: input.name?.trim() || recipe.name,
+      recipeId: recipe.id,
+      recipeName: recipe.name,
+      baseIngredient: base.name,
+      baseQuantity: input.baseQuantity,
+      baseUnit: base.unit,
+      plan: plan as any,
+      notes: input.notes?.trim() || null,
+    },
+  });
+}
+
+export async function listProductionOrderTemplates(includeArchived = false) {
+  return prismaClient.productionOrderTemplate.findMany({
+    where: includeArchived ? {} : { archivedAt: null },
+    orderBy: [{ name: "asc" }, { number: "desc" }],
+    include: {
+      _count: { select: { Launches: true } },
+      Launches: {
+        orderBy: [{ productionDate: "desc" }, { number: "desc" }],
+        take: 30,
+        select: { id: true, number: true, productionDate: true, status: true },
+      },
+    },
+  });
+}
+
+export async function getProductionOrderTemplate(id: string) {
+  const template = await prismaClient.productionOrderTemplate.findUnique({
+    where: { id },
+    include: {
+      Launches: {
+        orderBy: [{ productionDate: "desc" }, { number: "desc" }],
+        take: 30,
+      },
+    },
+  });
+  if (!template)
+    throw new Response("OP cadastrada nao encontrada", { status: 404 });
+  return { ...template, plan: template.plan as unknown as ProductionPlan };
+}
+
+export async function launchProductionOrderTemplate(input: {
+  templateId: string;
+  productionDate: Date;
+  usageDate?: Date | null;
+  notes?: string;
+}) {
+  if (!Number.isFinite(input.productionDate.getTime()))
+    throw new Error("Data de producao invalida.");
+  if (input.usageDate && input.usageDate < input.productionDate)
+    throw new Error("A data de uso nao pode ser anterior a data de producao.");
+  const template = await getProductionOrderTemplate(input.templateId);
+  if (template.archivedAt) throw new Error("Esta OP esta arquivada.");
+  const plan = template.plan;
+  return prismaClient.productionOrder.create({
+    data: {
+      templateId: template.id,
+      recipeId: template.recipeId,
+      recipeName: template.recipeName,
+      baseIngredient: template.baseIngredient,
+      baseQuantity: template.baseQuantity,
+      baseUnit: template.baseUnit,
+      productionDate: input.productionDate,
+      usageDate: input.usageDate ?? null,
+      notes: input.notes?.trim() || template.notes,
+      plan: plan as any,
+      Steps: {
+        create: [
+          ...plan.preparations.map((preparation, index) => ({
+            kind: "preparation",
+            name: preparation.name,
+            preparationId: preparation.id,
+            sortOrder: index,
+          })),
+          {
+            kind: "final",
+            name: "Mistura final",
+            sortOrder: plan.preparations.length,
+          },
+        ],
+      },
+    },
+  });
+}
+
+export async function setProductionOrderTemplateArchived(
+  id: string,
+  archived: boolean
+) {
+  return prismaClient.productionOrderTemplate.update({
+    where: { id },
+    data: { archivedAt: archived ? new Date() : null },
+  });
+}
+
 export type PreparationInput = {
   name: string;
   notes?: string;
-  ingredients: Array<{ recipeIngredientId: string; quantity: number; unit: string }>;
+  ingredients: Array<{
+    recipeIngredientId: string;
+    quantity: number;
+    unit: string;
+  }>;
 };
 
 /**
@@ -288,14 +427,18 @@ export async function definePreparations(
         .filter((l) => l.quantity !== 0)
         .map((l) => {
           const total = totals.get(l.recipeIngredientId);
-          if (!total) throw new Error(`${name}: ingrediente não encontrado na receita.`);
+          if (!total)
+            throw new Error(`${name}: ingrediente não encontrado na receita.`);
           if (!Number.isFinite(l.quantity) || l.quantity < 0)
             throw new Error(`${name}: quantidade inválida.`);
-          if (seen.has(total.id)) throw new Error(`${name}: ingrediente repetido.`);
+          if (seen.has(total.id))
+            throw new Error(`${name}: ingrediente repetido.`);
           seen.add(total.id);
           const quantity = convertQuantity(l.quantity, l.unit, total.unit);
           if (quantity == null)
-            throw new Error(`${name}: unidade ${l.unit} incompatível com ${total.name} (${total.unit}).`);
+            throw new Error(
+              `${name}: unidade ${l.unit} incompatível com ${total.name} (${total.unit}).`
+            );
           return { recipeIngredientId: total.id, quantity };
         }),
     };
@@ -309,12 +452,15 @@ export async function definePreparations(
     });
     if (!current) throw new Response("OP não encontrada", { status: 404 });
     if (current.status !== "planned")
-      throw new Error("As preparações só podem ser alteradas antes de iniciar a produção.");
+      throw new Error(
+        "As preparações só podem ser alteradas antes de iniciar a produção."
+      );
     const plan = applyPreparationsToPlan(
       current.plan as unknown as ProductionPlan,
       normalized
     );
-    if (plan.inconsistencies.length) throw new Error(plan.inconsistencies.join(" "));
+    if (plan.inconsistencies.length)
+      throw new Error(plan.inconsistencies.join(" "));
     await tx.productionOrderStep.deleteMany({ where: { orderId: id } });
     await tx.productionOrder.update({
       where: { id },
@@ -328,7 +474,11 @@ export async function definePreparations(
               preparationId: p.id,
               sortOrder: index,
             })),
-            { kind: "final", name: "Mistura final", sortOrder: plan.preparations.length },
+            {
+              kind: "final",
+              name: "Mistura final",
+              sortOrder: plan.preparations.length,
+            },
           ],
         },
       },
@@ -353,7 +503,10 @@ export async function definePreparations(
 }
 
 // async: defer exige Promise real, não o PrismaPromise lazy.
-export async function listProductionOrders(status?: string, productionDate?: { gte: Date; lt: Date }) {
+export async function listProductionOrders(
+  status?: string,
+  productionDate?: { gte: Date; lt: Date }
+) {
   return prismaClient.productionOrder.findMany({
     where: {
       ...(status && Object.hasOwn(ORDER_STATUS, status) ? { status } : {}),
@@ -383,7 +536,8 @@ export async function applyOrderAction(
     // Serializa as ações desta OP antes de ler o estado e as etapas.
     await tx.$queryRaw`SELECT id FROM production_orders WHERE id = ${id} FOR UPDATE`;
     const order = await tx.productionOrder.findUnique({
-      where: { id }, include: { Steps: true },
+      where: { id },
+      include: { Steps: true },
     });
     if (!order) throw new Response("OP não encontrada", { status: 404 });
     const now = new Date();
@@ -391,7 +545,9 @@ export async function applyOrderAction(
     if (intent === "start") {
       if (order.status !== "planned") throw new Error("OP já iniciada.");
       if ((order.plan as any)?.preparationsDefined === false)
-        throw new Error("Defina as preparações intermediárias antes de iniciar.");
+        throw new Error(
+          "Defina as preparações intermediárias antes de iniciar."
+        );
       await tx.productionOrder.update({
         where: { id },
         data: { status: "in_progress", startedAt: now },
@@ -427,7 +583,9 @@ export async function applyOrderAction(
       )
         throw new Error("Reabra a mistura final primeiro.");
       const allowed: Record<string, string[]> = {
-        pending: ["in_progress", "done"], in_progress: ["done", "pending"], done: ["pending"],
+        pending: ["in_progress", "done"],
+        in_progress: ["done", "pending"],
+        done: ["pending"],
       };
       if (!allowed[step.status]?.includes(to))
         throw new Error("Transição de etapa inválida. Atualize a OP.");
@@ -439,8 +597,12 @@ export async function applyOrderAction(
     }
     if (intent === "reorder") {
       if (order.status !== "planned" && order.status !== "in_progress")
-        throw new Error("A ordem das etapas só muda antes de finalizar a produção.");
-      const ids = String(form.get("stepIds") || "").split(",").filter(Boolean);
+        throw new Error(
+          "A ordem das etapas só muda antes de finalizar a produção."
+        );
+      const ids = String(form.get("stepIds") || "")
+        .split(",")
+        .filter(Boolean);
       const preparations = order.Steps.filter((s) => s.kind === "preparation");
       if (
         ids.length !== preparations.length ||
@@ -449,11 +611,17 @@ export async function applyOrderAction(
       )
         throw new Error("Ordem das etapas inválida. Atualize a OP.");
       for (const [index, id] of ids.entries())
-        await tx.productionOrderStep.update({ where: { id }, data: { sortOrder: index } });
+        await tx.productionOrderStep.update({
+          where: { id },
+          data: { sortOrder: index },
+        });
       // A mistura final fica sempre por último.
       const final = order.Steps.find((s) => s.kind === "final");
       if (final)
-        await tx.productionOrderStep.update({ where: { id: final.id }, data: { sortOrder: ids.length } });
+        await tx.productionOrderStep.update({
+          where: { id: final.id },
+          data: { sortOrder: ids.length },
+        });
       return;
     }
     if (intent === "finish") {
@@ -470,7 +638,8 @@ export async function applyOrderAction(
         data: {
           status: "finished",
           finishedAt: now,
-          producedQuantity: Number.isFinite(produced) && produced > 0 ? produced : null,
+          producedQuantity:
+            Number.isFinite(produced) && produced > 0 ? produced : null,
           producedUnit:
             Number.isFinite(produced) && produced > 0
               ? String(form.get("producedUnit") || "").trim() || null

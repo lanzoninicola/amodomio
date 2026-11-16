@@ -4,14 +4,34 @@ import {
   type ActionFunctionArgs,
   type LoaderFunctionArgs,
 } from "@remix-run/node";
-import { Form, Link, useActionData, useLoaderData, useNavigation, useSubmit } from "@remix-run/react";
+import {
+  Form,
+  Link,
+  useActionData,
+  useLoaderData,
+  useNavigation,
+  useSubmit,
+} from "@remix-run/react";
 import { AlertTriangle, ArrowLeft, Check, ChevronsUpDown } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import { Button } from "~/components/ui/button";
 import { Card } from "~/components/ui/card";
-import { Command, CommandEmpty, CommandInput, CommandItem, CommandList } from "~/components/ui/command";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "~/components/ui/dialog";
+import {
+  Command,
+  CommandEmpty,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "~/components/ui/command";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "~/components/ui/dialog";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import {
@@ -32,7 +52,7 @@ import {
   type ProductionPlan,
 } from "~/domain/production/production-order-calc";
 import {
-  createProductionOrder,
+  createProductionOrderTemplate,
   getRecipeProduction,
   listProductionRecipes,
   planForRecipe,
@@ -41,13 +61,20 @@ import {
 import { cn } from "~/lib/utils";
 
 function parseNumber(value: string | null) {
-  const n = Number(String(value || "").trim().replace(",", "."));
+  const n = Number(
+    String(value || "")
+      .trim()
+      .replace(",", ".")
+  );
   return Number.isFinite(n) ? n : 0;
 }
 
 function today() {
   const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit",
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
   }).formatToParts(new Date());
   const part = (type: string) => parts.find((p) => p.type === type)!.value;
   return `${part("year")}-${part("month")}-${part("day")}`;
@@ -90,7 +117,18 @@ export async function loader({ request }: LoaderFunctionArgs) {
       }
     }
   }
-  return json({ recipes, recipe, plan, qty, unit, date, usage, baseQuantity, baseId, error });
+  return json({
+    recipes,
+    recipe,
+    plan,
+    qty,
+    unit,
+    date,
+    usage,
+    baseQuantity,
+    baseId,
+    error,
+  });
 }
 
 export async function action({ request }: ActionFunctionArgs) {
@@ -98,15 +136,14 @@ export async function action({ request }: ActionFunctionArgs) {
     return redirect("/login");
   const form = (await request.formData()) as unknown as FormLike;
   try {
-    const order = await createProductionOrder({
+    await createProductionOrderTemplate({
+      name: String(form.get("name") || ""),
       recipeId: String(form.get("recipeId") || ""),
       baseIngredientId: String(form.get("baseIngredientId") || ""),
       baseQuantity: parseNumber(String(form.get("baseQuantity"))),
-      productionDate: new Date(`${form.get("date") || today()}T12:00:00`),
-      usageDate: form.get("usageDate") ? new Date(`${form.get("usageDate")}T12:00:00`) : null,
       notes: String(form.get("notes") || ""),
     });
-    return redirect(`/admin/producao/ordens/${order.id}`);
+    return redirect("/admin/producao/ordens");
   } catch (e) {
     return json({ error: (e as Error).message }, { status: 400 });
   }
@@ -125,7 +162,9 @@ export default function NewProductionOrder() {
   const selectedRecipe = data.recipes.find((r) => r.id === recipeId);
 
   const [previewPending, setPreviewPending] = useState(false);
-  useEffect(() => { setPreviewPending(false); }, [data]);
+  useEffect(() => {
+    setPreviewPending(false);
+  }, [data]);
   useEffect(() => () => clearTimeout(timer.current), []);
 
   const [baseId, setBaseId] = useState(data.baseId);
@@ -141,7 +180,12 @@ export default function NewProductionOrder() {
     );
   }
   const plan = data.plan as ProductionPlan | null;
-  const blocked = previewPending || recipeId !== data.recipe?.id || !plan || plan.inconsistencies.length > 0 || baseId !== data.baseId;
+  const blocked =
+    previewPending ||
+    recipeId !== data.recipe?.id ||
+    !plan ||
+    plan.inconsistencies.length > 0 ||
+    baseId !== data.baseId;
   const error = actionData?.error || data.error;
 
   return (
@@ -152,18 +196,31 @@ export default function NewProductionOrder() {
             <ArrowLeft className="h-6 w-6" />
           </Link>
         </Button>
-        <h1 className="text-3xl font-bold 2xl:text-4xl">Nova produção</h1>
+        <h1 className="text-3xl font-bold 2xl:text-4xl">Cadastrar OP</h1>
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[minmax(22rem,1fr)_2fr]">
         <Card className="h-fit space-y-6 p-6">
           <Form method="get" ref={formRef} className="space-y-6">
             <input type="hidden" name="recipeId" value={recipeId} />
-            <input type="hidden" name="baseId" value={recipeId === data.recipe?.id ? baseId : ""} />
-            <input type="hidden" name="unit" value={unit || (recipeId === data.recipe?.id ? data.unit : "")} />
+            <input
+              type="hidden"
+              name="baseId"
+              value={recipeId === data.recipe?.id ? baseId : ""}
+            />
+            <input
+              type="hidden"
+              name="unit"
+              value={unit || (recipeId === data.recipe?.id ? data.unit : "")}
+            />
             <div className="space-y-2">
-              <Label id="production-recipe-label" className="text-lg">1. Receita</Label>
-              <Dialog open={recipePickerOpen} onOpenChange={setRecipePickerOpen}>
+              <Label id="production-recipe-label" className="text-lg">
+                1. Receita
+              </Label>
+              <Dialog
+                open={recipePickerOpen}
+                onOpenChange={setRecipePickerOpen}
+              >
                 <DialogTrigger asChild>
                   <Button
                     type="button"
@@ -171,7 +228,13 @@ export default function NewProductionOrder() {
                     aria-labelledby="production-recipe-label production-recipe-value"
                     className="h-auto min-h-16 w-full justify-between gap-3 px-4 py-3 text-left text-xl font-medium"
                   >
-                    <span id="production-recipe-value" className={cn("min-w-0 whitespace-normal break-words", !selectedRecipe && "text-muted-foreground")}>
+                    <span
+                      id="production-recipe-value"
+                      className={cn(
+                        "min-w-0 whitespace-normal break-words",
+                        !selectedRecipe && "text-muted-foreground"
+                      )}
+                    >
                       {selectedRecipe?.name || "Buscar e escolher receita"}
                     </span>
                     <ChevronsUpDown className="h-5 w-5 shrink-0 text-muted-foreground" />
@@ -179,7 +242,9 @@ export default function NewProductionOrder() {
                 </DialogTrigger>
                 <DialogContent className="flex max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-2xl flex-col gap-0 overflow-hidden p-0 [&>button:last-child]:flex [&>button:last-child]:h-10 [&>button:last-child]:w-10 [&>button:last-child]:items-center [&>button:last-child]:justify-center">
                   <DialogHeader className="shrink-0 px-6 pb-4 pt-6 pr-16 text-left">
-                    <DialogTitle className="text-2xl">Escolher receita</DialogTitle>
+                    <DialogTitle className="text-2xl">
+                      Escolher receita
+                    </DialogTitle>
                     <DialogDescription className="text-base">
                       Busque pelo nome e toque na receita para selecionar.
                     </DialogDescription>
@@ -191,7 +256,9 @@ export default function NewProductionOrder() {
                       className="h-16 text-lg"
                     />
                     <CommandList className="max-h-[min(28rem,calc(100dvh-16rem))] min-h-0 overflow-y-auto overscroll-contain p-2">
-                      <CommandEmpty>Nenhuma receita encontrada. Tente outro nome.</CommandEmpty>
+                      <CommandEmpty>
+                        Nenhuma receita encontrada. Tente outro nome.
+                      </CommandEmpty>
                       {data.recipes.map((r) => (
                         <CommandItem
                           key={r.id}
@@ -209,9 +276,18 @@ export default function NewProductionOrder() {
                         >
                           <span className="min-w-0 flex-1 whitespace-normal break-words">
                             <span className="block font-medium">{r.name}</span>
-                            {r.status === "draft" && <span className="text-sm text-muted-foreground">Rascunho</span>}
+                            {r.status === "draft" && (
+                              <span className="text-sm text-muted-foreground">
+                                Rascunho
+                              </span>
+                            )}
                           </span>
-                          {r.id === recipeId && <Check className="h-6 w-6 shrink-0 text-emerald-600" aria-label="Receita selecionada" />}
+                          {r.id === recipeId && (
+                            <Check
+                              className="h-6 w-6 shrink-0 text-emerald-600"
+                              aria-label="Receita selecionada"
+                            />
+                          )}
                         </CommandItem>
                       ))}
                     </CommandList>
@@ -240,7 +316,11 @@ export default function NewProductionOrder() {
                   </SelectTrigger>
                   <SelectContent>
                     {data.recipe.ingredients.map((i: any) => (
-                      <SelectItem key={i.id} value={i.id} className="py-3 text-lg">
+                      <SelectItem
+                        key={i.id}
+                        value={i.id}
+                        className="py-3 text-lg"
+                      >
                         {i.name}
                       </SelectItem>
                     ))}
@@ -283,32 +363,6 @@ export default function NewProductionOrder() {
                 </div>
               </div>
             )}
-
-            <div className="space-y-2">
-              <Label className="text-lg">4. Produzir em</Label>
-              <Input
-                type="date"
-                name="date"
-                defaultValue={data.date}
-                className="h-16 text-xl"
-                onChange={() => refresh(200)}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label className="text-lg">5. Usar em (opcional)</Label>
-              <p className="text-sm text-muted-foreground">
-                Dia em que o resultado será usado. Ex.: biga feita hoje para a massa de amanhã.
-              </p>
-              <Input
-                type="date"
-                name="usage"
-                min={data.date}
-                defaultValue={data.usage}
-                className="h-16 text-xl"
-                onChange={() => refresh(200)}
-              />
-            </div>
           </Form>
 
           {error && (
@@ -322,17 +376,28 @@ export default function NewProductionOrder() {
           <Form method="post" className="space-y-4">
             <input type="hidden" name="recipeId" value={recipeId} />
             <input type="hidden" name="baseIngredientId" value={data.baseId} />
-            <input type="hidden" name="baseQuantity" value={data.baseQuantity} />
-            <input type="hidden" name="date" value={data.date} />
-            <input type="hidden" name="usageDate" value={data.usage} />
-            <Input name="notes" placeholder="Observações (opcional)" className="h-14 text-lg" />
+            <input
+              type="hidden"
+              name="baseQuantity"
+              value={data.baseQuantity}
+            />
+            <Input
+              name="name"
+              placeholder="Nome da OP (opcional)"
+              className="h-14 text-lg"
+            />
+            <Input
+              name="notes"
+              placeholder="Observações (opcional)"
+              className="h-14 text-lg"
+            />
             <Button
               type="submit"
               size="lg"
               disabled={blocked || navigation.state !== "idle"}
               className="h-20 w-full text-2xl"
             >
-              Criar OP e continuar
+              Cadastrar OP
             </Button>
           </Form>
         </Card>
@@ -340,7 +405,8 @@ export default function NewProductionOrder() {
         <div className="space-y-4">
           {!plan && (
             <Card className="p-10 text-center text-xl text-muted-foreground">
-              Escolha a receita, o ingrediente-base e a quantidade para ver o que será necessário.
+              Escolha a receita, o ingrediente-base e a quantidade para ver o
+              que será necessário.
             </Card>
           )}
           {plan && data.recipe && (
@@ -352,8 +418,14 @@ export default function NewProductionOrder() {
                 </div>
                 {base && (
                   <div className="text-right">
-                    <div className="text-lg text-muted-foreground">Ingrediente principal · {base.name}</div>
-                    <Quantity quantity={data.baseQuantity} unit={base.unit} className="text-5xl" />
+                    <div className="text-lg text-muted-foreground">
+                      Ingrediente principal · {base.name}
+                    </div>
+                    <Quantity
+                      quantity={data.baseQuantity}
+                      unit={base.unit}
+                      className="text-5xl"
+                    />
                   </div>
                 )}
               </Card>
@@ -369,10 +441,13 @@ export default function NewProductionOrder() {
               )}
 
               <Card className="space-y-4 p-6">
-                <h3 className="text-2xl font-bold">Ingredientes desta produção</h3>
+                <h3 className="text-2xl font-bold">
+                  Ingredientes desta produção
+                </h3>
                 <IngredientList lines={plan.totals} />
                 <p className="text-lg text-muted-foreground">
-                  Na próxima etapa você informa se há preparações intermediárias (biga, poolish, autólise…).
+                  Na próxima etapa você informa se há preparações intermediárias
+                  (biga, poolish, autólise…).
                 </p>
               </Card>
             </>

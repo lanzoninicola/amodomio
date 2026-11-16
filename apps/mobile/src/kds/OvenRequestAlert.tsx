@@ -36,9 +36,14 @@ export function OvenRequestAlert({
 }) {
   const [cutNotice, setCutNotice] = useState<KdsOrder | null>(null);
   const { width, height } = useWindowDimensions();
+  const screenPadding = width < 380 ? 16 : 24;
+  const actionSize = Math.min(
+    190,
+    Math.max(112, Math.min((width - screenPadding * 2 - 16) / 2, height * 0.25))
+  );
   const numberSize = Math.min(
     160,
-    Math.max(80, Math.min(width, height) * 0.25)
+    Math.max(72, Math.min(width, height) * (height < 560 ? 0.2 : 0.25))
   );
   const player = useAudioPlayer(require("../../assets/oven-alert.wav"));
   const sound = useKdsSoundPreferences();
@@ -206,7 +211,7 @@ export function OvenRequestAlert({
             <ScrollView
               contentContainerStyle={{
                 flexGrow: 1,
-                padding: 24,
+                padding: screenPadding,
                 alignItems: "center",
                 justifyContent: "center",
               }}
@@ -289,26 +294,30 @@ export function OvenRequestAlert({
                 <View
                   style={{
                     flexDirection: "row",
-                    gap: 12,
                     width: "100%",
-                    maxWidth: 600,
-                    marginTop: 12,
+                    maxWidth: 720,
+                    marginTop: height < 560 ? 4 : 16,
+                    justifyContent: "space-between",
+                    alignItems: "center",
                   }}
                 >
                   <Button
                     disabled={saving}
                     variant="secondary"
                     style={{
-                      minHeight: 60,
-                      flex: 1,
+                      width: actionSize,
+                      height: actionSize,
+                      minHeight: actionSize,
+                      borderRadius: actionSize / 2,
                     }}
                     onPress={dismiss}
                   >
                     <Text
                       style={{
-                        fontSize: 20,
+                        fontSize: actionSize < 130 ? 18 : 22,
                         fontFamily: theme.typography.bold,
                         color: theme.colors.primary,
+                        textAlign: "center",
                       }}
                     >
                       Entendi
@@ -318,17 +327,20 @@ export function OvenRequestAlert({
                     variant="secondary"
                     loading={saving}
                     style={{
-                      flex: 1,
-                      minHeight: 60,
+                      width: actionSize,
+                      height: actionSize,
+                      minHeight: actionSize,
+                      borderRadius: actionSize / 2,
                       backgroundColor: theme.colors.brandOrangeMuted,
                     }}
                     onPress={() => void bake()}
                   >
                     <Text
                       style={{
-                        fontSize: 20,
+                        fontSize: actionSize < 130 ? 18 : 22,
                         fontFamily: theme.typography.bold,
                         color: theme.colors.brandOrangeInk,
+                        textAlign: "center",
                       }}
                     >
                       Assando

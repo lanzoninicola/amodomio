@@ -1361,6 +1361,7 @@ function KanbanScreen({
           orders={orders}
           busy={Boolean(mutatingId)}
           onBake={(order) => move(order, "assando")}
+          onCancelRequest={toggleOven}
           onFinish={(order) => move(order, "finalizado")}
         />
       ) : null}

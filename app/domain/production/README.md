@@ -10,11 +10,18 @@ Módulo de OP: "produzir esta receita usando X do ingrediente-base". Fase 1, sem
 - **Inconsistência**: se a soma das preparações passa do total de algum ingrediente, `plan.inconsistencies` é preenchido. A criação da OP e o salvamento da configuração são bloqueados.
 - Receita sem preparação gera só a etapa "Mistura final".
 
-## Jornada em duas fases (atual)
+## Cadastro e lançamentos
 
-1. **Fase 1 — criar a OP**: receita → ingrediente-base (escolhido na OP, pré-selecionado com o padrão da receita) → quantidade → data. O sistema calcula só os totais (`calculateProductionTotals`). A OP nasce `planned` com `plan.preparationsDefined = false` e **sem etapas**.
-2. **Fase 2 — preparações**: a OP pergunta se há preparações intermediárias. "Não" cria só a "Mistura final". "Sim" monta cada preparação com quantidades **absolutas desta produção** (`applyPreparationsToPlan`). Se a receita tem preparações salvas, elas vêm sugeridas e escaladas (`getPreparationSuggestions`). "Salvar como padrão da receita" grava de volta em escala de receita (`definePreparations(..., { saveToRecipe })`).
-3. Só depois disso a OP pode ser iniciada (`start` rejeita `preparationsDefined === false`). Definir/alterar preparações só enquanto `planned`. OPs antigas sem o campo contam como definidas.
+- A OP cadastrada (`ProductionOrderTemplate`) não possui data nem estado operacional. Ela guarda receita, quantidade, observações e o snapshot do plano.
+- Um cadastro pode ser lançado em quantos dias forem necessários. Cada lançamento cria uma `ProductionOrder` independente, com data, status e etapas próprias.
+- A tela web `/admin/producao/ordens` lista os cadastros, permite lançar para uma data, consultar as execuções recentes e arquivar cadastros.
+- OPs criadas antes desse modelo são convertidas pela migration em cadastros reutilizáveis, sem perder a execução original.
+
+## Jornada da execução
+
+1. **Fase 1 — cadastrar a OP**: receita → ingrediente-base → quantidade. O cadastro fica disponível para lançamentos futuros, sem estar preso a uma data.
+2. **Lançar a OP**: escolha uma data. Nasce uma execução `planned`, com status, etapas e conclusão independentes dos outros lançamentos do mesmo cadastro.
+3. **Preparações**: o cadastro usa as preparações padrão da receita, escaladas para sua quantidade. Cada lançamento recebe uma cópia desse plano e de suas etapas.
 
 Onde fica: `definePreparations` e `getPreparationSuggestions` em `production-order.server.ts`; web em `components/preparations-editor.tsx` (usado em `admin.producao.ordens.$id.tsx`); mobile em `OrderPreparationsStep.tsx` (usado em `ProductionOrderDetail.tsx`); API: intent `define-preparations` e `baseIngredientId` em `preview`/`create`; `GET ?id=` e as mutações devolvem `{ order, suggestions }`.
 

@@ -7,11 +7,13 @@ export function OvenRequestsBar({
   orders,
   busy,
   onBake,
+  onCancelRequest,
   onFinish,
 }: {
   orders: KdsOrder[];
   busy: boolean;
   onBake: (order: KdsOrder) => void;
+  onCancelRequest: (order: KdsOrder) => void;
   onFinish: (order: KdsOrder) => void;
 }) {
   const requested = orders.filter(
@@ -29,6 +31,8 @@ export function OvenRequestsBar({
         onPressOrder={onBake}
         actionLabel="Colocar pedido"
         actionStatus="em Assando"
+        onSecondaryPress={onCancelRequest}
+        secondaryActionLabel="Desfazer solicitação de forno"
       />
       <OvenColumn
         title="Assando"
@@ -51,6 +55,8 @@ function OvenColumn({
   onPressOrder,
   actionLabel,
   actionStatus,
+  onSecondaryPress,
+  secondaryActionLabel,
 }: {
   title: string;
   backgroundColor: string;
@@ -59,6 +65,8 @@ function OvenColumn({
   onPressOrder: (order: KdsOrder) => void;
   actionLabel: string;
   actionStatus: string;
+  onSecondaryPress?: (order: KdsOrder) => void;
+  secondaryActionLabel?: string;
 }) {
   return (
     <View
@@ -129,21 +137,53 @@ function OvenColumn({
           };
 
           return (
-            <Pressable
-              key={order.id}
-              accessibilityRole="button"
-              accessibilityLabel={`${actionLabel} ${
-                order.commandNumber ?? "VL"
-              } ${actionStatus}`.trim()}
-              disabled={busy}
-              onPress={() => onPressOrder(order)}
-              style={({ pressed }) => ({
-                ...cardStyle,
-                opacity: busy || pressed ? 0.5 : 1,
-              })}
-            >
-              {number}
-            </Pressable>
+            <View key={order.id} style={{ flexDirection: "row", gap: 6 }}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`${actionLabel} ${
+                  order.commandNumber ?? "VL"
+                } ${actionStatus}`.trim()}
+                disabled={busy}
+                onPress={() => onPressOrder(order)}
+                style={({ pressed }) => ({
+                  ...cardStyle,
+                  opacity: busy || pressed ? 0.5 : 1,
+                })}
+              >
+                {number}
+              </Pressable>
+              {onSecondaryPress && secondaryActionLabel ? (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`${secondaryActionLabel} do pedido ${
+                    order.commandNumber ?? "VL"
+                  }`}
+                  disabled={busy}
+                  onPress={() => onSecondaryPress(order)}
+                  style={({ pressed }) => ({
+                    minWidth: 52,
+                    minHeight: 58,
+                    paddingHorizontal: 10,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    borderRadius: theme.radius.md,
+                    borderWidth: 1,
+                    borderColor: "rgba(255, 255, 255, 0.45)",
+                    opacity: busy || pressed ? 0.5 : 1,
+                  })}
+                >
+                  <Text
+                    style={{
+                      color: "#ffffff",
+                      fontSize: 14,
+                      fontFamily: "IBMPlexMono_Bold",
+                    }}
+                  >
+                    Desfazer
+                  </Text>
+                </Pressable>
+              ) : null}
+            </View>
           );
         })}
       </ScrollView>
