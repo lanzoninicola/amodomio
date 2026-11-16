@@ -12,3 +12,5 @@ amodomio-191.zip
 .venv-graphify/
 .codex/
 graphify-out/
+.vercel
+.env*

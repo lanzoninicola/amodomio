@@ -1,57 +1,30 @@
-import {
-  defer,
-  json,
-  redirect,
-  type ActionFunctionArgs,
-  type LoaderFunctionArgs,
-} from "@remix-run/node";
-import {
-  Await,
-  Form,
-  Link,
-  useActionData,
-  useLoaderData,
-  useNavigation,
-} from "@remix-run/react";
+import { defer, json, redirect, type ActionFunctionArgs, type LoaderFunctionArgs } from "@remix-run/node";
+import { Await, Form, Link, useActionData, useLoaderData, useNavigation } from "@remix-run/react";
 import { format } from "date-fns";
-import { Archive, ExternalLink, Plus } from "lucide-react";
+import { Archive, ChevronLeft, ExternalLink, PlusCircle } from "lucide-react";
 import { Suspense } from "react";
+import Container from "~/components/layout/container/container";
 import { Alert, AlertDescription } from "~/components/ui/alert";
 import { Button } from "~/components/ui/button";
-import { Card } from "~/components/ui/card";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { Skeleton } from "~/components/ui/skeleton";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "~/components/ui/table";
 import { authenticator } from "~/domain/auth/google.server";
-import {
-  OrderStatusBadge,
-  Quantity,
-} from "~/domain/production/components/production-ui";
-import {
-  launchProductionOrderTemplate,
-  listProductionOrderTemplates,
-  setProductionOrderTemplateArchived,
-  type FormLike,
-} from "~/domain/production/production-order.server";
+import { OrderStatusBadge, Quantity } from "~/domain/production/components/production-ui";
+import { launchProductionOrderTemplate, listProductionOrderTemplates, setProductionOrderTemplateArchived, type FormLike } from "~/domain/production/production-order.server";
 
 function today() {
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: "America/Sao_Paulo",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(new Date());
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
 }
 
 export async function loader({ request }: LoaderFunctionArgs) {
-  if (!(await authenticator.isAuthenticated(request)))
-    return redirect("/login");
+  if (!(await authenticator.isAuthenticated(request))) return redirect("/login");
   return defer({ templates: listProductionOrderTemplates() });
 }
 
 export async function action({ request }: ActionFunctionArgs) {
-  if (!(await authenticator.isAuthenticated(request)))
-    return redirect("/login");
+  if (!(await authenticator.isAuthenticated(request))) return redirect("/login");
   const form = (await request.formData()) as unknown as FormLike;
   const templateId = String(form.get("templateId") || "");
   try {
@@ -60,10 +33,7 @@ export async function action({ request }: ActionFunctionArgs) {
       return redirect("/admin/producao/ordens");
     }
     const rawDate = String(form.get("date") || "");
-    const launch = await launchProductionOrderTemplate({
-      templateId,
-      productionDate: new Date(`${rawDate}T12:00:00-03:00`),
-    });
+    const launch = await launchProductionOrderTemplate({ templateId, productionDate: new Date(`${rawDate}T12:00:00-03:00`) });
     return redirect(`/admin/producao/ordens/${launch.id}`);
   } catch (error) {
     return json({ error: (error as Error).message }, { status: 400 });
@@ -74,162 +44,106 @@ export default function ProductionOrdersIndex() {
   const { templates } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const busy = useNavigation().state !== "idle";
+
   return (
-    <div className="w-full space-y-6 p-4 md:p-6 2xl:p-10">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold 2xl:text-4xl">
-            Ordens de produção
-          </h1>
-          <p className="mt-1 text-lg text-muted-foreground">
-            Cadastre uma OP uma vez e lance-a nos dias necessários.
-          </p>
-        </div>
-        <Button asChild size="lg" className="h-16 px-8 text-xl">
-          <Link to="/admin/producao/ordens/new">
-            <Plus className="mr-2 h-6 w-6" /> Cadastrar OP
-          </Link>
-        </Button>
-      </div>
-      {actionData?.error && (
-        <Alert variant="destructive">
-          <AlertDescription>{actionData.error}</AlertDescription>
-        </Alert>
-      )}
-      <Suspense
-        fallback={
-          <div className="grid gap-4 xl:grid-cols-2">
-            {[0, 1].map((i) => (
-              <Skeleton key={i} className="h-72 rounded-xl" />
-            ))}
+    <Container fullWidth className="px-4">
+      <div className="flex flex-col gap-6">
+        <section className="space-y-5 border-b border-slate-200/80 pb-5">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex flex-wrap items-center gap-2 text-sm">
+              <Link to="/admin/producao" className="inline-flex items-center gap-1.5 font-semibold text-slate-700 transition hover:text-slate-950">
+                <span className="flex size-5 items-center justify-center rounded-full border border-slate-200 text-slate-500"><ChevronLeft size={12} /></span>
+                voltar
+              </Link>
+              <span className="text-slate-300">/</span>
+              <span className="font-medium text-slate-900">produção</span>
+            </div>
+            <Link to="/admin/producao/ordens/new" className="inline-flex h-9 items-center justify-center gap-2 self-start rounded-full bg-black px-4 text-sm font-semibold text-white transition hover:bg-blue-500">
+              <PlusCircle size={15} /> Cadastrar OP
+            </Link>
           </div>
-        }
-      >
-        <Await
-          resolve={templates}
-          errorElement={
-            <p className="text-destructive">Erro ao carregar as OPs.</p>
-          }
-        >
-          {(list) =>
-            list.length === 0 ? (
-              <Card className="p-12 text-center text-xl text-muted-foreground">
-                Nenhuma OP cadastrada.
-              </Card>
-            ) : (
-              <div className="grid gap-5 xl:grid-cols-2">
-                {list.map((template) => (
-                  <Card key={template.id} className="space-y-5 p-6">
-                    <div className="flex items-start justify-between gap-4">
-                      <div>
-                        <div className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-                          OP cadastrada #{template.number}
-                        </div>
-                        <h2 className="text-3xl font-bold">{template.name}</h2>
-                        {template.name !== template.recipeName && (
-                          <p className="text-muted-foreground">
-                            Receita: {template.recipeName}
-                          </p>
-                        )}
-                      </div>
-                      <Quantity
-                        quantity={template.baseQuantity}
-                        unit={template.baseUnit}
-                        className="text-3xl"
-                      />
-                    </div>
-                    <div className="rounded-lg bg-muted p-4">
-                      <div className="text-sm text-muted-foreground">
-                        Ingrediente principal
-                      </div>
-                      <div className="text-lg font-semibold">
-                        {template.baseIngredient}
-                      </div>
-                    </div>
-                    <Form
-                      method="post"
-                      className="flex flex-wrap items-end gap-3 rounded-xl border p-4"
-                    >
-                      <input
-                        type="hidden"
-                        name="templateId"
-                        value={template.id}
-                      />
-                      <div className="min-w-48 flex-1 space-y-2">
-                        <Label
-                          htmlFor={`date-${template.id}`}
-                          className="text-base"
-                        >
-                          Lançar para o dia
-                        </Label>
-                        <Input
-                          id={`date-${template.id}`}
-                          name="date"
-                          type="date"
-                          required
-                          defaultValue={today()}
-                          className="h-14 text-lg"
-                        />
-                      </div>
-                      <Button disabled={busy} className="h-14 px-7 text-lg">
-                        Lançar OP
-                      </Button>
-                    </Form>
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <h3 className="font-semibold">
-                          Últimos lançamentos ({template._count.Launches})
-                        </h3>
-                        <Form method="post">
-                          <input type="hidden" name="intent" value="archive" />
-                          <input
-                            type="hidden"
-                            name="templateId"
-                            value={template.id}
-                          />
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            disabled={busy}
-                            className="text-muted-foreground"
-                          >
-                            <Archive className="mr-2 h-4 w-4" /> Arquivar
-                          </Button>
-                        </Form>
-                      </div>
-                      {template.Launches.length === 0 ? (
-                        <p className="text-sm text-muted-foreground">
-                          Ainda não lançada.
-                        </p>
-                      ) : (
-                        template.Launches.map((launch) => (
-                          <Link
-                            key={launch.id}
-                            to={`/admin/producao/ordens/${launch.id}`}
-                            className="flex items-center justify-between rounded-lg border px-4 py-3 hover:bg-muted"
-                          >
-                            <span className="font-medium">
-                              Execução #{launch.number} ·{" "}
-                              {format(
-                                new Date(launch.productionDate),
-                                "dd/MM/yyyy"
-                              )}
-                            </span>
-                            <span className="flex items-center gap-2">
-                              <OrderStatusBadge status={launch.status} />
-                              <ExternalLink className="h-4 w-4" />
-                            </span>
-                          </Link>
-                        ))
-                      )}
-                    </div>
-                  </Card>
-                ))}
+          <div className="space-y-1">
+            <h1 className="text-2xl font-semibold tracking-tight text-slate-950">Ordens de produção</h1>
+            <p className="max-w-3xl text-sm text-slate-500">Cadastre uma OP uma vez e lance-a nos dias necessários.</p>
+          </div>
+        </section>
+
+        {actionData?.error && <Alert variant="destructive"><AlertDescription>{actionData.error}</AlertDescription></Alert>}
+
+        <Suspense fallback={<ProductionOrdersLoading />}>
+          <Await resolve={templates} errorElement={<div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">Não foi possível carregar as ordens de produção.</div>}>
+            {(list) => (
+              <div className="flex flex-col gap-4">
+                <div className="border-b border-slate-200 pb-4 text-sm text-slate-600">{list.length} ordem(ns) cadastrada(s).</div>
+                <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+                  <Table className="min-w-[1050px]">
+                    <TableHeader className="bg-slate-50/90">
+                      <TableRow className="hover:bg-slate-50/90">
+                        {["Ordem de produção", "Receita e ingrediente", "Quantidade base", "Últimos lançamentos", "Lançar OP"].map((heading) => (
+                          <TableHead key={heading} className="h-10 px-4 text-xs font-semibold uppercase tracking-wide text-slate-500">{heading}</TableHead>
+                        ))}
+                        <TableHead className="h-10 px-4 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">Ações</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {list.length === 0 ? (
+                        <TableRow className="hover:bg-transparent"><TableCell colSpan={6} className="px-4 py-8 text-sm text-slate-500">Nenhuma OP cadastrada.</TableCell></TableRow>
+                      ) : list.map((template) => (
+                        <TableRow key={template.id} className="border-slate-100 hover:bg-slate-50/50">
+                          <TableCell className="px-4 py-3">
+                            <div className="flex flex-col gap-0.5"><span className="font-semibold text-slate-900">{template.name}</span><span className="text-xs text-slate-500">OP cadastrada #{template.number}</span></div>
+                          </TableCell>
+                          <TableCell className="px-4 py-3">
+                            <div className="flex flex-col gap-0.5"><span className="text-sm font-medium text-slate-700">{template.recipeName}</span><span className="text-xs text-slate-500">{template.baseIngredient}</span></div>
+                          </TableCell>
+                          <TableCell className="px-4 py-3"><Quantity quantity={template.baseQuantity} unit={template.baseUnit} className="text-sm font-semibold" /></TableCell>
+                          <TableCell className="px-4 py-3">
+                            {template.Launches.length === 0 ? <span className="text-sm text-slate-400">Ainda não lançada</span> : (
+                              <div className="flex flex-col gap-1.5">
+                                {template.Launches.map((launch) => (
+                                  <Link key={launch.id} to={`/admin/producao/ordens/${launch.id}`} className="flex items-center gap-2 text-sm text-slate-700 hover:text-slate-950 hover:underline">
+                                    <span>#{launch.number} · {format(new Date(launch.productionDate), "dd/MM/yyyy")}</span><OrderStatusBadge status={launch.status} /><ExternalLink className="h-3.5 w-3.5 text-slate-400" />
+                                  </Link>
+                                ))}
+                                <span className="text-xs text-slate-400">{template._count.Launches} no total</span>
+                              </div>
+                            )}
+                          </TableCell>
+                          <TableCell className="px-4 py-3">
+                            <Form method="post" className="flex items-end gap-2">
+                              <input type="hidden" name="templateId" value={template.id} />
+                              <div className="space-y-1"><Label htmlFor={`date-${template.id}`} className="text-xs text-slate-500">Dia</Label><Input id={`date-${template.id}`} name="date" type="date" required defaultValue={today()} className="h-9 w-36 text-sm" /></div>
+                              <Button disabled={busy} size="sm" className="h-9">Lançar</Button>
+                            </Form>
+                          </TableCell>
+                          <TableCell className="px-4 py-3 text-right">
+                            <Form method="post">
+                              <input type="hidden" name="intent" value="archive" /><input type="hidden" name="templateId" value={template.id} />
+                              <Button variant="ghost" size="sm" disabled={busy} className="text-slate-500 hover:bg-red-50 hover:text-red-600"><Archive className="mr-2 h-4 w-4" /> Arquivar</Button>
+                            </Form>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
               </div>
-            )
-          }
-        </Await>
-      </Suspense>
+            )}
+          </Await>
+        </Suspense>
+      </div>
+    </Container>
+  );
+}
+
+function ProductionOrdersLoading() {
+  return (
+    <div className="space-y-4">
+      <Skeleton className="h-4 w-48" />
+      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+        <Skeleton className="h-10 w-full rounded-none" />
+        {[0, 1, 2, 3].map((row) => <div key={row} className="grid grid-cols-6 gap-4 border-t border-slate-100 px-4 py-4">{Array.from({ length: 6 }).map((_, column) => <Skeleton key={column} className="h-8 w-full" />)}</div>)}
+      </div>
     </div>
   );
 }

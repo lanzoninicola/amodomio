@@ -7,7 +7,9 @@ const prismaDatasourceUrl = process.env?.PRISMA_DB_URL;
 const prismaDevDatasourceUrl = process.env?.PRISMA_DB_DEV_URL;
 
 const datasourceUrl =
-  env === "development" ? prismaDevDatasourceUrl : prismaDatasourceUrl;
+  env === "development"
+    ? prismaDevDatasourceUrl ?? prismaDatasourceUrl
+    : prismaDatasourceUrl;
 const pool = datasourceUrl ? new Pool({ connectionString: datasourceUrl }) : undefined;
 const adapter = pool ? new PrismaPg(pool) : undefined;
 

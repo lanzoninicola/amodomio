@@ -44,27 +44,31 @@ def rebuild_wiki(root: Path) -> int:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Rebuild graphify code graph and regenerate graphify-out/wiki."
+        description="Rebuild the graphify code graph, wiki, or both."
+    )
+    parser.add_argument(
+        "target",
+        nargs="?",
+        choices=("all", "graph", "wiki"),
+        default="all",
+        help="Work to run (default: all)",
     )
     parser.add_argument("--root", default=".", help="Project root")
-    parser.add_argument(
-        "--skip-code-rebuild",
-        action="store_true",
-        help="Only regenerate wiki from existing graphify-out/graph.json",
-    )
     args = parser.parse_args()
 
     root = Path(args.root).resolve()
-    if not args.skip_code_rebuild:
+    if args.target in ("all", "graph"):
         ok = _rebuild_code(root)
         if not ok:
             raise SystemExit(1)
+        print(f"[graphify graph] Rebuilt graph at {root / 'graphify-out'}")
 
-    article_count = rebuild_wiki(root)
-    print(
-        f"[graphify wiki] Generated {article_count} articles + index at "
-        f"{root / 'graphify-out' / 'wiki' / 'index.md'}"
-    )
+    if args.target in ("all", "wiki"):
+        article_count = rebuild_wiki(root)
+        print(
+            f"[graphify wiki] Generated {article_count} articles + index at "
+            f"{root / 'graphify-out' / 'wiki' / 'index.md'}"
+        )
 
 
 if __name__ == "__main__":

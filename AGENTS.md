@@ -6,11 +6,14 @@ Rules:
 
 - Before answering architecture or codebase questions, read graphify-out/GRAPH_REPORT.md for god nodes and community structure
 - If graphify-out/wiki/index.md exists, navigate it instead of reading raw files
-- After modifying code files in this session, rebuild the graph and wiki using the Python environment for the current OS (commands below).
+- After modifying code files in this session, rebuild the graph and wiki. Prefer the cross-platform npm commands below after activating the project's Node version.
+- `npm run graphify:graph` rebuilds only the main graph. Use it during iteration or when the wiki can be updated later.
+- `npm run graphify:wiki` regenerates only the wiki from the existing `graphify-out/graph.json`; it does not rebuild the graph.
+- `npm run graphify:refresh` runs both steps in order (`graph` then `wiki`) and is the preferred final/full refresh.
+- The graph rebuild can be substantially slower on a machine with a cold extraction cache. The wiki is independent, so the two commands may be run separately or on different machines after synchronizing the current graph artifacts.
 - Windows PowerShell setup: `uv venv --python 3.12 .venv-graphify`, then `uv pip install --python .venv-graphify/Scripts/python.exe graphifyy`.
-- Windows PowerShell rebuild: `& .\.venv-graphify\Scripts\python.exe scripts/rebuild-graphify-wiki.py`.
 - Windows PowerShell validation: `& .\.venv-graphify\Scripts\python.exe -c "from graphify.watch import _rebuild_code; print('ok')"`.
-- Linux rebuild (when this pipx environment exists): `/home/lanzo/.local/share/pipx/venvs/graphifyy/bin/python scripts/rebuild-graphify-wiki.py`.
+- Set `GRAPHIFY_PYTHON` to override the Python selected by `scripts/run-graphify.mjs` when the environment is stored in a nonstandard location.
 - Do not use the Linux interpreter path on Windows or the Microsoft Store Python alias. The local `.venv-graphify/` environment is ignored by Git.
 - The package is named `graphifyy`, but the required importable Python module for this repo is `graphify`.
 
