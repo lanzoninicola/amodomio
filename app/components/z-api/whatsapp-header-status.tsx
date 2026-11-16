@@ -148,16 +148,16 @@ export function WhatsappHeaderStatus({
             Verificar conexão
           </DropdownMenuItem>
           {canManage ? (
-            <>
-              <DropdownMenuItem onSelect={() => setDialog("reconnect")}>
-                <RefreshCw size={14} className="mr-2" />
-                Tentar reconectar
-              </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => setDialog("qr-code")}>
-                <QrCode size={14} className="mr-2" />
-                Mostrar QR Code
-              </DropdownMenuItem>
-            </>
+            <DropdownMenuItem onSelect={() => setDialog("reconnect")}>
+              <RefreshCw size={14} className="mr-2" />
+              Tentar reconectar
+            </DropdownMenuItem>
+          ) : null}
+          {status.connected === false ? (
+            <DropdownMenuItem onSelect={() => setDialog("qr-code")}>
+              <QrCode size={14} className="mr-2" />
+              Gerar QR Code
+            </DropdownMenuItem>
           ) : null}
           <DropdownMenuSeparator />
           <DropdownMenuItem asChild>

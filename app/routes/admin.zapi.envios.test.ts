@@ -61,6 +61,17 @@ it("protects restart from unauthenticated and non-admin requests", async () => {
   expect((await action(args())).status).toBe(403);
   expect(mocks.reconnect).not.toHaveBeenCalled();
 });
+it("allows an authenticated operator to generate the pairing QR code", async () => {
+  mocks.auth.mockResolvedValueOnce({ roles: ["kdsOperator"] });
+  mocks.qr.mockResolvedValueOnce({
+    state: "qr",
+    qrCode: "data:image/png;base64,qr",
+  });
+  const response = await action(args("qr-code"));
+  expect(response.status).toBe(200);
+  expect(mocks.qr).toHaveBeenCalledTimes(1);
+  expect(mocks.reconnect).not.toHaveBeenCalled();
+});
 it("rejects cross-origin requests, GETs and unknown intents", async () => {
   expect((await action(args("reconnect", "https://other.test"))).status).toBe(
     403

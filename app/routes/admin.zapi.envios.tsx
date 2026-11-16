@@ -44,19 +44,19 @@ export async function action({ request }: ActionFunctionArgs) {
       { state: "error", message: "Entre novamente para gerenciar a conexão." },
       401
     );
-  if (!canManageConnection(user))
-    return respond(
-      {
-        state: "error",
-        message:
-          "Somente administradores podem gerenciar a conexão do WhatsApp.",
-      },
-      403
-    );
   const form = await request.formData();
   const intent = form.get("_intent");
   if (!["reconnect", "connection", "qr-code"].includes(String(intent)))
     return respond({ state: "error", message: "Ação inválida." }, 400);
+  if (intent === "reconnect" && !canManageConnection(user))
+    return respond(
+      {
+        state: "error",
+        message:
+          "Somente administradores podem reiniciar a conexão do WhatsApp.",
+      },
+      403
+    );
   const limited = enforceRateLimit(
     request,
     intent === "reconnect" ? 1 : 30,
