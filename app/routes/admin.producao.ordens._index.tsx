@@ -1,7 +1,7 @@
 import { defer, json, redirect, type ActionFunctionArgs, type LoaderFunctionArgs } from "@remix-run/node";
 import { Await, Form, Link, useActionData, useLoaderData, useNavigation } from "@remix-run/react";
 import { format } from "date-fns";
-import { Archive, ChevronLeft, ExternalLink, PlusCircle } from "lucide-react";
+import { Archive, CalendarClock, ChevronLeft, ExternalLink, PlusCircle } from "lucide-react";
 import { Suspense } from "react";
 import Container from "~/components/layout/container/container";
 import { Alert, AlertDescription } from "~/components/ui/alert";
@@ -12,7 +12,8 @@ import { Skeleton } from "~/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "~/components/ui/table";
 import { authenticator } from "~/domain/auth/google.server";
 import { OrderStatusBadge, Quantity } from "~/domain/production/components/production-ui";
-import { launchProductionOrderTemplate, listProductionOrderTemplates, setProductionOrderTemplateArchived, type FormLike } from "~/domain/production/production-order.server";
+import { launchProductionOrderTemplate, listProductionOrderTemplates, setProductionOrderTemplateArchived } from "~/domain/production/production-order.server";
+import type { ProductionOrderItemSnapshot } from "~/domain/production/production-order-calc";
 
 function today() {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
@@ -25,15 +26,25 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
 export async function action({ request }: ActionFunctionArgs) {
   if (!(await authenticator.isAuthenticated(request))) return redirect("/login");
-  const form = (await request.formData()) as unknown as FormLike;
+  const form = await request.formData();
   const templateId = String(form.get("templateId") || "");
   try {
     if (form.get("intent") === "archive") {
       await setProductionOrderTemplateArchived(templateId, true);
       return redirect("/admin/producao/ordens");
     }
-    const rawDate = String(form.get("date") || "");
-    const launch = await launchProductionOrderTemplate({ templateId, productionDate: new Date(`${rawDate}T12:00:00-03:00`) });
+    const schedules = [...form.entries()].filter(([key]) => key.startsWith("step:"))
+      .map(([key, value]) => {
+        const [, rawItemIndex, rawKind, rawPreparationIndex] = key.split(":");
+        const raw = String(value || "");
+        const startAt = new Date(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(raw) ? `${raw}:00-03:00` : raw);
+        if (!Number.isFinite(startAt.getTime())) throw new Error("Informe quando fazer cada etapa.");
+        return { itemIndex: Number(rawItemIndex), kind: rawKind === "prep" ? "preparation" as const : "final" as const,
+          preparationIndex: rawKind === "prep" ? Number(rawPreparationIndex) : undefined, startAt };
+      });
+    if (!schedules.length) throw new Error("Planeje as etapas antes de lançar a OP.");
+    const productionDate = new Date(Math.min(...schedules.map((entry) => entry.startAt.getTime())));
+    const launch = await launchProductionOrderTemplate({ templateId, productionDate, stepSchedules: schedules });
     return redirect(`/admin/producao/ordens/${launch.id}`);
   } catch (error) {
     return json({ error: (error as Error).message }, { status: 400 });
@@ -59,12 +70,12 @@ export default function ProductionOrdersIndex() {
               <span className="font-medium text-slate-900">produção</span>
             </div>
             <Link to="/admin/producao/ordens/new" className="inline-flex h-9 items-center justify-center gap-2 self-start rounded-full bg-black px-4 text-sm font-semibold text-white transition hover:bg-blue-500">
-              <PlusCircle size={15} /> Cadastrar OP
+              <PlusCircle size={15} /> Criar OP
             </Link>
           </div>
           <div className="space-y-1">
             <h1 className="text-2xl font-semibold tracking-tight text-slate-950">Ordens de produção</h1>
-            <p className="max-w-3xl text-sm text-slate-500">Cadastre uma OP uma vez e lance-a nos dias necessários.</p>
+            <p className="max-w-3xl text-sm text-slate-500">Crie uma OP uma vez e lance-a nos dias necessários.</p>
           </div>
         </section>
 
@@ -74,7 +85,7 @@ export default function ProductionOrdersIndex() {
           <Await resolve={templates} errorElement={<div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">Não foi possível carregar as ordens de produção.</div>}>
             {(list) => (
               <div className="flex flex-col gap-4">
-                <div className="border-b border-slate-200 pb-4 text-sm text-slate-600">{list.length} ordem(ns) cadastrada(s).</div>
+                <div className="border-b border-slate-200 pb-4 text-sm text-slate-600">{list.length} ordem(ns) criada(s).</div>
                 <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
                   <Table className="min-w-[1050px]">
                     <TableHeader className="bg-slate-50/90">
@@ -87,14 +98,14 @@ export default function ProductionOrdersIndex() {
                     </TableHeader>
                     <TableBody>
                       {list.length === 0 ? (
-                        <TableRow className="hover:bg-transparent"><TableCell colSpan={6} className="px-4 py-8 text-sm text-slate-500">Nenhuma OP cadastrada.</TableCell></TableRow>
+                        <TableRow className="hover:bg-transparent"><TableCell colSpan={6} className="px-4 py-8 text-sm text-slate-500">Nenhuma OP criada.</TableCell></TableRow>
                       ) : list.map((template) => (
                         <TableRow key={template.id} className="border-slate-100 hover:bg-slate-50/50">
                           <TableCell className="px-4 py-3">
-                            <div className="flex flex-col gap-0.5"><span className="font-semibold text-slate-900">{template.name}</span><span className="text-xs text-slate-500">OP cadastrada #{template.number}</span></div>
+                            <div className="flex flex-col gap-0.5"><span className="font-semibold text-slate-900">{template.name}</span><span className="text-xs text-slate-500">OP #{template.number}</span></div>
                           </TableCell>
                           <TableCell className="px-4 py-3">
-                            <div className="flex flex-col gap-0.5"><span className="text-sm font-medium text-slate-700">{template.recipeName}</span><span className="text-xs text-slate-500">{template.baseIngredient}</span></div>
+                            {(() => { const items = (Array.isArray(template.items) ? template.items : []) as unknown as ProductionOrderItemSnapshot[]; return <div className="flex flex-col gap-0.5"><span className="text-sm font-medium text-slate-700">{items.length > 1 ? `${items.length} receitas` : template.recipeName}</span><span className="text-xs text-slate-500">{items.length > 1 ? items.map((item) => item.recipeName).join(" · ") : template.baseIngredient}</span></div>; })()}
                           </TableCell>
                           <TableCell className="px-4 py-3"><Quantity quantity={template.baseQuantity} unit={template.baseUnit} className="text-sm font-semibold" /></TableCell>
                           <TableCell className="px-4 py-3">
@@ -110,11 +121,18 @@ export default function ProductionOrdersIndex() {
                             )}
                           </TableCell>
                           <TableCell className="px-4 py-3">
-                            <Form method="post" className="flex items-end gap-2">
-                              <input type="hidden" name="templateId" value={template.id} />
-                              <div className="space-y-1"><Label htmlFor={`date-${template.id}`} className="text-xs text-slate-500">Dia</Label><Input id={`date-${template.id}`} name="date" type="date" required defaultValue={today()} className="h-9 w-36 text-sm" /></div>
-                              <Button disabled={busy} size="sm" className="h-9">Lançar</Button>
-                            </Form>
+                            <details className="group min-w-72">
+                              <summary className="inline-flex h-9 cursor-pointer list-none items-center rounded-md bg-slate-900 px-3 text-sm font-medium text-white"><CalendarClock className="mr-2 h-4 w-4" /> Planejar OP</summary>
+                              <Form method="post" className="mt-3 space-y-4 rounded-xl border bg-slate-50 p-4">
+                                <input type="hidden" name="templateId" value={template.id} />
+                                {((Array.isArray(template.items) && template.items.length ? template.items : [{ recipeName: template.recipeName, plan: template.plan }]) as unknown as ProductionOrderItemSnapshot[]).map((item, itemIndex) => <fieldset key={`${item.recipeName}-${itemIndex}`} className="space-y-2">
+                                  <legend className="font-semibold text-slate-900">{item.recipeName}</legend>
+                                  {item.plan.preparations.map((preparation, preparationIndex) => <div key={preparation.id} className="space-y-1"><Label className="text-xs">{preparation.name}</Label><Input name={`step:${itemIndex}:prep:${preparationIndex}`} type="datetime-local" required defaultValue={`${today()}T06:00`} className="h-9 text-sm" /></div>)}
+                                  <div className="space-y-1"><Label className="text-xs">Mistura final</Label><Input name={`step:${itemIndex}:final`} type="datetime-local" required defaultValue={`${today()}T08:00`} className="h-9 text-sm" /></div>
+                                </fieldset>)}
+                                <Button disabled={busy} size="sm" className="h-9">Confirmar planejamento</Button>
+                              </Form>
+                            </details>
                           </TableCell>
                           <TableCell className="px-4 py-3 text-right">
                             <Form method="post">

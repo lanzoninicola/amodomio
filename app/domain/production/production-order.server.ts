@@ -5,6 +5,7 @@ import {
   calculateProductionTotals,
   calculateProductionPlan,
   convertQuantity,
+  type ProductionOrderItemSnapshot,
   type ProductionPlan,
   type ProductionRecipeIngredient,
 } from "./production-order-calc";
@@ -41,6 +42,9 @@ export async function getRecipeProduction(recipeId: string) {
       where: { id: recipeId },
       select: {
         productionBaseRecipeIngredientId: true,
+        costingMode: true,
+        yieldQuantity: true,
+        yieldUnit: true,
         Preparations: {
           orderBy: [{ sortOrderIndex: "asc" }, { createdAt: "asc" }],
           include: { Ingredients: true },
@@ -65,6 +69,9 @@ export async function getRecipeProduction(recipeId: string) {
   return {
     id: recipe.id,
     name: recipe.name,
+    costingMode: config.costingMode,
+    yieldQuantity: config.yieldQuantity == null ? null : Number(config.yieldQuantity),
+    yieldUnit: config.yieldUnit,
     ingredients,
     baseIngredientId,
     preparations: config.Preparations.map((p: any) => ({
@@ -223,46 +230,66 @@ export async function createProductionOrder(input: {
   });
 }
 
-/** Cadastro reutilizavel de OP. Datas e estado pertencem apenas aos lancamentos. */
+/** Modelo reutilizavel de OP. Datas e estado pertencem apenas aos lancamentos. */
 export async function createProductionOrderTemplate(input: {
   name?: string;
-  recipeId: string;
+  recipeId?: string;
   baseIngredientId?: string;
-  baseQuantity: number;
+  baseQuantity?: number;
+  items?: Array<{
+    recipeId: string;
+    baseIngredientId?: string;
+    baseQuantity: number;
+    calculationMode: "ingredient" | "yield";
+    targetQuantity: number;
+    targetUnit: string;
+  }>;
   notes?: string;
 }) {
-  const recipe = await getRecipeProduction(input.recipeId);
-  const baseId = input.baseIngredientId || recipe.baseIngredientId;
-  const base = recipe.ingredients.find(
-    (ingredient) => ingredient.id === baseId
-  );
-  if (!base) throw new Error("Escolha o ingrediente-base.");
-  if (!Number.isFinite(input.baseQuantity) || input.baseQuantity <= 0)
-    throw new Error("Informe uma quantidade maior que zero.");
-
-  let plan = planForRecipe(recipe, input.baseQuantity, base.id);
-  const preparations = recipe.preparations.map((preparation, index) => ({
-    id: `p${index + 1}`,
-    name: preparation.name,
-    notes: preparation.notes,
-    ingredients: preparation.ingredients.map((line) => ({
-      recipeIngredientId: line.recipeIngredientId,
-      quantity: line.quantity * plan.scaleFactor,
-    })),
-  }));
-  plan = applyPreparationsToPlan(plan, preparations);
-  if (plan.inconsistencies.length)
-    throw new Error(plan.inconsistencies.join(" "));
+  const requested = input.items?.length
+    ? input.items
+    : input.recipeId && input.baseQuantity
+      ? [{ recipeId: input.recipeId, baseIngredientId: input.baseIngredientId,
+          baseQuantity: input.baseQuantity, calculationMode: "ingredient" as const,
+          targetQuantity: input.baseQuantity, targetUnit: "" }]
+      : [];
+  if (!requested.length) throw new Error("Adicione ao menos uma receita à OP.");
+  const items: ProductionOrderItemSnapshot[] = [];
+  for (const requestedItem of requested) {
+    const recipe = await getRecipeProduction(requestedItem.recipeId);
+    const baseId = requestedItem.baseIngredientId || recipe.baseIngredientId;
+    const base = recipe.ingredients.find((ingredient) => ingredient.id === baseId);
+    if (!base) throw new Error(`${recipe.name}: escolha o ingrediente-base.`);
+    if (!Number.isFinite(requestedItem.baseQuantity) || requestedItem.baseQuantity <= 0)
+      throw new Error(`${recipe.name}: informe uma quantidade maior que zero.`);
+    let plan = planForRecipe(recipe, requestedItem.baseQuantity, base.id);
+    plan = applyPreparationsToPlan(plan, recipe.preparations.map((preparation, index) => ({
+      id: `p${index + 1}`, name: preparation.name, notes: preparation.notes,
+      ingredients: preparation.ingredients.map((line) => ({
+        recipeIngredientId: line.recipeIngredientId,
+        quantity: line.quantity * plan.scaleFactor,
+      })),
+    })));
+    if (plan.inconsistencies.length) throw new Error(plan.inconsistencies.join(" "));
+    items.push({ version: 1, recipeId: recipe.id, recipeName: recipe.name,
+      calculationMode: requestedItem.calculationMode,
+      targetQuantity: requestedItem.targetQuantity,
+      targetUnit: requestedItem.targetUnit || (requestedItem.calculationMode === "yield" ? recipe.yieldUnit || "UN" : base.unit),
+      baseIngredientId: base.id, baseIngredient: base.name,
+      baseQuantity: requestedItem.baseQuantity, baseUnit: base.unit, plan });
+  }
+  const first = items[0];
 
   return prismaClient.productionOrderTemplate.create({
     data: {
-      name: input.name?.trim() || recipe.name,
-      recipeId: recipe.id,
-      recipeName: recipe.name,
-      baseIngredient: base.name,
-      baseQuantity: input.baseQuantity,
-      baseUnit: base.unit,
-      plan: plan as any,
+      name: input.name?.trim() || items.map((item) => item.recipeName).join(" + "),
+      recipeId: first.recipeId,
+      recipeName: first.recipeName,
+      baseIngredient: first.baseIngredient,
+      baseQuantity: first.baseQuantity,
+      baseUnit: first.baseUnit,
+      plan: first.plan as any,
+      items: items as any,
       notes: input.notes?.trim() || null,
     },
   });
@@ -294,7 +321,7 @@ export async function getProductionOrderTemplate(id: string) {
     },
   });
   if (!template)
-    throw new Response("OP cadastrada nao encontrada", { status: 404 });
+    throw new Response("OP nao encontrada", { status: 404 });
   return { ...template, plan: template.plan as unknown as ProductionPlan };
 }
 
@@ -303,6 +330,13 @@ export async function launchProductionOrderTemplate(input: {
   productionDate: Date;
   usageDate?: Date | null;
   notes?: string;
+  stepSchedules?: Array<{
+    itemIndex: number;
+    kind: "preparation" | "final";
+    preparationIndex?: number;
+    startAt: Date;
+    endAt?: Date | null;
+  }>;
 }) {
   if (!Number.isFinite(input.productionDate.getTime()))
     throw new Error("Data de producao invalida.");
@@ -311,6 +345,31 @@ export async function launchProductionOrderTemplate(input: {
   const template = await getProductionOrderTemplate(input.templateId);
   if (template.archivedAt) throw new Error("Esta OP esta arquivada.");
   const plan = template.plan;
+  const items = (Array.isArray(template.items) && template.items.length
+    ? template.items
+    : [{ version: 1, recipeId: template.recipeId, recipeName: template.recipeName,
+        calculationMode: "ingredient", targetQuantity: template.baseQuantity,
+        targetUnit: template.baseUnit, baseIngredientId: plan.baseIngredientId || "",
+        baseIngredient: template.baseIngredient, baseQuantity: template.baseQuantity,
+        baseUnit: template.baseUnit, plan }]) as unknown as ProductionOrderItemSnapshot[];
+  const scheduleFor = (itemIndex: number, kind: "preparation" | "final", preparationIndex?: number) =>
+    input.stepSchedules?.find((entry) => entry.itemIndex === itemIndex && entry.kind === kind && entry.preparationIndex === preparationIndex);
+  const steps = items.flatMap((item, itemIndex) => [
+    ...item.plan.preparations.map((preparation, preparationIndex) => {
+      const schedule = scheduleFor(itemIndex, "preparation", preparationIndex);
+      return { kind: "preparation", name: preparation.name, preparationId: preparation.id,
+        itemIndex, recipeName: item.recipeName, sortOrder: itemIndex * 100 + preparationIndex,
+        scheduledStartAt: schedule?.startAt ?? input.productionDate,
+        scheduledEndAt: schedule?.endAt ?? null };
+    }),
+    (() => {
+      const schedule = scheduleFor(itemIndex, "final");
+      return { kind: "final", name: "Mistura final", itemIndex,
+        recipeName: item.recipeName, sortOrder: itemIndex * 100 + item.plan.preparations.length,
+        scheduledStartAt: schedule?.startAt ?? input.productionDate,
+        scheduledEndAt: schedule?.endAt ?? null };
+    })(),
+  ]);
   return prismaClient.productionOrder.create({
     data: {
       templateId: template.id,
@@ -323,20 +382,9 @@ export async function launchProductionOrderTemplate(input: {
       usageDate: input.usageDate ?? null,
       notes: input.notes?.trim() || template.notes,
       plan: plan as any,
+      items: items as any,
       Steps: {
-        create: [
-          ...plan.preparations.map((preparation, index) => ({
-            kind: "preparation",
-            name: preparation.name,
-            preparationId: preparation.id,
-            sortOrder: index,
-          })),
-          {
-            kind: "final",
-            name: "Mistura final",
-            sortOrder: plan.preparations.length,
-          },
-        ],
+        create: steps,
       },
     },
   });
@@ -573,13 +621,13 @@ export async function applyOrderAction(
       if (
         step.kind === "final" &&
         to !== "pending" &&
-        order.Steps.some((s) => s.kind !== "final" && s.status !== "done")
+        order.Steps.some((s) => s.itemIndex === step.itemIndex && s.kind !== "final" && s.status !== "done")
       )
         throw new Error("Conclua as preparações antes da mistura final.");
       if (
         step.kind !== "final" &&
         to !== "done" &&
-        order.Steps.some((s) => s.kind === "final" && s.status !== "pending")
+        order.Steps.some((s) => s.itemIndex === step.itemIndex && s.kind === "final" && s.status !== "pending")
       )
         throw new Error("Reabra a mistura final primeiro.");
       const allowed: Record<string, string[]> = {

@@ -12,7 +12,7 @@ import {
   useNavigation,
   useSubmit,
 } from "@remix-run/react";
-import { AlertTriangle, ArrowLeft, Check, ChevronsUpDown } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Check, ChevronsUpDown, Plus, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import { Button } from "~/components/ui/button";
@@ -87,6 +87,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const recipeId = url.searchParams.get("recipeId") || "";
   const qty = url.searchParams.get("qty") || "";
   const requestedBaseId = url.searchParams.get("baseId") || "";
+  const calculationMode = url.searchParams.get("mode") === "yield" ? "yield" : "ingredient";
   const date = url.searchParams.get("date") || today();
   const usage = url.searchParams.get("usage") || "";
   const recipes = await listProductionRecipes();
@@ -102,11 +103,15 @@ export async function loader({ request }: LoaderFunctionArgs) {
     baseId =
       recipe.ingredients.find((i: any) => i.id === requestedBaseId)?.id ||
       recipe.baseIngredientId ||
+      (calculationMode === "yield" ? recipe.ingredients[0]?.id : "") ||
       "";
     const base = recipe.ingredients.find((i: any) => i.id === baseId);
     unit = url.searchParams.get("unit") || base?.unit || "";
     if (base) {
-      const converted = convertQuantity(parseNumber(qty), unit, base.unit);
+      const requested = parseNumber(qty);
+      const converted = calculationMode === "yield" && Number(recipe.yieldQuantity) > 0
+        ? base.quantity * (requested / Number(recipe.yieldQuantity))
+        : convertQuantity(requested, unit, base.unit);
       baseQuantity = converted ?? 0;
       if (baseQuantity > 0) {
         try {
@@ -128,6 +133,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     baseQuantity,
     baseId,
     error,
+    calculationMode,
   });
 }
 
@@ -136,11 +142,15 @@ export async function action({ request }: ActionFunctionArgs) {
     return redirect("/login");
   const form = (await request.formData()) as unknown as FormLike;
   try {
+    const rawItems = String(form.get("items") || "");
+    const items = rawItems ? JSON.parse(rawItems) : undefined;
+    if (items && !Array.isArray(items)) throw new Error("Receitas da OP inválidas.");
     await createProductionOrderTemplate({
       name: String(form.get("name") || ""),
       recipeId: String(form.get("recipeId") || ""),
       baseIngredientId: String(form.get("baseIngredientId") || ""),
       baseQuantity: parseNumber(String(form.get("baseQuantity"))),
+      items,
       notes: String(form.get("notes") || ""),
     });
     return redirect("/admin/producao/ordens");
@@ -159,6 +169,8 @@ export default function NewProductionOrder() {
   const [recipeId, setRecipeId] = useState(data.recipe?.id || "");
   const [unit, setUnit] = useState(data.unit);
   const [recipePickerOpen, setRecipePickerOpen] = useState(false);
+  const [calculationMode, setCalculationMode] = useState<"ingredient" | "yield">(data.calculationMode);
+  const [items, setItems] = useState<Array<{ recipeId: string; recipeName: string; baseIngredientId: string; baseIngredient: string; baseQuantity: number; baseUnit: string; calculationMode: "ingredient" | "yield"; targetQuantity: number; targetUnit: string }>>([]);
   const selectedRecipe = data.recipes.find((r) => r.id === recipeId);
 
   const [previewPending, setPreviewPending] = useState(false);
@@ -187,6 +199,18 @@ export default function NewProductionOrder() {
     plan.inconsistencies.length > 0 ||
     baseId !== data.baseId;
   const error = actionData?.error || data.error;
+  const targetQuantity = parseNumber(data.qty);
+  const canAddItem = !blocked && Boolean(base) && targetQuantity > 0;
+  function addCurrentItem() {
+    if (!canAddItem || !data.recipe || !base) return;
+    setItems((current) => [...current, {
+      recipeId: data.recipe!.id, recipeName: data.recipe!.name,
+      baseIngredientId: base.id, baseIngredient: base.name,
+      baseQuantity: data.baseQuantity, baseUnit: base.unit,
+      calculationMode, targetQuantity,
+      targetUnit: calculationMode === "yield" ? data.recipe!.yieldUnit || "UN" : unit || base.unit,
+    }]);
+  }
 
   return (
     <div className="w-full space-y-6 p-4 md:p-6 2xl:p-10">
@@ -196,13 +220,14 @@ export default function NewProductionOrder() {
             <ArrowLeft className="h-6 w-6" />
           </Link>
         </Button>
-        <h1 className="text-3xl font-bold 2xl:text-4xl">Cadastrar OP</h1>
+        <h1 className="text-3xl font-bold 2xl:text-4xl">Criar OP</h1>
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[minmax(22rem,1fr)_2fr]">
         <Card className="h-fit space-y-6 p-6">
           <Form method="get" ref={formRef} className="space-y-6">
             <input type="hidden" name="recipeId" value={recipeId} />
+            <input type="hidden" name="mode" value={calculationMode} />
             <input
               type="hidden"
               name="baseId"
@@ -267,6 +292,7 @@ export default function NewProductionOrder() {
                           onSelect={() => {
                             setPreviewPending(true);
                             setRecipeId(r.id);
+                            setCalculationMode("ingredient");
                             setUnit("");
                             setBaseId("");
                             setRecipePickerOpen(false);
@@ -301,7 +327,22 @@ export default function NewProductionOrder() {
 
             {data.recipe && recipeId === data.recipe.id && (
               <div className="space-y-2">
-                <Label className="text-lg">2. Ingrediente-base</Label>
+                <Label className="text-lg">2. Como deseja calcular?</Label>
+                <Select value={calculationMode} onValueChange={(value: "ingredient" | "yield") => {
+                  setCalculationMode(value); setUnit(""); setTimeout(() => refresh(), 0);
+                }}>
+                  <SelectTrigger className="h-16 text-xl"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ingredient" className="py-3 text-lg">Quantidade de ingrediente</SelectItem>
+                    {Number(data.recipe.yieldQuantity) > 0 && <SelectItem value="yield" className="py-3 text-lg">Número de rendimentos</SelectItem>}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            {data.recipe && recipeId === data.recipe.id && calculationMode === "ingredient" && (
+              <div className="space-y-2">
+                <Label className="text-lg">3. Ingrediente-base</Label>
                 <Select
                   value={baseId}
                   onValueChange={(v) => {
@@ -331,7 +372,7 @@ export default function NewProductionOrder() {
 
             {base && (
               <div className="space-y-2">
-                <Label className="text-lg">3. Quantidade de {base.name}</Label>
+                <Label className="text-lg">4. {calculationMode === "yield" ? `Rendimento desejado (${data.recipe?.yieldUnit || "UN"})` : `Quantidade de ${base.name}`}</Label>
                 <div className="flex gap-3">
                   <Input
                     name="qty"
@@ -341,7 +382,7 @@ export default function NewProductionOrder() {
                     className="h-20 text-4xl font-bold tabular-nums"
                     onChange={() => refresh(400)}
                   />
-                  <Select
+                  {calculationMode === "ingredient" && <Select
                     value={unit || base.unit}
                     onValueChange={(v) => {
                       setPreviewPending(true);
@@ -359,10 +400,13 @@ export default function NewProductionOrder() {
                         </SelectItem>
                       ))}
                     </SelectContent>
-                  </Select>
+                  </Select>}
                 </div>
               </div>
             )}
+            <Button type="button" variant="outline" disabled={!canAddItem} onClick={addCurrentItem} className="h-14 w-full text-lg">
+              <Plus className="mr-2 h-5 w-5" /> Adicionar receita à OP
+            </Button>
           </Form>
 
           {error && (
@@ -374,6 +418,7 @@ export default function NewProductionOrder() {
           )}
 
           <Form method="post" className="space-y-4">
+            <input type="hidden" name="items" value={JSON.stringify(items)} />
             <input type="hidden" name="recipeId" value={recipeId} />
             <input type="hidden" name="baseIngredientId" value={data.baseId} />
             <input
@@ -394,15 +439,22 @@ export default function NewProductionOrder() {
             <Button
               type="submit"
               size="lg"
-              disabled={blocked || navigation.state !== "idle"}
+              disabled={items.length === 0 || navigation.state !== "idle"}
               className="h-20 w-full text-2xl"
             >
-              Cadastrar OP
+              Criar OP com {items.length} receita{items.length === 1 ? "" : "s"}
             </Button>
           </Form>
         </Card>
 
         <div className="space-y-4">
+          {items.length > 0 && <Card className="space-y-3 p-6">
+            <div><h2 className="text-2xl font-bold">Receitas da OP</h2><p className="text-muted-foreground">As datas serão definidas depois, ao planejar a OP.</p></div>
+            {items.map((item, index) => <div key={`${item.recipeId}-${index}`} className="flex items-center justify-between gap-4 rounded-xl border p-4">
+              <div><div className="font-semibold">{item.recipeName}</div><div className="text-sm text-muted-foreground">{item.calculationMode === "yield" ? `${item.targetQuantity} ${item.targetUnit}` : `${item.targetQuantity} ${item.targetUnit.toLowerCase()} de ${item.baseIngredient}`}</div></div>
+              <Button type="button" variant="ghost" size="icon" aria-label={`Remover ${item.recipeName}`} onClick={() => setItems((current) => current.filter((_, itemIndex) => itemIndex !== index))}><Trash2 className="h-5 w-5" /></Button>
+            </div>)}
+          </Card>}
           {!plan && (
             <Card className="p-10 text-center text-xl text-muted-foreground">
               Escolha a receita, o ingrediente-base e a quantidade para ver o

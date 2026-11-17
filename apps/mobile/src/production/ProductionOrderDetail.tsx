@@ -6,6 +6,11 @@ import { ReorderableList } from "./ReorderableList";
 import type { PreparationSuggestion, ProductionMutation, ProductionOrder, ProductionStep } from "./order-types";
 import { Action, FadeContent, Workflow, Progress, ErrorNotice, colors, Field, labelDay, Lines, relativeDay, Panel, qty, s, Sheet, statusColors, statusLabels, stepColors } from "./order-ui";
 
+function plannedAt(value: string | null) {
+  if (!value) return "";
+  return new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date(value));
+}
+
 export function ProductionOrderDetail({ order, suggestions, busy, actionError, summaryOpen, onSummaryClose, onAction }: {
   order: ProductionOrder; suggestions: PreparationSuggestion[]; busy: boolean; actionError?: string; summaryOpen: boolean; onSummaryClose: () => void; onAction: (body: ProductionMutation) => void | Promise<boolean>;
 }) {
@@ -27,23 +32,26 @@ export function ProductionOrderDetail({ order, suggestions, busy, actionError, s
   const running = order.status === "in_progress";
   const terminal = order.status === "finished" || order.status === "cancelled";
   const allDone = order.Steps.length > 0 && order.Steps.every((step) => step.status === "done");
-  const prepsDone = order.Steps.filter((step) => step.kind === "preparation").every((step) => step.status === "done");
   const final = order.Steps.find((step) => step.kind === "final");
   const current = order.Steps.find((step) => step.id === selectedId) || order.Steps.find((step) => step.status === "in_progress") || order.Steps.find((step) => step.status !== "done") || final;
   if (!current) return <Panel><Text style={s.label}>Esta produção não tem etapas. Volte à lista e abra novamente.</Text></Panel>;
-  const preparation = order.plan.preparations.find((p) => p.id === current.preparationId);
-  const stepColor = (step: ProductionStep) => step.kind === "final" ? colors.muted : stepColors[Math.max(0, order.plan.preparations.findIndex((p) => p.id === step.preparationId)) % stepColors.length];
+  const currentItemSteps = order.Steps.filter((step) => step.itemIndex === current.itemIndex);
+  const prepsDone = currentItemSteps.filter((step) => step.kind === "preparation").every((step) => step.status === "done");
+  const item = order.items?.[current.itemIndex];
+  const currentPlan = item?.plan || order.plan;
+  const preparation = currentPlan.preparations.find((p) => p.id === current.preparationId);
+  const stepColor = (step: ProductionStep) => step.kind === "final" ? colors.muted : stepColors[Math.max(0, step.sortOrder) % stepColors.length];
   const blocked = current.kind === "final" && !prepsDone;
-  const stepBlocked = (step: ProductionStep) => step.kind === "final" && !prepsDone;
+  const stepBlocked = (step: ProductionStep) => step.kind === "final" && order.Steps.some((candidate) => candidate.itemIndex === step.itemIndex && candidate.kind === "preparation" && candidate.status !== "done");
   // Preparação concluída só pode ser anulada com a mistura final ainda pendente.
-  const canUndo = (step: ProductionStep) => step.status !== "pending" && (step.kind === "final" || step.status !== "done" || final?.status === "pending");
+  const canUndo = (step: ProductionStep) => step.status !== "pending" && (step.kind === "final" || step.status !== "done" || order.Steps.find((candidate) => candidate.itemIndex === step.itemIndex && candidate.kind === "final")?.status === "pending");
   const setStep = async (step: ProductionStep, to: "done" | "pending") => {
     const saved = await onAction({ intent: "step", id: order.id, stepId: step.id, to });
     if (saved && to === "done") setSelectedId(null);
   };
   const usageLabel = order.usageDate && order.usageDate.slice(0, 10) !== order.productionDate.slice(0, 10) ? relativeDay(order.usageDate.slice(0, 10)) : "";
   const finishedCount = order.Steps.filter((step) => step.status === "done").length;
-  const canReorder = (order.status === "planned" || running) && order.Steps.filter((step) => step.kind === "preparation").length > 1;
+  const canReorder = !order.items?.length && (order.status === "planned" || running) && order.Steps.filter((step) => step.kind === "preparation").length > 1;
   const steps = <View style={s.stack}>
     {wide ? <Progress done={finishedCount} total={order.Steps.length} /> : null}
     <ReorderableList items={order.Steps.map((step) => ({ ...step, fixed: step.kind === "final" }))} disabled={!canReorder || busy}
@@ -52,7 +60,8 @@ export function ProductionOrderDetail({ order, suggestions, busy, actionError, s
       onPress={() => setSelectedId(step.id)} style={({ pressed }) => [s.panel, { borderLeftWidth: 4, borderLeftColor: stepColor(step), borderColor: current.id === step.id ? stepColor(step) : colors.line, backgroundColor: current.id === step.id ? colors.raised : colors.panel }, pressed && s.dim]}>
       <View style={s.row}>{handle ?? (canReorder ? <View style={{ width: 44 }} /> : null)}<Text style={{ color: stepColor(step), fontSize: 24, fontWeight: "700" }}>{step.status === "done" ? "✓" : String(index + 1).padStart(2, "0")}</Text>
         <View style={s.flex}><Text style={s.label}>{step.name}</Text>
-          <Text style={s.hint}>{step.kind === "final" && !prepsDone ? "Aguarda as preparações" : step.status === "done" ? "Concluída" : step.status === "in_progress" ? "Em andamento" : "A fazer"}</Text>
+          {step.recipeName ? <Text style={s.hint}>{step.recipeName}{step.scheduledStartAt ? ` · ${plannedAt(step.scheduledStartAt)}` : ""}</Text> : null}
+          <Text style={s.hint}>{stepBlocked(step) ? "Aguarda as preparações" : step.status === "done" ? "Concluída" : step.status === "in_progress" ? "Em andamento" : "A fazer"}</Text>
         </View>
         {running ? <>
           {canUndo(step) ? <Pressable disabled={busy} accessibilityRole="button" accessibilityLabel={`Reabrir etapa ${step.name}`} onPress={() => setStep(step, "pending")} style={({ pressed }) => [{ width: 44, height: 44, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.line, borderRadius: 6 }, (pressed || busy) && s.dim]}><Text style={{ color: colors.muted, fontSize: 28 }}>↶</Text></Pressable> : null}
@@ -66,17 +75,18 @@ export function ProductionOrderDetail({ order, suggestions, busy, actionError, s
   else if (running && !allDone && current.status !== "done" && !blocked) primary = { label: `Concluí ${current.name}`, action: () => { void setStep(current, "done"); } };
   else if (running && allDone) primary = { label: "Finalizar produção", action: () => setConfirm("finish") };
 
-  const hasFinalParts = current.kind === "final" && order.plan.final.preparedItems.length > 0;
+  const hasFinalParts = current.kind === "final" && currentPlan.final.preparedItems.length > 0;
   const ingredients = <FadeContent changeKey={`${current.id}:${finalPart}`} >
     <View style={[s.panel, { padding: wide ? 20 : 16, gap: 0 }]}>
       <View style={[s.row, { gap: 16, flexWrap: "wrap", alignItems: "center" }]}>
         <View style={{ flex: 1, minWidth: 160, gap: 4 }}>
         <Text style={[s.eyebrow, { color: stepColor(current) }]}>ETAPA {order.Steps.findIndex((step) => step.id === current.id) + 1}/{order.Steps.length}</Text>
         <Text style={[s.title, { fontSize: 23 }]}>{current.name}</Text>
+        {current.recipeName ? <Text style={s.hint}>{current.recipeName}</Text> : null}
         </View>
         {primary && !(hasFinalParts && finalPart === 0 && running && !allDone) ? <Action compact label={busy ? "Salvando…" : primary.label} disabled={busy || primary.disabled} onPress={primary.action} /> : terminal ? <Text style={{ color: statusColors[order.status], fontSize: 13 }}>{statusLabels[order.status]}</Text> : null}
       </View>
-      {hasFinalParts ? <>
+      {current.kind === "final" && currentPlan.final.preparedItems.length > 0 ? <>
         <View style={{ flexDirection: "row", gap: 12, marginTop: 20, marginBottom: 16 }}>
           {["Juntar preparações", "Acrescentar ingredientes"].map((label, index) => <Pressable key={label} accessibilityRole="button" accessibilityState={{ selected: finalPart === index }} onPress={() => setFinalPart(index)} style={{ flex: 1, minHeight: 44, gap: 8, paddingTop: 0, paddingBottom: 6 }}>
             <View style={{ height: 3, borderRadius: 2, backgroundColor: index === finalPart ? colors.yellow : index < finalPart ? colors.green : colors.line }} />
@@ -85,15 +95,15 @@ export function ProductionOrderDetail({ order, suggestions, busy, actionError, s
         </View>
         {finalPart === 0 ? <View style={{ gap: 8 }}>
           <Text style={s.hint}>Junte as preparações:</Text>
-          <View style={[s.row, { flexWrap: "wrap", gap: 12 }]}>{order.plan.final.preparedItems.map((name, index) => <Text key={`${index}:${name}`} style={{ color: prepsDone ? colors.green : colors.muted, fontSize: 16 }}>{prepsDone ? "✓" : "○"} {name}</Text>)}</View>
+          <View style={[s.row, { flexWrap: "wrap", gap: 12 }]}>{currentPlan.final.preparedItems.map((name, index) => <Text key={`${index}:${name}`} style={{ color: prepsDone ? colors.green : colors.muted, fontSize: 16 }}>{prepsDone ? "✓" : "○"} {name}</Text>)}</View>
           <View style={{ alignItems: "flex-end", marginTop: 16 }}><Action compact label="Acrescentar ingredientes →" onPress={() => setFinalPart(1)} /></View>
         </View> : <View style={{ gap: 8 }}>
           <Text style={s.hint}>Depois, acrescente:</Text>
-          <Lines lines={order.plan.final.ingredients} />
+          <Lines lines={currentPlan.final.ingredients} />
         </View>}
       </> : <View style={{ marginTop: 20, gap: 8 }}>
         <Text style={s.hint}>Separe e pese:</Text>
-        <Lines lines={current.kind === "final" ? order.plan.final.ingredients : preparation?.ingredients || []} />
+        <Lines lines={current.kind === "final" ? currentPlan.final.ingredients : preparation?.ingredients || []} />
       </View>}
       {preparation?.notes ? <View style={{ marginTop: 20 }}><Text style={s.label}>Como preparar</Text><Text style={[s.hint, { marginTop: 8 }]}>{preparation.notes}</Text></View> : null}
       {order.status === "planned" ? <Action compact secondary label="Editar preparações" disabled={busy} onPress={() => setEditingPreps(true)} /> : null}
@@ -111,7 +121,7 @@ export function ProductionOrderDetail({ order, suggestions, busy, actionError, s
     {summaryOpen ? <Sheet title="Resumo da produção" onClose={() => onSummaryClose()}>
       <ScrollView contentContainerStyle={s.scroll}>
         <Text style={s.sectionTitle}>{order.recipeName}</Text><Text style={s.hint}>Produção #{order.number} · Produzir: {labelDay(order.productionDate.slice(0, 10))}{usageLabel ? ` · Usar em: ${labelDay(order.usageDate!.slice(0, 10))}` : ""}</Text>
-        <Text style={s.label}>Todos os ingredientes</Text><Lines lines={order.plan.totals} />
+        {order.items?.length ? order.items.map((entry, index) => <View key={`${entry.recipeId}-${index}`} style={{ gap: 8 }}><Text style={s.label}>{entry.recipeName}</Text><Lines lines={entry.plan.totals} /></View>) : <><Text style={s.label}>Todos os ingredientes</Text><Lines lines={order.plan.totals} /></>}
         {order.producedQuantity != null ? <Text style={s.prepared}>Produzido: {qty(order.producedQuantity, order.producedUnit || "UN")}</Text> : null}
         {!terminal ? <Action secondary danger label="Cancelar esta produção" disabled={busy} onPress={() => { onSummaryClose(); setConfirm("cancel"); }} /> : null}
       </ScrollView>

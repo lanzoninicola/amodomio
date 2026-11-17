@@ -1,24 +1,28 @@
-import type { ProductionPlan, ProductionRecipeIngredient, ProductionRecipePreparation } from "../../../../shared/production/order-plan";
+import type { ProductionOrderItemSnapshot, ProductionPlan, ProductionRecipeIngredient, ProductionRecipePreparation } from "../../../../shared/production/order-plan";
 export type { ProductionPlan };
 export type ProductionRecipeSummary = {
   id: string; name: string; status: string; productionBaseRecipeIngredientId: string | null;
 };
 export type ProductionRecipe = {
   id: string; name: string; baseIngredientId: string | null;
+  costingMode: string; yieldQuantity: number | null; yieldUnit: string | null;
   ingredients: ProductionRecipeIngredient[]; preparations: ProductionRecipePreparation[];
 };
 export type OrderStatus = "planned" | "in_progress" | "finished" | "cancelled";
 export type ProductionStep = {
   id: string; name: string; kind: "preparation" | "final"; preparationId: string | null;
   status: "pending" | "in_progress" | "done"; sortOrder: number;
+  itemIndex: number; recipeName: string | null; scheduledStartAt: string | null; scheduledEndAt: string | null;
 };
 export type ProductionSummary = {
   id: string; number: number; recipeName: string; status: OrderStatus;
   baseIngredient: string; baseQuantity: number; baseUnit: string; productionDate: string; usageDate: string | null;
   Steps: { status: string }[];
+  items?: ProductionOrderItemSnapshot[] | null;
 };
 export type ProductionOrder = Omit<ProductionSummary, "Steps"> & {
   plan: ProductionPlan; Steps: ProductionStep[]; notes: string | null;
+  items: ProductionOrderItemSnapshot[] | null;
   producedQuantity: number | null; producedUnit: string | null;
 };
 export type ProductionMutation =

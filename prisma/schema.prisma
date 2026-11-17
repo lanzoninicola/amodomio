@@ -3529,6 +3529,7 @@ model ProductionOrder {
   // Dia em que o produto desta produção será usado (ex.: biga feita hoje para a massa de amanhã).
   usageDate        DateTime? @map("usage_date")
   plan             Json
+  items            Json?
   notes            String?   @db.Text
   producedQuantity Float?    @map("produced_quantity")
   producedUnit     String?   @map("produced_unit")
@@ -3558,6 +3559,7 @@ model ProductionOrderTemplate {
   baseQuantity   Float     @map("base_quantity")
   baseUnit       String    @map("base_unit")
   plan           Json
+  items          Json?
   notes          String?   @db.Text
   archivedAt     DateTime? @map("archived_at")
   createdAt      DateTime  @default(now()) @map("created_at")
@@ -3580,6 +3582,10 @@ model ProductionOrderStep {
   sortOrder     Int       @default(0) @map("sort_order")
   status        String    @default("pending") // pending | in_progress | done
   completedAt   DateTime? @map("completed_at")
+  itemIndex      Int       @default(0) @map("item_index")
+  recipeName     String?   @map("recipe_name")
+  scheduledStartAt DateTime? @map("scheduled_start_at")
+  scheduledEndAt   DateTime? @map("scheduled_end_at")
 
   Order ProductionOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
 

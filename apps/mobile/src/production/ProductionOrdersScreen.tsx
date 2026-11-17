@@ -90,7 +90,7 @@ export function ProductionOrdersScreen({ apiUrl, token, onBack, onUnauthorized }
     (closed ? row.status === "finished" || row.status === "cancelled" : row.status === "planned" || row.status === "in_progress"))
     .sort((a, b) => (a.status === "in_progress" ? -1 : 0) - (b.status === "in_progress" ? -1 : 0) || (allDays ? a.productionDate.localeCompare(b.productionDate) : 0) || b.number - a.number);
   const columns = width >= 1200 ? 3 : width >= 700 ? 2 : 1;
-  const title = page.kind === "new" ? "Nova produção" : page.kind === "order" ? order?.id === selectedOrderId ? order.recipeName : "Produção" : "Produção";
+  const title = page.kind === "new" ? "Nova produção" : page.kind === "order" ? order?.id === selectedOrderId ? (order.items && order.items.length > 1 ? `${order.items.length} receitas` : order.recipeName) : "Produção" : "Produção";
   return <KdsTypographyContext.Provider value={true}>
     <Screen style={s.screen}>
       <StatusBar style="light" />
@@ -148,7 +148,8 @@ export function ProductionOrdersScreen({ apiUrl, token, onBack, onUnauthorized }
           renderItem={({ item }) => <Pressable accessibilityRole="button" accessibilityLabel={`Abrir produção ${item.number}: ${item.recipeName}, ${statusLabels[item.status]}`} onPress={() => { setOrder(null); navigate({ kind: "order", id: item.id }); }}
             style={({ pressed }) => [s.panel, { flex: 1, maxWidth: `${100 / columns}%`, borderTopWidth: 4, borderTopColor: statusColors[item.status], marginBottom: 16 }, pressed && s.dim]}>
             <View style={[s.row, { justifyContent: "space-between", flexWrap: "wrap" }]}><Text style={s.hint}>#{item.number}</Text><Text style={[s.badge, { color: statusColors[item.status] }]}>{statusLabels[item.status]}</Text></View>
-            <Text style={s.sectionTitle}>{item.recipeName}</Text>
+            <Text style={s.sectionTitle}>{item.items && item.items.length > 1 ? `${item.items.length} receitas` : item.recipeName}</Text>
+            {item.items && item.items.length > 1 ? <Text style={s.hint}>{item.items.map((entry) => entry.recipeName).join(" · ")}</Text> : null}
             <View style={{ flexDirection: "row", gap: 12, paddingVertical: 12, borderTopWidth: 1, borderBottomWidth: 1, borderColor: colors.line }}>
               {[{ title: "Produzir em", date: item.productionDate }, { title: "Usar em", date: item.usageDate || item.productionDate }].map((entry, index) => {
                 const day = entry.date.slice(0, 10);

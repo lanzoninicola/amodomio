@@ -10,18 +10,21 @@ Módulo de OP: "produzir esta receita usando X do ingrediente-base". Fase 1, sem
 - **Inconsistência**: se a soma das preparações passa do total de algum ingrediente, `plan.inconsistencies` é preenchido. A criação da OP e o salvamento da configuração são bloqueados.
 - Receita sem preparação gera só a etapa "Mistura final".
 
-## Cadastro e lançamentos
+## Criação e lançamentos
 
-- A OP cadastrada (`ProductionOrderTemplate`) não possui data nem estado operacional. Ela guarda receita, quantidade, observações e o snapshot do plano.
-- Um cadastro pode ser lançado em quantos dias forem necessários. Cada lançamento cria uma `ProductionOrder` independente, com data, status e etapas próprias.
-- A tela web `/admin/producao/ordens` lista os cadastros, permite lançar para uma data, consultar as execuções recentes e arquivar cadastros.
-- OPs criadas antes desse modelo são convertidas pela migration em cadastros reutilizáveis, sem perder a execução original.
+- A OP criada (`ProductionOrderTemplate`) não possui data nem estado operacional. Ela guarda receita, quantidade, observações e o snapshot do plano.
+- Uma OP pode ser lançada em quantos dias forem necessários. Cada lançamento cria uma `ProductionOrder` independente, com data, status e etapas próprias.
+- A tela web `/admin/producao/ordens` lista as OPs, permite lançar para uma data, consultar as execuções recentes e arquivar OPs.
+- OPs criadas antes desse modelo são convertidas pela migration em modelos reutilizáveis, sem perder a execução original.
 
 ## Jornada da execução
 
-1. **Fase 1 — cadastrar a OP**: receita → ingrediente-base → quantidade. O cadastro fica disponível para lançamentos futuros, sem estar preso a uma data.
-2. **Lançar a OP**: escolha uma data. Nasce uma execução `planned`, com status, etapas e conclusão independentes dos outros lançamentos do mesmo cadastro.
-3. **Preparações**: o cadastro usa as preparações padrão da receita, escaladas para sua quantidade. Cada lançamento recebe uma cópia desse plano e de suas etapas.
+1. **Fase 1 — criar a OP**: adicione uma ou mais receitas. Cada receita pode ser dimensionada por ingrediente-base ou pelo rendimento cadastrado.
+2. **Planejar a OP**: somente depois da composição pronta, informe quando cada preparação e mistura final deve acontecer.
+3. **Lançar a OP**: nasce uma execução `planned`, com status, etapas e conclusão independentes dos outros lançamentos da mesma OP.
+4. **Preparações**: cada item usa as preparações padrão da sua receita, escaladas para sua quantidade. O lançamento recebe snapshots dos itens e uma etapa identificada por receita.
+
+OPs antigas continuam válidas: `plan` e os campos singulares representam o primeiro item. Novas OPs também gravam `items`, que contém os snapshots de todas as receitas. As datas ficam nas etapas (`scheduledStartAt`/`scheduledEndAt`), e `productionDate` continua como a primeira data da execução para filtros e compatibilidade.
 
 Onde fica: `definePreparations` e `getPreparationSuggestions` em `production-order.server.ts`; web em `components/preparations-editor.tsx` (usado em `admin.producao.ordens.$id.tsx`); mobile em `OrderPreparationsStep.tsx` (usado em `ProductionOrderDetail.tsx`); API: intent `define-preparations` e `baseIngredientId` em `preview`/`create`; `GET ?id=` e as mutações devolvem `{ order, suggestions }`.
 
@@ -34,8 +37,8 @@ A tela de configuração da receita (`/admin/producao/receitas/:id`) continua ex
 
 ## Modelos (prisma/schema.prisma, migration `20261102000000_production_orders`)
 
-- `ProductionOrder`: `number` autoincrement, snapshot em `plan` (JSON), status `planned | in_progress | finished | cancelled`, datas de início e fim, `producedQuantity`/`producedUnit` opcionais.
-- `ProductionOrderStep`: `kind` `preparation | final`, status `pending | in_progress | done`.
+- `ProductionOrder`: `number` autoincrement, snapshot legado em `plan`, composição multi-receita em `items` (JSON), status `planned | in_progress | finished | cancelled`, datas de início e fim, `producedQuantity`/`producedUnit` opcionais.
+- `ProductionOrderStep`: `kind` `preparation | final`, status `pending | in_progress | done`, `itemIndex`/`recipeName` e programação opcional por etapa.
 - A OP guarda snapshot. Alterar a receita depois não muda OPs existentes.
 
 ## Arquivos

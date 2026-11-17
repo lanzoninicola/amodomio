@@ -47,6 +47,20 @@ export type ProductionPlan = {
   preparationsDefined?: boolean;
 };
 
+export type ProductionOrderItemSnapshot = {
+  version: 1;
+  recipeId: string;
+  recipeName: string;
+  calculationMode: "ingredient" | "yield";
+  targetQuantity: number;
+  targetUnit: string;
+  baseIngredientId: string;
+  baseIngredient: string;
+  baseQuantity: number;
+  baseUnit: string;
+  plan: ProductionPlan;
+};
+
 const EPSILON = 1e-6;
 
 export function calculateProductionPlan(params: {
