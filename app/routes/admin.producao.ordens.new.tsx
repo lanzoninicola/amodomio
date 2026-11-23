@@ -12,7 +12,13 @@ import {
   useNavigation,
   useSubmit,
 } from "@remix-run/react";
-import { AlertTriangle, ArrowLeft, Check, ChevronsUpDown, Plus, Trash2 } from "lucide-react";
+import {
+  AlertTriangle,
+  ArrowLeft,
+  Check,
+  ChevronsUpDown,
+  PackageOpen,
+} from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import { Button } from "~/components/ui/button";
@@ -54,6 +60,8 @@ import {
 import {
   createProductionOrderTemplate,
   getRecipeProduction,
+  listProductionProductChoices,
+  listRecipeProductionProducts,
   listProductionRecipes,
   planForRecipe,
   type FormLike,
@@ -91,6 +99,11 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const date = url.searchParams.get("date") || today();
   const usage = url.searchParams.get("usage") || "";
   const recipes = await listProductionRecipes();
+  const planningMode = url.searchParams.get("planningMode") || "semiFinished";
+  const productChoices =
+    planningMode === "finalProducts" && !recipeId
+      ? await listProductionProductChoices()
+      : [];
 
   let recipe: Awaited<ReturnType<typeof getRecipeProduction>> | null = null;
   let plan: ProductionPlan | null = null;
@@ -98,24 +111,67 @@ export async function loader({ request }: LoaderFunctionArgs) {
   let error = "";
   let unit = "";
   let baseId = "";
+  let products: Awaited<ReturnType<typeof listRecipeProductionProducts>> = [];
+  let productMix: Array<{
+    itemVariationId: string;
+    itemName: string;
+    variationName: string;
+    quantity: number;
+    recipeBatches: number;
+  }> = [];
+  let unallocatedRecipeBatches = 0;
   if (recipeId) {
     recipe = await getRecipeProduction(recipeId);
+    products = await listRecipeProductionProducts(recipeId);
     baseId =
       recipe.ingredients.find((i: any) => i.id === requestedBaseId)?.id ||
       recipe.baseIngredientId ||
-      (calculationMode === "yield" ? recipe.ingredients[0]?.id : "") ||
+      (planningMode === "finalProducts"
+        ? recipe.ingredients.find((i: any) => i.quantity > 0)?.id
+        : "") ||
       "";
     const base = recipe.ingredients.find((i: any) => i.id === baseId);
     unit = url.searchParams.get("unit") || base?.unit || "";
     if (base) {
-      const requested = parseNumber(qty);
-      const converted = calculationMode === "yield" && Number(recipe.yieldQuantity) > 0
-        ? base.quantity * (requested / Number(recipe.yieldQuantity))
-        : convertQuantity(requested, unit, base.unit);
-      baseQuantity = converted ?? 0;
+      const requestedMix = products
+        .map((product) => {
+          const quantity = parseNumber(
+            url.searchParams.get(`product_${product.itemVariationId}`)
+          );
+          return {
+            itemVariationId: product.itemVariationId,
+            itemName: product.itemName,
+            variationName: product.variationName,
+            quantity,
+            recipeBatches: quantity * Number(product.recipeBatchesPerUnit || 0),
+          };
+        })
+        .filter((line) => line.quantity > 0);
+      const requestedBatches = requestedMix.reduce(
+        (sum, line) => sum + line.recipeBatches,
+        0
+      );
+      productMix = requestedMix;
+      if (planningMode === "finalProducts" && requestedBatches > 0) {
+        baseQuantity = base.quantity * requestedBatches;
+      } else {
+        const converted = convertQuantity(parseNumber(qty), unit, base.unit);
+        baseQuantity = converted ?? 0;
+      }
       if (baseQuantity > 0) {
         try {
           plan = planForRecipe(recipe, baseQuantity, base.id);
+          productMix = requestedMix;
+          unallocatedRecipeBatches = Math.max(
+            0,
+            plan.scaleFactor - requestedBatches
+          );
+          if (
+            planningMode !== "finalProducts" &&
+            requestedBatches > plan.scaleFactor + 1e-6
+          )
+            error =
+              "A distribuição informada ultrapassa a quantidade de semiacabado.";
         } catch (e) {
           error = (e as Error).message;
         }
@@ -133,7 +189,11 @@ export async function loader({ request }: LoaderFunctionArgs) {
     baseQuantity,
     baseId,
     error,
-    calculationMode,
+    products,
+    productMix,
+    unallocatedRecipeBatches,
+    planningMode,
+    productChoices,
   });
 }
 
@@ -142,9 +202,9 @@ export async function action({ request }: ActionFunctionArgs) {
     return redirect("/login");
   const form = (await request.formData()) as unknown as FormLike;
   try {
-    const rawItems = String(form.get("items") || "");
-    const items = rawItems ? JSON.parse(rawItems) : undefined;
-    if (items && !Array.isArray(items)) throw new Error("Receitas da OP inválidas.");
+    const rawMix = String(form.get("productMix") || "");
+    const parsedMix = rawMix ? JSON.parse(rawMix) : undefined;
+    const productMix = Array.isArray(parsedMix) ? parsedMix : undefined;
     await createProductionOrderTemplate({
       name: String(form.get("name") || ""),
       recipeId: String(form.get("recipeId") || ""),
@@ -152,6 +212,10 @@ export async function action({ request }: ActionFunctionArgs) {
       baseQuantity: parseNumber(String(form.get("baseQuantity"))),
       items,
       notes: String(form.get("notes") || ""),
+      productMix,
+      unallocatedRecipeBatches: parseNumber(
+        String(form.get("unallocatedRecipeBatches") || "0")
+      ),
     });
     return redirect("/admin/producao/ordens");
   } catch (e) {
@@ -169,8 +233,10 @@ export default function NewProductionOrder() {
   const [recipeId, setRecipeId] = useState(data.recipe?.id || "");
   const [unit, setUnit] = useState(data.unit);
   const [recipePickerOpen, setRecipePickerOpen] = useState(false);
-  const [calculationMode, setCalculationMode] = useState<"ingredient" | "yield">(data.calculationMode);
-  const [items, setItems] = useState<Array<{ recipeId: string; recipeName: string; baseIngredientId: string; baseIngredient: string; baseQuantity: number; baseUnit: string; calculationMode: "ingredient" | "yield"; targetQuantity: number; targetUnit: string }>>([]);
+  const [productPickerOpen, setProductPickerOpen] = useState(false);
+  const [showProductPlanner, setShowProductPlanner] = useState(
+    data.planningMode === "finalProducts" || data.productMix.length > 0
+  );
   const selectedRecipe = data.recipes.find((r) => r.id === recipeId);
 
   const [previewPending, setPreviewPending] = useState(false);
@@ -180,6 +246,10 @@ export default function NewProductionOrder() {
   useEffect(() => () => clearTimeout(timer.current), []);
 
   const [baseId, setBaseId] = useState(data.baseId);
+  useEffect(() => {
+    setBaseId(data.baseId);
+    setUnit(data.unit);
+  }, [data.baseId, data.unit]);
   const base = data.recipe?.ingredients.find((i: any) => i.id === data.baseId);
   const units = base ? compatibleUnits(base.unit) : [];
 
@@ -192,25 +262,14 @@ export default function NewProductionOrder() {
     );
   }
   const plan = data.plan as ProductionPlan | null;
+  const error = actionData?.error || data.error;
   const blocked =
     previewPending ||
     recipeId !== data.recipe?.id ||
     !plan ||
     plan.inconsistencies.length > 0 ||
-    baseId !== data.baseId;
-  const error = actionData?.error || data.error;
-  const targetQuantity = parseNumber(data.qty);
-  const canAddItem = !blocked && Boolean(base) && targetQuantity > 0;
-  function addCurrentItem() {
-    if (!canAddItem || !data.recipe || !base) return;
-    setItems((current) => [...current, {
-      recipeId: data.recipe!.id, recipeName: data.recipe!.name,
-      baseIngredientId: base.id, baseIngredient: base.name,
-      baseQuantity: data.baseQuantity, baseUnit: base.unit,
-      calculationMode, targetQuantity,
-      targetUnit: calculationMode === "yield" ? data.recipe!.yieldUnit || "UN" : unit || base.unit,
-    }]);
-  }
+    baseId !== data.baseId ||
+    Boolean(error);
 
   return (
     <div className="w-full space-y-6 p-4 md:p-6 2xl:p-10">
@@ -220,12 +279,18 @@ export default function NewProductionOrder() {
             <ArrowLeft className="h-6 w-6" />
           </Link>
         </Button>
-        <h1 className="text-3xl font-bold 2xl:text-4xl">Criar OP</h1>
+        <h1 className="text-3xl font-bold 2xl:text-4xl">Novo OP</h1>
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[minmax(22rem,1fr)_2fr]">
         <Card className="h-fit space-y-6 p-6">
           <Form method="get" ref={formRef} className="space-y-6">
+            <input
+              type="hidden"
+              name="planningMode"
+              value={data.planningMode}
+              readOnly
+            />
             <input type="hidden" name="recipeId" value={recipeId} />
             <input type="hidden" name="mode" value={calculationMode} />
             <input
@@ -238,92 +303,227 @@ export default function NewProductionOrder() {
               name="unit"
               value={unit || (recipeId === data.recipe?.id ? data.unit : "")}
             />
-            <div className="space-y-2">
-              <Label id="production-recipe-label" className="text-lg">
-                1. Receita
-              </Label>
+            <div className="space-y-3">
+              <Label className="text-lg">Como deseja planejar?</Label>
+              <div className="grid gap-2">
+                <Button
+                  type="button"
+                  variant={
+                    data.planningMode === "finalProducts"
+                      ? "default"
+                      : "outline"
+                  }
+                  className="h-auto min-h-14 whitespace-normal"
+                  onClick={() => {
+                    setShowProductPlanner(true);
+                    if (!recipeId) {
+                      const params = new URLSearchParams({
+                        planningMode: "finalProducts",
+                      });
+                      setPreviewPending(true);
+                      submit(params, { replace: true });
+                    } else {
+                      const params = new URLSearchParams(
+                        new FormData(formRef.current!) as any
+                      );
+                      params.set("planningMode", "finalProducts");
+                      setPreviewPending(true);
+                      submit(params, { replace: true });
+                    }
+                  }}
+                >
+                  Sei quais itens quero produzir
+                </Button>
+                <Button
+                  type="button"
+                  variant={
+                    data.planningMode !== "finalProducts"
+                      ? "default"
+                      : "outline"
+                  }
+                  className="h-auto min-h-14 whitespace-normal"
+                  onClick={() => {
+                    const params = new URLSearchParams(
+                      new FormData(formRef.current!) as any
+                    );
+                    params.set("planningMode", "semiFinished");
+                    setPreviewPending(true);
+                    submit(params, { replace: true });
+                  }}
+                >
+                  Partir da receita e do ingrediente-base
+                </Button>
+              </div>
+            </div>
+            {data.planningMode === "finalProducts" && !recipeId && (
               <Dialog
-                open={recipePickerOpen}
-                onOpenChange={setRecipePickerOpen}
+                open={productPickerOpen}
+                onOpenChange={setProductPickerOpen}
               >
                 <DialogTrigger asChild>
                   <Button
                     type="button"
                     variant="outline"
-                    aria-labelledby="production-recipe-label production-recipe-value"
-                    className="h-auto min-h-16 w-full justify-between gap-3 px-4 py-3 text-left text-xl font-medium"
+                    className="h-auto min-h-16 w-full justify-between gap-3 text-left text-lg"
                   >
-                    <span
-                      id="production-recipe-value"
-                      className={cn(
-                        "min-w-0 whitespace-normal break-words",
-                        !selectedRecipe && "text-muted-foreground"
-                      )}
-                    >
-                      {selectedRecipe?.name || "Buscar e escolher receita"}
-                    </span>
-                    <ChevronsUpDown className="h-5 w-5 shrink-0 text-muted-foreground" />
+                    Buscar o primeiro item{" "}
+                    <ChevronsUpDown className="h-5 w-5 shrink-0" />
                   </Button>
                 </DialogTrigger>
-                <DialogContent className="flex max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-2xl flex-col gap-0 overflow-hidden p-0 [&>button:last-child]:flex [&>button:last-child]:h-10 [&>button:last-child]:w-10 [&>button:last-child]:items-center [&>button:last-child]:justify-center">
-                  <DialogHeader className="shrink-0 px-6 pb-4 pt-6 pr-16 text-left">
-                    <DialogTitle className="text-2xl">
-                      Escolher receita
-                    </DialogTitle>
-                    <DialogDescription className="text-base">
-                      Busque pelo nome e toque na receita para selecionar.
+                <DialogContent className="flex max-h-[calc(100dvh-2rem)] max-w-2xl flex-col overflow-hidden">
+                  <DialogHeader>
+                    <DialogTitle>Escolha um item para começar</DialogTitle>
+                    <DialogDescription>
+                      Depois você poderá acrescentar outros itens que usem a
+                      mesma receita.
                     </DialogDescription>
                   </DialogHeader>
-                  <Command className="min-h-0 rounded-none [&_[data-slot=command-input-wrapper]]:h-16 [&_[data-slot=command-input-wrapper]]:shrink-0 [&_[data-slot=command-input-wrapper]]:px-5">
-                    <CommandInput
-                      placeholder="Digite o nome da receita…"
-                      aria-label="Buscar receita pelo nome"
-                      className="h-16 text-lg"
-                    />
-                    <CommandList className="max-h-[min(28rem,calc(100dvh-16rem))] min-h-0 overflow-y-auto overscroll-contain p-2">
+                  <Command className="min-h-0">
+                    <CommandInput placeholder="Buscar item ou receita" />
+                    <CommandList className="max-h-[50vh]">
                       <CommandEmpty>
-                        Nenhuma receita encontrada. Tente outro nome.
+                        Nenhum item com receita encontrado nas fichas de custo
+                        ativas.
                       </CommandEmpty>
-                      {data.recipes.map((r) => (
-                        <CommandItem
-                          key={r.id}
-                          value={r.id}
-                          keywords={[r.name]}
-                          onSelect={() => {
-                            setPreviewPending(true);
-                            setRecipeId(r.id);
-                            setCalculationMode("ingredient");
-                            setUnit("");
-                            setBaseId("");
-                            setRecipePickerOpen(false);
-                            setTimeout(() => refresh(), 0);
-                          }}
-                          className="min-h-16 cursor-pointer gap-4 rounded-lg px-4 py-3 text-lg data-[selected=true]:bg-slate-100"
-                        >
-                          <span className="min-w-0 flex-1 whitespace-normal break-words">
-                            <span className="block font-medium">{r.name}</span>
-                            {r.status === "draft" && (
-                              <span className="text-sm text-muted-foreground">
-                                Rascunho
+                      {data.productChoices
+                        .filter((choice) =>
+                          data.recipes.some((r) => r.id === choice.recipeId)
+                        )
+                        .map((choice) => {
+                          const recipe = data.recipes.find(
+                            (r) => r.id === choice.recipeId
+                          )!;
+                          return (
+                            <CommandItem
+                              key={`${choice.itemVariationId}:${choice.recipeId}`}
+                              value={`${choice.itemVariationId}:${choice.recipeId}`}
+                              keywords={[
+                                choice.itemName,
+                                choice.variationName,
+                                recipe.name,
+                              ]}
+                              className="min-h-14 text-lg"
+                              onSelect={() => {
+                                const params = new URLSearchParams({
+                                  planningMode: "finalProducts",
+                                  recipeId: choice.recipeId,
+                                });
+                                params.set(
+                                  `product_${choice.itemVariationId}`,
+                                  "1"
+                                );
+                                setRecipeId(choice.recipeId);
+                                setBaseId("");
+                                setUnit("");
+                                setShowProductPlanner(true);
+                                setProductPickerOpen(false);
+                                setPreviewPending(true);
+                                submit(params, { replace: true });
+                              }}
+                            >
+                              <span>
+                                {choice.itemName} · {choice.variationName}
+                                <span className="block text-sm text-muted-foreground">
+                                  Receita: {recipe.name}
+                                </span>
                               </span>
-                            )}
-                          </span>
-                          {r.id === recipeId && (
-                            <Check
-                              className="h-6 w-6 shrink-0 text-emerald-600"
-                              aria-label="Receita selecionada"
-                            />
-                          )}
-                        </CommandItem>
-                      ))}
+                            </CommandItem>
+                          );
+                        })}
                     </CommandList>
                   </Command>
-                  <div className="shrink-0 border-t bg-muted/30 px-6 py-3 text-sm text-muted-foreground">
-                    {data.recipes.length} receitas disponíveis
-                  </div>
                 </DialogContent>
               </Dialog>
-            </div>
+            )}
+            {(data.planningMode !== "finalProducts" || recipeId) && (
+              <div className="space-y-2">
+                <Label id="production-recipe-label" className="text-lg">
+                  1. Receita
+                </Label>
+                <Dialog
+                  open={recipePickerOpen}
+                  onOpenChange={setRecipePickerOpen}
+                >
+                  <DialogTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      aria-labelledby="production-recipe-label production-recipe-value"
+                      className="h-auto min-h-16 w-full justify-between gap-3 px-4 py-3 text-left text-xl font-medium"
+                    >
+                      <span
+                        id="production-recipe-value"
+                        className={cn(
+                          "min-w-0 whitespace-normal break-words",
+                          !selectedRecipe && "text-muted-foreground"
+                        )}
+                      >
+                        {selectedRecipe?.name || "Buscar e escolher receita"}
+                      </span>
+                      <ChevronsUpDown className="h-5 w-5 shrink-0 text-muted-foreground" />
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="flex max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-2xl flex-col gap-0 overflow-hidden p-0 [&>button:last-child]:flex [&>button:last-child]:h-10 [&>button:last-child]:w-10 [&>button:last-child]:items-center [&>button:last-child]:justify-center">
+                    <DialogHeader className="shrink-0 px-6 pb-4 pt-6 pr-16 text-left">
+                      <DialogTitle className="text-2xl">
+                        Escolher receita
+                      </DialogTitle>
+                      <DialogDescription className="text-base">
+                        Busque pelo nome e toque na receita para selecionar.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <Command className="min-h-0 rounded-none [&_[data-slot=command-input-wrapper]]:h-16 [&_[data-slot=command-input-wrapper]]:shrink-0 [&_[data-slot=command-input-wrapper]]:px-5">
+                      <CommandInput
+                        placeholder="Digite o nome da receita…"
+                        aria-label="Buscar receita pelo nome"
+                        className="h-16 text-lg"
+                      />
+                      <CommandList className="max-h-[min(28rem,calc(100dvh-16rem))] min-h-0 overflow-y-auto overscroll-contain p-2">
+                        <CommandEmpty>
+                          Nenhuma receita encontrada. Tente outro nome.
+                        </CommandEmpty>
+                        {data.recipes.map((r) => (
+                          <CommandItem
+                            key={r.id}
+                            value={r.id}
+                            keywords={[r.name]}
+                            onSelect={() => {
+                              setPreviewPending(true);
+                              setRecipeId(r.id);
+                              setUnit("");
+                              setBaseId("");
+                              setRecipePickerOpen(false);
+                              setTimeout(() => refresh(), 0);
+                            }}
+                            className="min-h-16 cursor-pointer gap-4 rounded-lg px-4 py-3 text-lg data-[selected=true]:bg-slate-100"
+                          >
+                            <span className="min-w-0 flex-1 whitespace-normal break-words">
+                              <span className="block font-medium">
+                                {r.name}
+                              </span>
+                              {r.status === "draft" && (
+                                <span className="text-sm text-muted-foreground">
+                                  Rascunho
+                                </span>
+                              )}
+                            </span>
+                            {r.id === recipeId && (
+                              <Check
+                                className="h-6 w-6 shrink-0 text-emerald-600"
+                                aria-label="Receita selecionada"
+                              />
+                            )}
+                          </CommandItem>
+                        ))}
+                      </CommandList>
+                    </Command>
+                    <div className="shrink-0 border-t bg-muted/30 px-6 py-3 text-sm text-muted-foreground">
+                      {data.recipes.length} receitas disponíveis
+                    </div>
+                  </DialogContent>
+                </Dialog>
+              </div>
+            )}
 
             {data.recipe && recipeId === data.recipe.id && (
               <div className="space-y-2">
@@ -371,37 +571,115 @@ export default function NewProductionOrder() {
             )}
 
             {base && (
-              <div className="space-y-2">
-                <Label className="text-lg">4. {calculationMode === "yield" ? `Rendimento desejado (${data.recipe?.yieldUnit || "UN"})` : `Quantidade de ${base.name}`}</Label>
-                <div className="flex gap-3">
-                  <Input
-                    name="qty"
-                    inputMode="decimal"
-                    defaultValue={data.qty}
-                    placeholder="0"
-                    className="h-20 text-4xl font-bold tabular-nums"
-                    onChange={() => refresh(400)}
-                  />
-                  {calculationMode === "ingredient" && <Select
-                    value={unit || base.unit}
-                    onValueChange={(v) => {
-                      setPreviewPending(true);
-                      setUnit(v);
-                      setTimeout(() => refresh(), 0);
-                    }}
-                  >
-                    <SelectTrigger className="h-20 w-32 text-2xl font-semibold">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {units.map((u) => (
-                        <SelectItem key={u} value={u} className="py-3 text-lg">
-                          {u.toLowerCase()}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>}
-                </div>
+              <div className="space-y-4">
+                <Button
+                  type="button"
+                  variant={showProductPlanner ? "secondary" : "outline"}
+                  className="h-14 w-full justify-start gap-3 text-lg"
+                  onClick={() => setShowProductPlanner((value) => !value)}
+                >
+                  <PackageOpen className="h-5 w-5" />
+                  {showProductPlanner
+                    ? "Ocultar planejamento por produtos"
+                    : "Planejar pelos itens que usam esta receita"}
+                </Button>
+
+                {showProductPlanner && (
+                  <div className="space-y-4 rounded-lg border bg-muted/20 p-4">
+                    <p className="text-sm text-muted-foreground">
+                      Informe a quantidade de cada item que deseja produzir com
+                      esta receita.
+                    </p>
+                    {data.products.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">
+                        Nenhum produto com ficha de custo ativa usa esta
+                        receita.
+                      </p>
+                    ) : (
+                      data.products.map((product) => {
+                        const selected = data.productMix.find(
+                          (line) =>
+                            line.itemVariationId === product.itemVariationId
+                        );
+                        return (
+                          <div
+                            key={product.itemVariationId}
+                            className="space-y-1"
+                          >
+                            <Label
+                              htmlFor={`product_${product.itemVariationId}`}
+                            >
+                              {product.itemName} · {product.variationName}
+                            </Label>
+                            <div className="flex items-center gap-3">
+                              <Input
+                                id={`product_${product.itemVariationId}`}
+                                name={`product_${product.itemVariationId}`}
+                                inputMode="numeric"
+                                min="0"
+                                step="1"
+                                disabled={product.recipeBatchesPerUnit == null}
+                                defaultValue={selected?.quantity || ""}
+                                className="h-14 text-2xl font-semibold"
+                                onChange={() => refresh(350)}
+                              />
+                              <span className="shrink-0 text-sm text-muted-foreground">
+                                un.
+                              </span>
+                            </div>
+                            {product.recipeBatchesPerUnit == null && (
+                              <p className="text-sm text-destructive">
+                                Ajuste a unidade de consumo desta receita na
+                                ficha de custo.
+                              </p>
+                            )}
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                )}
+
+                {data.planningMode !== "finalProducts" && (
+                  <div className="space-y-2">
+                    <Label className="text-lg">
+                      3. Quantidade de {base.name}
+                    </Label>
+                    <div className="flex gap-3">
+                      <Input
+                        name="qty"
+                        inputMode="decimal"
+                        defaultValue={data.qty}
+                        placeholder="0"
+                        className="h-20 text-4xl font-bold tabular-nums"
+                        onChange={() => refresh(400)}
+                      />
+                      <Select
+                        value={unit || base.unit}
+                        onValueChange={(v) => {
+                          setPreviewPending(true);
+                          setUnit(v);
+                          setTimeout(() => refresh(), 0);
+                        }}
+                      >
+                        <SelectTrigger className="h-20 w-32 text-2xl font-semibold">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {units.map((u) => (
+                            <SelectItem
+                              key={u}
+                              value={u}
+                              className="py-3 text-lg"
+                            >
+                              {u.toLowerCase()}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
             <Button type="button" variant="outline" disabled={!canAddItem} onClick={addCurrentItem} className="h-14 w-full text-lg">
@@ -426,6 +704,16 @@ export default function NewProductionOrder() {
               name="baseQuantity"
               value={data.baseQuantity}
             />
+            <input
+              type="hidden"
+              name="productMix"
+              value={JSON.stringify(data.productMix)}
+            />
+            <input
+              type="hidden"
+              name="unallocatedRecipeBatches"
+              value={data.unallocatedRecipeBatches}
+            />
             <Input
               name="name"
               placeholder="Nome da OP (opcional)"
@@ -442,7 +730,7 @@ export default function NewProductionOrder() {
               disabled={items.length === 0 || navigation.state !== "idle"}
               className="h-20 w-full text-2xl"
             >
-              Criar OP com {items.length} receita{items.length === 1 ? "" : "s"}
+              Novo OP
             </Button>
           </Form>
         </Card>
@@ -502,6 +790,58 @@ export default function NewProductionOrder() {
                   (biga, poolish, autólise…).
                 </p>
               </Card>
+              {showProductPlanner && data.products.length > 0 && (
+                <Card className="space-y-4 p-6">
+                  <h3 className="text-2xl font-bold">Rendimento por produto</h3>
+                  <div className="space-y-3">
+                    {data.products.map((product) => {
+                      const selected = data.productMix.find(
+                        (line) =>
+                          line.itemVariationId === product.itemVariationId
+                      );
+                      const possible = product.recipeBatchesPerUnit
+                        ? Math.floor(
+                            plan.scaleFactor / product.recipeBatchesPerUnit
+                          )
+                        : 0;
+                      return (
+                        <div
+                          key={product.itemVariationId}
+                          className="flex items-center justify-between gap-4 rounded-lg border p-4"
+                        >
+                          <div>
+                            <div className="font-semibold">
+                              {product.itemName} · {product.variationName}
+                            </div>
+                            <div className="text-sm text-muted-foreground">
+                              Rendimento se usar todo o lote: {possible} un.
+                            </div>
+                          </div>
+                          <div className="text-right text-xl font-bold">
+                            {selected?.quantity || 0} un.
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div className="flex items-center justify-between border-t pt-4 text-lg">
+                    <span>Sobra sem destino</span>
+                    <strong>
+                      {data.unallocatedRecipeBatches.toLocaleString("pt-BR", {
+                        maximumFractionDigits: 3,
+                      })}{" "}
+                      lote(s)
+                      {base && data.unallocatedRecipeBatches > 0
+                        ? ` · ${(
+                            data.unallocatedRecipeBatches * base.quantity
+                          ).toLocaleString("pt-BR", {
+                            maximumFractionDigits: 2,
+                          })} ${base.unit.toLowerCase()}`
+                        : ""}
+                    </strong>
+                  </div>
+                </Card>
+              )}
             </>
           )}
         </div>

@@ -98,7 +98,7 @@ export default function ProductionOrdersIndex() {
                     </TableHeader>
                     <TableBody>
                       {list.length === 0 ? (
-                        <TableRow className="hover:bg-transparent"><TableCell colSpan={6} className="px-4 py-8 text-sm text-slate-500">Nenhuma OP criada.</TableCell></TableRow>
+                        <TableRow className="hover:bg-transparent"><TableCell colSpan={6} className="px-4 py-8 text-sm text-slate-500">Nenhuma OP cadastrada.</TableCell></TableRow>
                       ) : list.map((template) => (
                         <TableRow key={template.id} className="border-slate-100 hover:bg-slate-50/50">
                           <TableCell className="px-4 py-3">
@@ -112,8 +112,9 @@ export default function ProductionOrdersIndex() {
                             {template.Launches.length === 0 ? <span className="text-sm text-slate-400">Ainda não lançada</span> : (
                               <div className="flex flex-col gap-1.5">
                                 {template.Launches.map((launch) => (
-                                  <Link key={launch.id} to={`/admin/producao/ordens/${launch.id}`} className="flex items-center gap-2 text-sm text-slate-700 hover:text-slate-950 hover:underline">
-                                    <span>#{launch.number} · {format(new Date(launch.productionDate), "dd/MM/yyyy")}</span><OrderStatusBadge status={launch.status} /><ExternalLink className="h-3.5 w-3.5 text-slate-400" />
+                                  <Link key={launch.id} to={`/admin/producao/ordens/${launch.id}`} className="flex flex-col items-start gap-1 text-sm text-slate-700 hover:text-slate-950 hover:underline">
+                                    <span className="inline-flex items-center gap-1 whitespace-nowrap">#{launch.number} · {format(new Date(launch.productionDate), "dd/MM/yyyy")} <ExternalLink className="h-3.5 w-3.5 text-slate-400" /></span>
+                                    <OrderStatusBadge status={launch.status} className="whitespace-nowrap px-2.5 py-1 text-xs" />
                                   </Link>
                                 ))}
                                 <span className="text-xs text-slate-400">{template._count.Launches} no total</span>

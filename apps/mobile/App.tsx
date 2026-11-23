@@ -2,6 +2,7 @@ import { CutPizzaNotice } from "./src/kds/CutPizzaNotice";
 import { needsCutNotice } from "./src/kds/cut-notice";
 import { KdsPreview } from "./src/kds/KdsPreview";
 import { ProductionOrdersScreen } from "./src/production/ProductionOrdersScreen";
+import { LabelsScreen } from "./src/labeling/LabelsScreen";
 import { KitchenMessages } from "./src/kds/KitchenMessages";
 import { DailyProgrammingScreen } from "./src/production/DailyProgrammingScreen";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -438,6 +439,7 @@ function HomeScreen({
   onOpenPurchases,
   onOpenProgramming,
   onOpenProduction,
+  onOpenLabels,
   onOpenDoughPlanning,
   onSignedOut,
 }: {
@@ -450,6 +452,7 @@ function HomeScreen({
   onOpenPurchases: () => void;
   onOpenProgramming: () => void;
   onOpenProduction: () => void;
+  onOpenLabels: () => void;
   onOpenDoughPlanning: () => void;
   onSignedOut: () => void;
 }) {
@@ -553,6 +556,19 @@ function HomeScreen({
                 <View style={styles.featureCopy}>
                   <Text style={styles.featureTitle}>Produção</Text>
                   <Text style={styles.featureDescription}>Escolha a receita e acompanhe cada etapa do preparo.</Text>
+                </View>
+              </Pressable>
+            ) : null}
+            {!desktop ? (
+              <Pressable accessibilityRole="button" onPress={onOpenLabels}
+                style={({ pressed }) => [styles.featureCard, featureWidth, pressed && styles.pressed]}>
+                <View style={styles.featureCardTop}>
+                  <View style={styles.featureIcon}><Text style={styles.featureEmoji}>E</Text></View>
+                  <Text style={styles.featureArrow}>›</Text>
+                </View>
+                <View style={styles.featureCopy}>
+                  <Text style={styles.featureTitle}>Etiquetas</Text>
+                  <Text style={styles.featureDescription}>Identifique alimentos manipulados e imprima a validade.</Text>
                 </View>
               </Pressable>
             ) : null}
@@ -2018,6 +2034,7 @@ function AppContent() {
     | "purchases"
     | "programming"
     | "production"
+    | "labels"
     | null
   >(null);
   const [stockShortcutDate, setStockShortcutDate] = useState<string | null>(
@@ -2091,6 +2108,11 @@ function AppContent() {
       );
     if (activeFeature === "production")
       return <ProductionOrdersScreen {...session} onBack={() => setActiveFeature(null)}
+        onUnauthorized={() => {
+          void sessionStorage.clearToken(); setActiveFeature(null); setSession(null);
+        }} />;
+    if (activeFeature === "labels")
+      return <LabelsScreen apiUrl={session.apiUrl} token={session.token} onBack={() => setActiveFeature(null)}
         onUnauthorized={() => {
           void sessionStorage.clearToken(); setActiveFeature(null); setSession(null);
         }} />;
@@ -2176,6 +2198,7 @@ function AppContent() {
         onOpenPurchases={() => setActiveFeature("purchases")}
         onOpenProgramming={() => setActiveFeature("programming")}
         onOpenProduction={() => setActiveFeature("production")}
+        onOpenLabels={() => setActiveFeature("labels")}
         onOpenDoughPlanning={() => setActiveFeature("dough-planning")}
         onSignedOut={() => {
           setActiveFeature(null);

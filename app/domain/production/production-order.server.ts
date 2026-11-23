@@ -88,6 +88,155 @@ export async function getRecipeProduction(recipeId: string) {
 
 export type RecipeProduction = Awaited<ReturnType<typeof getRecipeProduction>>;
 
+export type RecipeProductionProduct = {
+  itemVariationId: string;
+  itemName: string;
+  variationName: string;
+  consumptionQuantity: number;
+  consumptionUnit: string;
+  recipeBatchesPerUnit: number | null;
+};
+
+/** Catálogo para começar pela escolha de um produto final. */
+export async function listProductionProductChoices() {
+  const components = await prismaClient.itemCostSheetComponent.findMany({
+    where: {
+      type: "recipe",
+      refId: { not: null },
+      ItemCostSheet: { isActive: true, status: "active" },
+    },
+    select: {
+      refId: true,
+      ItemCostSheetVariationComponent: {
+        where: { quantity: { gt: 0 } },
+        select: {
+          ItemVariation: {
+            select: {
+              id: true,
+              deletedAt: true,
+              Item: { select: { name: true, active: true, archivedAt: true } },
+              Variation: { select: { name: true } },
+            },
+          },
+        },
+      },
+    },
+  });
+  const choices = new Map<
+    string,
+    {
+      itemVariationId: string;
+      itemName: string;
+      variationName: string;
+      recipeId: string;
+    }
+  >();
+  for (const component of components) {
+    if (!component.refId) continue;
+    for (const line of component.ItemCostSheetVariationComponent) {
+      const variation = line.ItemVariation;
+      if (
+        variation.deletedAt ||
+        !variation.Item.active ||
+        variation.Item.archivedAt
+      )
+        continue;
+      choices.set(`${variation.id}:${component.refId}`, {
+        itemVariationId: variation.id,
+        itemName: variation.Item.name,
+        variationName: variation.Variation.name,
+        recipeId: component.refId,
+      });
+    }
+  }
+  return [...choices.values()].sort((a, b) =>
+    `${a.itemName} ${a.variationName}`.localeCompare(
+      `${b.itemName} ${b.variationName}`,
+      "pt-BR"
+    )
+  );
+}
+
+/** Produtos finais cujas fichas ativas consomem esta receita. */
+export async function listRecipeProductionProducts(recipeId: string) {
+  const recipe = await prismaClient.recipe.findUnique({
+    where: { id: recipeId },
+    select: { costingMode: true, yieldQuantity: true, yieldUnit: true },
+  });
+  if (!recipe) return [];
+
+  const components = await prismaClient.itemCostSheetComponent.findMany({
+    where: {
+      type: "recipe",
+      refId: recipeId,
+      ItemCostSheet: { isActive: true, status: "active" },
+    },
+    select: {
+      ItemCostSheetVariationComponent: {
+        where: { quantity: { gt: 0 } },
+        select: {
+          quantity: true,
+          unit: true,
+          ItemVariation: {
+            select: {
+              id: true,
+              deletedAt: true,
+              Item: { select: { name: true, active: true, archivedAt: true } },
+              Variation: { select: { name: true } },
+            },
+          },
+        },
+      },
+    },
+  });
+
+  const yieldQuantity = Number(recipe.yieldQuantity || 0);
+  const yieldUnit = String(recipe.yieldUnit || "");
+  const byVariation = new Map<string, RecipeProductionProduct>();
+  for (const component of components) {
+    for (const line of component.ItemCostSheetVariationComponent) {
+      const variation = line.ItemVariation;
+      if (
+        variation.deletedAt ||
+        !variation.Item.active ||
+        variation.Item.archivedAt
+      )
+        continue;
+      const quantity = Number(line.quantity || 0);
+      const unit = String(line.unit || "receita");
+      const normalizedUnit = unit.trim().toLowerCase();
+      let recipeBatchesPerUnit: number | null = null;
+      if (["receita", "lote", "batch"].includes(normalizedUnit)) {
+        // Em fichas de custo, "receita" representa uma unidade do
+        // rendimento quando a receita é cadastrada por rendimento.
+        recipeBatchesPerUnit =
+          recipe.costingMode === "yield"
+            ? yieldQuantity > 0
+              ? quantity / yieldQuantity
+              : null
+            : quantity;
+      } else if (yieldQuantity > 0 && yieldUnit) {
+        const converted = convertQuantity(quantity, unit, yieldUnit);
+        if (converted != null) recipeBatchesPerUnit = converted / yieldQuantity;
+      }
+      byVariation.set(variation.id, {
+        itemVariationId: variation.id,
+        itemName: variation.Item.name,
+        variationName: variation.Variation.name,
+        consumptionQuantity: quantity,
+        consumptionUnit: unit,
+        recipeBatchesPerUnit,
+      });
+    }
+  }
+  return [...byVariation.values()].sort((a, b) =>
+    `${a.itemName} ${a.variationName}`.localeCompare(
+      `${b.itemName} ${b.variationName}`,
+      "pt-BR"
+    )
+  );
+}
+
 /** Fase 1: totais da receita para a quantidade-base (sem preparações). */
 export function planForRecipe(
   recipe: RecipeProduction,
@@ -245,6 +394,8 @@ export async function createProductionOrderTemplate(input: {
     targetUnit: string;
   }>;
   notes?: string;
+  productMix?: ProductionPlan["productMix"];
+  unallocatedRecipeBatches?: number;
 }) {
   const requested = input.items?.length
     ? input.items
@@ -279,6 +430,60 @@ export async function createProductionOrderTemplate(input: {
       baseQuantity: requestedItem.baseQuantity, baseUnit: base.unit, plan });
   }
   const first = items[0];
+
+  let plan = planForRecipe(recipe, input.baseQuantity, base.id);
+  const preparations = recipe.preparations.map((preparation, index) => ({
+    id: `p${index + 1}`,
+    name: preparation.name,
+    notes: preparation.notes,
+    ingredients: preparation.ingredients.map((line) => ({
+      recipeIngredientId: line.recipeIngredientId,
+      quantity: line.quantity * plan.scaleFactor,
+    })),
+  }));
+  plan = applyPreparationsToPlan(plan, preparations);
+  if (input.productMix?.length) {
+    const availableProducts = await listRecipeProductionProducts(recipe.id);
+    const availableById = new Map(
+      availableProducts.map((product) => [product.itemVariationId, product])
+    );
+    const seen = new Set<string>();
+    const normalizedMix = input.productMix.map((line) => {
+      const product = availableById.get(String(line.itemVariationId));
+      const quantity = Number(line.quantity);
+      if (
+        !product ||
+        product.recipeBatchesPerUnit == null ||
+        seen.has(product.itemVariationId) ||
+        !Number.isInteger(quantity) ||
+        quantity <= 0
+      )
+        throw new Error("Planejamento de produtos inválido. Atualize a OP.");
+      seen.add(product.itemVariationId);
+      return {
+        itemVariationId: product.itemVariationId,
+        itemName: product.itemName,
+        variationName: product.variationName,
+        quantity,
+        recipeBatches: quantity * product.recipeBatchesPerUnit,
+      };
+    });
+    const allocatedBatches = normalizedMix.reduce(
+      (sum, line) => sum + line.recipeBatches,
+      0
+    );
+    if (allocatedBatches > plan.scaleFactor + 1e-6)
+      throw new Error(
+        "As quantidades dos produtos ultrapassam o semiacabado informado."
+      );
+    plan.productMix = normalizedMix;
+    plan.unallocatedRecipeBatches = Math.max(
+      0,
+      plan.scaleFactor - allocatedBatches
+    );
+  }
+  if (plan.inconsistencies.length)
+    throw new Error(plan.inconsistencies.join(" "));
 
   return prismaClient.productionOrderTemplate.create({
     data: {

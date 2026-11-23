@@ -92,6 +92,7 @@ const itemNavigation = [
   { name: "Receitas", href: "recipes" },
   { name: "Fichas de Custo", href: "item-cost-sheets" },
   { name: "Compras", href: "purchases" },
+  { name: "Etiquetas", href: "labeling" },
 ];
 
 function toBool(value: FormDataEntryValue | null) {

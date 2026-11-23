@@ -347,6 +347,24 @@ export function submitProductionOrder(
   );
 }
 
+export function getLabels(baseUrl: string, token: string, signal?: AbortSignal) {
+  return request<{
+    items: import("../../../../shared/labeling/food-label").LabelingItem[];
+    labels: import("../../../../shared/labeling/food-label").FoodLabelRecord[];
+    settings: import("../../../../shared/labeling/food-label").LabelingSettings;
+  }>(baseUrl, "/api/mobile/labels", { signal }, token);
+}
+
+export function submitLabel(baseUrl: string, token: string, body:
+  | { intent: "create"; itemId: string; copies: number }
+  | { intent: "print-result"; id: string; printed: boolean; error?: string }
+) {
+  return request<{
+    label: import("../../../../shared/labeling/food-label").FoodLabelRecord;
+    settings?: import("../../../../shared/labeling/food-label").LabelingSettings;
+  }>(baseUrl, "/api/mobile/labels", { method: "POST", body: JSON.stringify(body) }, token);
+}
+
 export function updateCutRequest(baseUrl: string, token: string, id: string, requiresCut: boolean) {
   return request<{ id: string; requiresCut: boolean }>(baseUrl, "/api/kds/orders", {
     method: "PATCH", body: JSON.stringify({ action: "setRequiresCut", id, requiresCut }),

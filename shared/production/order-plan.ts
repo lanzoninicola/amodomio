@@ -45,6 +45,16 @@ export type ProductionPlan = {
    * Ausente em OPs antigas (tratadas como definidas).
    */
   preparationsDefined?: boolean;
+  /** Distribuicao planejada do semiacabado entre produtos finais. */
+  productMix?: Array<{
+    itemVariationId: string;
+    itemName: string;
+    variationName: string;
+    quantity: number;
+    recipeBatches: number;
+  }>;
+  /** Parte do lote ainda sem destino depois da distribuicao planejada. */
+  unallocatedRecipeBatches?: number;
 };
 
 export type ProductionOrderItemSnapshot = {
@@ -79,16 +89,24 @@ export function calculateProductionPlan(params: {
     throw new Error("Informe uma quantidade-base maior que zero.");
 
   for (const ingredient of params.ingredients) {
-    if (!Number.isFinite(ingredient.quantity) || ingredient.quantity < 0 ||
-        !Number.isFinite(ingredient.quantity * scaleFactor))
+    if (
+      !Number.isFinite(ingredient.quantity) ||
+      ingredient.quantity < 0 ||
+      !Number.isFinite(ingredient.quantity * scaleFactor)
+    )
       throw new Error(`${ingredient.name}: quantidade inválida na receita.`);
   }
   for (const preparation of params.preparations) {
     for (const line of preparation.ingredients) {
       if (!params.ingredients.some((i) => i.id === line.recipeIngredientId))
-        throw new Error(`${preparation.name}: ingrediente não encontrado na receita.`);
-      if (!Number.isFinite(line.quantity) || line.quantity < 0 ||
-          !Number.isFinite(line.quantity * scaleFactor))
+        throw new Error(
+          `${preparation.name}: ingrediente não encontrado na receita.`
+        );
+      if (
+        !Number.isFinite(line.quantity) ||
+        line.quantity < 0 ||
+        !Number.isFinite(line.quantity * scaleFactor)
+      )
         throw new Error(`${preparation.name}: quantidade inválida.`);
     }
   }
@@ -181,7 +199,9 @@ export function applyPreparationsToPlan(
     ingredients: preparation.ingredients
       .filter((line) => {
         if (!byId.has(line.recipeIngredientId))
-          throw new Error(`${preparation.name}: ingrediente não encontrado na receita.`);
+          throw new Error(
+            `${preparation.name}: ingrediente não encontrado na receita.`
+          );
         if (!Number.isFinite(line.quantity) || line.quantity < 0)
           throw new Error(`${preparation.name}: quantidade inválida.`);
         return line.quantity > 0;
@@ -189,12 +209,19 @@ export function applyPreparationsToPlan(
       .map((line) => {
         const total = byId.get(line.recipeIngredientId)!;
         used.set(total.id, (used.get(total.id) ?? 0) + line.quantity);
-        return { id: total.id, name: total.name, unit: total.unit, quantity: line.quantity };
+        return {
+          id: total.id,
+          name: total.name,
+          unit: total.unit,
+          quantity: line.quantity,
+        };
       }),
   }));
   for (const total of plan.totals) {
     if ((used.get(total.id) ?? 0) > total.quantity + EPSILON)
-      inconsistencies.push(`${total.name}: preparações usam mais que o total da produção.`);
+      inconsistencies.push(
+        `${total.name}: preparações usam mais que o total da produção.`
+      );
   }
   return {
     ...plan,
@@ -202,7 +229,10 @@ export function applyPreparationsToPlan(
     final: {
       preparedItems: result.map((p) => p.name),
       ingredients: plan.totals
-        .map((t) => ({ ...t, quantity: Math.max(0, t.quantity - (used.get(t.id) ?? 0)) }))
+        .map((t) => ({
+          ...t,
+          quantity: Math.max(0, t.quantity - (used.get(t.id) ?? 0)),
+        }))
         .filter((t) => t.quantity > EPSILON),
     },
     inconsistencies,
@@ -257,7 +287,8 @@ export function formatProductionQuantity(quantity: number, unit: string) {
     u = "L";
   } else if (u === "G" || u === "ML") u = u.toLowerCase();
   else if (u === "KG") u = "kg";
-  const text = value
-    .toLocaleString("pt-BR", { maximumFractionDigits: value < 10 ? 2 : 1 });
+  const text = value.toLocaleString("pt-BR", {
+    maximumFractionDigits: value < 10 ? 2 : 1,
+  });
   return { value: text, unit: u };
 }

@@ -311,12 +311,55 @@ model Item {
   ItemInterestEvent            ItemInterestEvent[]
   SupplierPurchaseOrderItem    SupplierPurchaseOrderItem[]
   PurchaseShoppingListItem     PurchaseShoppingListItem[]
+  LabelingConfig               ItemLabelingConfig?
+  FoodLabels                   FoodLabel[]
 
   @@index([categoryId], map: "items_category_id_idx")
   @@index([classification], map: "items_classification_idx")
   @@index([active, classification], map: "items_active_classification_idx")
   @@index([archivedAt], map: "items_archived_at_idx")
   @@map("items")
+}
+
+model ItemLabelingConfig {
+  id               String   @id @default(uuid())
+  itemId           String   @unique(map: "item_labeling_configs_item_id_unique") @map("item_id")
+  enabled          Boolean  @default(true)
+  shelfLifeMinutes Int      @map("shelf_life_minutes")
+  conservation     String?  @db.VarChar(255)
+  labelName        String?  @map("label_name") @db.VarChar(255)
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @default(now()) @updatedAt @map("updated_at")
+
+  Item Item @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@index([enabled], map: "item_labeling_configs_enabled_idx")
+  @@map("item_labeling_configs")
+}
+
+model FoodLabel {
+  id               String   @id @default(uuid())
+  itemId           String   @map("item_id")
+  itemName         String   @map("item_name")
+  conservation     String?  @db.VarChar(255)
+  manipulatedAt    DateTime @map("manipulated_at")
+  expiresAt        DateTime @map("expires_at")
+  shelfLifeMinutes Int      @map("shelf_life_minutes")
+  copies           Int      @default(1)
+  operatorUserId   String?  @map("operator_user_id")
+  operatorName     String?  @map("operator_name")
+  printStatus      String   @default("requested") @map("print_status") // requested | printed | failed
+  printError       String?  @map("print_error") @db.Text
+  printedAt        DateTime? @map("printed_at")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @default(now()) @updatedAt @map("updated_at")
+
+  Item Item @relation(fields: [itemId], references: [id], onDelete: Restrict)
+
+  @@index([createdAt], map: "food_labels_created_at_idx")
+  @@index([itemId, createdAt], map: "food_labels_item_created_at_idx")
+  @@index([printStatus, createdAt], map: "food_labels_status_created_at_idx")
+  @@map("food_labels")
 }
 
 model ItemSellingInfo {

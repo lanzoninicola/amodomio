@@ -77,6 +77,7 @@ import {
 } from "~/domain/stock-movement/cost-review-notification-settings";
 import { ensureAdminNavigationMenuLayoutSetting } from "~/domain/website-navigation/admin-navigation-settings.server";
 import { ensureBioSettings } from "~/domain/bio/bio-settings.server";
+import { ensureLabelingSettings } from "~/domain/labeling/labeling.server";
 import {
   ensureServerPresetsSetting,
   MOBILE_SETTINGS_CONTEXT,
@@ -484,6 +485,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   await ensureBioSettings();
   await ensureServerPresetsSetting();
   await ensureKdsWhatsappSetting();
+  await ensureLabelingSettings();
 
   const settings = await prismaClient.setting.findMany({
     where,

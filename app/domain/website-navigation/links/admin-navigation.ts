@@ -560,6 +560,13 @@ const ADMIN_NAVIGATION_LINKS: WebsiteNavigationConfig = {
           tags: ["producao", "ordem", "op", "panificacao", "receita", "preparacao"],
         },
         {
+          title: "Etiquetas de manipulação",
+          href: "/admin/etiquetas",
+          items: [],
+          disabled: false,
+          tags: ["etiquetas", "validade", "manipulacao", "fracionamento", "alimentos"],
+        },
+        {
           title: "Programação Diaria",
           href: "/admin/producao/programacao-diaria",
           items: [],
