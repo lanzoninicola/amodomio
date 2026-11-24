@@ -129,6 +129,7 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { mapSuitableOrder } from "~/domain/suitable/map-order";
+import { parseOrderItems } from "~/domain/kds/order-items";
 import { emptyReservation } from "~/domain/kds/import-order.server";
 import { SuitableInboxPanel } from "~/domain/suitable/suitable-inbox-panel";
 import { findAllCardapioItems } from "~/domain/cardapio/cardapio-items-source.server";
@@ -1078,6 +1079,18 @@ export async function action({ request, params }: ActionFunctionArgs) {
         { status: 400 }
       );
     const hasSizes = Object.values(fill.sizes).some((n) => n > 0);
+    // orderItems só é gravado se válido (pizza exige tamanho); senão vai p/ notas
+    let storedItems: Prisma.InputJsonValue | typeof Prisma.DbNull = Prisma.DbNull;
+    const noteLines = [...fill.notes];
+    try {
+      storedItems = parseOrderItems(fill.orderItems) as unknown as Prisma.InputJsonValue;
+    } catch {
+      noteLines.unshift(
+        ...fill.orderItems.map(
+          (i) => `${i.quantity}x ${i.name}${i.flavors.length ? ` (${i.flavors.join("; ")})` : ""}`
+        )
+      );
+    }
     await prisma.$transaction(async (tx) => {
       const updated = await tx.kdsDailyOrderDetail.update({
         where: { id: target.id },
@@ -1093,6 +1106,15 @@ export async function action({ request, params }: ActionFunctionArgs) {
           isCash: fill.isCash,
           isOtherPaymentMethod: fill.isOtherPaymentMethod,
           size: JSON.stringify(fill.sizes),
+          orderItems: storedItems,
+          suitableOrderId: fill.suitableOrderId,
+          deliveryAddress: fill.address,
+          changeFor:
+            fill.changeForValue != null
+              ? new Prisma.Decimal(fill.changeForValue.toFixed(2))
+              : null,
+          notes: noteLines.join("\n").slice(0, 2000) || null,
+          paidOnline: fill.paid,
           // sem tamanho detectado: mantém "pendente" para conferência manual
           ...(hasSizes && fill.unmappedItems.length === 0
             ? { status: "novoPedido", novoPedidoAt: new Date() }

@@ -2461,6 +2461,13 @@ model KdsDailyOrderDetail {
   DeliveryZone      DeliveryZone? @relation(fields: [deliveryZoneId], references: [id])
   deliveryZoneId    String?       @map("delivery_zone_id")
 
+  /// Pedido Suitable de origem (quando importado do cardápio)
+  suitableOrderId Int?     @map("suitable_order_id")
+  deliveryAddress String?  @map("delivery_address")
+  changeFor       Decimal? @map("change_for") @db.Decimal(10, 2)
+  notes           String?
+  paidOnline      Boolean  @default(false) @map("paid_online")
+
   customerOrder CustomerOrder?
 
   /// Regras/índices
@@ -2468,6 +2475,7 @@ model KdsDailyOrderDetail {
   @@index([dateInt])
   @@index([commandNumber])
   @@index([orderId])
+  @@index([suitableOrderId])
   @@map("kds_daily_order_details")
 }
 

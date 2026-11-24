@@ -372,6 +372,13 @@ const ADMIN_NAVIGATION_LINKS: WebsiteNavigationConfig = {
           href: "",
           items: [
             {
+              title: "Suitable API",
+              href: "/admin/suitable-api",
+              items: [],
+              disabled: false,
+              tags: ["suitable", "api", "webhook", "cardapio", "integracao"],
+            },
+            {
               title: "Consulta de custo",
               href: "/admin/cost-monitoring",
               items: [],

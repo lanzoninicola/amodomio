@@ -1,3 +1,4 @@
+import type { KdsOrderItem } from "~/domain/kds/order-items";
 import type { SuitableOrderDetails } from "./suitable-client.server";
 
 export type KdsFormFill = {
@@ -17,6 +18,9 @@ export type KdsFormFill = {
   address: string | null;
   changeFor: string | null;
   suitableOrderId: number;
+  paid: boolean;
+  changeForValue: number | null;
+  orderItems: KdsOrderItem[];
 };
 
 const norm = (s: string) =>
@@ -42,6 +46,7 @@ export function mapSuitableOrder(o: SuitableOrderDetails): KdsFormFill {
   const sizes = { F: 0, M: 0, P: 0, I: 0, FT: 0 };
   const unmappedItems: string[] = [];
   const notes: string[] = [];
+  const orderItems: KdsOrderItem[] = [];
   for (const item of o.items ?? []) {
     const opts = (item.options ?? []).map((x) => x.name);
     const isPizza = /pizza/.test(norm(`${item.name} ${item.category ?? ""}`));
@@ -51,6 +56,15 @@ export function mapSuitableOrder(o: SuitableOrderDetails): KdsFormFill {
     if (size) sizes[size] += item.quantity;
     else if (isPizza) unmappedItems.push(`${item.quantity}x ${item.name}`);
     if (item.comments) notes.push(`${item.name}: ${item.comments}`);
+    orderItems.push({
+      name: item.name,
+      quantity: item.quantity,
+      size,
+      flavors: (item.options ?? []).map((x) =>
+        `${x.quantity > 1 ? `${x.quantity}x ` : ""}${x.group_name ? `${x.group_name}: ` : ""}${x.name}`
+      ),
+      notes: item.comments ? [item.comments] : [],
+    });
   }
   if (o.comments) notes.push(o.comments);
 
@@ -80,5 +94,8 @@ export function mapSuitableOrder(o: SuitableOrderDetails): KdsFormFill {
     address: o.delivery_address?.formatted ?? null,
     changeFor: o.payment?.change_for ?? null,
     suitableOrderId: o.id,
+    paid: Boolean(o.paid || o.payment?.paid),
+    changeForValue: o.payment?.change_for ? num(o.payment.change_for) : null,
+    orderItems,
   };
 }
