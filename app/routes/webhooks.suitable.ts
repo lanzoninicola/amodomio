@@ -1,7 +1,7 @@
 import type { ActionFunctionArgs } from "@remix-run/node";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import prisma from "~/lib/prisma/client.server";
-import { fetchSuitableOrder } from "~/domain/suitable/suitable-client.server";
+import { syncInboxOrder } from "~/domain/suitable/suitable-inbox.server";
 
 const MAX_AGE_MS = 24 * 60 * 60 * 1000;
 
@@ -77,36 +77,5 @@ async function processOrder(
     });
     if (!exists) return; // só acompanha pedidos já recebidos
   }
-  try {
-    const details = await fetchSuitableOrder(orderId);
-    await prisma.suitableOrderInbox.upsert({
-      where: { suitableOrderId: orderId },
-      create: {
-        suitableOrderId: orderId,
-        lastEventId: eventId,
-        lastEventType: type,
-        paid: details.paid,
-        details: details as any,
-      },
-      update: {
-        lastEventId: eventId,
-        lastEventType: type,
-        paid: details.paid,
-        details: details as any,
-        fetchError: null,
-      },
-    });
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    await prisma.suitableOrderInbox.upsert({
-      where: { suitableOrderId: orderId },
-      create: {
-        suitableOrderId: orderId,
-        lastEventId: eventId,
-        lastEventType: type,
-        fetchError: msg,
-      },
-      update: { fetchError: msg },
-    });
-  }
+  await syncInboxOrder(orderId, eventId, type);
 }

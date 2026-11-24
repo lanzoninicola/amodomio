@@ -10,5 +10,6 @@
   },
   "prisma-smart-formatter.typescript.defaultFormatter": "esbenp.prettier-vscode",
   "prisma-smart-formatter.prisma.defaultFormatter": "Prisma.prisma",
-  "i18n-ally.localesPaths": ["store/messages"]
+  "i18n-ally.localesPaths": ["store/messages"],
+  "python.terminal.useEnvFile": true
 }
