@@ -20,6 +20,7 @@ export const kdsOrderApiSelect = {
   customerName: true,
   customerPhone: true,
   orderItems: true,
+  suitableOrderId: true,
   takeAway: true,
   requestedForOven: true,
   requiresCut: true,

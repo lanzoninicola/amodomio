@@ -372,13 +372,6 @@ const ADMIN_NAVIGATION_LINKS: WebsiteNavigationConfig = {
           href: "",
           items: [
             {
-              title: "Suitable API",
-              href: "/admin/suitable-api",
-              items: [],
-              disabled: false,
-              tags: ["suitable", "api", "webhook", "cardapio", "integracao"],
-            },
-            {
               title: "Consulta de custo",
               href: "/admin/cost-monitoring",
               items: [],
@@ -980,6 +973,13 @@ const ADMIN_NAVIGATION_LINKS: WebsiteNavigationConfig = {
           items: [],
           disabled: false,
           tags: ["distancia", "raio", "entrega", "km", "area"],
+        },
+        {
+          title: "Suitable API",
+          href: "/admin/suitable-api",
+          items: [],
+          disabled: false,
+          tags: ["suitable", "api", "webhook", "cardapio", "integracao", "pausar"],
         },
         {
           title: "Z-API Envios e conexão",

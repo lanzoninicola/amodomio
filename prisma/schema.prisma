@@ -3670,3 +3670,14 @@ model SuitableWebhookEvent {
 
   @@map("suitable_webhook_event")
 }
+
+/// Configuração singleton da integração Suitable (id = "default")
+model SuitableSettings {
+  id       String    @id @default("default")
+  paused   Boolean   @default(false)
+  pausedAt DateTime? @map("paused_at")
+  pausedBy String?   @map("paused_by")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("suitable_settings")
+}

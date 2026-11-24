@@ -36,5 +36,6 @@ export type OrderRow = {
   isOtherPaymentMethod?: boolean | null;
   customerName?: string | null;
   customerPhone?: string | null;
+  suitableOrderId?: number | null;
   orderItems?: KdsOrderItem[] | Prisma.JsonValue | null;
 };

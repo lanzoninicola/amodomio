@@ -128,6 +128,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
+import { getSuitableSettings } from "~/domain/suitable/suitable-settings.server";
 import { mapSuitableOrder } from "~/domain/suitable/map-order";
 import { parseOrderItems } from "~/domain/kds/order-items";
 import { emptyReservation } from "~/domain/kds/import-order.server";
@@ -1061,6 +1062,11 @@ export async function action({ request, params }: ActionFunctionArgs) {
   }
 
   if (_action === "importSuitable") {
+    if ((await getSuitableSettings()).paused)
+      return json(
+        { ok: false, error: "Integração Suitable pausada." },
+        { status: 400 }
+      );
     const inbox = await prisma.suitableOrderInbox.findUnique({
       where: { id: String(form.get("inboxId") ?? "") },
     });
@@ -1963,6 +1969,18 @@ function RowItem({
                 ))}
               </SelectContent>
             </Select>
+            {(o as any).suitableOrderId ? (
+              <span
+                className="ml-1 self-center rounded bg-pink-100 px-1.5 py-0.5 text-[10px] font-semibold text-pink-800"
+                title={`Pedido Suitable #${(o as any).suitableOrderId}`}
+              >
+                Suitable API
+              </span>
+            ) : o.status !== "pendente" || Number(o.orderAmount ?? 0) > 0 ? (
+              <span className="ml-1 self-center rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-semibold text-gray-700">
+                Manual
+              </span>
+            ) : null}
           </div>
 
           {/* DELIVERY (switch + zona + valor moto) */}

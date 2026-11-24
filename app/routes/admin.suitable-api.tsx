@@ -22,6 +22,10 @@ import {
   type SuitableWebhook,
 } from "~/domain/suitable/suitable-client.server";
 import {
+  getSuitableSettings,
+  setSuitablePaused,
+} from "~/domain/suitable/suitable-settings.server";
+import {
   reconcileSuitableOrders,
   syncInboxOrder,
 } from "~/domain/suitable/suitable-inbox.server";
@@ -64,7 +68,12 @@ async function webhooks(): Promise<WebhooksResult> {
 export async function loader({ request }: LoaderFunctionArgs) {
   if (!(await authenticator.isAuthenticated(request))) throw redirect("/login");
   const webhookUrl = `${new URL(request.url).origin}/webhooks/suitable`;
-  return defer({ webhookUrl, activity: activity(), webhooks: webhooks() });
+  return defer({
+    webhookUrl,
+    settings: await getSuitableSettings(),
+    activity: activity(),
+    webhooks: webhooks(),
+  });
 }
 
 type ActionResult = {
@@ -76,13 +85,22 @@ type ActionResult = {
 };
 
 export async function action({ request }: ActionFunctionArgs) {
-  if (!(await authenticator.isAuthenticated(request)))
+  const user = await authenticator.isAuthenticated(request);
+  if (!user)
     return json<ActionResult>({ ok: false, error: "Não autenticado" }, { status: 401 });
   const form = await request.formData();
   const intent = String(form.get("_action") ?? "");
   const id = String(form.get("id") ?? "");
   try {
     switch (intent) {
+      case "setPaused": {
+        const paused = form.get("paused") === "true";
+        await setSuitablePaused(paused, String((user as any).email ?? "admin"));
+        return json<ActionResult>({
+          ok: true,
+          message: paused ? "Integração pausada." : "Integração retomada.",
+        });
+      }
       case "health":
         return json<ActionResult>({ ok: true, health: await checkSuitableHealth() });
       case "createWebhook": {
@@ -273,12 +291,41 @@ function WebhooksCard({ webhookUrl, result }: { webhookUrl: string; result: Webh
   );
 }
 
+function PauseCard({ paused, pausedAt }: { paused: boolean; pausedAt: string | null }) {
+  const fx = useFetcher<ActionResult>();
+  return (
+    <section className="rounded border p-4 grid gap-2 text-sm">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <h2 className="font-semibold">
+          Preenchimento do KDS <Badge ok={!paused} label={paused ? "pausado" : "ativo"} />
+        </h2>
+        <fx.Form method="post">
+          <input type="hidden" name="paused" value={String(!paused)} />
+          <Button type="submit" name="_action" value="setPaused" disabled={fx.state !== "idle"}>
+            {paused ? "Retomar" : "Pausar"}
+          </Button>
+        </fx.Form>
+      </div>
+      <p className="text-gray-600">
+        Pausado: o webhook continua recebendo e guardando pedidos, mas o grid não deixa
+        preencher comandas. Ao retomar, os pedidos acumulados aparecem no painel do grid para
+        preencher ou descartar. Nada é criado sozinho.
+        {paused && pausedAt
+          ? ` Pausado desde ${new Date(pausedAt).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })}.`
+          : ""}
+      </p>
+      <Feedback data={fx.data} />
+    </section>
+  );
+}
+
 export default function SuitableApiAdmin() {
-  const { webhookUrl, activity, webhooks } = useLoaderData<typeof loader>();
+  const { webhookUrl, settings, activity, webhooks } = useLoaderData<typeof loader>();
   const fx = useFetcher<ActionResult>();
   return (
     <div className="grid gap-4 p-4 max-w-3xl">
       <h1 className="text-xl font-bold">Suitable API</h1>
+      <PauseCard paused={settings.paused} pausedAt={settings.pausedAt} />
       <HealthCard />
       <Suspense fallback={<p role="status">Carregando webhooks…</p>}>
         <Await

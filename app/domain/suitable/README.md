@@ -95,9 +95,20 @@ SUITABLE_WEBHOOK_SECRET=
 
 A lógica de caixa de entrada (`syncInboxOrder`, `reconcileSuitableOrders`) fica em `suitable-inbox.server.ts`; as chamadas à API em `suitable-client.server.ts` (token em cache por escopo).
 
+## Pausa
+
+`suitable_settings.paused` (singleton). Pausar/retomar na página de administração ou no painel do grid.
+- Pausado: o webhook continua validando e gravando pedidos na caixa de entrada (nada se perde); o painel mostra "PAUSADA" e `importSuitable` é recusada.
+- Retomar: os pedidos acumulados aparecem no painel (com o horário de recebimento) para preencher ou descartar. Nada é criado automaticamente. Pedidos cancelados durante a pausa já saem sozinhos.
+
+## Badge na linha do KDS
+
+Comanda com `suitableOrderId` mostra "Suitable API" (tooltip com o nº do pedido). Comanda preenchida sem esse vínculo mostra "Manual". Comanda vazia não mostra nada.
+
 ## Tabelas
 
 - `suitable_order_inbox`: um registro por pedido Suitable (`suitable_order_id` único), com `status` (`pending`, `imported`, `dismissed`), `details` (JSON da API) e `imported_row_id`.
+- `suitable_settings`: estado de pausa.
 - `suitable_webhook_event`: ids de eventos já processados.
 
 ## Limitações
