@@ -124,8 +124,6 @@ export async function action({ request }: ActionFunctionArgs) {
               costAmount: line.costAmount,
               costTotalAmount: line.costTotalAmount,
               convertedCostAmount: line.convertedCostAmount,
-              costAmount: line.costAmount,
-              costTotalAmount: line.costTotalAmount,
               rawData: { source: "suitable", rowNumber: index + 1, ...line },
             })),
           });

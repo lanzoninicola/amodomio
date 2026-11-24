@@ -381,6 +381,7 @@ export async function createProductionOrder(input: {
 
 /** Modelo reutilizavel de OP. Datas e estado pertencem apenas aos lancamentos. */
 export async function createProductionOrderTemplate(input: {
+  templateId?: string;
   name?: string;
   recipeId?: string;
   baseIngredientId?: string;
@@ -392,11 +393,20 @@ export async function createProductionOrderTemplate(input: {
     calculationMode: "ingredient" | "yield";
     targetQuantity: number;
     targetUnit: string;
+    productMix?: ProductionPlan["productMix"];
   }>;
   notes?: string;
   productMix?: ProductionPlan["productMix"];
   unallocatedRecipeBatches?: number;
 }) {
+  const existing = input.templateId ? await getProductionOrderTemplate(input.templateId) : null;
+  if (existing?.archivedAt) throw new Error("Esta OP está arquivada.");
+  const existingItems = (Array.isArray(existing?.items) && existing.items.length
+    ? existing.items
+    : existing?.recipeId ? [{ recipeId: existing.recipeId, recipeName: existing.recipeName,
+        calculationMode: "ingredient", targetQuantity: existing.baseQuantity, targetUnit: existing.baseUnit,
+        baseIngredientId: existing.plan.baseIngredientId, baseIngredient: existing.baseIngredient,
+        baseQuantity: existing.baseQuantity, baseUnit: existing.baseUnit, plan: existing.plan, version: 1 }] : []) as unknown as ProductionOrderItemSnapshot[];
   const requested = input.items?.length
     ? input.items
     : input.recipeId && input.baseQuantity
@@ -407,6 +417,13 @@ export async function createProductionOrderTemplate(input: {
   if (!requested.length) throw new Error("Adicione ao menos uma receita à OP.");
   const items: ProductionOrderItemSnapshot[] = [];
   for (const requestedItem of requested) {
+    if (!Number.isFinite(requestedItem.targetQuantity) || requestedItem.targetQuantity <= 0)
+      throw new Error("Informe uma quantidade maior que zero para cada receita.");
+    const original = existingItems.find((item) => item.recipeId === requestedItem.recipeId &&
+      item.baseIngredientId === requestedItem.baseIngredientId && item.baseQuantity === requestedItem.baseQuantity &&
+      item.calculationMode === requestedItem.calculationMode && item.targetQuantity === requestedItem.targetQuantity &&
+      item.targetUnit === requestedItem.targetUnit && JSON.stringify(item.plan.productMix || []) === JSON.stringify(requestedItem.productMix || []));
+    if (original) { items.push(original); continue; }
     const recipe = await getRecipeProduction(requestedItem.recipeId);
     const baseId = requestedItem.baseIngredientId || recipe.baseIngredientId;
     const base = recipe.ingredients.find((ingredient) => ingredient.id === baseId);
@@ -422,6 +439,23 @@ export async function createProductionOrderTemplate(input: {
       })),
     })));
     if (plan.inconsistencies.length) throw new Error(plan.inconsistencies.join(" "));
+    const mix = requestedItem.productMix || (requested.length === 1 ? input.productMix : undefined);
+    if (mix?.length) {
+      const available = new Map((await listRecipeProductionProducts(recipe.id)).map((product) => [product.itemVariationId, product]));
+      const seen = new Set<string>();
+      plan.productMix = mix.map((line) => {
+        const product = available.get(String(line.itemVariationId));
+        const quantity = Number(line.quantity);
+        if (!product || product.recipeBatchesPerUnit == null || seen.has(product.itemVariationId) || !Number.isInteger(quantity) || quantity <= 0)
+          throw new Error("Planejamento de produtos inválido. Atualize a OP.");
+        seen.add(product.itemVariationId);
+        return { itemVariationId: product.itemVariationId, itemName: product.itemName, variationName: product.variationName,
+          quantity, recipeBatches: quantity * product.recipeBatchesPerUnit };
+      });
+      const allocated = plan.productMix.reduce((sum, line) => sum + line.recipeBatches, 0);
+      if (allocated > plan.scaleFactor + 1e-6) throw new Error("As quantidades dos produtos ultrapassam o semiacabado informado.");
+      plan.unallocatedRecipeBatches = Math.max(0, plan.scaleFactor - allocated);
+    }
     items.push({ version: 1, recipeId: recipe.id, recipeName: recipe.name,
       calculationMode: requestedItem.calculationMode,
       targetQuantity: requestedItem.targetQuantity,
@@ -431,62 +465,7 @@ export async function createProductionOrderTemplate(input: {
   }
   const first = items[0];
 
-  let plan = planForRecipe(recipe, input.baseQuantity, base.id);
-  const preparations = recipe.preparations.map((preparation, index) => ({
-    id: `p${index + 1}`,
-    name: preparation.name,
-    notes: preparation.notes,
-    ingredients: preparation.ingredients.map((line) => ({
-      recipeIngredientId: line.recipeIngredientId,
-      quantity: line.quantity * plan.scaleFactor,
-    })),
-  }));
-  plan = applyPreparationsToPlan(plan, preparations);
-  if (input.productMix?.length) {
-    const availableProducts = await listRecipeProductionProducts(recipe.id);
-    const availableById = new Map(
-      availableProducts.map((product) => [product.itemVariationId, product])
-    );
-    const seen = new Set<string>();
-    const normalizedMix = input.productMix.map((line) => {
-      const product = availableById.get(String(line.itemVariationId));
-      const quantity = Number(line.quantity);
-      if (
-        !product ||
-        product.recipeBatchesPerUnit == null ||
-        seen.has(product.itemVariationId) ||
-        !Number.isInteger(quantity) ||
-        quantity <= 0
-      )
-        throw new Error("Planejamento de produtos inválido. Atualize a OP.");
-      seen.add(product.itemVariationId);
-      return {
-        itemVariationId: product.itemVariationId,
-        itemName: product.itemName,
-        variationName: product.variationName,
-        quantity,
-        recipeBatches: quantity * product.recipeBatchesPerUnit,
-      };
-    });
-    const allocatedBatches = normalizedMix.reduce(
-      (sum, line) => sum + line.recipeBatches,
-      0
-    );
-    if (allocatedBatches > plan.scaleFactor + 1e-6)
-      throw new Error(
-        "As quantidades dos produtos ultrapassam o semiacabado informado."
-      );
-    plan.productMix = normalizedMix;
-    plan.unallocatedRecipeBatches = Math.max(
-      0,
-      plan.scaleFactor - allocatedBatches
-    );
-  }
-  if (plan.inconsistencies.length)
-    throw new Error(plan.inconsistencies.join(" "));
-
-  return prismaClient.productionOrderTemplate.create({
-    data: {
+  const data = {
       name: input.name?.trim() || items.map((item) => item.recipeName).join(" + "),
       recipeId: first.recipeId,
       recipeName: first.recipeName,
@@ -496,8 +475,10 @@ export async function createProductionOrderTemplate(input: {
       plan: first.plan as any,
       items: items as any,
       notes: input.notes?.trim() || null,
-    },
-  });
+    };
+  return existing
+    ? prismaClient.productionOrderTemplate.update({ where: { id: existing.id }, data })
+    : prismaClient.productionOrderTemplate.create({ data });
 }
 
 export async function listProductionOrderTemplates(includeArchived = false) {

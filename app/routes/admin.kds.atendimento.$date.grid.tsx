@@ -128,6 +128,9 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
+import { mapSuitableOrder } from "~/domain/suitable/map-order";
+import { emptyReservation } from "~/domain/kds/import-order.server";
+import { SuitableInboxPanel } from "~/domain/suitable/suitable-inbox-panel";
 import { findAllCardapioItems } from "~/domain/cardapio/cardapio-items-source.server";
 
 /* ===========================
@@ -1047,6 +1050,64 @@ export async function action({ request, params }: ActionFunctionArgs) {
   const _action = String(form.get("_action") ?? "");
   const dateStr = String(form.get("date") ?? params.date ?? todayLocalYMD());
   const dateInt = ymdToDateInt(dateStr);
+
+  if (_action === "dismissSuitable") {
+    await prisma.suitableOrderInbox.updateMany({
+      where: { id: String(form.get("inboxId") ?? ""), status: "pending" },
+      data: { status: "dismissed" },
+    });
+    return json({ ok: true });
+  }
+
+  if (_action === "importSuitable") {
+    const inbox = await prisma.suitableOrderInbox.findUnique({
+      where: { id: String(form.get("inboxId") ?? "") },
+    });
+    if (!inbox || inbox.status !== "pending" || !inbox.details)
+      return json({ ok: false, error: "Pedido Suitable indisponível." }, { status: 400 });
+    const fill = mapSuitableOrder(inbox.details as any);
+    const candidates = await prisma.kdsDailyOrderDetail.findMany({
+      where: { dateInt, status: "pendente", deletedAt: null, isVendaLivre: false },
+      orderBy: [{ sortOrderIndex: "asc" }, { commandNumber: "asc" }],
+      take: 100,
+    });
+    const target = candidates.find((r) => emptyReservation(r));
+    if (!target)
+      return json(
+        { ok: false, error: "Sem comanda vazia. Use 'Adicionar mais'." },
+        { status: 400 }
+      );
+    const hasSizes = Object.values(fill.sizes).some((n) => n > 0);
+    await prisma.$transaction(async (tx) => {
+      const updated = await tx.kdsDailyOrderDetail.update({
+        where: { id: target.id },
+        data: {
+          channel: fill.channel,
+          customerName: fill.customerName || null,
+          customerPhone: fill.customerPhone || null,
+          orderAmount: new Prisma.Decimal(fill.orderAmount.toFixed(2)),
+          hasMoto: fill.hasMoto,
+          motoValue: new Prisma.Decimal(fill.motoValue.toFixed(2)),
+          takeAway: fill.takeAway,
+          isCreditCard: fill.isCreditCard,
+          isCash: fill.isCash,
+          isOtherPaymentMethod: fill.isOtherPaymentMethod,
+          size: JSON.stringify(fill.sizes),
+          // sem tamanho detectado: mantém "pendente" para conferência manual
+          ...(hasSizes && fill.unmappedItems.length === 0
+            ? { status: "novoPedido", novoPedidoAt: new Date() }
+            : {}),
+        },
+      });
+      await tx.suitableOrderInbox.update({
+        where: { id: inbox.id },
+        data: { status: "imported", importedRowId: target.id },
+      });
+      await syncKdsOrderHistory(tx, updated);
+    });
+    await recalcHeaderTotal(dateInt);
+    return json({ ok: true, id: target.id, commandNumber: target.commandNumber });
+  }
 
   if (_action === "activateHiddenFlavor") {
     const itemId = String(form.get("itemId") ?? "").trim();
@@ -3982,6 +4043,8 @@ export default function GridKdsPage() {
           </div>
         </>
       )}
+
+      <SuitableInboxPanel />
 
       {/* ========== SOMENTE AS LINHAS EM SUSPENSE ==========
           Ao trocar a data, o topo fica estável e aqui mostramos skeleton */}

@@ -3635,3 +3635,30 @@ model ProductionOrderStep {
   @@index([orderId, sortOrder], map: "production_order_steps_order_idx")
   @@map("production_order_steps")
 }
+
+/// Pedidos recebidos do cardápio Suitable (webhook), aguardando preenchimento no KDS
+model SuitableOrderInbox {
+  id              String    @id @default(uuid())
+  suitableOrderId Int       @unique @map("suitable_order_id")
+  lastEventId     String?   @map("last_event_id")
+  lastEventType   String?   @map("last_event_type")
+  status          String    @default("pending") // pending | imported | dismissed
+  paid            Boolean   @default(false)
+  details         Json?
+  fetchError      String?   @map("fetch_error")
+  importedRowId   String?   @map("imported_row_id")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  @@index([status, createdAt])
+  @@map("suitable_order_inbox")
+}
+
+/// Deduplicação de eventos de webhook Suitable
+model SuitableWebhookEvent {
+  eventId   String   @id @map("event_id")
+  type      String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("suitable_webhook_event")
+}

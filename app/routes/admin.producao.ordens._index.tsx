@@ -1,7 +1,7 @@
 import { defer, json, redirect, type ActionFunctionArgs, type LoaderFunctionArgs } from "@remix-run/node";
 import { Await, Form, Link, useActionData, useLoaderData, useNavigation } from "@remix-run/react";
 import { format } from "date-fns";
-import { Archive, CalendarClock, ChevronLeft, ExternalLink, PlusCircle } from "lucide-react";
+import { Archive, CalendarClock, ChevronLeft, ExternalLink, Pencil, PlusCircle } from "lucide-react";
 import { Suspense } from "react";
 import Container from "~/components/layout/container/container";
 import { Alert, AlertDescription } from "~/components/ui/alert";
@@ -102,7 +102,7 @@ export default function ProductionOrdersIndex() {
                       ) : list.map((template) => (
                         <TableRow key={template.id} className="border-slate-100 hover:bg-slate-50/50">
                           <TableCell className="px-4 py-3">
-                            <div className="flex flex-col gap-0.5"><span className="font-semibold text-slate-900">{template.name}</span><span className="text-xs text-slate-500">OP #{template.number}</span></div>
+                            <div className="flex flex-col gap-0.5"><Link to={`/admin/producao/ordens/new?templateId=${encodeURIComponent(template.id)}`} className="font-semibold text-slate-900 hover:underline">{template.name}</Link><span className="text-xs text-slate-500">OP #{template.number}</span></div>
                           </TableCell>
                           <TableCell className="px-4 py-3">
                             {(() => { const items = (Array.isArray(template.items) ? template.items : []) as unknown as ProductionOrderItemSnapshot[]; return <div className="flex flex-col gap-0.5"><span className="text-sm font-medium text-slate-700">{items.length > 1 ? `${items.length} receitas` : template.recipeName}</span><span className="text-xs text-slate-500">{items.length > 1 ? items.map((item) => item.recipeName).join(" · ") : template.baseIngredient}</span></div>; })()}
@@ -136,6 +136,7 @@ export default function ProductionOrdersIndex() {
                             </details>
                           </TableCell>
                           <TableCell className="px-4 py-3 text-right">
+                            <Button asChild variant="ghost" size="sm"><Link to={`/admin/producao/ordens/new?templateId=${encodeURIComponent(template.id)}`}><Pencil className="mr-2 h-4 w-4" /> Editar</Link></Button>
                             <Form method="post">
                               <input type="hidden" name="intent" value="archive" /><input type="hidden" name="templateId" value={template.id} />
                               <Button variant="ghost" size="sm" disabled={busy} className="text-slate-500 hover:bg-red-50 hover:text-red-600"><Archive className="mr-2 h-4 w-4" /> Arquivar</Button>

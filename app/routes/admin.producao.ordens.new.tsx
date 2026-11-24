@@ -18,6 +18,9 @@ import {
   Check,
   ChevronsUpDown,
   PackageOpen,
+  Pencil,
+  Plus,
+  Trash2,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
@@ -56,9 +59,11 @@ import {
   compatibleUnits,
   convertQuantity,
   type ProductionPlan,
+  type ProductionOrderItemSnapshot,
 } from "~/domain/production/production-order-calc";
 import {
   createProductionOrderTemplate,
+  getProductionOrderTemplate,
   getRecipeProduction,
   listProductionProductChoices,
   listRecipeProductionProducts,
@@ -92,6 +97,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
   if (!(await authenticator.isAuthenticated(request)))
     return redirect("/login");
   const url = new URL(request.url);
+  const templateId = url.searchParams.get("templateId") || "";
+  const template = templateId ? await getProductionOrderTemplate(templateId) : null;
+  if (template?.archivedAt) throw new Response("OP arquivada", { status: 404 });
   const recipeId = url.searchParams.get("recipeId") || "";
   const qty = url.searchParams.get("qty") || "";
   const requestedBaseId = url.searchParams.get("baseId") || "";
@@ -126,7 +134,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     baseId =
       recipe.ingredients.find((i: any) => i.id === requestedBaseId)?.id ||
       recipe.baseIngredientId ||
-      (planningMode === "finalProducts"
+      (planningMode === "finalProducts" || calculationMode === "yield"
         ? recipe.ingredients.find((i: any) => i.quantity > 0)?.id
         : "") ||
       "";
@@ -154,6 +162,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
       productMix = requestedMix;
       if (planningMode === "finalProducts" && requestedBatches > 0) {
         baseQuantity = base.quantity * requestedBatches;
+      } else if (calculationMode === "yield") {
+        baseQuantity = base.quantity * parseNumber(qty);
       } else {
         const converted = convertQuantity(parseNumber(qty), unit, base.unit);
         baseQuantity = converted ?? 0;
@@ -194,6 +204,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
     unallocatedRecipeBatches,
     planningMode,
     productChoices,
+    calculationMode,
+    template,
   });
 }
 
@@ -205,7 +217,15 @@ export async function action({ request }: ActionFunctionArgs) {
     const rawMix = String(form.get("productMix") || "");
     const parsedMix = rawMix ? JSON.parse(rawMix) : undefined;
     const productMix = Array.isArray(parsedMix) ? parsedMix : undefined;
+    const parsedItems = JSON.parse(String(form.get("items") || "[]"));
+    if (!Array.isArray(parsedItems)) throw new Error("Receitas da OP inválidas.");
+    const items = parsedItems.map((item) => ({
+      recipeId: String(item.recipeId || ""), baseIngredientId: String(item.baseIngredientId || ""),
+      baseQuantity: Number(item.baseQuantity), calculationMode: item.calculationMode === "yield" ? "yield" as const : "ingredient" as const,
+      targetQuantity: Number(item.targetQuantity), targetUnit: String(item.targetUnit || ""), productMix: Array.isArray(item.productMix) ? item.productMix : undefined,
+    }));
     await createProductionOrderTemplate({
+      templateId: String(form.get("templateId") || "") || undefined,
       name: String(form.get("name") || ""),
       recipeId: String(form.get("recipeId") || ""),
       baseIngredientId: String(form.get("baseIngredientId") || ""),
@@ -231,6 +251,19 @@ export default function NewProductionOrder() {
   const formRef = useRef<HTMLFormElement>(null);
   const timer = useRef<ReturnType<typeof setTimeout>>();
   const [recipeId, setRecipeId] = useState(data.recipe?.id || "");
+  const [calculationMode, setCalculationMode] = useState<"ingredient" | "yield">(data.calculationMode);
+  type EditableItem = Omit<ProductionOrderItemSnapshot, "plan" | "version"> & { productMix?: ProductionPlan["productMix"] };
+  const [items, setItems] = useState<EditableItem[]>(() => {
+    const template = data.template;
+    if (!template) return [];
+    const snapshots = (Array.isArray(template.items) && template.items.length ? template.items : [{
+      recipeId: template.recipeId, recipeName: template.recipeName, calculationMode: "ingredient", targetQuantity: template.baseQuantity,
+      targetUnit: template.baseUnit, baseIngredientId: template.plan.baseIngredientId || "", baseIngredient: template.baseIngredient,
+      baseQuantity: template.baseQuantity, baseUnit: template.baseUnit, plan: template.plan,
+    }]) as unknown as ProductionOrderItemSnapshot[];
+    return snapshots.map(({ plan, ...item }) => ({ ...item, productMix: plan.productMix || [] }));
+  });
+  const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [unit, setUnit] = useState(data.unit);
   const [recipePickerOpen, setRecipePickerOpen] = useState(false);
   const [productPickerOpen, setProductPickerOpen] = useState(false);
@@ -270,6 +303,30 @@ export default function NewProductionOrder() {
     plan.inconsistencies.length > 0 ||
     baseId !== data.baseId ||
     Boolean(error);
+  const canAddItem = !blocked && Boolean(base) && (data.planningMode === "finalProducts" ? data.productMix.length > 0 : parseNumber(data.qty) > 0);
+  function addCurrentItem() {
+    if (!data.recipe || !base || !plan || !canAddItem) return;
+    const item: EditableItem = {
+      recipeId: data.recipe.id, recipeName: data.recipe.name, calculationMode,
+      targetQuantity: data.planningMode === "finalProducts" ? data.baseQuantity : parseNumber(data.qty),
+      targetUnit: calculationMode === "yield" ? "rendimentos" : (data.planningMode === "finalProducts" ? base.unit : unit || base.unit),
+      baseIngredientId: base.id, baseIngredient: base.name, baseQuantity: data.baseQuantity, baseUnit: base.unit,
+      productMix: data.productMix,
+    };
+    setItems((current) => editingIndex === null ? [...current, item] : current.map((entry, index) => index === editingIndex ? item : entry));
+    setEditingIndex(null);
+  }
+  function editItem(item: EditableItem, index: number) {
+    const params = new URLSearchParams({ recipeId: item.recipeId, baseId: item.baseIngredientId, mode: item.calculationMode,
+      qty: String(item.targetQuantity), unit: item.calculationMode === "yield" ? item.baseUnit : item.targetUnit,
+      planningMode: "semiFinished" });
+    if (data.template) params.set("templateId", data.template.id);
+    item.productMix?.forEach((line) => params.set(`product_${line.itemVariationId}`, String(line.quantity)));
+    setEditingIndex(index); setRecipeId(item.recipeId); setBaseId(item.baseIngredientId); setCalculationMode(item.calculationMode);
+    setUnit(item.calculationMode === "yield" ? item.baseUnit : item.targetUnit);
+    setShowProductPlanner(Boolean(item.productMix?.length)); setPreviewPending(true);
+    submit(params, { replace: true });
+  }
 
   return (
     <div className="w-full space-y-6 p-4 md:p-6 2xl:p-10">
@@ -279,12 +336,13 @@ export default function NewProductionOrder() {
             <ArrowLeft className="h-6 w-6" />
           </Link>
         </Button>
-        <h1 className="text-3xl font-bold 2xl:text-4xl">Novo OP</h1>
+        <h1 className="text-3xl font-bold 2xl:text-4xl">{data.template ? "Editar OP" : "Criar OP"}</h1>
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[minmax(22rem,1fr)_2fr]">
         <Card className="h-fit space-y-6 p-6">
           <Form method="get" ref={formRef} className="space-y-6">
+            {data.template && <input type="hidden" name="templateId" value={data.template.id} />}
             <input
               type="hidden"
               name="planningMode"
@@ -320,6 +378,7 @@ export default function NewProductionOrder() {
                       const params = new URLSearchParams({
                         planningMode: "finalProducts",
                       });
+                      if (data.template) params.set("templateId", data.template.id);
                       setPreviewPending(true);
                       submit(params, { replace: true });
                     } else {
@@ -408,6 +467,7 @@ export default function NewProductionOrder() {
                                   planningMode: "finalProducts",
                                   recipeId: choice.recipeId,
                                 });
+                                if (data.template) params.set("templateId", data.template.id);
                                 params.set(
                                   `product_${choice.itemVariationId}`,
                                   "1"
@@ -613,6 +673,7 @@ export default function NewProductionOrder() {
                             </Label>
                             <div className="flex items-center gap-3">
                               <Input
+                                key={`${product.itemVariationId}-${editingIndex}`}
                                 id={`product_${product.itemVariationId}`}
                                 name={`product_${product.itemVariationId}`}
                                 inputMode="numeric"
@@ -643,10 +704,11 @@ export default function NewProductionOrder() {
                 {data.planningMode !== "finalProducts" && (
                   <div className="space-y-2">
                     <Label className="text-lg">
-                      3. Quantidade de {base.name}
+                      3. {calculationMode === "yield" ? "Número de rendimentos" : `Quantidade de ${base.name}`}
                     </Label>
                     <div className="flex gap-3">
                       <Input
+                        key={`${data.recipe?.id}-${editingIndex}-${data.calculationMode}`}
                         name="qty"
                         inputMode="decimal"
                         defaultValue={data.qty}
@@ -654,7 +716,7 @@ export default function NewProductionOrder() {
                         className="h-20 text-4xl font-bold tabular-nums"
                         onChange={() => refresh(400)}
                       />
-                      <Select
+                      {calculationMode === "ingredient" && <Select
                         value={unit || base.unit}
                         onValueChange={(v) => {
                           setPreviewPending(true);
@@ -676,15 +738,16 @@ export default function NewProductionOrder() {
                             </SelectItem>
                           ))}
                         </SelectContent>
-                      </Select>
+                      </Select>}
                     </div>
                   </div>
                 )}
               </div>
             )}
             <Button type="button" variant="outline" disabled={!canAddItem} onClick={addCurrentItem} className="h-14 w-full text-lg">
-              <Plus className="mr-2 h-5 w-5" /> Adicionar receita à OP
+              <Plus className="mr-2 h-5 w-5" /> {editingIndex === null ? "Adicionar receita à OP" : "Atualizar receita"}
             </Button>
+            {editingIndex !== null && <Button type="button" variant="ghost" onClick={() => setEditingIndex(null)}>Cancelar edição da receita</Button>}
           </Form>
 
           {error && (
@@ -696,6 +759,7 @@ export default function NewProductionOrder() {
           )}
 
           <Form method="post" className="space-y-4">
+            {data.template && <input type="hidden" name="templateId" value={data.template.id} />}
             <input type="hidden" name="items" value={JSON.stringify(items)} />
             <input type="hidden" name="recipeId" value={recipeId} />
             <input type="hidden" name="baseIngredientId" value={data.baseId} />
@@ -716,22 +780,25 @@ export default function NewProductionOrder() {
             />
             <Input
               name="name"
+              defaultValue={data.template?.name || ""}
               placeholder="Nome da OP (opcional)"
               className="h-14 text-lg"
             />
             <Input
               name="notes"
+              defaultValue={data.template?.notes || ""}
               placeholder="Observações (opcional)"
               className="h-14 text-lg"
             />
             <Button
               type="submit"
               size="lg"
-              disabled={items.length === 0 || navigation.state !== "idle"}
+              disabled={items.length === 0 || editingIndex !== null || navigation.state !== "idle"}
               className="h-20 w-full text-2xl"
             >
-              Novo OP
+              {data.template ? "Salvar alterações" : "Criar OP"}
             </Button>
+            {editingIndex !== null && <p className="text-sm text-muted-foreground">Atualize a receita selecionada antes de salvar a OP.</p>}
           </Form>
         </Card>
 
@@ -740,7 +807,8 @@ export default function NewProductionOrder() {
             <div><h2 className="text-2xl font-bold">Receitas da OP</h2><p className="text-muted-foreground">As datas serão definidas depois, ao planejar a OP.</p></div>
             {items.map((item, index) => <div key={`${item.recipeId}-${index}`} className="flex items-center justify-between gap-4 rounded-xl border p-4">
               <div><div className="font-semibold">{item.recipeName}</div><div className="text-sm text-muted-foreground">{item.calculationMode === "yield" ? `${item.targetQuantity} ${item.targetUnit}` : `${item.targetQuantity} ${item.targetUnit.toLowerCase()} de ${item.baseIngredient}`}</div></div>
-              <Button type="button" variant="ghost" size="icon" aria-label={`Remover ${item.recipeName}`} onClick={() => setItems((current) => current.filter((_, itemIndex) => itemIndex !== index))}><Trash2 className="h-5 w-5" /></Button>
+              <div className="flex"><Button type="button" variant="ghost" size="icon" aria-label={`Editar ${item.recipeName}`} onClick={() => editItem(item, index)}><Pencil className="h-5 w-5" /></Button>
+              <Button type="button" variant="ghost" size="icon" aria-label={`Remover ${item.recipeName}`} onClick={() => { setItems((current) => current.filter((_, itemIndex) => itemIndex !== index)); setEditingIndex(null); }}><Trash2 className="h-5 w-5" /></Button></div>
             </div>)}
           </Card>}
           {!plan && (

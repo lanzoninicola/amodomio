@@ -1,13 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   recipe: vi.fn(), config: vi.fn(), update: vi.fn(), step: vi.fn(),
-  find: vi.fn(), lock: vi.fn(), transaction: vi.fn(),
+  find: vi.fn(), lock: vi.fn(), transaction: vi.fn(), templateFind: vi.fn(), templateCreate: vi.fn(), templateUpdate: vi.fn(),
 }));
 vi.mock("~/domain/recipe/mobile-recipe.server", () => ({ getMobileRecipe: mocks.recipe }));
 vi.mock("~/lib/prisma/client.server", () => ({ default: {
   recipe: { findUnique: mocks.config }, $transaction: mocks.transaction,
+  productionOrderTemplate: { findUnique: mocks.templateFind, create: mocks.templateCreate, update: mocks.templateUpdate },
 } }));
-import { applyOrderAction, saveRecipeProduction } from "./production-order.server";
+import { applyOrderAction, createProductionOrderTemplate, saveRecipeProduction } from "./production-order.server";
 const form = (values: Record<string, string>) => ({ get: (key: string) => values[key] });
 
 describe("production order server", () => {
@@ -32,6 +33,23 @@ describe("production order server", () => {
       name: "Biga", ingredients: [{ recipeIngredientId: "f", quantity: 11000, unit: "G" }],
     }] })).rejects.toThrow("mais que o total");
     expect(mocks.transaction).not.toHaveBeenCalled();
+  });
+  it("creates a reusable OP with independently calculated recipes", async () => {
+    await createProductionOrderTemplate({ name: "Pães", items: [
+      { recipeId: "r", baseIngredientId: "f", baseQuantity: 20, calculationMode: "ingredient", targetQuantity: 20, targetUnit: "KG" },
+      { recipeId: "r", baseIngredientId: "f", baseQuantity: 30, calculationMode: "yield", targetQuantity: 3, targetUnit: "rendimentos" },
+    ] });
+    const data = mocks.templateCreate.mock.calls[0][0].data;
+    expect(data.items.map((item: any) => item.plan.totals[0].quantity)).toEqual([20, 30]);
+    expect(data.plan).toEqual(data.items[0].plan);
+  });
+  it("preserves existing recipe snapshots when editing only the OP name", async () => {
+    const plan = { baseIngredientId: "f", productMix: [], totals: [{ id: "f", name: "Farinha", quantity: 20, unit: "KG" }] };
+    const item = { version: 1, recipeId: "r", recipeName: "Pão", baseIngredientId: "f", baseIngredient: "Farinha", baseQuantity: 20, baseUnit: "KG", calculationMode: "ingredient", targetQuantity: 20, targetUnit: "KG", plan };
+    mocks.templateFind.mockResolvedValue({ id: "t", archivedAt: null, items: [item], plan });
+    await createProductionOrderTemplate({ templateId: "t", name: "Novo nome", items: [{ ...item, productMix: [] }] });
+    expect(mocks.recipe).not.toHaveBeenCalled();
+    expect(mocks.templateUpdate).toHaveBeenCalledWith(expect.objectContaining({ where: { id: "t" }, data: expect.objectContaining({ name: "Novo nome", items: [item] }) }));
   });
   it.each([-1, NaN, Infinity])("rejects invalid preparation quantity %s", async (quantity) => {
     await expect(saveRecipeProduction("r", { baseIngredientId: "f", preparations: [{
