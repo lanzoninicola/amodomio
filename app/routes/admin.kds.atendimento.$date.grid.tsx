@@ -10,6 +10,7 @@ import type {
 import { json, defer } from "@remix-run/node";
 import { Await, Link, useFetcher, useLoaderData } from "@remix-run/react";
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import prisma from "~/lib/prisma/client.server";
 import { Prisma } from "@prisma/client";
 
@@ -123,6 +124,7 @@ import type { DzMap } from "@/domain/kds/delivery-prediction/delivery-time";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -2691,7 +2693,7 @@ export default function GridKdsPage() {
     error?: string;
   }>();
 
-  const status = (header?.operationStatus ?? "PENDING") as
+  const status = (header?.operationStatus?.trim().toUpperCase() || "PENDING") as
     | "PENDING"
     | "OPENED"
     | "CLOSED"
@@ -2699,12 +2701,19 @@ export default function GridKdsPage() {
   const isClosed = status === "CLOSED";
   const readOnly = isClosed;
 
+  const [dayControlTarget, setDayControlTarget] = useState<HTMLElement | null>(null);
+  useEffect(() => {
+    setDayControlTarget(document.getElementById("kds-day-control-toolbar"));
+  }, []);
+
   const [opening, setOpening] = useState(false);
   const [progress, setProgress] = useState(5);
   const [openError, setOpenError] = useState<string | null>(null);
 
   const [channelFilter, setChannelFilter] = useState<string>("");
   const [timelineOpen, setTimelineOpen] = useState(false);
+  const [summaryExpanded, setSummaryExpanded] = useState(false);
+  const [timingExpanded, setTimingExpanded] = useState(false);
   const [predictionMode, setPredictionMode] = useState<"real" | "theoretical">(
     predictionSettings.mode ?? "theoretical"
   );
@@ -3042,52 +3051,66 @@ export default function GridKdsPage() {
 
       {/* Toolbar topo + Painel-resumo SEM suspense (feedback imediato) */}
 
-      <div className="grid gap-4 xl:grid-cols-8 items-stretch">
-        <div className={`${summaryCardClass} xl:col-span-1`}>
-          <div className="flex flex-col items-center justify-between gap-3">
-            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-              <CalendarClock className="h-4 w-4" /> Controle do dia
-            </div>
-            <div
-              className={`text-[11px] font-semibold uppercase tracking-wide ${dayStatusBadge} w-full text-center`}
+      {dayControlTarget && createPortal(
+        <Dialog>
+          <DialogTrigger asChild>
+            <Button
+              type="button"
+              size="sm"
+              variant="default"
+              className="h-9 w-full justify-center gap-2 rounded-md bg-blue-800 px-3 text-white"
             >
+              <CalendarClock className="h-4 w-4" />
+              {status === "PENDING" ? "Abrir dia" : "Controle do dia"}
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>{status === "PENDING" ? "Abrir dia" : "Controle do dia"}</DialogTitle>
+              <DialogDescription>
+                {status === "PENDING"
+                  ? "Defina a quantidade inicial de comandas para iniciar o atendimento."
+                  : "Gerencie a abertura e o fechamento do atendimento."}
+              </DialogDescription>
+            </DialogHeader>
+            <div className={`rounded-md px-3 py-2 text-center text-xs font-semibold uppercase tracking-wide ${dayStatusBadge}`}>
               {dayStatusLabel}
             </div>
-          </div>
-
           <div className="space-y-3">
             {(!header?.id || status === "PENDING") && (
-              <listFx.Form
-                method="post"
-                className="flex flex-col sm:flex-row sm:items-center gap-3"
-              >
+              <listFx.Form method="post" className="space-y-5">
                 <input type="hidden" name="_action" value="openDay" />
                 <input type="hidden" name="date" value={dateStr} />
-                <div className="flex flex-col items-center gap-2">
-                  <Button
-                    type="submit"
-                    variant="default"
-                    disabled={listFx.state !== "idle"}
-                    className="bg-blue-800 w-full justify-center"
-                  >
-                    {listFx.state !== "idle" ? (
-                      <>
-                        <Loader2 className="w-4 h-4 animate-spin mr-1" />{" "}
-                        Abrindo…
-                      </>
-                    ) : (
-                      <>
-                        <PlusCircle className="w-4 h-4 mr-1" />
-                        Abrir dia
-                      </>
-                    )}
-                  </Button>
+                <div className="space-y-2">
+                  <Label htmlFor="open-day-qty">Quantidade inicial de comandas</Label>
                   <NumericInput
+                    id="open-day-qty"
                     name="qty"
                     defaultValue={40}
-                    className="h-10 w-full text-center"
+                    className="h-11 w-full text-left text-base"
                   />
+                  <p className="text-xs text-slate-500">
+                    As comandas serão criadas ao abrir o dia.
+                  </p>
                 </div>
+                <Button
+                  type="submit"
+                  variant="default"
+                  disabled={listFx.state !== "idle"}
+                  className="h-11 w-full justify-center gap-2 bg-blue-800"
+                >
+                  {listFx.state !== "idle" ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Abrindo...
+                    </>
+                  ) : (
+                    <>
+                      <PlusCircle className="h-4 w-4" />
+                      Abrir dia
+                    </>
+                  )}
+                </Button>
               </listFx.Form>
             )}
 
@@ -3191,9 +3214,41 @@ export default function GridKdsPage() {
               </div>
             )}
           </div>
-        </div>
+          </DialogContent>
+        </Dialog>,
+        dayControlTarget
+      )}
 
-        <div className="xl:col-span-7">
+      <div className="grid grid-cols-1 gap-4 items-stretch">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+          <button
+            type="button"
+            aria-expanded={summaryExpanded}
+            aria-controls="kds-summary-cards"
+            onClick={() => setSummaryExpanded((expanded) => !expanded)}
+            className="flex min-w-0 items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-left text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
+          >
+            <span>Resumo do dia</span>
+            <span className="flex shrink-0 items-center gap-2 text-xs">
+              {summaryExpanded ? "Recolher cards" : "Expandir cards"}
+              <ChevronDown className={cn("h-4 w-4", summaryExpanded && "rotate-180")} aria-hidden="true" />
+            </span>
+          </button>
+          <button
+            type="button"
+            aria-expanded={timingExpanded}
+            aria-controls="kds-timing-panel"
+            onClick={() => setTimingExpanded((expanded) => !expanded)}
+            className="flex min-w-0 items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-left text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
+          >
+            <span>Horários e pedidos por faixa horária</span>
+            <span className="flex shrink-0 items-center gap-2 text-xs">
+              {timingExpanded ? "Recolher painel" : "Expandir painel"}
+              <ChevronDown className={cn("h-4 w-4", timingExpanded && "rotate-180")} aria-hidden="true" />
+            </span>
+          </button>
+        </div>
+        <div id="kds-summary-cards" hidden={!summaryExpanded} className="min-w-0">
           {/* previsao de saida + cards financeiros */}
           <Suspense
             key={`timeline-summary-${dateStr}`}
@@ -3250,14 +3305,14 @@ export default function GridKdsPage() {
                     : predictionData.theoreticalTimelineReadyMap;
 
                 return (
-                  <div className="w-full">
-                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4 w-full items-stretch">
+                  <div className="w-full min-w-0">
+                    <div className="grid grid-cols-1 gap-4 w-full items-stretch md:grid-cols-2 xl:grid-cols-5">
                       {/* Card previsão */}
                       <div className={summaryCardClass}>
-                        <div className="flex items-start justify-between gap-3">
+                        <div className="flex flex-wrap items-start justify-between gap-2">
                           <div className="space-y-1">
                             <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                              <Clock4 className="h-4 w-4" /> Previsão de saída
+                              <Clock4 className="h-4 w-4 shrink-0" /> Previsão de saída
                             </div>
                             <p className="text-sm font-semibold text-slate-800">
                               Último pedido
@@ -3278,7 +3333,8 @@ export default function GridKdsPage() {
                                 <Button
                                   variant="ghost"
                                   size="icon"
-                                  className="h-8 w-8"
+                                  className="h-8 w-8 shrink-0"
+                                  aria-label="Configurar previsão de saída"
                                 >
                                   <SettingsIcon className="h-4 w-4" />
                                 </Button>
@@ -3401,8 +3457,8 @@ export default function GridKdsPage() {
                           </div>
                         </div>
 
-                        <div className="flex items-baseline gap-3">
-                          <div className="text-5xl font-black text-slate-900 tabular-nums">
+                        <div className="flex flex-col items-start gap-1">
+                          <div className="whitespace-nowrap text-5xl font-black text-slate-900 tabular-nums">
                             {activeLastReady
                               ? fmtHHMM(activeLastReady)
                               : "--:--"}
@@ -3433,9 +3489,9 @@ export default function GridKdsPage() {
 
                       {/* Card pizzas */}
                       <div className={summaryCardClass}>
-                        <div className="flex items-start justify-between gap-3">
+                        <div className="flex flex-wrap items-start justify-between gap-2">
                           <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                            <Pizza className="h-4 w-4" /> Pizzas do dia
+                            <Pizza className="h-4 w-4 shrink-0" /> Pizzas do dia
                           </div>
                           <Badge
                             variant="outline"
@@ -3447,7 +3503,7 @@ export default function GridKdsPage() {
 
                         <div className="mt-3 grid gap-3">
                           <div className="text-center">
-                            <div className="text-5xl font-black text-slate-900 tabular-nums">
+                            <div className="whitespace-nowrap text-5xl font-black text-slate-900 tabular-nums">
                               {totalPizzas}
                             </div>
                             <span className="text-[11px] uppercase tracking-wide text-slate-500 font-semibold">
@@ -3455,11 +3511,11 @@ export default function GridKdsPage() {
                             </span>
                           </div>
 
-                          <div className="grid grid-cols-2 sm:grid-cols-5 gap-1">
+                          <div className="grid grid-cols-5 gap-1">
                             {sizeKeys.map((k) => (
                               <div
                                 key={k}
-                                className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-center space-y-0.5"
+                                className="rounded-lg border border-slate-200 bg-slate-50 px-1 py-2 text-center space-y-0.5"
                               >
                                 <div className="text-[11px] uppercase tracking-wide font-semibold text-slate-600">
                                   {SIZE_LABELS[k]?.slice(0, 3) ?? k}
@@ -3476,7 +3532,7 @@ export default function GridKdsPage() {
 
                       {/* Card financeiro */}
                       <div
-                        className={`${summaryCardClass} md:col-span-2 xl:col-span-2`}
+                        className={`${summaryCardClass} md:col-span-2`}
                       >
                         <div className="flex items-start justify-between gap-3">
                           <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
@@ -3658,8 +3714,8 @@ export default function GridKdsPage() {
                       </div>
 
                       {/* Card status */}
-                      <div className={cn(summaryCardClass, statusColor)}>
-                        <div className="flex items-start justify-between gap-3">
+                      <div className={cn(summaryCardClass, "md:col-span-2 xl:col-span-1", statusColor)}>
+                        <div className="flex flex-col items-start gap-2">
                           <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide">
                             <span
                               className={`inline-flex h-2.5 w-2.5 rounded-full ${statusDot}`}
@@ -3732,7 +3788,7 @@ export default function GridKdsPage() {
           </Suspense>
         </div>
 
-        <div className="xl:col-span-8">
+        <div id="kds-timing-panel" hidden={!timingExpanded} className="min-w-0">
           <Suspense
             fallback={
               <div className="rounded-2xl border border-slate-200 bg-white p-3 text-sm text-slate-500 shadow-sm">
