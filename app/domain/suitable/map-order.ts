@@ -33,8 +33,8 @@ export function detectSize(text: string): keyof KdsFormFill["sizes"] | null {
   const t = norm(text);
   if (/\bgigante\b|\bfamilia\b/.test(t)) return "F";
   if (/\bgrande\b/.test(t)) return "F";
-  if (/\bmedia\b/.test(t)) return "M";
-  if (/\bpequena\b|\bbroto\b/.test(t)) return "P";
+  if (/\bmedi[ao]\b/.test(t)) return "M";
+  if (/\bpequen[ao]\b|\bbroto\b/.test(t)) return "P";
   if (/\bindividual\b/.test(t)) return "I";
   return null;
 }

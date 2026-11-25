@@ -15,15 +15,13 @@ Docs Suitable:
    - descarta eventos com mais de 24h;
    - deduplica pelo `id` do evento (`suitable_webhook_event`);
    - responde 200 após registrar o evento (limite de 5s) e protege o processamento em segundo plano com `waitUntil` de `@vercel/functions`. Autenticação e busca compartilham um prazo de 3s; fora do webhook cada chamada tem prazo de 15s.
-3. O payload do webhook não traz cliente nem itens. `fetchSuitableOrder` chama `GET /api/order/details/?order_id=` e o resultado vai para `suitable_order_inbox` (status `pending`).
+3. O payload do webhook não traz cliente nem itens. `fetchSuitableOrder` chama `GET /api/order/details/?order_id=` e o resultado vai para `suitable_order_inbox`. Em seguida `importSuitableInboxOrder` lança automaticamente a comanda e marca a entrada como `imported`, sem confirmação do operador.
    - `changed_order_status` com `cancelled` marca o pedido como `dismissed`.
    - Outros `changed_order_status` só atualizam pedidos já recebidos.
-   - Falha na busca grava `fetchError`; um novo evento, o botão "Tentar de novo" ou a reconciliação podem recuperar o pedido.
+   - Falha na busca grava `fetchError`; um novo evento, a recuperação automática pelo painel aberto, o botão técnico "Tentar de novo" ou a reconciliação podem recuperar o pedido.
 4. [api.suitable.inbox.ts](../../routes/api.suitable.inbox.ts) lista os pendentes já mapeados (exige login).
 5. [suitable-inbox-panel.tsx](./suitable-inbox-panel.tsx) mostra o painel no grid, com atualização a cada 15s.
-6. Ações no grid:
-   - `importSuitable`: preenche a comanda do dia com `commandNumber` igual a `display_number` da Suitable, desde que esteja vazia (`emptyReservation`) e marca a entrada como `imported`.
-   - `dismissSuitable`: marca como `dismissed`.
+6. O webhook lança o pedido no KDS pelo serviço compartilhado `import-order.server.ts`. O painel não exige clicar em lançar. A ação `importSuitable` permanece como compatibilidade administrativa; `dismissSuitable` permite ignorar uma exceção.
 
 ## Arquivos
 
@@ -99,7 +97,7 @@ A lógica de caixa de entrada (`syncInboxOrder`, `reconcileSuitableOrders`) fica
 
 `suitable_settings.paused` (singleton). Pausar/retomar na página de administração ou no painel do grid.
 - Pausado: o webhook continua validando e gravando pedidos na caixa de entrada (nada se perde); o painel mostra "PAUSADA" e `importSuitable` é recusada.
-- Retomar: os pedidos acumulados aparecem no painel (com o horário de recebimento) para preencher ou descartar. Nada é criado automaticamente. Pedidos cancelados durante a pausa já saem sozinhos.
+- Retomar: pedidos acumulados são lançados automaticamente pelo próximo ciclo do painel. Pedidos cancelados durante a pausa já saem sozinhos.
 
 ## Badge na linha do KDS
 
@@ -114,7 +112,7 @@ Comanda com `suitableOrderId` mostra "Suitable API" (tooltip com o número visí
 ## Limitações
 
 - Eventos podem chegar fora de ordem ou se perder; a reconciliação é manual (botão na página de administração), não periódica.
-- Data do pedido não é considerada: o pedido entra na comanda do dia aberto no grid.
+- O lançamento automático usa o dia de recebimento na caixa de entrada em America/Sao_Paulo; o servidor Vercel em UTC não muda esse dia.
 - Pedido pago online chega só como `paid_order` (sem `new_order`); o tratamento é o mesmo.
 
 ## Diagnóstico de erros para agentes de coding
@@ -155,3 +153,22 @@ No painel, "Ver diagnóstico técnico" exibe `fetchError`; "Tentar de novo" usa 
 administrativa autenticada `retryOrder`. Uma recuperação bem-sucedida limpa o erro.
 A reconciliação continua manual. `waitUntil` mantém a tarefa após a resposta,
 mas não oferece fila durável nem supera o prazo máximo da função Vercel.
+
+## Lançamento e recuperação automáticos
+
+Webhook, nova tentativa e reconciliação usam `importSuitableInboxOrder` após buscar
+os dados. O serviço abre/reabre o dia, cria a comanda com o número visível,
+atualiza total/histórico e confirma a inbox na mesma transação. Um lock na inbox
+impede lançamentos duplicados; uma comanda ocupada gera erro, sem sobrescrita.
+`PEQUENO` e `MEDIO` são reconhecidos como tamanhos P e M.
+
+Enquanto o KDS está aberto, `GET /api/suitable/inbox` agenda recuperação com
+`waitUntil`: até 3 pendentes por ciclo, respeitando 30s desde a última atualização.
+A consulta do painel ocorre a cada 15s e, após novo lançamento, revalida o grid.
+Sem KDS aberto, a recuperação depende de novo evento ou reconciliação; não há cron.
+A pausa impede o lançamento, inclusive na segunda verificação dentro da transação.
+
+O botão de pausa/retomada fica à direita da barra de ações do KDS, com ícone e
+status ao lado (Ativa, Pausada ou Com falha). Durante a pausa, o banner e a lista
+de pedidos em entrada ficam ocultos; o status e o controle permanecem acessíveis.
+Toolbar e painel compartilham a mesma consulta e o mesmo estado pelo provider.

@@ -1,6 +1,6 @@
-import { AlertCircle, RefreshCw } from "lucide-react";
-import { useFetcher } from "@remix-run/react";
-import { useEffect, useRef, useState } from "react";
+import { AlertCircle, RefreshCw, Pause, Play } from "lucide-react";
+import { useFetcher, useRevalidator } from "@remix-run/react";
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { Button } from "~/components/ui/button";
 
 type InboxOrder = {
@@ -21,7 +21,7 @@ type InboxOrder = {
 
 type InboxData = {
   paused: boolean;
-  status?: { configured: boolean; lastEventAt: string | null; errorCount: number };
+  status?: { configured: boolean; lastEventAt: string | null; errorCount: number; lastImportedAt?: string | null };
   orders: InboxOrder[];
 };
 
@@ -53,9 +53,10 @@ function beep() {
   }
 }
 
-export function SuitableInboxPanel({ readOnly }: { readOnly?: boolean }) {
+function useSuitableIntegrationState() {
   const list = useFetcher<InboxData>();
-  const importFx = useFetcher<ActionData>();
+  const revalidator = useRevalidator();
+  const lastImportVersion = useRef<string | null>(null);
   const dismissFx = useFetcher<ActionData>();
   const pauseFx = useFetcher<ActionData>();
   const retryFx = useFetcher<ActionData>();
@@ -63,7 +64,6 @@ export function SuitableInboxPanel({ readOnly }: { readOnly?: boolean }) {
   const [showDetails, setShowDetails] = useState(false);
   const [flash, setFlash] = useState(false);
   const seen = useRef<Set<string> | null>(null);
-  const [lastImported, setLastImported] = useState<number | null>(null);
 
   useEffect(() => {
     list.load("/api/suitable/inbox");
@@ -73,17 +73,20 @@ export function SuitableInboxPanel({ readOnly }: { readOnly?: boolean }) {
   }, []);
 
   useEffect(() => {
-    if ([importFx, dismissFx, pauseFx, retryFx].some((fx) => fx.state === "idle" && fx.data)) {
+    if ([dismissFx, pauseFx, retryFx].some((fx) => fx.state === "idle" && fx.data)) {
       list.load("/api/suitable/inbox");
       setConfirm(null);
     }
     // Recarrega após concluir uma ação, sem depender da identidade dos fetchers.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [importFx.state, dismissFx.state, pauseFx.state, retryFx.state]);
+  }, [dismissFx.state, pauseFx.state, retryFx.state]);
   useEffect(() => {
-    if (importFx.state === "idle" && importFx.data?.ok)
-      setLastImported(importFx.data.commandNumber ?? null);
-  }, [importFx.state, importFx.data]);
+    const version = list.data?.status?.lastImportedAt;
+    if (version && version !== lastImportVersion.current) {
+      lastImportVersion.current = version;
+      revalidator.revalidate();
+    }
+  }, [list.data?.status?.lastImportedAt, revalidator]);
 
   const orders = list.data?.orders ?? [];
   const paused = list.data?.paused ?? false;
@@ -125,10 +128,52 @@ export function SuitableInboxPanel({ readOnly }: { readOnly?: boolean }) {
         ? "Há pedido do cardápio aguardando recuperação."
         : paused
           ? "Integração PAUSADA. Pedidos do cardápio NÃO entram sozinhos: lance à mão."
-          : "Pedidos do cardápio chegando normalmente.";
+          : "Pedidos do cardápio lançados automaticamente no KDS.";
 
-  const busy = importFx.state !== "idle" || dismissFx.state !== "idle";
-  const error = [importFx, dismissFx, pauseFx, retryFx].find((f) => f.data?.ok === false)?.data?.error;
+  const error = [dismissFx, pauseFx, retryFx].find((f) => f.data?.ok === false)?.data?.error;
+
+  return { list, dismissFx, pauseFx, retryFx, confirm, setConfirm, showDetails, setShowDetails, flash, orders, paused, st, problem, palette, message, error };
+}
+
+const SuitableIntegrationContext = createContext<ReturnType<typeof useSuitableIntegrationState> | null>(null);
+
+export function SuitableIntegrationProvider({ children }: { children: ReactNode }) {
+  const state = useSuitableIntegrationState();
+  return <SuitableIntegrationContext.Provider value={state}>{children}</SuitableIntegrationContext.Provider>;
+}
+
+function useSuitableIntegration() {
+  const state = useContext(SuitableIntegrationContext);
+  if (!state) throw new Error("SuitableIntegrationProvider ausente no layout do KDS");
+  return state;
+}
+
+export function SuitableIntegrationToolbar() {
+  const { list, paused, st, pauseFx } = useSuitableIntegration();
+  const label = !list.data ? "Verificando" : paused ? "Pausada" : !st?.configured || st.errorCount > 0 ? "Com falha" : "Ativa";
+  const color = !list.data ? "bg-slate-400" : paused ? "bg-amber-500" : !st?.configured || st.errorCount > 0 ? "bg-red-500" : "bg-emerald-500";
+  const actionLabel = paused ? "Retomar integração Suitable" : "Pausar integração Suitable";
+  return (
+    <div className="flex flex-wrap items-center justify-end gap-2 lg:ml-auto">
+      <pauseFx.Form method="post" action="/admin/suitable-api">
+        <input type="hidden" name="paused" value={String(!paused)} />
+        <Button type="submit" name="_action" value="setPaused" size="icon" variant="outline"
+          className="h-9 w-9" disabled={!list.data || pauseFx.state !== "idle"} title={actionLabel} aria-label={actionLabel}>
+          {pauseFx.state !== "idle" ? <RefreshCw className="h-4 w-4 animate-spin" aria-hidden="true" /> : paused ? <Play className="h-4 w-4" aria-hidden="true" /> : <Pause className="h-4 w-4" aria-hidden="true" />}
+        </Button>
+      </pauseFx.Form>
+      <span role="status" className="inline-flex items-center gap-1.5 whitespace-nowrap text-xs font-medium text-slate-600">
+        <span className={`h-2 w-2 rounded-full ${color}`} aria-hidden="true" />
+        Suitable · {label}
+      </span>
+      {pauseFx.data?.ok === false && <span role="alert" className="basis-full max-w-sm text-right text-xs text-red-700">{pauseFx.data.error}</span>}
+    </div>
+  );
+}
+
+export function SuitableInboxPanel({ readOnly }: { readOnly?: boolean }) {
+  const { list, dismissFx, retryFx, confirm, setConfirm, showDetails, setShowDetails, flash, orders, paused, st, problem, palette, message, error } = useSuitableIntegration();
+  if (!list.data || paused) return null;
 
   return (
     <div
@@ -141,43 +186,12 @@ export function SuitableInboxPanel({ readOnly }: { readOnly?: boolean }) {
         <span className="font-semibold text-base">{message}</span>
         {orders.length > 0 && !problem && (
           <span className="rounded-full bg-pink-600 text-white px-3 py-1 text-sm font-bold">
-            {orders.length} {orders.length === 1 ? "pedido novo" : "pedidos novos"} do cardápio
+            {orders.length} {orders.length === 1 ? "pedido aguardando lançamento automático" : "pedidos aguardando lançamento automático"}
           </span>
         )}
-        {!readOnly && (
-          <span className="ml-auto flex items-center gap-2">
-            {confirm === "pause" ? (
-              <pauseFx.Form method="post" action="/admin/suitable-api" className="flex gap-1 items-center">
-                <input type="hidden" name="paused" value="true" />
-                <span>Pausar? Pedidos do cardápio não entrarão no KDS.</span>
-                <Button size="sm" type="submit" name="_action" value="setPaused">
-                  Sim, pausar
-                </Button>
-                <Button size="sm" variant="outline" type="button" onClick={() => setConfirm(null)}>
-                  Cancelar
-                </Button>
-              </pauseFx.Form>
-            ) : paused ? (
-              <pauseFx.Form method="post" action="/admin/suitable-api">
-                <input type="hidden" name="paused" value="false" />
-                <Button size="sm" type="submit" name="_action" value="setPaused">
-                  Voltar a receber pedidos do cardápio
-                </Button>
-              </pauseFx.Form>
-            ) : (
-              <Button size="sm" variant="outline" type="button" onClick={() => setConfirm("pause")}>
-                Pausar pedidos do cardápio
-              </Button>
-            )}
-          </span>
-        )}
+
       </div>
 
-      {lastImported != null && importFx.data?.ok && (
-        <div className="mt-2 font-medium text-green-800">
-          Lançado na comanda {lastImported}. Confira o pedido na linha.
-        </div>
-      )}
       {error && (
         <div role="alert" className="mt-3 flex items-start gap-2 rounded-md border border-red-200 bg-white p-3 text-red-900">
           <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
@@ -191,6 +205,7 @@ export function SuitableInboxPanel({ readOnly }: { readOnly?: boolean }) {
       {orders.length > 0 && (
         <ul className="mt-2 flex flex-col gap-2">
           {orders.map((o) => {
+            const importFailed = Boolean(o.fetchError?.includes("etapa=import_kds"));
             const needsCheck = Boolean(o.fill?.unmappedItems.length);
             return (
               <li
@@ -212,7 +227,7 @@ export function SuitableInboxPanel({ readOnly }: { readOnly?: boolean }) {
                 </span>
                 {needsCheck && (
                   <span className="text-red-700">
-                    Confira o tamanho: {o.fill!.unmappedItems.join(", ")}
+                    Conferir tamanho no KDS: {o.fill!.unmappedItems.join(", ")}
                   </span>
                 )}
                 {!readOnly && (
@@ -230,23 +245,7 @@ export function SuitableInboxPanel({ readOnly }: { readOnly?: boolean }) {
                       </dismissFx.Form>
                     ) : (
                       <>
-                        <importFx.Form method="post">
-                          <input type="hidden" name="inboxId" value={o.id} />
-                          <Button
-                            size="sm"
-                            type="submit"
-                            name="_action"
-                            value="importSuitable"
-                            disabled={!o.fill || Boolean(o.fetchError) || paused || busy}
-                            title={
-                              paused
-                                ? "Integração pausada"
-                                : "Preenche a comanda com o mesmo número do pedido Suitable"
-                            }
-                          >
-                            Lançar na comanda {o.displayNumber ? `#${o.displayNumber}` : "do pedido"}
-                          </Button>
-                        </importFx.Form>
+
                         <Button
                           size="sm"
                           variant="outline"
@@ -264,8 +263,8 @@ export function SuitableInboxPanel({ readOnly }: { readOnly?: boolean }) {
                     <div className="flex flex-wrap items-start gap-3">
                       <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
                       <div className="min-w-0 flex-1">
-                        <p className="font-semibold">Não foi possível carregar o pedido</p>
-                        <p className="mt-1 text-sm">Tente buscar os dados novamente. Se a falha continuar, confira na Suitable antes de lançar à mão.</p>
+                        <p className="font-semibold">{importFailed ? "Não foi possível lançar o pedido automaticamente" : "Não foi possível carregar o pedido"}</p>
+                        <p className="mt-1 text-sm">A recuperação é automática enquanto o KDS estiver aberto. Se a falha continuar, avise o responsável.</p>
                       </div>
                       {!readOnly && (
                         <retryFx.Form method="post" action="/admin/suitable-api">

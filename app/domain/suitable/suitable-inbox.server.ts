@@ -1,3 +1,4 @@
+import { importSuitableInboxOrder } from "./import-order.server";
 import prisma from "~/lib/prisma/client.server";
 import { fetchSuitableOrder, listSuitableOrders, suitableDiagnosticExcerpt, type SuitableRequestOptions } from "./suitable-client.server";
 
@@ -12,7 +13,7 @@ export async function syncInboxOrder(
   try {
     const details = await fetchSuitableOrder(orderId, options);
     stage = "persist_order";
-    await prisma.suitableOrderInbox.upsert({
+    const inbox = await prisma.suitableOrderInbox.upsert({
       where: { suitableOrderId: orderId },
       create: {
         suitableOrderId: orderId,
@@ -29,6 +30,8 @@ export async function syncInboxOrder(
         fetchError: null,
       },
     });
+    stage = "import_kds";
+    await importSuitableInboxOrder(inbox.id);
     return { ok: true as const };
   } catch (e) {
     const reason = suitableDiagnosticExcerpt(e instanceof Error ? e.message : String(e), 1500);
@@ -73,7 +76,7 @@ export async function reconcileSuitableOrders(hours = 24, maxNew = 50) {
         where: { suitableOrderId: { in: seen } },
         select: { suitableOrderId: true, status: true, fetchError: true },
       })
-    ).filter((k) => k.status !== "pending" || !k.fetchError).map((k) => k.suitableOrderId)
+    ).filter((k) => k.status !== "pending").map((k) => k.suitableOrderId)
   );
   const missing = [...new Set(seen)].filter((id) => !known.has(id)).slice(0, maxNew);
   let recovered = 0;

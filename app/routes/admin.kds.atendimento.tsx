@@ -1,3 +1,4 @@
+import { SuitableIntegrationProvider, SuitableIntegrationToolbar } from "~/domain/suitable/suitable-inbox-panel";
 import { defer, LoaderFunctionArgs } from "@remix-run/node";
 import {
   Await,
@@ -213,6 +214,7 @@ export default function KdsAtendimento() {
   };
 
   return (
+    <SuitableIntegrationProvider>
     <div className="mb-12">
       <Suspense fallback={<div>Carregando dias...</div>}>
         <Await resolve={data.days}>
@@ -527,6 +529,7 @@ export default function KdsAtendimento() {
                     </Button>
                   </div>
                 </div>
+                <SuitableIntegrationToolbar />
               </div>
 
               <Separator />
@@ -538,5 +541,6 @@ export default function KdsAtendimento() {
         </Await>
       </Suspense>
     </div>
+    </SuitableIntegrationProvider>
   );
 }

@@ -1,3 +1,5 @@
+import { waitUntil } from "@vercel/functions";
+import { processSuitablePendingOrders } from "~/domain/suitable/process-pending.server";
 import { suitableDisplayNumber } from "~/domain/suitable/order-display";
 import { json, type LoaderFunctionArgs } from "@remix-run/node";
 import { authenticator } from "~/domain/auth/google.server";
@@ -10,11 +12,13 @@ export async function loader({ request }: LoaderFunctionArgs) {
   if (!(await authenticator.isAuthenticated(request)))
     return json({ ok: false, paused: false, orders: [] }, { status: 401 });
   const settings = await getSuitableSettings();
-  const [lastEvent, errorCount] = await Promise.all([
+  if (!settings.paused) waitUntil(processSuitablePendingOrders().catch(() => console.error("[Suitable pending_processing_failed] etapa=process_pending")));
+  const [lastEvent, errorCount, lastImport] = await Promise.all([
     prisma.suitableWebhookEvent.findFirst({ orderBy: { createdAt: "desc" } }),
     prisma.suitableOrderInbox.count({
       where: { status: "pending", fetchError: { not: null } },
     }),
+    prisma.suitableOrderInbox.findFirst({ where: { status: "imported" }, orderBy: { updatedAt: "desc" }, select: { updatedAt: true } }),
   ]);
   const configured = Boolean(
     process.env.SUITABLE_CLIENT_ID &&
@@ -42,6 +46,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       configured,
       lastEventAt: lastEvent?.createdAt.toISOString() ?? null,
       errorCount,
+      lastImportedAt: lastImport?.updatedAt.toISOString() ?? null,
     },
     orders,
   });

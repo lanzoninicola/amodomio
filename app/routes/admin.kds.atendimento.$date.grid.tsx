@@ -1,4 +1,4 @@
-import { prepareSuitableKdsOrder, SuitableKdsConflict } from "~/domain/suitable/prepare-kds-order.server";
+import { importSuitableInboxOrder } from "~/domain/suitable/import-order.server";
 import { syncKdsOrderHistory } from "~/domain/crm/order-history.server";
 import { normalizeKdsChannel } from "@/domain/kds/constants";
 // app/routes/admin.kds.atendimento.$date.grid.tsx
@@ -130,9 +130,6 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { getSuitableSettings } from "~/domain/suitable/suitable-settings.server";
-import { mapSuitableOrder } from "~/domain/suitable/map-order";
-import { parseOrderItems } from "~/domain/kds/order-items";
-import { emptyReservation } from "~/domain/kds/import-order.server";
 import { SuitableInboxPanel } from "~/domain/suitable/suitable-inbox-panel";
 import { findAllCardapioItems } from "~/domain/cardapio/cardapio-items-source.server";
 
@@ -1073,72 +1070,13 @@ export async function action({ request, params }: ActionFunctionArgs) {
     });
     if (!inbox || inbox.status !== "pending" || !inbox.details)
       return json({ ok: false, error: "Pedido Suitable indisponível." }, { status: 400 });
-    const fill = mapSuitableOrder(inbox.details as any);
-    if (fill.commandNumber === null)
-      return json({ ok: false, error: "Número do pedido Suitable ausente ou inválido. Tente buscar o pedido de novo." }, { status: 400 });
-    const hasSizes = Object.values(fill.sizes).some((n) => n > 0);
-    // orderItems só é gravado se válido (pizza exige tamanho); senão vai p/ notas
-    let storedItems: Prisma.InputJsonValue | typeof Prisma.DbNull = Prisma.DbNull;
-    const noteLines = [...fill.notes];
     try {
-      storedItems = parseOrderItems(fill.orderItems) as unknown as Prisma.InputJsonValue;
-    } catch {
-      noteLines.unshift(
-        ...fill.orderItems.map(
-          (i) => `${i.quantity}x ${i.name}${i.flavors.length ? ` (${i.flavors.join("; ")})` : ""}`
-        )
-      );
-    }
-    let imported: { id: string; commandNumber: number | null };
-    try {
-      const header = await ensureHeader(dateInt, ymdToUtcNoon(dateStr));
-      imported = await prisma.$transaction(async (tx) => {
-      const target = await prepareSuitableKdsOrder(tx, header.id, dateInt, fill.commandNumber!, emptyReservation);
-      const updated = await tx.kdsDailyOrderDetail.update({
-        where: { id: target.id },
-        data: {
-          commandNumber: fill.commandNumber,
-          channel: fill.channel,
-          customerName: fill.customerName || null,
-          customerPhone: fill.customerPhone || null,
-          orderAmount: new Prisma.Decimal(fill.orderAmount.toFixed(2)),
-          hasMoto: fill.hasMoto,
-          motoValue: new Prisma.Decimal(fill.motoValue.toFixed(2)),
-          takeAway: fill.takeAway,
-          isCreditCard: fill.isCreditCard,
-          isCash: fill.isCash,
-          isOtherPaymentMethod: fill.isOtherPaymentMethod,
-          size: JSON.stringify(fill.sizes),
-          orderItems: storedItems,
-          suitableOrderId: fill.suitableOrderId,
-          deliveryAddress: fill.address,
-          changeFor:
-            fill.changeForValue != null
-              ? new Prisma.Decimal(fill.changeForValue.toFixed(2))
-              : null,
-          notes: noteLines.join("\n").slice(0, 2000) || null,
-          paidOnline: fill.paid,
-          // sem tamanho detectado: mantém "pendente" para conferência manual
-          ...(hasSizes && fill.unmappedItems.length === 0
-            ? { status: "novoPedido", novoPedidoAt: new Date() }
-            : {}),
-        },
-      });
-      await tx.suitableOrderInbox.update({
-        where: { id: inbox.id },
-        data: { status: "imported", importedRowId: target.id },
-      });
-      await syncKdsOrderHistory(tx, updated);
-      return { id: updated.id, commandNumber: updated.commandNumber };
-      });
+      const imported = await importSuitableInboxOrder(inbox.id, dateStr);
+      if (imported.skipped) return json({ ok: false, error: "Pedido pausado ou já processado." }, { status: 409 });
+      return json({ ok: true, ...imported });
     } catch (error) {
-      if (error instanceof SuitableKdsConflict)
-        return json({ ok: false, error: error.message }, { status: 409 });
-      console.error("[Suitable kds_import_failed]", { orderId: fill.suitableOrderId, stage: "import_kds" });
-      return json({ ok: false, error: "Não foi possível lançar o pedido. Tente novamente; se continuar, avise o responsável." }, { status: 500 });
+      return json({ ok: false, error: error instanceof Error ? error.message : "Falha ao lançar pedido Suitable." }, { status: 409 });
     }
-    await recalcHeaderTotal(dateInt);
-    return json({ ok: true, ...imported });
   }
 
   if (_action === "activateHiddenFlavor") {

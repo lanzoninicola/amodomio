@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { mapSuitableOrder } from "./map-order";
+import { mapSuitableOrder, detectSize } from "./map-order";
 
 it("maps delivery order with card payment", () => {
   const r = mapSuitableOrder({
@@ -22,4 +22,9 @@ it("keeps the visible Suitable number separate from its internal ID", () => {
   expect(result.commandNumber).toBe(1);
   expect(result.notes).toContain("Pedido Suitable #1");
   expect(result.notes.join(" ")).not.toContain("1902");
+});
+
+it("recognizes Suitable masculine size names", () => {
+  expect(detectSize("Pizzas PEQUENO")).toBe("P");
+  expect(detectSize("Pizzas MEDIO")).toBe("M");
 });
