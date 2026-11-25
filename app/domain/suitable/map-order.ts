@@ -1,3 +1,4 @@
+import { suitableCommandNumber, suitableDisplayNumber } from "./order-display";
 import type { KdsOrderItem } from "~/domain/kds/order-items";
 import type { SuitableOrderDetails } from "./suitable-client.server";
 
@@ -18,6 +19,7 @@ export type KdsFormFill = {
   address: string | null;
   changeFor: string | null;
   suitableOrderId: number;
+  commandNumber: number | null;
   paid: boolean;
   changeForValue: number | null;
   orderItems: KdsOrderItem[];
@@ -45,7 +47,8 @@ const num = (v: string | null | undefined) => {
 export function mapSuitableOrder(o: SuitableOrderDetails): KdsFormFill {
   const sizes = { F: 0, M: 0, P: 0, I: 0, FT: 0 };
   const unmappedItems: string[] = [];
-  const notes: string[] = [];
+  const displayNumber = suitableDisplayNumber(o.display_number);
+  const notes: string[] = displayNumber ? [`Pedido Suitable #${displayNumber}`] : [];
   const orderItems: KdsOrderItem[] = [];
   for (const item of o.items ?? []) {
     const opts = (item.options ?? []).map((x) => x.name);
@@ -94,6 +97,7 @@ export function mapSuitableOrder(o: SuitableOrderDetails): KdsFormFill {
     address: o.delivery_address?.formatted ?? null,
     changeFor: o.payment?.change_for ?? null,
     suitableOrderId: o.id,
+    commandNumber: suitableCommandNumber(o.display_number),
     paid: Boolean(o.paid || o.payment?.paid),
     changeForValue: o.payment?.change_for ? num(o.payment.change_for) : null,
     orderItems,

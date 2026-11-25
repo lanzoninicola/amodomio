@@ -1,3 +1,4 @@
+import { prepareSuitableKdsOrder, SuitableKdsConflict } from "~/domain/suitable/prepare-kds-order.server";
 import { syncKdsOrderHistory } from "~/domain/crm/order-history.server";
 import { normalizeKdsChannel } from "@/domain/kds/constants";
 // app/routes/admin.kds.atendimento.$date.grid.tsx
@@ -1073,17 +1074,8 @@ export async function action({ request, params }: ActionFunctionArgs) {
     if (!inbox || inbox.status !== "pending" || !inbox.details)
       return json({ ok: false, error: "Pedido Suitable indisponível." }, { status: 400 });
     const fill = mapSuitableOrder(inbox.details as any);
-    const candidates = await prisma.kdsDailyOrderDetail.findMany({
-      where: { dateInt, status: "pendente", deletedAt: null, isVendaLivre: false },
-      orderBy: [{ sortOrderIndex: "asc" }, { commandNumber: "asc" }],
-      take: 100,
-    });
-    const target = candidates.find((r) => emptyReservation(r));
-    if (!target)
-      return json(
-        { ok: false, error: "Sem comanda vazia. Use 'Adicionar mais'." },
-        { status: 400 }
-      );
+    if (fill.commandNumber === null)
+      return json({ ok: false, error: "Número do pedido Suitable ausente ou inválido. Tente buscar o pedido de novo." }, { status: 400 });
     const hasSizes = Object.values(fill.sizes).some((n) => n > 0);
     // orderItems só é gravado se válido (pizza exige tamanho); senão vai p/ notas
     let storedItems: Prisma.InputJsonValue | typeof Prisma.DbNull = Prisma.DbNull;
@@ -1097,10 +1089,15 @@ export async function action({ request, params }: ActionFunctionArgs) {
         )
       );
     }
-    await prisma.$transaction(async (tx) => {
+    let imported: { id: string; commandNumber: number | null };
+    try {
+      const header = await ensureHeader(dateInt, ymdToUtcNoon(dateStr));
+      imported = await prisma.$transaction(async (tx) => {
+      const target = await prepareSuitableKdsOrder(tx, header.id, dateInt, fill.commandNumber!, emptyReservation);
       const updated = await tx.kdsDailyOrderDetail.update({
         where: { id: target.id },
         data: {
+          commandNumber: fill.commandNumber,
           channel: fill.channel,
           customerName: fill.customerName || null,
           customerPhone: fill.customerPhone || null,
@@ -1132,9 +1129,16 @@ export async function action({ request, params }: ActionFunctionArgs) {
         data: { status: "imported", importedRowId: target.id },
       });
       await syncKdsOrderHistory(tx, updated);
-    });
+      return { id: updated.id, commandNumber: updated.commandNumber };
+      });
+    } catch (error) {
+      if (error instanceof SuitableKdsConflict)
+        return json({ ok: false, error: error.message }, { status: 409 });
+      console.error("[Suitable kds_import_failed]", { orderId: fill.suitableOrderId, stage: "import_kds" });
+      return json({ ok: false, error: "Não foi possível lançar o pedido. Tente novamente; se continuar, avise o responsável." }, { status: 500 });
+    }
     await recalcHeaderTotal(dateInt);
-    return json({ ok: true, id: target.id, commandNumber: target.commandNumber });
+    return json({ ok: true, ...imported });
   }
 
   if (_action === "activateHiddenFlavor") {
@@ -1972,7 +1976,7 @@ function RowItem({
             {(o as any).suitableOrderId ? (
               <span
                 className="ml-1 self-center rounded bg-pink-100 px-1.5 py-0.5 text-[10px] font-semibold text-pink-800"
-                title={`Pedido Suitable #${(o as any).suitableOrderId}`}
+                title={String(o.notes ?? "").match(/^Pedido Suitable #[^\n]+/m)?.[0] ?? "Pedido recebido pela API Suitable"}
               >
                 Suitable API
               </span>

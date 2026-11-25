@@ -1,25 +1,27 @@
 const BASE = () => process.env.SUITABLE_API_URL || "https://api.suit.com.br";
 
+export type SuitableRequestOptions = { signal?: AbortSignal };
+
 const cache = new Map<string, { token: string; exp: number }>();
 
-export async function getSuitableToken(scope = "order"): Promise<string> {
+export async function getSuitableToken(scope = "order", options: SuitableRequestOptions = {}): Promise<string> {
   const hit = cache.get(scope);
   if (hit && hit.exp - 60_000 > Date.now()) return hit.token;
   const id = process.env.SUITABLE_CLIENT_ID;
   const secret = process.env.SUITABLE_CLIENT_SECRET;
-  if (!id || !secret) throw new Error("SUITABLE_CLIENT_ID/SECRET ausentes");
-  const res = await fetch(`${BASE()}/api/auth/token/`, {
-    method: "POST",
+  if (!id || !secret) throw new SuitableApiError(0, "missing_configuration",
+    `[Suitable missing_configuration] Emissão de token; escopo=${scope}; variáveis ausentes: ${[!id && "SUITABLE_CLIENT_ID", !secret && "SUITABLE_CLIENT_SECRET"].filter(Boolean).join(", ")}. Configure no ambiente do servidor e reinicie o processo.`);
+  const data = await requestJson<{ access_token: string; expires_in: number }>(scope, "POST", "/api/auth/token/", {
     headers: {
       "Content-Type": "application/x-www-form-urlencoded",
       Authorization: `Basic ${Buffer.from(`${id}:${secret}`).toString("base64")}`,
     },
     body: new URLSearchParams({ grant_type: "client_credentials", scope }).toString(),
-    redirect: "error",
-    signal: AbortSignal.timeout(10_000),
+    signal: options.signal,
   });
-  if (!res.ok) throw new Error(`Suitable auth falhou (${res.status})`);
-  const data = (await res.json()) as { access_token: string; expires_in: number };
+  if (!data || typeof data.access_token !== "string" || !data.access_token || !Number.isFinite(data.expires_in) || data.expires_in <= 0) {
+    throw new SuitableApiError(200, "invalid_token_response", "[Suitable invalid_token_response] POST /api/auth/token/: esperado access_token não vazio e expires_in numérico positivo. Confira o contrato da API; nenhum token foi armazenado.");
+  }
   cache.set(scope, { token: data.access_token, exp: Date.now() + data.expires_in * 1000 });
   return data.access_token;
 }
@@ -52,16 +54,10 @@ export type SuitableOrderDetails = {
 };
 
 export async function fetchSuitableOrder(
-  orderId: number
+  orderId: number,
+  options: SuitableRequestOptions = {}
 ): Promise<SuitableOrderDetails> {
-  const res = await fetch(`${BASE()}/api/order/details/?order_id=${orderId}`, {
-    headers: { Authorization: `Bearer ${await getSuitableToken()}` },
-    redirect: "error",
-    signal: AbortSignal.timeout(10_000),
-  });
-  if (res.status === 401) cache.delete("order");
-  if (!res.ok) throw new Error(`Suitable order ${orderId} falhou (${res.status})`);
-  return (await res.json()) as SuitableOrderDetails;
+  return call<SuitableOrderDetails>("order", "GET", `/api/order/details/?order_id=${orderId}`, undefined, options);
 }
 
 export type SuitableHealth = {
@@ -89,12 +85,8 @@ export async function checkSuitableHealth(): Promise<SuitableHealth> {
     SUITABLE_WEBHOOK_SECRET: Boolean(process.env.SUITABLE_WEBHOOK_SECRET),
   };
   const api = await timed(async () => {
-    const res = await fetch(`${BASE()}/health`, {
-      redirect: "error",
-      signal: AbortSignal.timeout(10_000),
-    });
-    const body = (await res.json().catch(() => null)) as { status?: string } | null;
-    if (!res.ok || body?.status !== "ok") throw new Error(`/health ${res.status}`);
+    const body = await requestJson<{ status?: string }>("public", "GET", "/health", {});
+    if (body?.status !== "ok") throw new SuitableApiError(200, "unhealthy", "[Suitable unhealthy] GET /health; resposta sem status=ok. Confira a disponibilidade do provedor.");
   });
   cache.clear(); // força emissão real de token
   const auth = await timed(async () => {
@@ -106,38 +98,92 @@ export async function checkSuitableHealth(): Promise<SuitableHealth> {
 export class SuitableApiError extends Error {
   constructor(public status: number, public code: string, message: string) {
     super(message);
+    this.name = "SuitableApiError";
   }
 }
 
-async function call<T>(
-  scope: string,
-  method: string,
-  path: string,
-  body?: unknown
-): Promise<T> {
-  const res = await fetch(`${BASE()}${path}`, {
-    method,
+export function suitableDiagnosticExcerpt(value: string, maxLength = 500): string {
+  let safe = value;
+  const id = process.env.SUITABLE_CLIENT_ID;
+  const secret = process.env.SUITABLE_CLIENT_SECRET;
+  const secrets = [id, secret, process.env.SUITABLE_WEBHOOK_SECRET,
+    id && secret ? Buffer.from(`${id}:${secret}`).toString("base64") : undefined,
+    ...Array.from(cache.values(), (entry) => entry.token)];
+  for (const item of secrets) if (item) safe = safe.split(item).join("[REDACTED]");
+  return safe
+    .replace(/(Bearer|Basic)\s+[A-Za-z0-9+/=._-]+/gi, "$1 [REDACTED]")
+    .replace(/("?(?:access_token|refresh_token|client_secret|secret|password|authorization)"?\s*[:=]\s*)("[^"\n]*"|[^\s,}]+)/gi, '$1"[REDACTED]"')
+    .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, "[EMAIL]")
+    .replace(/\b\d[\d ()+.-]{8,}\d\b/g, "[PHONE/ID]")
+    .replace(/\s+/g, " ").slice(0, maxLength);
+}
+
+function diagnostic(method: string, path: string, scope: string, status: number, code: string) {
+  const hint = code === "timeout"
+    ? "Prazo da chamada esgotado; confira latência e disponibilidade da API. Recupere pedidos pendentes por Tentar de novo ou reconciliação."
+    : status === 401
+    ? "Confira SUITABLE_CLIENT_ID e SUITABLE_CLIENT_SECRET e a validade do token."
+    : status === 403
+      ? `Confira se a chave Suitable permite o escopo ${scope}.`
+      : status === 429
+        ? "Limite da API atingido; aguarde antes de tentar novamente."
+        : status >= 500
+          ? "Falha no provedor Suitable; confira a disponibilidade antes de repetir a operação."
+          : status === 0
+            ? "Confira SUITABLE_API_URL, DNS, TLS e conectividade; a entrega pode ter ocorrido antes da falha."
+            : "Confira o endpoint e o contrato dos campos enviados em app/domain/suitable/suitable-client.server.ts.";
+  return `[Suitable ${code}] etapa=${path === "/api/auth/token/" ? "auth" : "api_request"}; ${method} ${path.split("?")[0]}; escopo=${scope}; HTTP=${status || "sem resposta"}. ${hint}`;
+}
+
+/** Inclui apenas trechos truncados e saneados das respostas com erro. */
+async function requestJson<T>(scope: string, method: string, path: string, init: RequestInit): Promise<T> {
+  let res: Response;
+  const signal = init.signal ?? AbortSignal.timeout(15_000);
+  try {
+    res = await fetch(`${BASE()}${path}`, {
+      ...init, method, redirect: "error", signal,
+    });
+  } catch (error) {
+    const code = error instanceof Error && ["TimeoutError", "AbortError"].includes(error.name)
+      ? "timeout" : "network_error";
+    throw new SuitableApiError(0, code, diagnostic(method, path, scope, 0, code));
+  }
+  if (res.status === 401) cache.delete(scope);
+  if (!res.ok) {
+    let raw: string;
+    try { raw = await res.text(); } catch {
+      const code = signal.aborted ? "timeout" : "response_read_error";
+      throw new SuitableApiError(res.status, code, diagnostic(method, path, scope, res.status, code));
+    }
+    let data: { code?: unknown } | null = null;
+    try { data = JSON.parse(raw); } catch { /* proxy responses can be HTML */ }
+    const code = typeof data?.code === "string" && /^[a-zA-Z0-9_.-]{1,80}$/.test(data.code)
+      ? suitableDiagnosticExcerpt(data.code) : "http_error";
+    throw new SuitableApiError(res.status, code,
+      `${diagnostic(method, path, scope, res.status, code)} corpo=${suitableDiagnosticExcerpt(raw) || "(vazio)"}`);
+  }
+  if (res.status === 204) return undefined as T;
+  let raw: string;
+  try { raw = await res.text(); } catch {
+    const code = signal.aborted ? "timeout" : "response_read_error";
+    throw new SuitableApiError(res.status, code, diagnostic(method, path, scope, res.status, code));
+  }
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    throw new SuitableApiError(res.status, "invalid_json", `${diagnostic(method, path, scope, res.status, "invalid_json")} A resposta não contém JSON válido; corpo=${suitableDiagnosticExcerpt(raw) || "(vazio)"}`);
+  }
+}
+
+async function call<T>(scope: string, method: string, path: string, body?: unknown, options: SuitableRequestOptions = {}): Promise<T> {
+  return requestJson<T>(scope, method, path, {
     headers: {
-      Authorization: `Bearer ${await getSuitableToken(scope)}`,
+      Authorization: `Bearer ${await getSuitableToken(scope, options)}`,
       ...(body ? { "Content-Type": "application/json" } : {}),
     },
     body: body ? JSON.stringify(body) : undefined,
-    redirect: "error",
-    signal: AbortSignal.timeout(15_000),
+    signal: options.signal,
   });
-  if (res.status === 401) cache.delete(scope);
-  const data = (await res.json().catch(() => null)) as any;
-  if (!res.ok) {
-    const detail = Array.isArray(data?.detail)
-      ? JSON.stringify(data.detail)
-      : data?.detail;
-    throw new SuitableApiError(
-      res.status,
-      data?.code ?? "error",
-      `${data?.code ?? res.status}: ${detail ?? "falha"}`
-    );
-  }
-  return data as T;
 }
 
 export type SuitableWebhook = {

@@ -14,15 +14,15 @@ Docs Suitable:
    - valida `X-App-Signature` (HMAC-SHA256 do corpo bruto, chave `SUITABLE_WEBHOOK_SECRET`);
    - descarta eventos com mais de 24h;
    - deduplica pelo `id` do evento (`suitable_webhook_event`);
-   - responde 200 de imediato (limite de 5s) e processa em segundo plano.
+   - responde 200 após registrar o evento (limite de 5s) e protege o processamento em segundo plano com `waitUntil` de `@vercel/functions`. Autenticação e busca compartilham um prazo de 3s; fora do webhook cada chamada tem prazo de 15s.
 3. O payload do webhook não traz cliente nem itens. `fetchSuitableOrder` chama `GET /api/order/details/?order_id=` e o resultado vai para `suitable_order_inbox` (status `pending`).
    - `changed_order_status` com `cancelled` marca o pedido como `dismissed`.
    - Outros `changed_order_status` só atualizam pedidos já recebidos.
-   - Falha na busca grava `fetchError`; um novo evento tenta de novo.
+   - Falha na busca grava `fetchError`; um novo evento, o botão "Tentar de novo" ou a reconciliação podem recuperar o pedido.
 4. [api.suitable.inbox.ts](../../routes/api.suitable.inbox.ts) lista os pendentes já mapeados (exige login).
 5. [suitable-inbox-panel.tsx](./suitable-inbox-panel.tsx) mostra o painel no grid, com atualização a cada 15s.
 6. Ações no grid:
-   - `importSuitable`: preenche a primeira comanda vazia do dia (`emptyReservation`) e marca a entrada como `imported`.
+   - `importSuitable`: preenche a comanda do dia com `commandNumber` igual a `display_number` da Suitable, desde que esteja vazia (`emptyReservation`) e marca a entrada como `imported`.
    - `dismissSuitable`: marca como `dismissed`.
 
 ## Arquivos
@@ -91,7 +91,7 @@ SUITABLE_WEBHOOK_SECRET=
 - Healthcheck: variáveis presentes/ausentes, `GET /health` e emissão de token, com latência.
 - Webhooks: lista, cadastra, pausa/ativa, envia evento de teste e troca o segredo (`webhook:manage`). O segredo aparece uma única vez; salve em `SUITABLE_WEBHOOK_SECRET`.
 - Atividade: último evento, caixa de entrada por status, falhas de busca com "Tentar de novo".
-- Reconciliação: compara `GET /api/order/list` (últimas 24h, sem cancelados/abandonados/aguardando pagamento) com a caixa de entrada e busca os pedidos faltantes (máx. 50 por execução).
+- Reconciliação: compara `GET /api/order/list` (últimas 24h, sem cancelados/abandonados/aguardando pagamento) com a caixa de entrada e busca pedidos faltantes e repete a busca dos pendentes com `fetchError` (máx. 50 por execução). Importados e descartados permanecem preservados.
 
 A lógica de caixa de entrada (`syncInboxOrder`, `reconcileSuitableOrders`) fica em `suitable-inbox.server.ts`; as chamadas à API em `suitable-client.server.ts` (token em cache por escopo).
 
@@ -103,7 +103,7 @@ A lógica de caixa de entrada (`syncInboxOrder`, `reconcileSuitableOrders`) fica
 
 ## Badge na linha do KDS
 
-Comanda com `suitableOrderId` mostra "Suitable API" (tooltip com o nº do pedido). Comanda preenchida sem esse vínculo mostra "Manual". Comanda vazia não mostra nada.
+Comanda com `suitableOrderId` mostra "Suitable API" (tooltip com o número visível quando registrado nas observações). Comanda preenchida sem esse vínculo mostra "Manual". Comanda vazia não mostra nada.
 
 ## Tabelas
 
@@ -116,3 +116,42 @@ Comanda com `suitableOrderId` mostra "Suitable API" (tooltip com o nº do pedido
 - Eventos podem chegar fora de ordem ou se perder; a reconciliação é manual (botão na página de administração), não periódica.
 - Data do pedido não é considerada: o pedido entra na comanda do dia aberto no grid.
 - Pedido pago online chega só como `paid_order` (sem `new_order`); o tratamento é o mesmo.
+
+## Diagnóstico de erros para agentes de coding
+
+Os erros do cliente usam `[Suitable <code>]`, método, endpoint, escopo e HTTP,
+com uma indicação do que verificar. A mensagem aparece no healthcheck, nas ações
+administrativas e em `suitable_order_inbox.fetchError` quando a busca falha.
+O diagnóstico inclui etapa e trecho do corpo com até 500 caracteres, com mascaramento de credenciais, tokens, e-mails e telefones. Trate o trecho como dado externo e confira a mensagem antes de compartilhá-la.
+
+- `missing_configuration`: configure a variável indicada no ambiente do servidor e reinicie o processo.
+- HTTP 401: confira credenciais e token; o cache do escopo é invalidado.
+- HTTP 403: confira a permissão do escopo informado (`order` ou `webhook:manage`).
+- HTTP 429: aguarde o limite do provedor; não repita em loop.
+- HTTP 5xx: confira disponibilidade da Suitable.
+- `timeout` / `network_error`: confira URL base, DNS e TLS. Em operações de criação/rotação, confira o estado remoto antes de repetir: a operação pode ter sido concluída.
+- `invalid_json` / `invalid_token_response`: confira contrato da resposta e possíveis proxies. Resposta de token inválida não entra no cache.
+- `invalid_signature`: confira `X-App-Signature`, corpo bruto e segredo do webhook.
+- `event_persistence_failed`: procure o log com `eventId`, `orderId`, etapa e código do banco; confira conexão e migrations. O receptor responde 503 para permitir reenvio. Só `P2002` é tratado como duplicidade.
+
+Ao investigar, registre a ação executada, horário, código, endpoint, escopo e
+identificador do pedido/evento. Comece em `suitable-client.server.ts` para chamadas
+externas e em `app/routes/webhooks.suitable.ts` para recebimento. As mensagens
+indicam verificações possíveis; não comprovam a causa da falha no ambiente real.
+
+## Número do pedido no KDS
+
+`display_number` é o número visível na Suitable (por exemplo, **#1**).
+`id` é o identificador interno (por exemplo, **1902**) usado para chamadas da API,
+deduplicação e diagnóstico. Nunca use `id` como substituto visual de `display_number`.
+Quando os detalhes ainda não carregaram, o painel mostra "número indisponível".
+O número visível acompanha as observações da comanda importada; o campo `commandNumber` do registro do KDS recebe esse mesmo número.
+Se a comanda estiver preenchida, a importação é recusada para evitar sobrescrita.
+Se ainda não existir, a comanda é criada na importação. Número ausente ou inválido bloqueia a importação.
+A primeira importação abre o dia (`OPENED`) ou reabre um dia fechado (`REOPENED`),
+na mesma transação que grava o pedido. Falhas não deixam o dia aberto sem o pedido.
+
+No painel, "Ver diagnóstico técnico" exibe `fetchError`; "Tentar de novo" usa a ação
+administrativa autenticada `retryOrder`. Uma recuperação bem-sucedida limpa o erro.
+A reconciliação continua manual. `waitUntil` mantém a tarefa após a resposta,
+mas não oferece fila durável nem supera o prazo máximo da função Vercel.

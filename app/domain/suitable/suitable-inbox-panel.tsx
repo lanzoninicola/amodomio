@@ -1,3 +1,4 @@
+import { AlertCircle, RefreshCw } from "lucide-react";
 import { useFetcher } from "@remix-run/react";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "~/components/ui/button";
@@ -57,6 +58,7 @@ export function SuitableInboxPanel({ readOnly }: { readOnly?: boolean }) {
   const importFx = useFetcher<ActionData>();
   const dismissFx = useFetcher<ActionData>();
   const pauseFx = useFetcher<ActionData>();
+  const retryFx = useFetcher<ActionData>();
   const [confirm, setConfirm] = useState<string | null>(null);
   const [showDetails, setShowDetails] = useState(false);
   const [flash, setFlash] = useState(false);
@@ -70,16 +72,14 @@ export function SuitableInboxPanel({ readOnly }: { readOnly?: boolean }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  for (const fx of [importFx, dismissFx, pauseFx]) {
-    // eslint-disable-next-line react-hooks/rules-of-hooks
-    useEffect(() => {
-      if (fx.state === "idle" && fx.data) {
-        list.load("/api/suitable/inbox");
-        setConfirm(null);
-      }
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [fx.state]);
-  }
+  useEffect(() => {
+    if ([importFx, dismissFx, pauseFx, retryFx].some((fx) => fx.state === "idle" && fx.data)) {
+      list.load("/api/suitable/inbox");
+      setConfirm(null);
+    }
+    // Recarrega após concluir uma ação, sem depender da identidade dos fetchers.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [importFx.state, dismissFx.state, pauseFx.state, retryFx.state]);
   useEffect(() => {
     if (importFx.state === "idle" && importFx.data?.ok)
       setLastImported(importFx.data.commandNumber ?? null);
@@ -120,15 +120,15 @@ export function SuitableInboxPanel({ readOnly }: { readOnly?: boolean }) {
   const message = !st
     ? "Verificando pedidos do cardápio…"
     : !st.configured
-      ? "Integração com problema. Lance os pedidos do cardápio à mão e avise o responsável."
+      ? "Integração sem configuração. Avise o responsável."
       : st.errorCount > 0
-        ? "Há pedido do cardápio que não carregou. Lance à mão e avise o responsável."
+        ? "Há pedido do cardápio aguardando recuperação."
         : paused
           ? "Integração PAUSADA. Pedidos do cardápio NÃO entram sozinhos: lance à mão."
           : "Pedidos do cardápio chegando normalmente.";
 
   const busy = importFx.state !== "idle" || dismissFx.state !== "idle";
-  const error = [importFx, dismissFx, pauseFx].find((f) => f.data?.ok === false)?.data?.error;
+  const error = [importFx, dismissFx, pauseFx, retryFx].find((f) => f.data?.ok === false)?.data?.error;
 
   return (
     <div
@@ -178,7 +178,15 @@ export function SuitableInboxPanel({ readOnly }: { readOnly?: boolean }) {
           Lançado na comanda {lastImported}. Confira o pedido na linha.
         </div>
       )}
-      {error && <div className="mt-2 text-red-700 font-medium">{error}</div>}
+      {error && (
+        <div role="alert" className="mt-3 flex items-start gap-2 rounded-md border border-red-200 bg-white p-3 text-red-900">
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+          <div>
+            <p className="font-semibold">A ação não foi concluída</p>
+            <p className="mt-1 text-sm whitespace-pre-wrap break-words">{error}</p>
+          </div>
+        </div>
+      )}
 
       {orders.length > 0 && (
         <ul className="mt-2 flex flex-col gap-2">
@@ -190,21 +198,22 @@ export function SuitableInboxPanel({ readOnly }: { readOnly?: boolean }) {
                 className="flex items-center gap-2 flex-wrap rounded bg-white/70 border px-2 py-1.5"
               >
                 <span className="font-medium">
-                  Pedido #{o.displayNumber ?? o.suitableOrderId}
+                  Pedido {o.displayNumber ? `#${o.displayNumber}` : "(número indisponível)"}
                 </span>
-                <span>
-                  {o.fill?.customerName || "cliente sem nome"} · R${" "}
-                  {o.fill?.orderAmount.toFixed(2).replace(".", ",") ?? "—"} ·{" "}
-                  {o.fill?.takeAway ? "retirada" : o.fill?.hasMoto ? "entrega" : "no local"}
-                  {!o.paid && " · pagar na entrega/retirada"} · chegou às {brTime(o.receivedAt)}
+                <span className="text-sm">
+                  {o.fill ? (
+                    <>
+                      {o.fill.customerName || "cliente sem nome"} · R$ {o.fill.orderAmount.toFixed(2).replace(".", ",")} ·{" "}
+                      {o.fill.takeAway ? "retirada" : o.fill.hasMoto ? "entrega" : "no local"}
+                      {!o.paid && " · pagar na entrega/retirada"} ·{" "}
+                    </>
+                  ) : "Dados do pedido ainda não carregados · "}
+                  recebido às {brTime(o.receivedAt)}
                 </span>
                 {needsCheck && (
                   <span className="text-red-700">
                     Confira o tamanho: {o.fill!.unmappedItems.join(", ")}
                   </span>
-                )}
-                {o.fetchError && (
-                  <span className="text-red-700">Dados incompletos: lance à mão.</span>
                 )}
                 {!readOnly && (
                   <span className="ml-auto flex gap-2 items-center">
@@ -228,14 +237,14 @@ export function SuitableInboxPanel({ readOnly }: { readOnly?: boolean }) {
                             type="submit"
                             name="_action"
                             value="importSuitable"
-                            disabled={!o.fill || paused || busy}
+                            disabled={!o.fill || Boolean(o.fetchError) || paused || busy}
                             title={
                               paused
                                 ? "Integração pausada"
-                                : "Preenche a próxima comanda vazia com os dados do pedido"
+                                : "Preenche a comanda com o mesmo número do pedido Suitable"
                             }
                           >
-                            Lançar na próxima comanda
+                            Lançar na comanda {o.displayNumber ? `#${o.displayNumber}` : "do pedido"}
                           </Button>
                         </importFx.Form>
                         <Button
@@ -249,6 +258,30 @@ export function SuitableInboxPanel({ readOnly }: { readOnly?: boolean }) {
                       </>
                     )}
                   </span>
+                )}
+                {o.fetchError && (
+                  <div className="basis-full rounded-md border border-amber-200 bg-amber-50 p-3 text-amber-950">
+                    <div className="flex flex-wrap items-start gap-3">
+                      <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+                      <div className="min-w-0 flex-1">
+                        <p className="font-semibold">Não foi possível carregar o pedido</p>
+                        <p className="mt-1 text-sm">Tente buscar os dados novamente. Se a falha continuar, confira na Suitable antes de lançar à mão.</p>
+                      </div>
+                      {!readOnly && (
+                        <retryFx.Form method="post" action="/admin/suitable-api">
+                          <input type="hidden" name="orderId" value={o.suitableOrderId} />
+                          <Button size="sm" variant="outline" type="submit" name="_action" value="retryOrder" disabled={retryFx.state !== "idle"}>
+                            <RefreshCw className={`mr-2 h-4 w-4 ${retryFx.state !== "idle" && String(retryFx.formData?.get("orderId")) === String(o.suitableOrderId) ? "animate-spin" : ""}`} aria-hidden="true" />
+                            {retryFx.state !== "idle" && String(retryFx.formData?.get("orderId")) === String(o.suitableOrderId) ? "Buscando…" : "Tentar de novo"}
+                          </Button>
+                        </retryFx.Form>
+                      )}
+                    </div>
+                    <details className="mt-2 text-xs">
+                      <summary className="cursor-pointer underline">Ver diagnóstico técnico</summary>
+                      <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap break-words rounded bg-white p-2 font-mono text-gray-700">{o.fetchError}</pre>
+                    </details>
+                  </div>
                 )}
               </li>
             );

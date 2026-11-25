@@ -1,3 +1,4 @@
+import { suitableDisplayNumber } from "~/domain/suitable/order-display";
 import { json, type LoaderFunctionArgs } from "@remix-run/node";
 import { authenticator } from "~/domain/auth/google.server";
 import prisma from "~/lib/prisma/client.server";
@@ -32,7 +33,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     receivedAt: r.createdAt.toISOString(),
     fetchError: r.fetchError,
     fill: r.details ? mapSuitableOrder(r.details as unknown as SuitableOrderDetails) : null,
-    displayNumber: (r.details as any)?.display_number ?? null,
+    displayNumber: suitableDisplayNumber((r.details as any)?.display_number),
   }));
   return json({
     ok: true,

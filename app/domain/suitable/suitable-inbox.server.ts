@@ -1,14 +1,17 @@
 import prisma from "~/lib/prisma/client.server";
-import { fetchSuitableOrder, listSuitableOrders } from "./suitable-client.server";
+import { fetchSuitableOrder, listSuitableOrders, suitableDiagnosticExcerpt, type SuitableRequestOptions } from "./suitable-client.server";
 
-/** Busca o pedido na Suitable e grava/atualiza a caixa de entrada. Nunca lança. */
+/** Busca e persiste o pedido; falhas ficam na inbox e nos logs. */
 export async function syncInboxOrder(
   orderId: number,
   eventId: string | null,
-  type: string
+  type: string,
+  options: SuitableRequestOptions = {}
 ) {
+  let stage = "fetch_order";
   try {
-    const details = await fetchSuitableOrder(orderId);
+    const details = await fetchSuitableOrder(orderId, options);
+    stage = "persist_order";
     await prisma.suitableOrderInbox.upsert({
       where: { suitableOrderId: orderId },
       create: {
@@ -28,17 +31,25 @@ export async function syncInboxOrder(
     });
     return { ok: true as const };
   } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    await prisma.suitableOrderInbox.upsert({
-      where: { suitableOrderId: orderId },
-      create: {
-        suitableOrderId: orderId,
-        lastEventId: eventId,
-        lastEventType: type,
-        fetchError: msg,
-      },
-      update: { fetchError: msg },
-    });
+    const reason = suitableDiagnosticExcerpt(e instanceof Error ? e.message : String(e), 1500);
+    const msg = `[Suitable sync_failed] orderId=${orderId}; etapa=${stage}; evento=${eventId ?? "manual"}; ${reason}`;
+    console.error("[Suitable sync_failed]", { orderId, eventId, stage, error: msg });
+    try {
+      await prisma.suitableOrderInbox.upsert({
+        where: { suitableOrderId: orderId },
+        create: {
+          suitableOrderId: orderId, lastEventId: eventId, lastEventType: type,
+          fetchError: msg,
+        },
+        update: { fetchError: msg, lastEventId: eventId, lastEventType: type },
+      });
+    } catch (persistenceError) {
+      console.error("[Suitable error_persistence_failed]", {
+        orderId, eventId, stage: "persist_fetch_error",
+        error: suitableDiagnosticExcerpt(persistenceError instanceof Error ? persistenceError.message : String(persistenceError)),
+        originalError: msg,
+      });
+    }
     return { ok: false as const, error: msg };
   }
 }
@@ -60,11 +71,11 @@ export async function reconcileSuitableOrders(hours = 24, maxNew = 50) {
     (
       await prisma.suitableOrderInbox.findMany({
         where: { suitableOrderId: { in: seen } },
-        select: { suitableOrderId: true },
+        select: { suitableOrderId: true, status: true, fetchError: true },
       })
-    ).map((k) => k.suitableOrderId)
+    ).filter((k) => k.status !== "pending" || !k.fetchError).map((k) => k.suitableOrderId)
   );
-  const missing = seen.filter((id) => !known.has(id)).slice(0, maxNew);
+  const missing = [...new Set(seen)].filter((id) => !known.has(id)).slice(0, maxNew);
   let recovered = 0;
   for (const id of missing) {
     if ((await syncInboxOrder(id, null, "reconcile")).ok) recovered++;
