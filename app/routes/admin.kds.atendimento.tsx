@@ -436,6 +436,7 @@ export default function KdsAtendimento() {
                 <div className="flex flex-col gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 lg:flex-row lg:items-center lg:gap-3 lg:border-0 lg:bg-transparent lg:px-2 lg:py-0">
 
                   <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:flex">
+                    <div id="kds-day-control-toolbar" className="empty:hidden" />
                     <Button
                       asChild
                       size="sm"

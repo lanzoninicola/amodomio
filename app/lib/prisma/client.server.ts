@@ -10,8 +10,6 @@ const datasourceUrl =
   env === "development"
     ? prismaDevDatasourceUrl ?? prismaDatasourceUrl
     : prismaDatasourceUrl;
-const pool = datasourceUrl ? new Pool({ connectionString: datasourceUrl }) : undefined;
-const adapter = pool ? new PrismaPg(pool) : undefined;
 
 class AMMPrismaClient<
   T extends Prisma.PrismaClientOptions = Prisma.PrismaClientOptions
@@ -35,6 +33,29 @@ class AMMPrismaClient<
   }
 }
 
-const prismaClient = new AMMPrismaClient({ adapter });
+const globalForPrisma = globalThis as typeof globalThis & {
+  ammPrismaClient?: AMMPrismaClient;
+};
+
+function createPrismaClient() {
+  const pool = datasourceUrl
+    ? new Pool({
+        connectionString: datasourceUrl,
+        max: 5,
+        idleTimeoutMillis: 30_000,
+        connectionTimeoutMillis: 10_000,
+      })
+    : undefined;
+  const adapter = pool
+    ? new PrismaPg(pool, { disposeExternalPool: true })
+    : undefined;
+
+  return new AMMPrismaClient({ adapter });
+}
+
+// Vite re-evaluates server modules during HMR; keep the client and its pool alive.
+const prismaClient = globalForPrisma.ammPrismaClient ?? createPrismaClient();
+
+if (env !== "production") globalForPrisma.ammPrismaClient = prismaClient;
 
 export default prismaClient;
